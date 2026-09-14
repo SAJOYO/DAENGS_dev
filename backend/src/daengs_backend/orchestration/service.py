@@ -147,7 +147,7 @@ class AssistantOrchestrationService:
                 _route_metadata(
                     route_plan,
                     resolved_router_version=resolved_router_version,
-                    # 케어 기록 거절은 RoutePlan 없이 **결정론으로** 끝난다 (D-074). 그것을
+                    # 케어 기록 거절은 RoutePlan 없이 **결정론으로** 끝난다 (D-075). 그것을
                     # 가리는 값이 `resolved_router_version is None` 이다 — 시맨틱 라우터를
                     # 거친 두 응답(스몰토크·라우터 실패)은 그 자리에서 버전을 이미 계산해
                     # 두므로 None 이 아니다.
@@ -196,7 +196,7 @@ class AssistantOrchestrationService:
                 query=query,
                 context=structured_context,
             )
-        # ── 케어 기록 (#331 후속, D-074). 응급·명시 신호 **뒤**, Turn Resolver·라우터 **앞**.
+        # ── 케어 기록 (#331 후속, D-075). 응급·명시 신호 **뒤**, Turn Resolver·라우터 **앞**.
         #
         # 응급이 앞인 이유는 `resolve_emergency_route` 와 같다 — `"밥 먹였는데 토해요"` 는
         # 기록 의도가 아니라 응급이고, 그 경계를 이 게이트가 약하게 만들 수 없다. 명시 신호가
@@ -365,7 +365,7 @@ def _route_metadata(
     RoutePlan 이 없는 두 응답(스몰토크 · 라우터 실패)은 시맨틱 라우터를 거친 뒤라
     LLM 라우팅으로 적는다 — 그래서 `fallback_router` 의 기본값이 LLM 이다.
 
-    **기본값이 아닌 경우가 하나 생겼다** (#331 후속, D-074). 케어 기록 **거절**
+    **기본값이 아닌 경우가 하나 생겼다** (#331 후속, D-075). 케어 기록 **거절**
     (`"아니 됐어"`)은 결정론 게이트가 모델을 한 번도 안 태우고 고정 문구로 끝내므로,
     RoutePlan 없이 끝나면서도 LLM 라우팅이 아니다 — 부르는 쪽이
     `fallback_router=RouterKind.DETERMINISTIC` 를 넘긴다. 예전 주석은 "결정론 라우팅은

@@ -5,12 +5,14 @@ from datetime import timedelta
 
 import pytest
 
-from daengs_backend.services.walk_diary_slot_writing import write_slot_preview, writing_payload
+from daengs_backend.services.walk_diary.legacy.slots import write_slot_preview, writing_payload
 from daengs_evals.diary_slots_demo import demo_input
-from daengs_walk.diary_board import BaseBoardPolicy
-from daengs_walk.diary_input import DiaryInput, digest
-from daengs_walk.diary_slots import SlotPolicy, prepare_slot_preview
-from daengs_walk.diary_stamps import StampPolicy
+from daengs_walk.diary.board.models import BaseBoardPolicy
+from daengs_walk.diary.board.preview import prepare_slot_preview
+from daengs_walk.diary.board.scene_input import scene_materials
+from daengs_walk.diary.contracts.input import DiaryInput, digest
+from daengs_walk.diary.contracts.slots import SlotPolicy
+from daengs_walk.diary.selection.stamps import StampPolicy
 
 
 def prepare(source=None, route=None, **policy):
@@ -80,7 +82,7 @@ def test_no_route_means_no_motion_and_no_other_scene_background():
 
 
 def test_motion_cannot_bridge_a_removed_canonical_segment():
-    from daengs_walk.diary_slot_sources import candidates_for_scene, verified_motion
+    from daengs_walk.diary.slots.sources import candidates_for_scene, verified_motion
 
     source, route, _ = demo_input()
     preview = prepare(source, route)
@@ -109,8 +111,9 @@ async def test_writer_keeps_originals_and_never_changes_slots():
             "scenes": [
                 {
                     "scene_id": s["scene_id"],
-                    "background": "주변에 공원이 있었다.",
-                    "evidence_ids": [s["evidence"][0]["id"]],
+                    "text": "주변에 공원이 있었다.",
+                    "evidence_ids": [scene_materials(s)[0]["id"]],
+                    "action_id": s["action"]["id"] if s["action"] else None,
                 }
                 for s in payload["scenes"]
             ]
@@ -127,15 +130,16 @@ async def test_writer_keeps_originals_and_never_changes_slots():
 async def test_cross_scene_citation_and_provider_failure_keep_base_board():
     preview = prepare()
     payload = writing_payload(preview)
-    foreign = payload["scenes"][1]["evidence"][0]["id"]
+    foreign = scene_materials(payload["scenes"][1])[0]["id"]
 
     async def invalid(*args):
         return {
             "scenes": [
                 {
                     "scene_id": s["scene_id"],
-                    "background": "공원 주변이었다.",
+                    "text": "공원 주변이었다.",
                     "evidence_ids": [foreign],
+                    "action_id": s["action"]["id"] if s["action"] else None,
                 }
                 for s in payload["scenes"]
             ]

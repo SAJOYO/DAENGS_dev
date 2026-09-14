@@ -24,7 +24,10 @@ def shop(raw):
 
 
 async def refresh(transport, key, path, point, radius):
+    from daengs_backend.services.walk_space_catalog_input import retain_page, retained_fields
+
     region = catalog.area(point, radius)
+    retained = []
     raw, receipts = await catalog.pages(
         transport,
         ENDPOINT,
@@ -35,9 +38,18 @@ async def refresh(transport, key, path, point, radius):
             "radius": radius,
         },
         identity_field="bizesId",
+        page_sink=lambda page: retained.append(retain_page(page, "commerce")),
     )
     rows, rejected = catalog.unique_rows(raw, shop)
-    return catalog.publish(path, "commerce", region, rows, rejected=rejected, receipts=receipts)
+    return catalog.publish(
+        path,
+        "commerce",
+        region,
+        rows,
+        rejected=rejected,
+        receipts=receipts,
+        extra=retained_fields(retained),
+    )
 
 
 def nearby(value, point):

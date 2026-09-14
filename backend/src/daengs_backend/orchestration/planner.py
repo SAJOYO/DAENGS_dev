@@ -38,7 +38,7 @@ exclusive single-request plan itself, and never lets `vet_contact` reach the sha
 `assemble_route_plan`/`_payload_for` machinery — see `resolve_emergency_route`'s
 docstring and D-051 ②.
 
-**`care_log` 도 같은 이유로 같은 길을 간다 — 그런데 이쪽은 쓴다** (#331 후속, D-074).
+**`care_log` 도 같은 이유로 같은 길을 간다 — 그런데 이쪽은 쓴다** (#331 후속, D-075).
 이 모듈에서 DB 에 행을 남기는 계획을 만드는 함수는 `resolve_care_log_write` 하나이고, 그것은
 **사용자가 앞 턴의 제안에 승낙했을 때만** 계획을 낸다. 앞 턴의 제안을 만드는
 `resolve_care_log_route` 는 아무것도 안 쓴다 (확인 되묻기, 아니면 기록 화면 HANDOFF).
@@ -110,7 +110,7 @@ _HANDOFF_REASONS = {
     "skin": "image_upload_required",
     "gait": "video_upload_required",
 }
-#: 케어 기록 화면으로 (#331 후속, D-074). **위 표에 안 넣는 것이 의도다** — 라우터가 못 고르고
+#: 케어 기록 화면으로 (#331 후속, D-075). **위 표에 안 넣는 것이 의도다** — 라우터가 못 고르고
 #: 명시 신호로도 못 부른다. 들어오는 길은 `resolve_care_log_route` 의 결정론 게이트 하나뿐이다.
 #: "새 결정론 신호를 여기서 발명하지 않는다" (모듈 머리말 1번)는 규칙을 지키는 쪽이기도 하다 —
 #: 앱이 "기록" 버튼을 누르는 것은 어차피 `/app/care-events` POST 이고, 비서를 거칠 일이 없다.

@@ -5,8 +5,8 @@ from datetime import UTC, datetime, timedelta
 
 from daengs_walk import analyze_walk
 from daengs_walk.contracts import WalkEvidencePoint
-from daengs_walk.diary_board import VerifiedBoardRoute
-from daengs_walk.diary_input import (
+from daengs_walk.diary.board.models import VerifiedBoardRoute
+from daengs_walk.diary.contracts.input import (
     DiaryInput,
     RouteVersion,
     SavedBackground,
@@ -14,7 +14,7 @@ from daengs_walk.diary_input import (
     digest,
     material_ref,
 )
-from daengs_walk.diary_observations import build_observation_pool
+from daengs_walk.diary.route.observations import build_observation_pool
 
 
 def demo_input():

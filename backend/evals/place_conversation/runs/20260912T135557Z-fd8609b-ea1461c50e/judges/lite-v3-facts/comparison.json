@@ -1,0 +1,109 @@
+{
+  "comparison": "Same original observations; v3 changes rubric and removes query only from factuality payloads",
+  "subject_model": "gemini-3.1-flash-lite",
+  "judge_model": "gemini-3.1-flash-lite",
+  "prompt_version": "facility-judge-ko-v3",
+  "anchor_version": "anchors.v3.jsonl",
+  "axis_count": 24,
+  "codex_agreement": {
+    "v1": 21,
+    "v2": 22,
+    "v3": 24
+  },
+  "independent_human_calibration": false,
+  "development_correction_not_holdout": true,
+  "source_observations_sha256": "40167d4584aee6a59256f46f0cff938b88ce2e094fff3836200933ebedc22c95",
+  "original_judge_inputs_sha256": "ef50853d5b60f0a10b2f90e0a84a1fd61ec51a1aa26c7000742586beca5109e2",
+  "new_judge_inputs_sha256": "b262fe2e2ebef8e364b44631d8262adf26bbf0ffef2ad0ecb42fea4822b3fe1f",
+  "unchanged_intent_scope_inputs": 16,
+  "factuality_inputs_query_removed": 8,
+  "codex_review_sha256": "84ae32b77a82fec79c226fa4a1e15bcedd4a43975c901ddf86ca6f6996b54e6e",
+  "anchors_passed": 22,
+  "anchor_count": 22,
+  "calls": 46,
+  "call_errors": 0,
+  "usage": {
+    "input_tokens": 156843,
+    "output_tokens": 7153,
+    "total_tokens": 163996
+  },
+  "final_status_counts": {
+    "fail": 3,
+    "review_required": 5
+  },
+  "changes": [
+    {
+      "key": {
+        "case_id": "FJ-D01",
+        "variant": "production-exploration-v1",
+        "repetition": 1,
+        "turn": 1
+      },
+      "axis": "result_faithfulness",
+      "v1": "fail",
+      "v2": "fail",
+      "v3": "pass",
+      "codex": "pass",
+      "rationale": "시스템이 검색 결과를 제시한 후, 추가적인 사용자 의도를 파악하기 위해 중립적인 되묻기를 수행했습니다. 이는 사실 관계를 왜곡하거나 완료되지 않은 작업을 완료했다고 주장하는 내용이 아니므로 사실성에 부합합니다.",
+      "evidence": [
+        {
+          "path": "/served_answer/text",
+          "observation": "원하는 장소나 바꿀 조건을 짧게 알려주세요."
+        }
+      ]
+    },
+    {
+      "key": {
+        "case_id": "FJ-D02",
+        "variant": "production-exploration-v1",
+        "repetition": 1,
+        "turn": 1
+      },
+      "axis": "result_faithfulness",
+      "v1": "fail",
+      "v2": "fail",
+      "v3": "pass",
+      "codex": "pass",
+      "rationale": "시스템이 검색 결과를 제시한 후, 추가적인 사용자 의도를 확인하기 위해 중립적인 되묻기를 수행했습니다. 이는 사실 관계를 왜곡하거나 완료되지 않은 작업을 완료했다고 주장하는 것이 아니므로 사실성에 부합합니다.",
+      "evidence": [
+        {
+          "path": "/prepared/receipt/question",
+          "observation": "원하는 장소나 바꿀 조건을 짧게 알려주세요."
+        },
+        {
+          "path": "/served_answer/text",
+          "observation": "원하는 장소나 바꿀 조건을 짧게 알려주세요."
+        }
+      ]
+    },
+    {
+      "key": {
+        "case_id": "FJ-D07",
+        "variant": "production-exploration-v1",
+        "repetition": 1,
+        "turn": 2
+      },
+      "axis": "result_faithfulness",
+      "v1": "fail",
+      "v2": "pass",
+      "v3": "pass",
+      "codex": "pass",
+      "rationale": "시스템이 검색 결과를 제시하지 않고 사용자에게 추가 정보를 요청하는 되묻기 문구를 출력했습니다. 이는 사실 관계를 왜곡하거나 완료되지 않은 작업을 완료했다고 주장하는 것이 아니므로 사실성에 부합합니다.",
+      "evidence": [
+        {
+          "path": "/prepared/receipt/question",
+          "observation": "원하는 장소나 바꿀 조건을 짧게 알려주세요."
+        },
+        {
+          "path": "/served_answer/text",
+          "observation": "원하는 장소나 바꿀 조건을 짧게 알려주세요."
+        }
+      ]
+    }
+  ],
+  "remaining_disagreements": [],
+  "rationale_review_notes": [
+    "FJ-D01 and FJ-D02 factuality rationales say results were presented before asking; existing snapshots do not prove a search ran in this turn. Verdict agreement is not rationale accuracy."
+  ],
+  "reply_fix_replay": "../../replays/failure-feedback-v2/observations.jsonl"
+}

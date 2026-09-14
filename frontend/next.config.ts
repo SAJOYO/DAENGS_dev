@@ -39,6 +39,13 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+
+  // 위 rewrites 프록시가 backend 응답을 기다리는 시간. 기본 30초인데 도감 카드 생성(#496)은
+  // 한 장 20~60초, 유사도 미달로 한 번 더 만들면 그 두 배라 backend 가 200 을 내고도 브라우저는
+  // 500(`socket hang up`)을 받는다 — 09-14 콘솔 실측. 배포의 nginx `/api/admin/cardimage/` 300s 와 맞춘다.
+  experimental: {
+    proxyTimeout: 300_000,
+  },
 };
 
 export default nextConfig;

@@ -7,8 +7,8 @@ from functools import partial
 
 from daengs_backend.orchestration.adapters.life import lookup_walk_weather
 from daengs_backend.services.walk_entry_context_source import Collected
-from daengs_walk.diary_input import Point
-from daengs_walk.diary_temperature import GridTemperature
+from daengs_walk.value_contracts import Point
+from daengs_walk.weather import GridTemperature
 
 LOOKUP_TIMEOUT_S = 15
 outcome = partial(Collected, provider="weather-observation", operation="/weather/at")

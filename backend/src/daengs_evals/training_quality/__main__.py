@@ -15,6 +15,7 @@
 첫날 결함 둘을 찾았고 **둘 다 비율이 아니라 선별에서** 나왔다: 프롬프트 오탐은 앵커 게이트가,
 judge 의 축 넘기(⑧)는 `blindspots` 가 잡았다. 일치율은 아무것도 못 찾았다.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -49,7 +50,9 @@ def cmd_check_anchors(args: argparse.Namespace) -> int:
     result = anchors_mod.check(model=model)
     for row in result["results"]:
         mark = "OK  " if row["passed"] else "FAIL"
-        print(f"  [{mark}] {row['id']:<22} 기대={row['expected_grounded']} 실제={row['actual_grounded']}")
+        print(
+            f"  [{mark}] {row['id']:<22} 기대={row['expected_grounded']} 실제={row['actual_grounded']}"
+        )
         if row["missing_reasons"]:
             print(f"           judge 가 못 짚은 근거: {row['missing_reasons']}")
         if not row["passed"]:
@@ -106,8 +109,10 @@ def cmd_score(args: argparse.Namespace) -> int:
 
     summary = judge_mod.summarise(judgments)
     print(f"\n{out}")
-    print(f"  덤프 {head.get('items')}문항 중 판정 {summary['n']}건 "
-          f"(ANSWER 가 아니거나 청크가 없는 행은 뺍니다 — D-060 ⑤)")
+    print(
+        f"  덤프 {head.get('items')}문항 중 판정 {summary['n']}건 "
+        f"(ANSWER 가 아니거나 청크가 없는 행은 뺍니다 — D-060 ⑤)"
+    )
     print(f"  grounded {summary['grounded']} · 아님 {summary['not_grounded']}")
     print(f"  사람이 봐야 할 문항 {summary['review_needed']}건  → `review --label {args.label}`")
     print("\n⚠ 이 비율은 지표가 아닙니다. **승격은 포기했습니다** (D-060 ⑨) — 어디에도")
@@ -117,8 +122,7 @@ def cmd_score(args: argparse.Namespace) -> int:
     return 0
 
 
-def _review_sheet(label: str, picks: list[dict[str, Any]],
-                  rows: list[dict[str, Any]]) -> str:
+def _review_sheet(label: str, picks: list[dict[str, Any]], rows: list[dict[str, Any]]) -> str:
     """사람이 실제로 검산할 수 있는 한 장. **청크 본문을 같이 싣는 것이 요점이다.**
 
     판정만 보여주면 사람이 할 수 있는 것은 "그럴듯한가" 뿐이고, 그건 `RAG-075` ② 가 실패한
@@ -129,24 +133,32 @@ def _review_sheet(label: str, picks: list[dict[str, Any]],
     out = [
         f"# 사람이 볼 자리 — `{label}`",
         "",
-        (f"judge 가 판정 {len(rows)}건 중 **{len(picks)}건**에서 흔들렸습니다. 전부 읽지 "
-         "마시고 여기부터 보세요."),
+        (
+            f"judge 가 판정 {len(rows)}건 중 **{len(picks)}건**에서 흔들렸습니다. 전부 읽지 "
+            "마시고 여기부터 보세요."
+        ),
         "",
         "## 각 문항에서 물을 것 하나",
         "",
         "> **judge 가 뒷받침 안 된다고 한 그 문장이, 아래 [자료]로 정말 뒷받침이 안 됩니까?**",
         "",
-        ("그것만 보시면 됩니다. 답변이 좋은지 나쁜지는 이 축이 묻는 것이 아닙니다. "
-         "`Ctrl+F` 로 낱말을 찾아보는 것이 가장 빠릅니다."),
+        (
+            "그것만 보시면 됩니다. 답변이 좋은지 나쁜지는 이 축이 묻는 것이 아닙니다. "
+            "`Ctrl+F` 로 낱말을 찾아보는 것이 가장 빠릅니다."
+        ),
         "",
-        ("⚠ **«없다»와 «뒷받침이 안 된다»는 다릅니다.** judge 가 «자료에는 있지만 다른 맥락의 "
-         "것이라 이 질문에 옮겨 쓸 수 없다»고 하는 경우가 있습니다. 그때는 낱말을 찾으면 "
-         "**나옵니다** — 그래도 판정은 false 입니다. 아래 근거를 꼭 읽으세요."),
+        (
+            "⚠ **«없다»와 «뒷받침이 안 된다»는 다릅니다.** judge 가 «자료에는 있지만 다른 맥락의 "
+            "것이라 이 질문에 옮겨 쓸 수 없다»고 하는 경우가 있습니다. 그때는 낱말을 찾으면 "
+            "**나옵니다** — 그래도 판정은 false 입니다. 아래 근거를 꼭 읽으세요."
+        ),
         "",
-        ("⚠ 그리고 그 경우 **judge 가 축을 넘은 것일 수 있습니다.** 이 축은 *"
-         "«자료에 있는가»* 만 묻고, *«이 질문에 맞는 답인가»* 는 다른 자가 잽니다"
-         "(#305 의 `answers_question`). 자료에 있는데 «맥락이 다르다»는 이유로 false 라면 "
-         "그것은 이 축의 판정이 아닙니다 — 그렇게 보이면 적어 주세요."),
+        (
+            "⚠ 그리고 그 경우 **judge 가 축을 넘은 것일 수 있습니다.** 이 축은 *"
+            "«자료에 있는가»* 만 묻고, *«이 질문에 맞는 답인가»* 는 다른 자가 잽니다"
+            "(#305 의 `answers_question`). 자료에 있는데 «맥락이 다르다»는 이유로 false 라면 "
+            "그것은 이 축의 판정이 아닙니다 — 그렇게 보이면 적어 주세요."
+        ),
         "",
         "판정이 셋 중 하나로 갈립니다:",
         "",
@@ -156,8 +168,10 @@ def _review_sheet(label: str, picks: list[dict[str, Any]],
         "| **judge 가 틀렸다** | 자료에 있는데 못 찾았다, 또는 표현만 다른 것을 없다고 했다 |",
         "| **자료가 문제다** | 답은 맞는데 검색된 네 청크에 근거가 안 잡혔다 (검색 문제) |",
         "",
-        ("⚠ 셋째가 있다는 것이 중요합니다. judge 가 틀린 것도 생성이 틀린 것도 아니라 "
-         "**검색이 엉뚱한 청크를 물어온** 경우이고, 그건 고칠 곳이 다릅니다."),
+        (
+            "⚠ 셋째가 있다는 것이 중요합니다. judge 가 틀린 것도 생성이 틀린 것도 아니라 "
+            "**검색이 엉뚱한 청크를 물어온** 경우이고, 그건 고칠 곳이 다릅니다."
+        ),
         "",
         "---",
         "",
@@ -173,9 +187,19 @@ def _review_sheet(label: str, picks: list[dict[str, Any]],
             "",
         ]
         out += [f"- {claim}" for claim in pick["unsupported"]] or ["- (없음)"]
-        out += ["", f"> {pick['rationale']}", "", "### 답변 전문", "",
-                "```", str(row.get("answer", "")).strip(), "```", "",
-                "### 검색된 자료 — 여기에 있습니까?", ""]
+        out += [
+            "",
+            f"> {pick['rationale']}",
+            "",
+            "### 답변 전문",
+            "",
+            "```",
+            str(row.get("answer", "")).strip(),
+            "```",
+            "",
+            "### 검색된 자료 — 여기에 있습니까?",
+            "",
+        ]
         for n, chunk in enumerate(row.get("chunks") or [], start=1):
             head = " › ".join(str(p) for p in (chunk.get("heading_path") or []))
             out += [
@@ -200,11 +224,15 @@ def _review_sheet(label: str, picks: list[dict[str, Any]],
         f"backend/evals/training_quality/judgments_{label}__<이름>.jsonl",
         "```",
         "",
-        ("⚠ `judge_model` 에는 **누가 판정했는지**를 적으세요 — 사람이면 `human`, LLM 이면 "
-         "실제 모델명입니다. 섞이면 나중에 구분되지 않습니다 (D-060 ⑦)."),
+        (
+            "⚠ `judge_model` 에는 **누가 판정했는지**를 적으세요 — 사람이면 `human`, LLM 이면 "
+            "실제 모델명입니다. 섞이면 나중에 구분되지 않습니다 (D-060 ⑦)."
+        ),
         "",
-        ("⚠ 이 대조로 나오는 수는 **지표가 아닙니다.** 사람 라벨 30개(RAG-007) 조건이 "
-         "충족되지 않기 때문입니다. 쓸모는 *judge 가 어느 쪽으로 기우는지* 까지입니다."),
+        (
+            "⚠ 이 대조로 나오는 수는 **지표가 아닙니다.** 사람 라벨 30개(RAG-007) 조건이 "
+            "충족되지 않기 때문입니다. 쓸모는 *judge 가 어느 쪽으로 기우는지* 까지입니다."
+        ),
     ]
     return "\n".join(out) + "\n"
 
@@ -284,8 +312,7 @@ def cmd_blindspots(args: argparse.Namespace) -> int:
         shared = [
             s
             for s in sentences(answers.get(qid, ""))
-            if covered(s, left[qid].supported) < 0.34
-            and covered(s, right[qid].supported) < 0.34
+            if covered(s, left[qid].supported) < 0.34 and covered(s, right[qid].supported) < 0.34
         ]
         if not shared:
             continue
@@ -307,8 +334,10 @@ def cmd_agreement(args: argparse.Namespace) -> int:
     result = judge_mod.agreement(reference, candidate)
 
     print(f"기준 {args.against} ({ref_model})  ↔  후보 {args.label} ({cand_model})")
-    print(f"일치 {result['agreed']}/{result['n']}   "
-          f"(분모는 **양쪽에 다 있는 문항**입니다 — RAG-075 ①)")
+    print(
+        f"일치 {result['agreed']}/{result['n']}   "
+        f"(분모는 **양쪽에 다 있는 문항**입니다 — RAG-075 ①)"
+    )
     for row in result["mismatch"]:
         print(f"\n── {row['id']}  기준={row['reference']} 후보={row['candidate']}")
         print(f"   기준 근거: {row['reference_why']}")
@@ -318,8 +347,10 @@ def cmd_agreement(args: argparse.Namespace) -> int:
     # 사람과의 일치는 `RAG-007` 이 요구한 바로 그 수다. 다만 **승격은 포기했으므로**(D-060 ⑨)
     # 어느 쪽이든 이 수로 지표를 만들지 않는다 — 분모 30 은 이제 목표가 아니라 되열기 조건이다.
     if "human" in (ref_model, cand_model):
-        print(f"\n사람과의 일치입니다 — `RAG-007` 이 요구한 종류의 수이고 분모는 {result['n']}개"
-              " 입니다.")
+        print(
+            f"\n사람과의 일치입니다 — `RAG-007` 이 요구한 종류의 수이고 분모는 {result['n']}개"
+            " 입니다."
+        )
         print("   ⚠ 그래도 지표로 만들지 않습니다. **승격은 포기했습니다** (D-060 ⑨).")
         print("   분모 30 은 이제 목표가 아니라 **카드를 다시 여는 조건**입니다 — 사람 라벨을")
         print("   30개까지 달겠다는 사람이 나오면 그때 이 수가 뜻을 갖습니다.")
@@ -351,8 +382,9 @@ def main(argv: list[str] | None = None) -> int:
     p_review = sub.add_parser("review", help="사람이 볼 문항을 고르고 읽을 한 장을 낸다")
     p_review.add_argument("--label", required=True)
     p_review.add_argument("--dump", type=Path, default=None)
-    p_review.add_argument("--out", type=Path, default=None,
-                          help="기본은 evals/training_quality/review_<label>.md")
+    p_review.add_argument(
+        "--out", type=Path, default=None, help="기본은 evals/training_quality/review_<label>.md"
+    )
 
     p_blind = sub.add_parser("blindspots", help="두 판정자가 공통으로 안 훑은 문장")
     p_blind.add_argument("--label", required=True)

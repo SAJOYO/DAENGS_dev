@@ -40,6 +40,8 @@ TERRITORY_ATTEMPT_STATUSES = (
     "FAILED",
 )
 TERRITORY_EVIDENCE_VERSION = 1
+# On an unredacted terminal row, this retry reason requires explicit operator resumption.
+PHOTO_CLEANUP_BLOCKED_REASON = "photo_cleanup_conflict"
 
 
 class TerritoryAttempt(Base):

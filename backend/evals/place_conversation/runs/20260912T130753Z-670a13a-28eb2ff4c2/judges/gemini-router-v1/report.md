@@ -1,0 +1,37 @@
+# 시설 Judge 검토 목록
+
+자동 판정은 검토 보조이며 독립 사람 리뷰나 출시 승인 점수가 아닙니다.
+코드 검사 실패와 기존 리뷰는 유지합니다. 판단 보류·미측정·호출 오류는 통과가 아닙니다.
+
+Judge: gemini-3.1-flash-lite. 호출 21회 / 오류 0회.
+앵커 12/12. 앵커 미통과 시 실제 턴 판정은 실행하지 않습니다.
+
+| 사례 / 변형 / 반복 / 턴 | 코드 | 별도 리뷰 | 의도 | 범위 | 결과 설명 | 최종 |
+| --- | --- | --- | --- | --- | --- | --- |
+| FJ-D01/production-exploration-v1/1/1 | pass | review_required | pass | pass | pass | review_required |
+| FJ-D03/production-exploration-v1/1/1 | pass | review_required | pass | pass | pass | review_required |
+| FJ-D07/production-exploration-v1/1/1 | blocked | review_required | unmeasured | unmeasured | unmeasured | blocked |
+| FJ-D07/production-exploration-v1/1/2 | not_run | review_required | unmeasured | unmeasured | unmeasured | not_run |
+| FJ-H01/production-exploration-v1/1/1 | blocked | review_required | unmeasured | unmeasured | unmeasured | blocked |
+| FJ-H02/production-exploration-v1/1/1 | pass | review_required | pass | pass | pass | review_required |
+
+## 근거
+
+    {"key": {"case_id": "FJ-D01", "variant": "production-exploration-v1", "repetition": 1, "turn": 1}, "axis": "intent_alignment", "status": "pass", "reason": "사용자의 의도인 '주차 가능한 카페'를 정확히 파악하여 업종 필터와 주차 필수 조건을 모두 적용하였으며, 결과적으로 조건에 부합하는 시설을 성공적으로 검색함.", "evidence": [{"path": "/plans/0/changes/kinds", "observation": "사용자의 '카페' 업종 요청을 반영하여 candidate_kinds를 ['cafe']로 설정함."}, {"path": "/plans/0/changes/parking", "observation": "사용자의 '주차되는' 요청을 반영하여 hard.all에 parking: true 조건을 추가함."}, {"path": "/prepared/state/filters/candidate_kinds", "observation": "이전의 ['cafe', 'restaurant']에서 ['cafe']로 정확히 변경됨."}, {"path": "/prepared/state/filters/hard/all", "observation": "주차 가능 시설만 필터링하도록 조건이 올바르게 적용됨."}]}
+    {"key": {"case_id": "FJ-D01", "variant": "production-exploration-v1", "repetition": 1, "turn": 1}, "axis": "scope_fit", "status": "pass", "reason": "사용자의 검색 의도인 '주차 가능한 카페'를 정확히 파악하여 필터에 반영하였고, 결과적으로 조건에 부합하는 시설을 찾아 안내하였으므로 적절하게 처리되었습니다.", "evidence": [{"path": "/query", "observation": "사용자가 '주차되는 카페만 찾아줘'라고 요청함"}, {"path": "/prepared/state/filters", "observation": "필터에 candidate_kinds=['cafe']와 parking=true 조건이 정상적으로 적용됨"}, {"path": "/prepared/receipt/returned_count", "observation": "조건에 맞는 시설 1곳을 성공적으로 검색하여 반환함"}]}
+    {"key": {"case_id": "FJ-D01", "variant": "production-exploration-v1", "repetition": 1, "turn": 1}, "axis": "result_faithfulness", "status": "pass", "reason": "사용자가 요청한 '주차되는 카페' 조건에 대해 서버가 필터를 적용하여 '테스트 카페 A' 1곳을 성공적으로 검색하였고, 응답 문구 또한 실제 검색 결과와 일치함.", "evidence": [{"path": "/prepared/receipt/returned_count", "observation": "1개의 카페가 검색 결과로 반환됨"}, {"path": "/served_answer/text", "observation": "조건에 맞는 카페 1곳을 찾았다고 응답함"}]}
+    {"key": {"case_id": "FJ-D03", "variant": "production-exploration-v1", "repetition": 1, "turn": 1}, "axis": "intent_alignment", "status": "pass", "reason": "사용자의 질문은 시설 검색과 무관한 일반 지식 질문입니다. 지침에 따라 시설 밖의 지식 질문에 대해 짧은 강아지 안내로 대응하고 검색 상태를 유지하는 것은 적절한 동작입니다.", "evidence": [{"path": "/query", "observation": "사용자가 시설 검색과 무관한 '피타고라스 정리 설명해줘'라는 질문을 입력함."}, {"path": "/prepared/receipt/question", "observation": "시스템이 시설 검색 기능의 범위를 벗어난 질문임을 인지하고 강아지 안내 문구로 응답함."}]}
+    {"key": {"case_id": "FJ-D03", "variant": "production-exploration-v1", "repetition": 1, "turn": 1}, "axis": "scope_fit", "status": "pass", "reason": "사용자의 질문은 시설 검색과 무관한 일반 지식 질문입니다. 지침에 따라 시설 밖의 지식 질문은 짧은 강아지 안내로 끝내며 검색 상태를 보존해야 합니다. 시스템은 적절하게 범위를 벗어난 질문임을 안내하고 검색 기능을 유지했습니다.", "evidence": [{"path": "/query", "observation": "사용자가 '피타고라스 정리 설명해줘'라는 시설 검색과 무관한 일반 지식 질문을 입력함."}, {"path": "/prepared/receipt/question", "observation": "시스템이 '멍, 그건 잘 몰라요. 장소 찾는 건 맡겨줘요 🐾'라고 답변하여 시설 검색 기능의 범위를 벗어난 질문임을 안내함."}]}
+    {"key": {"case_id": "FJ-D03", "variant": "production-exploration-v1", "repetition": 1, "turn": 1}, "axis": "result_faithfulness", "status": "pass", "reason": "사용자의 질문이 시설 검색 범위를 벗어난 일반 지식 질문이므로, 지침에 따라 짧은 강아지 안내로 답변하고 검색 상태를 유지한 것은 적절한 대응입니다.", "evidence": [{"path": "/query", "observation": "사용자가 '피타고라스 정리 설명해줘'라는 시설 검색과 무관한 질문을 입력함."}, {"path": "/served_answer/text", "observation": "시스템이 '멍, 그건 잘 몰라요. 장소 찾는 건 맡겨줘요 🐾'라고 답변하여 시설 검색 기능의 범위를 벗어난 질문에 대해 짧은 강아지 안내로 대응함."}]}
+    {"key": {"case_id": "FJ-D07", "variant": "production-exploration-v1", "repetition": 1, "turn": 1}, "axis": "intent_alignment", "status": "unmeasured", "reason": "target execution blocked or not run", "evidence": []}
+    {"key": {"case_id": "FJ-D07", "variant": "production-exploration-v1", "repetition": 1, "turn": 1}, "axis": "scope_fit", "status": "unmeasured", "reason": "target execution blocked or not run", "evidence": []}
+    {"key": {"case_id": "FJ-D07", "variant": "production-exploration-v1", "repetition": 1, "turn": 1}, "axis": "result_faithfulness", "status": "unmeasured", "reason": "target execution blocked or not run", "evidence": []}
+    {"key": {"case_id": "FJ-D07", "variant": "production-exploration-v1", "repetition": 1, "turn": 2}, "axis": "intent_alignment", "status": "unmeasured", "reason": "target execution blocked or not run", "evidence": []}
+    {"key": {"case_id": "FJ-D07", "variant": "production-exploration-v1", "repetition": 1, "turn": 2}, "axis": "scope_fit", "status": "unmeasured", "reason": "target execution blocked or not run", "evidence": []}
+    {"key": {"case_id": "FJ-D07", "variant": "production-exploration-v1", "repetition": 1, "turn": 2}, "axis": "result_faithfulness", "status": "unmeasured", "reason": "target execution blocked or not run", "evidence": []}
+    {"key": {"case_id": "FJ-H01", "variant": "production-exploration-v1", "repetition": 1, "turn": 1}, "axis": "intent_alignment", "status": "unmeasured", "reason": "target execution blocked or not run", "evidence": []}
+    {"key": {"case_id": "FJ-H01", "variant": "production-exploration-v1", "repetition": 1, "turn": 1}, "axis": "scope_fit", "status": "unmeasured", "reason": "target execution blocked or not run", "evidence": []}
+    {"key": {"case_id": "FJ-H01", "variant": "production-exploration-v1", "repetition": 1, "turn": 1}, "axis": "result_faithfulness", "status": "unmeasured", "reason": "target execution blocked or not run", "evidence": []}
+    {"key": {"case_id": "FJ-H02", "variant": "production-exploration-v1", "repetition": 1, "turn": 1}, "axis": "intent_alignment", "status": "pass", "reason": "사용자의 질문은 시설 검색 범위를 벗어난 일반 지식 질문이며, 시스템은 지시사항대로 강아지 안내 문구를 사용하여 짧게 답변하고 검색 상태를 유지함.", "evidence": [{"path": "/query", "observation": "사용자가 시설 검색과 무관한 '우주가 얼마나 큰지'에 대해 질문함."}, {"path": "/served_answer/text", "observation": "시설 검색 기능의 범위를 벗어난 질문에 대해 강아지 안내 문구로 짧게 답변함."}]}
+    {"key": {"case_id": "FJ-H02", "variant": "production-exploration-v1", "repetition": 1, "turn": 1}, "axis": "scope_fit", "status": "pass", "reason": "사용자의 질문은 시설 검색 범위 밖의 지식 질문이며, 시스템은 지시사항대로 짧은 강아지 안내를 통해 이를 적절히 거절하고 검색 상태를 유지함.", "evidence": [{"path": "/query", "observation": "사용자가 '우주가 얼마나 큰지 알려줘'라는 시설 검색과 무관한 질문을 입력함."}, {"path": "/prepared/receipt/question", "observation": "시스템이 '멍, 그건 잘 몰라요. 장소 찾는 건 맡겨줘요 🐾'라고 강아지 안내를 포함하여 범위 밖 질문임을 적절히 처리함."}]}
+    {"key": {"case_id": "FJ-H02", "variant": "production-exploration-v1", "repetition": 1, "turn": 1}, "axis": "result_faithfulness", "status": "pass", "reason": "사용자의 질문이 시설 검색 범위를 벗어난 일반 지식 질문이며, 시스템은 지침에 따라 짧은 강아지 안내 문구로 답변하고 검색 상태를 유지했으므로 적절하게 대응함.", "evidence": [{"path": "/query", "observation": "사용자가 시설 검색과 무관한 '우주가 얼마나 큰지'에 대해 질문함"}, {"path": "/served_answer/text", "observation": "시스템이 시설 검색 기능의 범위를 벗어난 질문임을 인지하고 강아지 안내 문구로 답변함"}]}

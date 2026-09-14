@@ -18,9 +18,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from daengs_backend.core.database import get_session
 from daengs_backend.core.deps import CurrentAppUser
 from daengs_backend.core.storage import StorageNotConfiguredError
-from daengs_backend.models import Pet
 from daengs_backend.repositories import pet as pet_repo
 from daengs_backend.schemas.pet import (
+    PetDisplayUpdate,
     PetListResponse,
     PetPhotoResponse,
     PetPhotoTicketRequest,
@@ -30,6 +30,7 @@ from daengs_backend.schemas.pet import (
     PrimaryPetRequest,
 )
 from daengs_backend.services import pet as pet_service
+from daengs_backend.services import pet_identity as identity_service
 
 log = logging.getLogger(__name__)
 
@@ -60,29 +61,63 @@ def _photo_conflict(exc: pet_service.PetPhotoConflictError) -> HTTPException:
 
 
 def _to_response(
-    pet: Pet, primary_pet_id: uuid.UUID | None, viewer: uuid.UUID
+    view: identity_service.PetView, primary_pet_id: uuid.UUID | None, viewer: uuid.UUID
 ) -> PetResponse:
     """`viewer` 는 **부른 사람**입니다 — 목록에 돌보미로 참여 중인 아이가 섞여 오므로
-    (docs/co-care.md §2), 그 아이의 대표가 나인지를 여기서 붙입니다."""
+    (docs/co-care.md §2), 그 아이의 대표가 나인지를 여기서 붙입니다.
+
+    **두 행에서 읽습니다** (MVP 결정 §5). `view.display` 는 그 사용자의 행이고
+    `view.common` 은 그룹 주보호자의 행입니다 — 연결 안 된 강아지는 둘이 같은 객체라
+    이 함수의 동작이 지금까지와 한 글자도 다르지 않습니다.
+
+    | 어디서 | 무엇 |
+    | --- | --- |
+    | `display` | `id`(이후 API 에 쓸 값) · `name` · 사진 · `updated_at` |
+    | `common`  | 견종 · 성별 · 생일 · 몸무게 · 급식 · 지병 · 상시 복용약 · 배웅 |
+
+    `id` 를 `display` 에서 내는 것이 핵심입니다 — 앱은 이 값을 그대로 케어·산책 요청에
+    싣고, 서버가 그것을 그룹으로 펼쳐 읽습니다. `common.id` 를 내보내면 B 가 A 의 행에
+    기록을 쓰게 됩니다.
+    """
+    display, common = view.display, view.common
     return PetResponse(
-        id=pet.id,
-        name=pet.name,
-        breed=pet.breed,
-        sex=pet.sex,
-        neutered=pet.neutered,
-        weight_kg=pet.weight_kg,
-        birth_date=pet.birth_date,
-        birth_date_kind=pet.birth_date_kind,
-        farewell_on=pet.farewell_on,
-        feeding_style=pet.feeding_style,
-        feeding_times=pet.feeding_times,
-        health_conditions=pet.health_conditions,
-        medications=pet.medications,
-        is_primary=pet.id == primary_pet_id,
-        is_owner=pet.app_user_id == viewer,
-        updated_at=pet.updated_at,
-        has_photo=pet.photo_storage_key is not None,
-        photo_updated_at=pet.photo_updated_at,
+        id=display.id,
+        name=display.name,
+        breed=common.breed,
+        sex=common.sex,
+        neutered=common.neutered,
+        weight_kg=common.weight_kg,
+        birth_date=common.birth_date,
+        birth_date_kind=common.birth_date_kind,
+        farewell_on=common.farewell_on,
+        feeding_style=common.feeding_style,
+        feeding_times=common.feeding_times,
+        health_conditions=common.health_conditions,
+        medications=common.medications,
+        is_primary=display.id == primary_pet_id,
+        is_owner=display.app_user_id == viewer,
+        is_group_owner=common.app_user_id == viewer,
+        updated_at=display.updated_at,
+        has_photo=display.photo_storage_key is not None,
+        photo_updated_at=display.photo_updated_at,
+    )
+
+
+def _not_group_owner(exc: identity_service.NotGroupOwnerError) -> HTTPException:
+    """그룹 관리 동작을 그룹 주보호자가 아닌 사람이 불렀습니다 → **409.**
+
+    404 가 아닌 이유는 호출자가 그 강아지를 이미 자기 목록에서 보고 있기 때문입니다 —
+    감출 것이 없는데 404 를 내면 앱이 "강아지를 찾을 수 없습니다" 라고 거짓말을 그립니다.
+    강아지 삭제의 `PetHasCarersError` 와 같은 dict `detail` 모양이라 앱이 `code` 로
+    가릅니다.
+    """
+    return HTTPException(
+        status.HTTP_409_CONFLICT,
+        {
+            "code": "not_group_owner",
+            "message": f"이 아이의 주 보호자만 할 수 있어요 ({exc.pet_name}).",
+            "pet_name": exc.pet_name,
+        },
     )
 
 
@@ -99,9 +134,9 @@ async def list_pets(
     `max_pets` 를 같이 보내는 이유는 앱이 `+` 버튼을 언제 감출지 정하기 때문입니다.
     앱에 숫자를 박아 두면 서버가 상한을 바꿀 때 갈라집니다.
     """
-    pets, primary_id = await pet_service.list_pets(session, user.app_user_id)
+    views, primary_id = await pet_service.list_pets(session, user.app_user_id)
     return PetListResponse(
-        pets=[_to_response(p, primary_id, user.app_user_id) for p in pets],
+        pets=[_to_response(v, primary_id, user.app_user_id) for v in views],
         max_pets=pet_service.MAX_PETS_PER_USER,
     )
 
@@ -120,7 +155,10 @@ async def create_pet(
             status.HTTP_409_CONFLICT,
             f"강아지는 {pet_service.MAX_PETS_PER_USER}마리까지 등록할 수 있습니다.",
         ) from None
-    return _to_response(pet, primary_id, user.app_user_id)
+    # 갓 만든 아이는 어떤 그룹에도 안 붙어 있어 표시용 행과 공통 행이 같습니다.
+    return _to_response(
+        identity_service.PetView(display=pet, common=pet), primary_id, user.app_user_id
+    )
 
 
 # ⚠️ **`/{pet_id}` 보다 먼저 선언해야 한다.** FastAPI 는 등록 순서대로 매칭하므로,
@@ -149,13 +187,47 @@ async def update_pet(
     """전체를 다시 보냅니다(PUT).
 
     부분 수정을 안 두는 이유는 `None` 의 뜻이 갈리기 때문입니다 (schemas/pet.py).
+
+    ⚠️ **연결된 강아지는 그룹 주보호자만** 부를 수 있습니다 → 아니면 409
+    (MVP 결정 §5). 전체 PUT 이라 연결된 공동 보호자가 이름만 고치려 해도 화면에 그려진
+    **주보호자의 공통 정보**가 자기 원본 행에 덮어써지기 때문입니다. 이름만 바꾸려면
+    `PATCH /app/pets/{pet_id}/display` 를 쓰세요.
     """
     try:
         pet = await pet_service.update_pet(session, user.app_user_id, pet_id, body)
     except pet_service.PetNotFoundError:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "강아지를 찾을 수 없습니다.") from None
+    except identity_service.NotGroupOwnerError as exc:
+        raise _not_group_owner(exc) from None
+    view = await identity_service.view_of(session, pet)
     _, primary_id = await pet_service.list_pets(session, user.app_user_id)
-    return _to_response(pet, primary_id, user.app_user_id)
+    return _to_response(view, primary_id, user.app_user_id)
+
+
+@router.patch("/{pet_id}/display", response_model=PetResponse)
+async def update_display(
+    pet_id: uuid.UUID,
+    body: PetDisplayUpdate,
+    user: CurrentAppUser,
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> PetResponse:
+    """**이름만** 바꿉니다. 행 대표면 됩니다 (MVP 결정 §5).
+
+    이름·사진은 보호자마다 자기 값이라, 같은 실제 강아지를 연결한 공동 보호자도 자기
+    행의 이름을 계속 고칠 수 있어야 합니다. 전체 PUT 이 그 자리에서 409 인 것과 짝입니다 —
+    좁은 계약 하나를 여는 쪽이, 넓은 계약에서 공통 필드만 몰래 무시하는 것보다 낫습니다.
+
+    사진은 여기 없습니다 — `/{pet_id}/photo*` 가 이미 따로이고 그쪽도 행 대표입니다.
+    """
+    try:
+        pet = await pet_service.update_display(
+            session, user.app_user_id, pet_id, name=body.name
+        )
+    except pet_service.PetNotFoundError:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "강아지를 찾을 수 없습니다.") from None
+    view = await identity_service.view_of(session, pet)
+    _, primary_id = await pet_service.list_pets(session, user.app_user_id)
+    return _to_response(view, primary_id, user.app_user_id)
 
 
 @router.delete("/{pet_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -184,6 +256,11 @@ async def delete_pet(
         await pet_service.delete_pet(session, user.app_user_id, pet_id, confirm=confirm)
     except pet_service.PetNotFoundError:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "강아지를 찾을 수 없습니다.") from None
+    except identity_service.NotGroupOwnerError as exc:
+        # 연결된 강아지는 그룹 주보호자만 지웁니다 (MVP 결정 §6). 아래
+        # `PetHasCarersError` 와 달리 **`confirm` 으로 안 뚫립니다** — 저쪽은 "알고 하는
+        # 것이 맞나" 확인이고, 이쪽은 "당신이 할 일이 아니다" 입니다.
+        raise _not_group_owner(exc) from None
     except pet_service.PetHasCarersError as exc:
         raise HTTPException(
             status.HTTP_409_CONFLICT,
@@ -261,8 +338,9 @@ async def confirm_photo(
         raise _photo_conflict(exc) from None
     except StorageNotConfiguredError as exc:
         raise _photo_unavailable(exc) from None
+    view = await identity_service.view_of(session, pet)
     _, primary_id = await pet_service.list_pets(session, user.app_user_id)
-    return _to_response(pet, primary_id, user.app_user_id)
+    return _to_response(view, primary_id, user.app_user_id)
 
 
 @router.get("/{pet_id}/photo", response_model=PetPhotoResponse)

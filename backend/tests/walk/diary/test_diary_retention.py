@@ -8,7 +8,7 @@ from uuid import uuid4
 import pytest
 
 from daengs_backend.config import settings
-from daengs_backend.services import walk_diary_input as reader
+from daengs_backend.services.walk_diary.preparation import input as reader
 from tests.walk.support.diary_generation import PATH, QUERY, body
 from tests.walk.support.photo_input import row as photos
 

@@ -14,7 +14,7 @@ from daengs_backend.services import walk_catalog_refresh as refresh
 from daengs_backend.services import walk_catalog_regions as regions
 from daengs_backend.services.walk_public_context import collect_public
 from daengs_backend.services.walk_public_http import PublicSourceError, get_json
-from daengs_walk.diary_input import digest
+from daengs_walk.diary.contracts.input import digest
 
 POINTS = [{"lat": 37.5, "lng": 127.0}, {"lat": 37.66, "lng": 126.754}]
 

@@ -311,6 +311,19 @@ async def main(dsn):
                 "precision_versions"
             ] == [pc.VERSION]
             await request("GET", precision_path, 404)
+            await request(
+                "POST", f"/app/walks/{walk_id}/measurements?version=walk-measurement-v1", 503
+            )
+            async with engine.begin() as conn:
+                pg = (await conn.get_raw_connection()).driver_connection
+                for filename in ["db/migrations/2026-09-13_walk_measurements.sql"] * 2 + [
+                    "db/init/37_walk_measurements.sql",
+                    "db/migrations/verify_2026-09-13_walk_measurements.sql",
+                ]:
+                    await pg.execute((ROOT / filename).read_text(encoding="utf-8"))
+            assert (await request("GET", "/app/walks/trajectory-capabilities"))[
+                "persisted_measurements_supported"
+            ]
             for selected_id, selected_raw, base_done in [
                 (walk_id, raw, complete),
                 (empty_id, [], empty_done),
@@ -386,6 +399,62 @@ async def main(dsn):
                     and calc["precision_fingerprint"] == receipt["evidence_fingerprint"]
                 )
                 assert calc["device_result_verified"] is False
+                mpath = f"/app/walks/{selected_id}/measurements"
+                query = "?version=walk-measurement-v1"
+                await request("POST", mpath, 422)
+                results = await asyncio.gather(*[request("POST", mpath + query) for _ in range(2)])
+                assert results[0] == results[1]
+                measured = results[0]
+                mid = measured["measurement"]["measurement_id"]
+                assert measured == await request("GET", mpath + f"/{mid}" + query)
+                assert measured == await request("POST", mpath + query)
+                # A persisted input is served without rerunning the CPU engine.
+                from unittest.mock import patch
+
+                from daengs_backend.services import walk_measurement as measurement_service
+
+                with patch.object(
+                    measurement_service, "project", side_effect=AssertionError("recomputed")
+                ):
+                    assert measured == await request("POST", mpath + query)
+                # Exact stored bytes are checked on reads and cache hits too.
+                async with engine.begin() as conn:
+                    original = await conn.scalar(
+                        text("SELECT payload FROM walk_measurements WHERE walk_id=:id"),
+                        {"id": selected_id},
+                    )
+                    await conn.execute(
+                        text(
+                            "UPDATE walk_measurements SET payload=payload || ' ' WHERE walk_id=:id"
+                        ),
+                        {"id": selected_id},
+                    )
+                await request("GET", mpath + f"/{mid}" + query, 409)
+                await request("POST", mpath + query, 409)
+                async with engine.begin() as conn:
+                    await conn.execute(
+                        text("UPDATE walk_measurements SET payload=:payload WHERE walk_id=:id"),
+                        {"id": selected_id, "payload": original},
+                    )
+                import hashlib
+
+                for ref in measured["required_route_chunks"]:
+                    reply = await client.get(mpath + f"/{mid}/chunks/{ref['index']}" + query)
+                    assert reply.status_code == 200, reply.text
+                    assert hashlib.sha256(reply.content).hexdigest() == ref["sha256"]
+                    assert len(reply.content) == ref["byte_size"]
+                    assert reply.headers["etag"] == '"' + ref["sha256"] + '"'
+                    assert reply.headers["cache-control"] == "private, no-store"
+                    count += 1
+                app.dependency_overrides[CurrentAppUser.__metadata__[0].dependency] = lambda: (
+                    AppPrincipal(app_user_id=other)
+                )
+                await request("POST", mpath + query, 404)
+                await request("GET", mpath + f"/{mid}" + query, 404)
+                await request("GET", mpath + f"/{mid}/chunks/0" + query, 404)
+                app.dependency_overrides[CurrentAppUser.__metadata__[0].dependency] = current
+                await request("GET", mpath + f"/{mid}/chunks/1999" + query, 404)
+
                 for i, part in enumerate(parts):
                     assert (await request("GET", ppath + f"/chunks/{i}"))["points"] == [
                         q.model_dump() for q in part
@@ -401,6 +470,47 @@ async def main(dsn):
                         409,
                         json={"manifest_fingerprint": pm_hash, "points": changed},
                     )
+            # Deletion can win while calculation is detached. No output may resurrect the walk.
+            import threading
+            from unittest.mock import patch
+
+            from daengs_backend.services import walk_measurement as measurement_service
+
+            async with engine.begin() as conn:
+                await conn.execute(
+                    text("DELETE FROM walk_measurements WHERE walk_id=:id"), {"id": empty_id}
+                )
+            entered, release = threading.Event(), threading.Event()
+            original_project = measurement_service.project
+
+            def blocked_project(*args):
+                entered.set()
+                assert release.wait(10)
+                return original_project(*args)
+
+            with patch.object(measurement_service, "project", blocked_project):
+                pending = asyncio.create_task(
+                    request(
+                        "POST",
+                        f"/app/walks/{empty_id}/measurements?version=walk-measurement-v1",
+                        404,
+                    )
+                )
+                try:
+                    assert await asyncio.to_thread(entered.wait, 10)
+                    async with engine.begin() as conn:
+                        await conn.execute(text("DELETE FROM walks WHERE id=:id"), {"id": empty_id})
+                finally:
+                    release.set()
+                await pending
+            async with engine.begin() as conn:
+                assert (
+                    await conn.scalar(
+                        text("SELECT count(*) FROM walk_measurements WHERE walk_id=:id"),
+                        {"id": empty_id},
+                    )
+                    == 0
+                )
             async with sessions() as session:
                 assert (await session.get(WalkPointChunk, (walk_id, 0))).payload == encode_chunk(
                     raw
@@ -411,6 +521,8 @@ async def main(dsn):
                 assert await conn.scalar(text("SELECT count(*) FROM walk_motion_chunks")) == 0
                 assert await conn.scalar(text("SELECT count(*) FROM walk_precision_backups")) == 0
                 assert await conn.scalar(text("SELECT count(*) FROM walk_precision_chunks")) == 0
+                assert await conn.scalar(text("SELECT count(*) FROM walk_measurements")) == 0
+                assert await conn.scalar(text("SELECT count(*) FROM walk_measurement_chunks")) == 0
             await request("GET", path, 404)
             await request("GET", calculation_path, 404)
         # Reuse the registered mutation cases, scoped to this migration. No psql or full SQL suite required.
@@ -420,9 +532,9 @@ async def main(dsn):
         checks = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(checks)
         mutation_count = 0
-        for name in ("walk_motion_backup", "walk_precision_backup"):
+        for name in ("walk_motion_backup", "walk_precision_backup", "walk_measurements"):
             case = next(c for c in checks.CHECKS if c[1] == name)
-            for mutation in ["", f"DROP TABLE {name}s CASCADE", *case[4]]:
+            for mutation in ["", f"DROP TABLE {case[3]} CASCADE", *case[4]]:
                 async with engine.connect() as conn:
                     transaction = await conn.begin()
                     # SQLAlchemy begins lazily; force BEGIN before using the underlying asyncpg connection.
@@ -432,7 +544,7 @@ async def main(dsn):
                         await pg.execute(mutation)
                     try:
                         await pg.execute(
-                            (ROOT / f"db/migrations/verify_2026-09-11_{name}.sql").read_text(
+                            (ROOT / f"db/migrations/verify_{case[0]}_{name}.sql").read_text(
                                 encoding="utf-8"
                             )
                         )

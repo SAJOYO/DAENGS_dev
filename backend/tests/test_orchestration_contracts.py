@@ -140,7 +140,7 @@ def test_capability_names_have_exactly_three_copies_and_they_agree() -> None:
     # `general` (D-057) 은 v9 부터 라우터 목적지이기도 하다.
     # `vet_contact` 는 라우터가 고를 수 없는 능력이라 세 사본이 더는 완전히 같지 않다 —
     # 결정론적 어휘 게이트와 명시 신호로만 들어온다.
-    # `care_log` (D-074) 도 라우터 밖이고, 한 겹 더 좁다 — 명시 신호로도 못 부르고,
+    # `care_log` (D-075) 도 라우터 밖이고, 한 겹 더 좁다 — 명시 신호로도 못 부르고,
     # 사용자가 앞 턴의 제안에 승낙했을 때만 들어온다.
     router_reachable = names - {"vet_contact", "care_log"}
     assert set(get_args(ExecuteName)) == router_reachable, "라우터가 고를 수 있는 목적지가 어긋났다"

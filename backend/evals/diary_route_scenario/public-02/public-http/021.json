@@ -1,0 +1,31 @@
+{
+  "sequence": 21,
+  "endpoint": "https://sgisapi.mods.go.kr/OpenAPI3/addr/rgeocode.json",
+  "parameters": {
+    "x_coor": "959097.3145699049",
+    "y_coor": "1941608.1467334558",
+    "addr_type": "20"
+  },
+  "started_at": "2026-09-14T03:06:30.917087+00:00",
+  "http_status": 200,
+  "response": {
+    "result": [
+      {
+        "addr_en": "Yangjae 2(i)-dong Seocho-gu Seoul",
+        "sido_cd": "11",
+        "sgg_nm": "서초구",
+        "sido_nm": "서울특별시",
+        "emdong_cd": "670",
+        "full_addr": "서울특별시 서초구 양재2동",
+        "sgg_cd": "220",
+        "emdong_nm": "양재2동"
+      }
+    ],
+    "errCd": 0,
+    "errMsg": "Success",
+    "id": "API_0703",
+    "trId": "TjdF_API_0703_1789355190549"
+  },
+  "response_sha256": "597f6fa1884ad0fee2684bf0de7ed164a1c3a2fbf7eb9ccf8dd8237ab777d681",
+  "elapsed_s": 1.0
+}

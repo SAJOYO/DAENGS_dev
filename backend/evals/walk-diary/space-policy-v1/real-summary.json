@@ -1,0 +1,151 @@
+{
+  "format": "space-policy-real-summary-v1",
+  "date": "2026-09-13",
+  "basis": "retrospective public lookup snapshots on unchanged saved phone coordinates; each point is an application probe, not a selected diary scene",
+  "commerce_sample_radius_m": 500,
+  "park_candidate_radius_m": 1000,
+  "land_requests": 12,
+  "land_responses": 11,
+  "land_unavailable": 1,
+  "trials": [
+    {
+      "phone": "phone-A",
+      "park_radius_m": 100,
+      "input_revision": "e14d2a314a44a94506e88ad47f302204879413039b8ccd70d95fcdee6d706f5e",
+      "frames": 363,
+      "loaded_frames": {
+        "commerce": 363,
+        "park": 72,
+        "land_cover": 277
+      },
+      "max_loaded": 3,
+      "capacity_loss_frames": 0,
+      "capacity_decisions": {
+        "kept": 712
+      },
+      "elapsed_s": 10.0234,
+      "capacity_lost_materials_by_source": {}
+    },
+    {
+      "phone": "phone-A",
+      "park_radius_m": 250,
+      "input_revision": "8e1c0525757861b40ad2c524617fe4d5d287eb15e8f2aa7dd03ce1a14cbab884",
+      "frames": 363,
+      "loaded_frames": {
+        "commerce": 363,
+        "park": 348,
+        "land_cover": 277
+      },
+      "max_loaded": 4,
+      "capacity_loss_frames": 101,
+      "capacity_decisions": {
+        "kept": 990,
+        "part_capacity": 101
+      },
+      "elapsed_s": 11.344,
+      "capacity_lost_materials_by_source": {
+        "park": 101
+      }
+    },
+    {
+      "phone": "phone-A",
+      "park_radius_m": 500,
+      "input_revision": "d2c2af157df274e3ab960be1718b9111c89f916cc0a9f9c8c2162ebf5ba80a4b",
+      "frames": 363,
+      "loaded_frames": {
+        "commerce": 363,
+        "park": 363,
+        "land_cover": 277
+      },
+      "max_loaded": 7,
+      "capacity_loss_frames": 350,
+      "capacity_decisions": {
+        "kept": 1089,
+        "part_capacity": 1019
+      },
+      "elapsed_s": 10.0514,
+      "capacity_lost_materials_by_source": {
+        "park": 1019
+      }
+    },
+    {
+      "phone": "phone-B",
+      "park_radius_m": 100,
+      "input_revision": "551b2bfdcd0cf1f96db850127c72886688430411f04cf2da24ba14ada9255091",
+      "frames": 174,
+      "loaded_frames": {
+        "commerce": 174,
+        "park": 0,
+        "land_cover": 152
+      },
+      "max_loaded": 2,
+      "capacity_loss_frames": 0,
+      "capacity_decisions": {
+        "kept": 326
+      },
+      "elapsed_s": 5.9558,
+      "capacity_lost_materials_by_source": {}
+    },
+    {
+      "phone": "phone-B",
+      "park_radius_m": 250,
+      "input_revision": "de1112365e457b23e53bd89f8c2d982b2751245fb99bbc24eb49e1452926fae0",
+      "frames": 174,
+      "loaded_frames": {
+        "commerce": 174,
+        "park": 41,
+        "land_cover": 152
+      },
+      "max_loaded": 3,
+      "capacity_loss_frames": 0,
+      "capacity_decisions": {
+        "kept": 367
+      },
+      "elapsed_s": 5.6101,
+      "capacity_lost_materials_by_source": {}
+    },
+    {
+      "phone": "phone-B",
+      "park_radius_m": 500,
+      "input_revision": "d4c926c908043c58293b3a452cde746c3821f5423d14a9334e65a543a13d20dd",
+      "frames": 174,
+      "loaded_frames": {
+        "commerce": 174,
+        "park": 174,
+        "land_cover": 152
+      },
+      "max_loaded": 4,
+      "capacity_loss_frames": 152,
+      "capacity_decisions": {
+        "kept": 522,
+        "part_capacity": 152
+      },
+      "elapsed_s": 5.9224,
+      "capacity_lost_materials_by_source": {
+        "park": 152
+      }
+    }
+  ],
+  "application_performance": [
+    {
+      "phone": "phone-A",
+      "unique_candidates": 13,
+      "prepared_features": 2,
+      "prepare_s": 0.2199,
+      "coordinate_application_p95_ms": 5.206,
+      "coordinate_application_max_ms": 11.823,
+      "original_geometry_equivalence_checks": 8,
+      "measurement_scope": "application rules only after preparation; evaluates every unique saved candidate; excludes API, input parsing/hashing, evidence/stamp serialization"
+    },
+    {
+      "phone": "phone-B",
+      "unique_candidates": 14,
+      "prepared_features": 2,
+      "prepare_s": 0.1422,
+      "coordinate_application_p95_ms": 4.457,
+      "coordinate_application_max_ms": 18.12,
+      "original_geometry_equivalence_checks": 8,
+      "measurement_scope": "application rules only after preparation; evaluates every unique saved candidate; excludes API, input parsing/hashing, evidence/stamp serialization"
+    }
+  ]
+}

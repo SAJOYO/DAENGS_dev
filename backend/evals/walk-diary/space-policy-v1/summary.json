@@ -1,0 +1,15 @@
+{
+  "input_revision": "2f420c4058a8a516c3b67c7760a74884b4e3dbb0325ecb108ed0a7d60879888d",
+  "frames": 6,
+  "loaded_frames": {
+    "commerce": 4,
+    "park": 2,
+    "land_cover": 3
+  },
+  "max_loaded": 4,
+  "capacity_loss_frames": 2,
+  "capacity_decisions": {
+    "kept": 9,
+    "part_capacity": 2
+  }
+}

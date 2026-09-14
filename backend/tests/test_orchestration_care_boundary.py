@@ -280,7 +280,7 @@ def test_no_care_capability_exists_in_the_contracts() -> None:
     receives husbandry questions now — additive, and stripped by the planner while the
     fallback flag is off, so this file's deterministic cases still route as before.
 
-    **`care_log` 는 발명된 능력이 아니다** (D-074). 육아 질문을 받는 목적지가 아니라
+    **`care_log` 는 발명된 능력이 아니다** (D-075). 육아 질문을 받는 목적지가 아니라
     **케어 로그에 한 줄 쓰는 능력**이고, 라우터가 고를 수 없다 (`ExecuteName` 에 없다 —
     아래 assert). 들어오는 길은 사용자가 앞 턴의 제안에 승낙하는 것 하나뿐이다
     (`planner.resolve_care_log_write`). 이 파일이 막으려는 것 — "육아 질문을 받는 새 목적지를

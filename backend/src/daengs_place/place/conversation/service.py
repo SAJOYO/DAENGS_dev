@@ -34,7 +34,7 @@ from daengs_place.place.conversation.contract import (
 from daengs_place.place.conversation.grounding import browse_scope
 from daengs_place.place.conversation.policy import Decision, base_revision, decide
 from daengs_place.place.conversation.render import selected_facts
-from daengs_place.place.conversation.scope import INVALID_REQUEST, PRESERVE_CODES
+from daengs_place.place.conversation.scope import PRESERVE_CODES, PROCESSING_FAILED
 from daengs_place.place.filters.contract import (
     Branch,
     FilterState,
@@ -181,7 +181,7 @@ class ConversationService:
                     request,
                     "clarify",
                     "invalid_plan",
-                    INVALID_REQUEST,
+                    PROCESSING_FAILED,
                     action="clarify",
                 )
             now = self.now()

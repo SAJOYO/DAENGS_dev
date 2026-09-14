@@ -47,7 +47,7 @@ LLM은 의미만 판단합니다. EXECUTE에서는 `training`·`life`·`walk`, H
 
 **모델 앞에 서는 결정론 게이트가 셋입니다** — 명시 신호(`requested_capability`) · 응급
 어휘(`emergency.py` → `vet_contact`) · 케어 기록(`care_log.py` → 확인 되묻기 또는 기록 화면
-HANDOFF, D-074). 셋 다 라우터를 아예 안 거치고 계획을 냅니다. 마지막 것이 **이 저장소에서
+HANDOFF, D-075). 셋 다 라우터를 아예 안 거치고 계획을 냅니다. 마지막 것이 **이 저장소에서
 유일하게 DB 에 쓰는 경로**이고, 그래서 모델 앞에 있습니다 — 프롬프트 회귀 하나가 남의 강아지
 기록에 행을 남기는 자리를 만들지 않으려는 배치입니다 (contracts §3 「케어 기록 쓰기」).
 
@@ -330,7 +330,7 @@ handoff 쌍 · `social_intent` · O-14 1회 재시도 · v5 의 Life 제한 · v
 - HANDOFF 는 실패가 아닙니다. multipart 이미지·영상 워크플로(Skin·Gait)는 전용 API 에
   남는다는 확정 경계(architecture §논리 오케스트레이션)의 라우팅 쪽 표현입니다.
   대상 플로우 식별자를 각 `handoffs[].target` 에 담아 프론트가 이동시킬 수 있게 합니다.
-  **세 번째 target 이 있습니다 — `care_log`** (D-074, `reason: "care_log_entry_required"`).
+  **세 번째 target 이 있습니다 — `care_log`** (D-075, `reason: "care_log_entry_required"`).
   앞 둘과 달리 **의미 라우터가 못 고릅니다**: 결정론 게이트
   (`orchestration/care_log.py` → `planner.resolve_care_log_route`)만 냅니다. 뜻은 같습니다 —
   "채팅으로 처리하지 않고 기록 화면으로 보낸다". `"방금 밥 먹였어"` 에서 무엇을·어느 아이를

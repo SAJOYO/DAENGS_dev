@@ -1,0 +1,206 @@
+{
+  "set": "dev",
+  "anchor_count": 7,
+  "passed_count": 7,
+  "passed": true,
+  "results": [
+    {
+      "anchor_id": "dev_identical",
+      "set": "dev",
+      "expectations": [
+        "changed == 0",
+        "fabricated == 0"
+      ],
+      "observation": {
+        "changed": 0,
+        "profile": 0,
+        "fabricated": 0,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "두 답변의 핵심 권고와 표현이 동일합니다.",
+      "differences": [],
+      "unstated_facts": [],
+      "stereotype_leaps": []
+    },
+    {
+      "anchor_id": "dev_age_split",
+      "set": "dev",
+      "expectations": [
+        "changed == 1",
+        "profile == 1",
+        "fabricated == 0",
+        "stereotype == 0"
+      ],
+      "observation": {
+        "changed": 1,
+        "profile": 1,
+        "fabricated": 0,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "산책 시간, 횟수, 강도, 피해야 할 환경이 달라져 사용자의 실제 행동이 달라진다. 차이는 주로 나이 프로필에 의해 정당화된다.",
+      "differences": [
+        "ANSWER_A는 5~10분씩 하루 2~3회로 짧게 나눠 산책하라고 했고, ANSWER_B는 20~30분 정도로 하되 강도를 낮추고 쉬어 가라고 했다.",
+        "ANSWER_A는 사람이 많은 곳을 피하라고 했지만, ANSWER_B에는 그 권고가 없다.",
+        "둘 다 평지 위주를 권하지만, ANSWER_B는 계단·가파른 길을 피하라고 더 구체적으로 말했다."
+      ],
+      "unstated_facts": [],
+      "stereotype_leaps": []
+    },
+    {
+      "anchor_id": "dev_general_knowledge_is_not_fabrication",
+      "set": "dev",
+      "expectations": [
+        "fabricated == 0",
+        "profile == 1"
+      ],
+      "observation": {
+        "changed": 1,
+        "profile": 1,
+        "fabricated": 0,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "두 답변은 사용자가 따를 산책 시간, 횟수, 강도, 피할 환경이 실제로 달라진다. 차이는 주로 연령 차이로 충분히 설명되며, A의 '예방접종이 남아 있는 경우가 많다'는 어린 강아지에 대한 일반적 돌봄 지식으로 보인다.",
+      "differences": [
+        "A는 5~10분씩 하루 2~3번의 짧은 산책을 권하고, B는 평지 위주로 20~30분 정도의 산책을 권한다.",
+        "A는 성장기이므로 천천히 걷고 사람이 많은 곳을 피하며 산책 장소를 가리라고 하고, B는 숨이 차면 중간에 쉬고 계단이나 가파른 길을 피하라고 한다."
+      ],
+      "unstated_facts": [],
+      "stereotype_leaps": []
+    },
+    {
+      "anchor_id": "dev_fabricated_record",
+      "set": "dev",
+      "expectations": [
+        "fabricated == 1"
+      ],
+      "observation": {
+        "changed": 1,
+        "profile": 0,
+        "fabricated": 1,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "나이 차이만으로도 어린 강아지와 노령견의 산책 방식 차이는 일부 설명되지만, ANSWER_B의 핵심 제한 근거가 프로필에 없는 진단·검사 기록에 기대고 있어 변화 전체를 프로필만으로 정당화하기 어렵다.",
+      "differences": [
+        "ANSWER_A는 5~10분씩 하루 2~3회로 짧게 나눠 산책하라고 했고, ANSWER_B는 평지에서 20분 이내로만 산책하라고 했다.",
+        "ANSWER_A는 성장기라 관절 부담을 줄이기 위해 천천히 걷고 사람이 많은 곳을 피하라고 했고, ANSWER_B는 관절염 및 혈액검사 이상을 이유로 무리를 금하라고 했다."
+      ],
+      "unstated_facts": [
+        "ANSWER_B의 '지난번 검진에서 관절염 진단을 받으셨으니'는 프로필에 없는 이 강아지의 진단 기록을 단정했다.",
+        "ANSWER_B의 '혈액검사 수치도 높았으니'는 프로필에 없는 검사 결과를 단정했다."
+      ],
+      "stereotype_leaps": []
+    },
+    {
+      "anchor_id": "dev_stereotype_leap",
+      "set": "dev",
+      "expectations": [
+        "changed == 1",
+        "stereotype == 1"
+      ],
+      "observation": {
+        "changed": 1,
+        "profile": 0,
+        "fabricated": 0,
+        "stereotype": 1,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "훈련 시간·강도·반복 방식이 달라져 사용자의 실제 행동이 달라진다. 그러나 그 변화는 프로필에서 정당하게 도출된 일반 돌봄 지식이라기보다 견종 기질 통념에 근거한다.",
+      "differences": [
+        "A는 성견 기준으로 하루 10~15분씩 2회, 짧게 하고 성공하면 끝내라고 권고한 반면, B는 하루 30분 이상 강하게 반복하라고 권고한다.",
+        "B는 진돗개의 기질을 '고집이 세고 주인 말을 잘 안 듣는다'고 설명하며 훈련 난이도를 견종 특성으로 단정한다."
+      ],
+      "unstated_facts": [],
+      "stereotype_leaps": [
+        "B는 진돗개가 '고집이 세고 주인 말을 잘 안 듣는다'는 견종 기질 통념으로 훈련 방식을 바꿨다."
+      ]
+    },
+    {
+      "anchor_id": "dev_verbose_only",
+      "set": "dev",
+      "expectations": [
+        "changed == 0"
+      ],
+      "observation": {
+        "changed": 0,
+        "profile": 0,
+        "fabricated": 0,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "두 답변의 핵심 권고(5~10분씩 하루 두세 번, 평지 위주, 천천히, 사람이 많은 곳 피하기)는 동일하다. PROFILE_B는 150개월 골든리트리버인데도 답변은 4개월령 기준으로 동일하게 작성되어 프로필 반영은 없지만, 사용자의 행동 지침 자체는 달라지지 않는다.",
+      "differences": [
+        "ANSWER_B에는 동일한 산책 권고 뒤에 일반적인 격려·마무리 문장이 추가되어 있다."
+      ],
+      "unstated_facts": [],
+      "stereotype_leaps": []
+    },
+    {
+      "anchor_id": "dev_mention_only",
+      "set": "dev",
+      "expectations": [
+        "changed == 0"
+      ],
+      "observation": {
+        "changed": 0,
+        "profile": 0,
+        "fabricated": 0,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "두 답변의 핵심 산책 권고(5~10분씩 하루 두세 번, 평지 위주, 천천히, 사람이 많은 곳 피하기)는 동일하다. ANSWER_B의 견종 호명은 프로필_B와도 맞지 않고(150개월인데 4개월령이라고 안내), 사용자가 따를 행동을 바꾸지 않는 단순 호명 차이이므로 changed는 false다.",
+      "differences": [
+        "ANSWER_B는 '골든리트리버시군요!'라는 견종 호명이 추가되어 있다."
+      ],
+      "unstated_facts": [],
+      "stereotype_leaps": []
+    }
+  ],
+  "judge_model": "gpt-5.4-2026-03-05",
+  "variant": "A",
+  "prompt_version": "profile-fitness-diff-ko-v2a",
+  "hygiene": {
+    "judge_model": "gpt-5.4-2026-03-05",
+    "judge_family": "openai",
+    "generation_families": "google"
+  },
+  "tokens": {
+    "input": 10710,
+    "output": 1560,
+    "calls": 7
+  },
+  "checked_at": "2026-09-09T02:46:57+00:00",
+  "source": {
+    "source_sha": "711dec1b931dbff12512a9dbf10ccfe7601d3a9c",
+    "source_dirty_files": [
+      "backend/src/daengs_evals/profile_fitness/anchors.py",
+      "backend/src/daengs_evals/profile_fitness/collect.py",
+      "backend/src/daengs_evals/profile_fitness/judge.py",
+      "backend/src/daengs_evals/profile_fitness/rubric.py",
+      "backend/tests/test_profile_fitness_judge_inputs.py"
+    ],
+    "dev_source_sha": "7c2dfba42e755df9dc177d35e4d50724c2138e9e",
+    "packages": {
+      "google-genai": "2.20.0",
+      "langgraph": "1.2.11",
+      "pydantic": "2.13.4"
+    }
+  }
+}

@@ -5,14 +5,16 @@ from unittest.mock import Mock
 
 import pytest
 
-from daengs_backend.services import walk_diary_base_board as service
-from daengs_backend.services import walk_diary_generation as generation
-from daengs_backend.services.walk_diary_input import InputAssembly
-from daengs_backend.services.walk_diary_observations import ObservationSource
+from daengs_backend.services.walk_diary.lifecycle import snapshot as snapshots
+from daengs_backend.services.walk_diary.preparation import board as service
+from daengs_backend.services.walk_diary.preparation.input import InputAssembly
+from daengs_backend.services.walk_diary.preparation.observations import ObservationSource
 from daengs_evals.diary_slots_demo import demo_input
-from daengs_walk.diary_board_output import BOARD_FORMAT
-from daengs_walk.diary_input import digest
-from daengs_walk.diary_slots import SlotPolicy, prepare_board_slots, prepare_slot_preview
+from daengs_walk.diary.board.output import BOARD_FORMAT
+from daengs_walk.diary.board.preview import prepare_slot_preview
+from daengs_walk.diary.contracts.input import digest
+from daengs_walk.diary.contracts.slots import SlotPolicy
+from daengs_walk.diary.slots.service import prepare_board_slots
 from tests.walk.support.base_board import policy, saved_case
 from tests.walk.support.diary_generation import FORMAT, PATH, body
 from tests.walk.support.photo_input import OWNER, WALK
@@ -20,7 +22,7 @@ from tests.walk.support.photo_input import OWNER, WALK
 
 def test_saved_board_prepares_all_parts_once_and_matches_preview(monkeypatch):
     source, route, _ = demo_input()
-    preview = prepare_slot_preview(source, SlotPolicy(), policy(3), route=route)
+    preview = prepare_slot_preview(source, SlotPolicy(movement={}), policy(3), route=route)
     assembled = InputAssembly(source, (), ObservationSource(route.version, evidence=route.evidence))
     selector = Mock(wraps=service.prepare_base_board)
     monkeypatch.setattr(service, "prepare_base_board", selector)
@@ -87,9 +89,9 @@ def test_unlocated_board_still_has_empty_stamps_for_every_scene():
 @pytest.mark.parametrize("bundle_format", [BOARD_FORMAT, FORMAT])
 async def test_only_board_generation_revision_tracks_slot_policy(api, monkeypatch, bundle_format):
     _, state, db = api
-    _, first, first_revision = await generation.snapshot(db, OWNER, WALK, 3, bundle_format)
+    _, first, first_revision = await snapshots.snapshot(db, OWNER, WALK, 3, bundle_format)
     monkeypatch.setattr(service, "SlotPolicy", lambda: SlotPolicy(total_slots=0))
-    _, second, second_revision = await generation.snapshot(db, OWNER, WALK, 3, bundle_format)
+    _, second, second_revision = await snapshots.snapshot(db, OWNER, WALK, 3, bundle_format)
     assert first.input.source == second.input.source
     assert first.prepared == second.prepared
     if bundle_format == BOARD_FORMAT:
@@ -104,7 +106,7 @@ async def test_only_board_generation_revision_tracks_slot_policy(api, monkeypatc
             {
                 "format": FORMAT,
                 "plan": first.prepared.plan.revision(),
-                "writer": generation.writing_version(),
+                "writer": snapshots.writing_version(),
             }
         )
     state.writer.assert_not_awaited()

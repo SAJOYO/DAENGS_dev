@@ -188,7 +188,7 @@ RoutePlan:
   ⚠ **코드가 축을 채우지 않습니다.** 모델이 고른 것만 실리고, 질문 문장이 식욕을 언급했다고
   해서 `APPETITE` 를 넣어 주지 않습니다. 비어 있으면 "물은 것이 없다" 가 아니라 **"축을
   모른다"** 로 읽어야 합니다.
-- **`clarify.care_log` 는 되묻기의 세 번째 부류입니다 — 승낙받으면 DB 에 쓸 것** (D-074).
+- **`clarify.care_log` 는 되묻기의 세 번째 부류입니다 — 승낙받으면 DB 에 쓸 것** (D-075).
   `missing=["care_log_confirmation"]` 과 함께 `CareLogProposal` 이 실리고, 다른 두 부류
   (좌표 게이트 · 관찰 되묻기)에서는 늘 `None` 입니다. 위 둘과 갈리는 지점이 하나 더 있습니다:
   **후속 답변을 무엇에 묶을지가 아니라, 후속 답변이 행을 남길지의 문제**라 Turn Resolver 를
@@ -217,7 +217,7 @@ CapabilityRequest:
   capability: training | life | walk | place | general | vet_contact | care_log
       # 실행 registry (place: PR #196, 의미 선택은 PR #204). `general` 은 PR #279 의 일반 답변
       # 폴백 — 실행되고 저장되지만 **라우터가 고르지 못하고** planner 규칙만이 넣는다 (아래 §3 끝)
-      # `care_log` (D-074) 는 **유일하게 쓰는 능력**이다 — 아래 「케어 기록 쓰기」
+      # `care_log` (D-075) 는 **유일하게 쓰는 능력**이다 — 아래 「케어 기록 쓰기」
   payload:    <능력별 타입>                     # 능력이 소유하는 도메인 페이로드
   timeout_ms: int | None                       # 선택 — 능력별 기본값을 덮을 때만
 ```
@@ -248,7 +248,7 @@ grounding합니다), 좌표는 검증된 `context.location`에서 복사합니�
 `ScreeningContext` 의 두 칸(§1 · 불변식 15)이 여기서도 그대로이고, `daengs_life` 로는
 원시값 둘로 건너갑니다 — 도메인이 오케스트레이션 타입을 알면 D-035 가 막은 방향이 됩니다.
 
-**케어 기록 쓰기 — payload 가 "사용자가 승낙한 것" 입니다** (CURRENT — D-074). `care_log` 는
+**케어 기록 쓰기 — payload 가 "사용자가 승낙한 것" 입니다** (CURRENT — D-075). `care_log` 는
 이 계약에서 **읽지 않고 쓰는 유일한 능력**입니다. payload 타입이
 `CareLogProposal {kind, pet_id, occurred_at, proposal_id}` 인데, **같은 타입이 앞 턴의 확인
 되묻기에도 실립니다** (`ClarifyRequest.care_log`) — 타입을 하나로 둔 것이 의도입니다: 확인

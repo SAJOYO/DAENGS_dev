@@ -11,12 +11,12 @@
 - **산책은 여기 안 적는다.** `walks` 가 이미 진실이라 `kind` 에 `walk` 가 없다 — 한 사실이 두 곳에
   있으면 반드시 어긋난다. 하루 요약이 `walks` 를 세어 같이 보여 줄 뿐이다.
 - **이 API 자체는 오케스트레이터를 모른다.** 비서가 이 표를 읽는 것은 #344 가 따로 놓았고,
-  비서가 **쓰는** 것은 D-074 가 따로 놓았다 (아래 「채팅에서 기록하기」). 둘 다 이 파일의
+  비서가 **쓰는** 것은 D-075 가 따로 놓았다 (아래 「채팅에서 기록하기」). 둘 다 이 파일의
   라우터·서비스를 안 고쳤다 —
   `services/care_log_context` 가 `day_summary` 를 건수·마지막 시각으로 좁혀 `context["care_log"]`
   에 얹고, general 답변 프롬프트의 `CARE_LOG_TODAY` 로만 간다. `note` 와 이벤트 목록은 안 넘어간다
   (`docs/orchestration/contracts.md` §1).
-- ~~**채팅으로 기록하는 쓰기 능력은 처음부터 안 한다**~~ — **2026-09-13 에 열었다 (D-074).**
+- ~~**채팅으로 기록하는 쓰기 능력은 처음부터 안 한다**~~ — **2026-09-13 에 열었다 (D-075).**
   #331 메모가 같이 적어 둔 순서(로그·화면 → 채팅에서 기록 화면으로 HANDOFF → 확인 단계 있는
   자동 쓰기)의 **남은 두 칸**이 그 카드다. "처음부터 안 한다" 가 가리킨 것은 확인 없는
   쓰기였고, 세 번째 칸은 처음부터 열려 있었다. 아래 「채팅에서 기록하기」 절을 보라.
@@ -92,7 +92,7 @@
   `count_for_pet_between`) — 공동 돌봄 전에는 부른 사람 소유의 산책만 셌다. 근거는
   `docs/co-care.md` §2 "산책 읽기".
 
-## 채팅에서 기록하기 (D-074)
+## 채팅에서 기록하기 (D-075)
 
 `"방금 밥 먹였어"` 라고 하면 비서가 되묻고, 승낙하면 이 API 와 **같은 서비스 함수**
 (`services/care_event.record`)로 한 줄이 남는다. 채팅으로 들어온 기록이 화면으로 들어온
@@ -154,7 +154,7 @@
 | DAO | `repositories/care_event.py` · `repositories/walk.py` 의 `count_for_pet_between` |
 | Service | `services/care_event.py` — 구성원 판정·멱등·기간 상한·하루 경계·삭제 자격 |
 | Controller | `routers/care_event.py` |
-| 채팅 쓰기 (D-074) | `orchestration/care_log.py`(결정론 게이트) · `orchestration/planner.py`(`resolve_care_log_route`·`resolve_care_log_write`) · `orchestration/adapters/care_log.py`(쓰는 자리) · `routers/assistant.py`(어댑터 주입) |
+| 채팅 쓰기 (D-075) | `orchestration/care_log.py`(결정론 게이트) · `orchestration/planner.py`(`resolve_care_log_route`·`resolve_care_log_write`) · `orchestration/adapters/care_log.py`(쓰는 자리) · `routers/assistant.py`(어댑터 주입) |
 | 테스트 | `tests/test_care_events.py` — `fakes.py` 를 안 건드리고 이 파일 안의 가짜를 쓴다 (#331 과 파일이 안 겹치게) |
 | 테스트 (채팅 쓰기) | `tests/test_assistant_care_log_write.py` — 같은 꼴의 가짜를 쓴다. 절반이 **안 쓰는** 갈래다 |
 | 테스트 (채팅 읽기) | `tests/test_assistant_care_log.py` (#344) |

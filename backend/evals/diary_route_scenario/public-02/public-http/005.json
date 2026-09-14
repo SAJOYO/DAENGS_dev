@@ -1,0 +1,24 @@
+{
+  "sequence": 5,
+  "endpoint": "https://sgisapi.mods.go.kr/OpenAPI3/transformation/transcoord.json",
+  "parameters": {
+    "src": "4326",
+    "dst": "5179",
+    "posX": "127.03729634665666",
+    "posY": "37.47333149207589"
+  },
+  "started_at": "2026-09-14T03:06:26.921341+00:00",
+  "http_status": 200,
+  "response": {
+    "result": {
+      "posX": 959086.9322521697,
+      "posY": 1941668.1619567908
+    },
+    "errCd": 0,
+    "errMsg": "Success",
+    "id": "API_0201",
+    "trId": "KP68_API_0201_1789355186552"
+  },
+  "response_sha256": "783bba1465f57cec22d8e7cbb7bef44de583bf3ea3d84960bfe77603eb1fb4c9",
+  "elapsed_s": 0.031
+}

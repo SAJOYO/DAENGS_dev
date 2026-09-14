@@ -1,0 +1,200 @@
+{
+  "source": "llm_judge; not independent human review",
+  "judge_model": "gemini-3-flash-preview",
+  "boundary": "server prepare/answer; synthetic search; no APP/member write evidence",
+  "rows": [
+    {
+      "key": {
+        "case_id": "FJ-D01",
+        "variant": "production-exploration-v1",
+        "repetition": 1,
+        "turn": 1
+      },
+      "code_status": "pass",
+      "review_status": "review_required",
+      "final_status": "review_required",
+      "judge_axes": {
+        "intent_alignment": {
+          "status": "not_run",
+          "reason": "not judged",
+          "evidence": []
+        },
+        "scope_fit": {
+          "status": "not_run",
+          "reason": "not judged",
+          "evidence": []
+        },
+        "result_faithfulness": {
+          "status": "not_run",
+          "reason": "not judged",
+          "evidence": []
+        }
+      },
+      "needs_attention": true
+    },
+    {
+      "key": {
+        "case_id": "FJ-D03",
+        "variant": "production-exploration-v1",
+        "repetition": 1,
+        "turn": 1
+      },
+      "code_status": "pass",
+      "review_status": "review_required",
+      "final_status": "review_required",
+      "judge_axes": {
+        "intent_alignment": {
+          "status": "not_run",
+          "reason": "not judged",
+          "evidence": []
+        },
+        "scope_fit": {
+          "status": "not_run",
+          "reason": "not judged",
+          "evidence": []
+        },
+        "result_faithfulness": {
+          "status": "not_run",
+          "reason": "not judged",
+          "evidence": []
+        }
+      },
+      "needs_attention": true
+    },
+    {
+      "key": {
+        "case_id": "FJ-D07",
+        "variant": "production-exploration-v1",
+        "repetition": 1,
+        "turn": 1
+      },
+      "code_status": "blocked",
+      "review_status": "review_required",
+      "final_status": "blocked",
+      "judge_axes": {
+        "intent_alignment": {
+          "status": "not_run",
+          "reason": "not judged",
+          "evidence": []
+        },
+        "scope_fit": {
+          "status": "not_run",
+          "reason": "not judged",
+          "evidence": []
+        },
+        "result_faithfulness": {
+          "status": "not_run",
+          "reason": "not judged",
+          "evidence": []
+        }
+      },
+      "needs_attention": true
+    },
+    {
+      "key": {
+        "case_id": "FJ-D07",
+        "variant": "production-exploration-v1",
+        "repetition": 1,
+        "turn": 2
+      },
+      "code_status": "not_run",
+      "review_status": "review_required",
+      "final_status": "not_run",
+      "judge_axes": {
+        "intent_alignment": {
+          "status": "not_run",
+          "reason": "not judged",
+          "evidence": []
+        },
+        "scope_fit": {
+          "status": "not_run",
+          "reason": "not judged",
+          "evidence": []
+        },
+        "result_faithfulness": {
+          "status": "not_run",
+          "reason": "not judged",
+          "evidence": []
+        }
+      },
+      "needs_attention": true
+    },
+    {
+      "key": {
+        "case_id": "FJ-H01",
+        "variant": "production-exploration-v1",
+        "repetition": 1,
+        "turn": 1
+      },
+      "code_status": "blocked",
+      "review_status": "review_required",
+      "final_status": "blocked",
+      "judge_axes": {
+        "intent_alignment": {
+          "status": "not_run",
+          "reason": "not judged",
+          "evidence": []
+        },
+        "scope_fit": {
+          "status": "not_run",
+          "reason": "not judged",
+          "evidence": []
+        },
+        "result_faithfulness": {
+          "status": "not_run",
+          "reason": "not judged",
+          "evidence": []
+        }
+      },
+      "needs_attention": true
+    },
+    {
+      "key": {
+        "case_id": "FJ-H02",
+        "variant": "production-exploration-v1",
+        "repetition": 1,
+        "turn": 1
+      },
+      "code_status": "pass",
+      "review_status": "review_required",
+      "final_status": "review_required",
+      "judge_axes": {
+        "intent_alignment": {
+          "status": "not_run",
+          "reason": "not judged",
+          "evidence": []
+        },
+        "scope_fit": {
+          "status": "not_run",
+          "reason": "not judged",
+          "evidence": []
+        },
+        "result_faithfulness": {
+          "status": "not_run",
+          "reason": "not judged",
+          "evidence": []
+        }
+      },
+      "needs_attention": true
+    }
+  ],
+  "axis_counts": {
+    "intent_alignment.not_run": 6,
+    "scope_fit.not_run": 6,
+    "result_faithfulness.not_run": 6
+  },
+  "expected_axis_rows": 18,
+  "anchor_passed": false,
+  "anchor_count": 12,
+  "anchors_passed_count": 5,
+  "calls_started": 22,
+  "call_errors": 17,
+  "unfinished_calls": 0,
+  "usage_missing_calls": 17,
+  "usage": {
+    "input_tokens": 3465,
+    "output_tokens": 2410,
+    "thinking_tokens": 1676,
+    "total_tokens": 5875
+  }
+}

@@ -2,6 +2,7 @@
 
 from daengs_place.place.conversation.contract import AnswerFact
 from daengs_place.place.conversation.presentation import user_text
+from daengs_place.place.conversation.scope import PROCESSING_FAILED
 
 KINDS = {
     "hospital": "동물병원",
@@ -148,6 +149,8 @@ def _plain_result(receipt):
         return "지금 적용된 조건은 조건 칩에서 볼 수 있어요."
     if receipt.execution == "failed":
         return "다시 찾지 못했어요. 보던 목록은 그대로예요."
+    if receipt.code == "invalid_plan":
+        return PROCESSING_FAILED
     if receipt.bookmark_command is not None:
         return "찜 처리 결과를 확인하고 있어요."
     if receipt.question:
@@ -178,6 +181,9 @@ def _render_result(receipt, filters):
         if receipt.known_places:
             return "이미 아는 곳으로 반영했어요. 다시 찾지 못해 목록은 그대로예요."
         return "검색을 완료하지 못했어요. 보던 목록은 그대로예요."
+    if receipt.code == "invalid_plan":
+        # Replayed/older receipts can still contain an incorrect clarification question.
+        return PROCESSING_FAILED
     if receipt.question:
         return receipt.question
     if receipt.known_places:

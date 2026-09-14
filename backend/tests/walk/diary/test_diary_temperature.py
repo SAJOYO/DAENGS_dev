@@ -4,10 +4,10 @@ from datetime import timedelta
 
 import pytest
 
-from daengs_backend.services.walk_diary_slot_writing import write_slot_preview
+from daengs_backend.services.walk_diary.legacy.slots import write_slot_preview
 from daengs_evals.diary_slots_demo import demo_input
-from daengs_walk.diary_input import DiaryInput, digest
-from daengs_walk.diary_temperature import GridTemperature
+from daengs_walk.diary.contracts.input import DiaryInput, digest
+from daengs_walk.diary.slots.temperature import GridTemperature
 from tests.walk.diary.test_diary_slots import prepare
 
 
@@ -52,10 +52,11 @@ async def test_grid_temperature_joins_space_and_motion_without_rewriting_origina
             "scenes": [
                 {
                     "scene_id": s["scene_id"],
-                    "background": "앞선 지역 관측에서 기온은 22.5도였다."
+                    "text": "앞선 지역 관측에서 기온은 22.5도였다."
                     if s["scene_id"] == stamp.scene_id
                     else "",
                     "evidence_ids": [e.id] if s["scene_id"] == stamp.scene_id else [],
+                    "action_id": None,
                 }
                 for s in payload["scenes"]
             ]

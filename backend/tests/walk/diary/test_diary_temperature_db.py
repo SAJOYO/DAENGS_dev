@@ -11,12 +11,13 @@ from daengs_backend.models.walk_entry import WalkEntry
 from daengs_backend.models.walk_entry_context import WalkEntryContextEnvelope, WalkEntryContextJob
 from daengs_backend.models.walk_storyboard import WalkStoryboard
 from daengs_backend.services import walk_entry_context
-from daengs_backend.services.walk_diary_board_slot_writing import write_board
-from daengs_backend.services.walk_diary_generation import generate_diary, get_diary
+from daengs_backend.services.walk_diary.api import legacy_slot_writer
+from daengs_backend.services.walk_diary.legacy.board_slots import write_legacy_slot_board
+from daengs_backend.services.walk_diary.lifecycle.generation import generate_diary, get_diary
 from daengs_life.app import deps
 from daengs_life.realtime.cache import Cache, MemoryStore
 from daengs_life.realtime.providers import kma_vilage_fcst
-from daengs_walk.diary_board_output import BOARD_FORMAT
+from daengs_walk.diary.board.output import BOARD_FORMAT
 from tests.walk.diary.test_diary_board_db import board_database, spec  # noqa: F401
 from tests.walk.support.entry_v2 import AT, ENTRY, OWNER, WALK
 from tests.walk.support.photo_input import entry
@@ -85,21 +86,24 @@ async def test_collected_temperature_reaches_writer_and_is_frozen_after_source_r
             "scenes": [
                 {
                     "scene_id": s["scene_id"],
-                    "background": "이 지역의 기온 관측값은 22.5도였다.",
-                    "evidence_ids": [
-                        next(e["id"] for e in s["evidence"] if e["part"] == "environment")
-                    ],
+                    "text": "이 지역의 기온 관측값은 22.5도였다.",
+                    "evidence_ids": [s["scene"]["environment"][0]["id"]],
+                    "action_id": s["action"]["id"] if s["action"] else None,
                 }
                 for s in payload["scenes"]
             ]
         }
 
     async def writer(source, base):
-        return await write_board(source, base, prose)
+        return await write_legacy_slot_board(source, base, prose)
 
     async with factory() as db:
         first = await generate_diary(
-            db, OWNER, WALK, spec(expected_entries={str(ENTRY): 1}), writer=writer
+            db,
+            OWNER,
+            WALK,
+            spec(expected_entries={str(ENTRY): 1}),
+            writer=legacy_slot_writer(writer),
         )
         assert first.bundle.model_status == "accepted"
         saved = deepcopy((await db.get(WalkStoryboard, WALK)).bundle)

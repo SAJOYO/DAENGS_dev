@@ -295,7 +295,7 @@ async def _dispatch(
     place_adapter: CapabilityAdapter | None = None
     care_log_adapter: CapabilityAdapter | None = None
     if settings.care_log_write and isinstance(principal, AppPrincipal):
-        # **쓰기 어댑터를 넣는 자리와 쓰기를 허용한다고 알리는 자리가 같은 `if` 다** (D-074).
+        # **쓰기 어댑터를 넣는 자리와 쓰기를 허용한다고 알리는 자리가 같은 `if` 다** (D-075).
         # 갈라 두면 한쪽만 참인 상태가 생기고, 그 상태의 뜻은 "제안은 나가는데 승낙하면
         # `unsupported_capability` 로 끝난다" 다 — 사용자에게는 기록이 됐는지 안 됐는지
         # 모르는 응답이다. 관리자 토큰은 여기 안 들어온다: 대화도 pets 도 앱 회원 것이다.

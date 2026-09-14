@@ -38,6 +38,7 @@
 한쪽만 두면 "다 거짓이라 하는 judge" 나 "다 참이라 하는 judge" 가 통과한다 — 실제로
 `gpt-4o-mini` 는 후자였다 (`judge_model_probe_0907.md`). 짝이라야 그것이 걸린다.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field

@@ -271,7 +271,7 @@ def pending_clarification_of(turns: list[ChatTurn]) -> PendingClarification | No
 
 
 def _pending_care_log(clarify: dict) -> CareLogProposal | None:
-    """되묻기에 실린 케어 기록 제안 (#331 후속, D-074). 없거나 깨졌으면 None.
+    """되묻기에 실린 케어 기록 제안 (#331 후속, D-075). 없거나 깨졌으면 None.
 
     **여기서 조용히 None 이 되는 것이 안전한 방향이다.** 이 값이 있으면 다음 턴의 "네" 가
     DB 에 행을 남기고, None 이면 그 "네" 가 아무 일도 안 한다 — 읽다 실패했을 때 쓰는 쪽으로

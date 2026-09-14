@@ -1,6 +1,6 @@
 """Shared diary test builders; no test cases."""
 
-from daengs_walk.diary_input import (
+from daengs_walk.diary.contracts.input import (
     DiaryInput,
     MovementObservation,
     SavedBackground,

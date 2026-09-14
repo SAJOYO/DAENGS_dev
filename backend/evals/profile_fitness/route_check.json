@@ -1,0 +1,134 @@
+[
+  {
+    "label": "pf_ask_v1",
+    "router": {
+      "model": "gemini-3.1-flash-lite",
+      "prompt_version": "semantic-router-ko-v10"
+    },
+    "n": 40,
+    "match": 32,
+    "rate": {
+      "point": 0.8,
+      "low": 0.6524,
+      "high": 0.895,
+      "n": 40
+    },
+    "mismatches": [
+      {
+        "question_id": "pf_answer_chocolate_why_01",
+        "query": "초콜릿이 강아지한테 왜 위험해요?",
+        "expected": "general",
+        "got": "vet_contact",
+        "status": "ANSWERED",
+        "cells": 2
+      },
+      {
+        "question_id": "pf_ask_condition_01",
+        "query": "오늘 컨디션 어때 보여?",
+        "expected": "general",
+        "got": "handoff:gait",
+        "status": "HANDOFF",
+        "cells": 2
+      },
+      {
+        "question_id": "pf_ask_limp_01",
+        "query": "발을 좀 저는 것 같아요",
+        "expected": "general",
+        "got": "handoff:gait",
+        "status": "HANDOFF",
+        "cells": 2
+      },
+      {
+        "question_id": "pf_defer_emergency_02",
+        "query": "숨이 너무 가빠요 어떡해요",
+        "expected": "vet_contact",
+        "got": "general",
+        "status": "CLARIFY",
+        "cells": 2
+      }
+    ]
+  },
+  {
+    "label": "pf_v6_sub18",
+    "router": {
+      "model": "gemini-3.1-flash-lite",
+      "prompt_version": "semantic-router-ko-v10"
+    },
+    "n": 46,
+    "match": 40,
+    "rate": {
+      "point": 0.8696,
+      "low": 0.7433,
+      "high": 0.9388,
+      "n": 46
+    },
+    "mismatches": [
+      {
+        "question_id": "pf_play_type_01",
+        "query": "놀아줄 때 어떤 놀이가 좋아요?",
+        "expected": "general",
+        "got": "training",
+        "status": "ANSWERED",
+        "cells": 3
+      },
+      {
+        "question_id": "pf_summer_walk_01",
+        "query": "여름에 산책 나갈 때 뭘 조심해야 해요?",
+        "expected": "general",
+        "got": "walk+general",
+        "status": "ANSWERED",
+        "cells": 3
+      }
+    ]
+  },
+  {
+    "label": "pf_carelog_v1",
+    "router": {
+      "model": "gemini-3.1-flash-lite",
+      "prompt_version": "semantic-router-ko-v10"
+    },
+    "n": 34,
+    "match": 31,
+    "rate": {
+      "point": 0.9118,
+      "low": 0.7704,
+      "high": 0.9695,
+      "n": 34
+    },
+    "mismatches": [
+      {
+        "question_id": "pf_log_absent_wellness_01",
+        "query": "오늘 우리 애 상태 어때 보여?",
+        "expected": "general",
+        "got": "handoff:gait",
+        "status": "HANDOFF",
+        "cells": 3
+      }
+    ]
+  },
+  {
+    "label": "pf_life_v1",
+    "router": {
+      "model": "gemini-3.1-flash-lite",
+      "prompt_version": "semantic-router-ko-v10"
+    },
+    "n": 40,
+    "match": 36,
+    "rate": {
+      "point": 0.9,
+      "low": 0.7695,
+      "high": 0.9604,
+      "n": 40
+    },
+    "mismatches": [
+      {
+        "question_id": "pf_life_food_stage_01",
+        "query": "사료 살 때 어떤 단계 사료를 골라야 해요?",
+        "expected": "life",
+        "got": "general",
+        "status": "ANSWERED",
+        "cells": 4
+      }
+    ]
+  }
+]

@@ -18,6 +18,9 @@ psycopg = pytest.importorskip("psycopg", reason="적재 키 검증에는 psycopg
 
 SCHEMA_SQL = Path(__file__).resolve().parents[2] / "db" / "init" / "05_training_rag.sql"
 
+#: 첫 연결 실패의 skip 사유 (#519). 같은 실행 안에서는 다시 연결을 시도하지 않는다.
+_unreachable: str | None = None
+
 
 def _dsn() -> str:
     """`RAG_PGVECTOR_DSN` 이 있으면 그것, 없으면 앱 설정에서 조립한다."""
@@ -41,14 +44,25 @@ def schema():
     임시 스키마를 못 만든다. `search_path` 를 `pg_temp` 로 두면 같은 DDL 이 임시 테이블을
     만들고, 세션이 끝나면 사라진다 — **실 DB 의 `training_rag_chunks` 는 안 건드린다.**
     `public` 을 뒤에 붙이는 것은 `vector` 타입과 확장이 거기 있기 때문이다.
+
+    **연결 실패만 기억한다** (#519) — 못 붙는 PC 에서 테스트마다 10초씩 기다렸다. 붙은 뒤의
+    DDL·권한 실패는 사유가 여러 가지라 매번 다시 판단한다.
     """
+    global _unreachable
+    if _unreachable is not None:
+        pytest.skip(_unreachable)
     try:
         conn = psycopg.connect(_dsn(), connect_timeout=5)
+    except psycopg.OperationalError as exc:
+        _unreachable = f"임시 스키마를 못 세웠습니다 ({type(exc).__name__}) — 실 DB 가 필요합니다"
+        pytest.skip(_unreachable)
+    try:
         with conn.cursor() as cur:
             cur.execute("set search_path to pg_temp, public")
             cur.execute(SCHEMA_SQL.read_text(encoding="utf-8"))
         conn.commit()
-    except Exception as exc:  # noqa: BLE001 — 연결 실패·권한 부족 등 사유가 여러 가지다
+    except Exception as exc:  # noqa: BLE001 — 권한 부족 등 사유가 여러 가지다
+        conn.close()
         pytest.skip(f"임시 스키마를 못 세웠습니다 ({type(exc).__name__}) — 실 DB 가 필요합니다")
 
     try:

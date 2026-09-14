@@ -9,17 +9,22 @@ import pytest
 
 from daengs_backend.routers import walk_storyboard as router
 from daengs_backend.schemas.walk_storyboard import StoryboardRequest
-from daengs_backend.services import walk_diary_slot_writing as writer
-from daengs_backend.services.walk_diary_base_board import assemble_saved_base_board
-from daengs_backend.services.walk_diary_board_slot_writing import complete_slot_board, write_board
-from daengs_backend.services.walk_diary_generation import generate_diary
-from daengs_backend.services.walk_diary_input import InputAssembly
-from daengs_backend.services.walk_diary_observations import ObservationSource
-from daengs_backend.services.walk_diary_prepare import PreparedWalkDiary
-from daengs_backend.services.walk_diary_publication import within_budget
+from daengs_backend.services.walk_diary.api import legacy_slot_writer
+from daengs_backend.services.walk_diary.legacy import slots as writer
+from daengs_backend.services.walk_diary.legacy.board_slots import (
+    complete_slot_board,
+    write_legacy_slot_board,
+)
+from daengs_backend.services.walk_diary.lifecycle.generation import generate_diary
+from daengs_backend.services.walk_diary.lifecycle.publication import within_budget
+from daengs_backend.services.walk_diary.preparation.board import assemble_saved_base_board
+from daengs_backend.services.walk_diary.preparation.diary import PreparedWalkDiary
+from daengs_backend.services.walk_diary.preparation.input import InputAssembly
+from daengs_backend.services.walk_diary.preparation.observations import ObservationSource
 from daengs_evals.diary_slots_demo import demo_input
-from daengs_walk.diary_board_output import BOARD_FORMAT
-from daengs_walk.diary_slots import SlotPolicy
+from daengs_walk.diary.board.output import BOARD_FORMAT
+from daengs_walk.diary.board.scene_input import scene_materials
+from daengs_walk.diary.contracts.slots import SlotPolicy
 from tests.walk.support.base_board import policy
 from tests.walk.support.diary_generation import PATH, body
 from tests.walk.support.photo_input import OWNER, WALK
@@ -37,27 +42,28 @@ def prose(payload):
         "scenes": [
             {
                 "scene_id": s["scene_id"],
-                "background": "주변에 공원이 있었고, 이동 속도는 다른 구간보다 느렸다.",
-                "evidence_ids": [e["id"] for e in s["evidence"]],
+                "text": "주변에 공원이 있었고, 이동 속도는 다른 구간보다 느렸다.",
+                "evidence_ids": [e["id"] for e in scene_materials(s)],
+                "action_id": s["action"]["id"] if s["action"] else None,
             }
             for s in payload["scenes"]
         ]
     }
 
 
-async def test_all_parts_reach_writer_and_only_prose_is_added():
+async def test_scene_parts_reach_writer_and_core_is_preserved():
     prepared = prepared_case()
     base = prepared.board
     before = base.slots.model_dump(mode="json")
     provider = AsyncMock(side_effect=lambda payload, schema: prose(payload))
-    output = await write_board(prepared.input.source, base, provider)
+    output = await write_legacy_slot_board(prepared.input.source, base, provider)
     published = complete_slot_board(prepared, output)
     payload = provider.call_args.args[0]
     assert published.model_status == "accepted"
     assert len(payload["scenes"]) == 3
     for scene in payload["scenes"]:
-        assert {e["part"] for e in scene["evidence"]} == {"space", "environment", "motion"}
-        assert all(set(e) == {"id", "part", "role", "facts"} for e in scene["evidence"])
+        assert set(scene["scene"]) == {"where", "environment", "route_pattern"}
+        assert all(set(e) == {"id", "role", "facts"} for e in scene_materials(scene))
     assert len(published.scenes) == len(base.board.scenes) == 5
     for actual, original in zip(published.scenes, base.board.scenes, strict=True):
         assert (actual.id, actual.order, actual.anchor, actual.core, actual.title) == (
@@ -67,7 +73,10 @@ async def test_all_parts_reach_writer_and_only_prose_is_added():
             original.core_ref,
             original.title,
         )
-        assert actual.body.endswith(original.body)
+        if original.core.kind == "user_record" and original.core.record.content.kind == "note":
+            assert actual.body.endswith(original.body)
+        elif any(s["scene_id"] == actual.id for s in payload["scenes"]):
+            assert actual.body == "주변에 공원이 있었고, 이동 속도는 다른 구간보다 느렸다."
     assert base.slots.model_dump(mode="json") == before
     provider.assert_awaited_once()
 
@@ -84,8 +93,8 @@ async def test_invalid_prose_preserves_every_original(change):
     elif change == "original":
         raw["scenes"][0]["original"] = "모델이 바꾼 원문"
     else:
-        raw["scenes"][0]["background"] = "가" * 221
-    output = await write_board(prepared.input.source, base, AsyncMock(return_value=raw))
+        raw["scenes"][0]["text"] = "가" * 221
+    output = await write_legacy_slot_board(prepared.input.source, base, AsyncMock(return_value=raw))
     assert output.failure_code == "invalid_response"
     published = complete_slot_board(prepared, output)
     assert [s.body for s in published.scenes] == [s.body for s in base.board.scenes]
@@ -94,7 +103,7 @@ async def test_invalid_prose_preserves_every_original(change):
 @pytest.mark.parametrize("field", ["slot_revision", "writer_version"])
 async def test_completion_rejects_receipt_for_different_input_or_writer(field):
     prepared = prepared_case()
-    output = await write_board(
+    output = await write_legacy_slot_board(
         prepared.input.source, prepared.board, AsyncMock(side_effect=lambda p, s: prose(p))
     )
     with pytest.raises(ValueError, match="another snapshot"):
@@ -104,12 +113,12 @@ async def test_completion_rejects_receipt_for_different_input_or_writer(field):
 async def test_empty_slots_and_input_budget_never_call_provider(monkeypatch):
     empty = prepared_case(total_slots=0, include_location_reference=False)
     provider = AsyncMock()
-    output = await write_board(empty.input.source, empty.board, provider)
+    output = await write_legacy_slot_board(empty.input.source, empty.board, provider)
     assert output.model_status == "not_requested"
     assert complete_slot_board(empty, output).scenes
     full = prepared_case()
     monkeypatch.setattr(writer, "MAX_INPUT_BYTES", 1)
-    output = await write_board(full.input.source, full.board, provider)
+    output = await write_legacy_slot_board(full.input.source, full.board, provider)
     assert output.failure_code == "budget_exceeded"
     provider.assert_not_awaited()
 
@@ -121,22 +130,21 @@ async def test_timeout_and_external_cancel_have_distinct_results(monkeypatch):
     async def slow(*_):
         await asyncio.Event().wait()
 
-    output = await write_board(prepared.input.source, prepared.board, slow)
+    output = await write_legacy_slot_board(prepared.input.source, prepared.board, slow)
     assert output.failure_code == "budget_exceeded"
     with pytest.raises(asyncio.CancelledError):
-        await write_board(
+        await write_legacy_slot_board(
             prepared.input.source, prepared.board, AsyncMock(side_effect=asyncio.CancelledError())
         )
 
 
-def test_real_router_selects_slot_writer_without_changing_request_body(api, monkeypatch):
+def test_explicit_slot_writer_override_preserves_slot_payload(api):
     client, state, _ = api
-    client.app.dependency_overrides.pop(router.get_diary_writer)
-    monkeypatch.setattr(router, "write_board", state.writer)
+    client.app.dependency_overrides[router.get_diary_writer] = lambda: state.slot_writer
     response = client.post(PATH, json=body(state, bundle_format=BOARD_FORMAT))
     assert response.status_code == 200, response.text
     assert response.json()["bundle"]["model_status"] == "accepted"
-    assert "evidence" in state.provider.call_args.args[0]["scenes"][0]
+    assert "scene" in state.provider.call_args.args[0]["scenes"][0]
     state.provider.assert_awaited_once()
 
 
@@ -155,7 +163,7 @@ async def test_deadline_publishes_base_even_if_slot_provider_ignores_cancel(api)
     async def bounded(source, base):
         # Exercise the real slot writer inside the existing outer deadline.
         return await within_budget(
-            lambda s, b: write_board(s, b, provider),
+            lambda s, b: write_legacy_slot_board(s, b, provider),
             source,
             base,
             datetime.now(UTC) + timedelta(milliseconds=20),
@@ -170,7 +178,7 @@ async def test_deadline_publishes_base_even_if_slot_provider_ignores_cancel(api)
                 StoryboardRequest.model_validate(
                     body(state, bundle_format=BOARD_FORMAT, preparation_budget_ms=10000)
                 ),
-                writer=bounded,
+                writer=legacy_slot_writer(bounded),
             ),
             timeout=2,
         )

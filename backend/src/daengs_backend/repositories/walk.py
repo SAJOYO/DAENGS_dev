@@ -5,6 +5,7 @@ commit 도 하지 않습니다 — 트랜잭션 경계는 services 가 잡습니
 """
 
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -31,6 +32,7 @@ __all__ = [
     "get_owned_for_update",
     "is_client_session_conflict",
     "list_for_owner",
+    "list_for_pets_between",
 ]
 
 
@@ -125,7 +127,7 @@ async def get_by_client_session(
 async def count_for_pet_between(
     session: AsyncSession,
     _app_user_id: uuid.UUID,
-    pet_id: uuid.UUID,
+    pet_ids: Sequence[uuid.UUID],
     start: datetime,
     end: datetime,
 ) -> int:
@@ -142,12 +144,17 @@ async def count_for_pet_between(
 
     **산책의 소유는 그대로 사람 것입니다** — 여기서 여는 것은 세는 것뿐이고, 목록·수정은
     `walks.app_user_id` 를 계속 봅니다.
+
+    `pet_ids` 묶음을 받는 이유는 **논리 연결** 때문입니다 (MVP 결정 §7). 같은 실제 강아지를
+    두 사람이 각자 등록해 연결하면 산책이 두 `pet_id` 에 갈려 태그되는데, 화면에서는 한
+    마리의 하루입니다. `COUNT(DISTINCT Walk.id)` 라 그룹의 두 아이가 같은 산책에 태그돼도
+    **두 번 세지 않습니다.** 묶음을 만드는 것은 서비스입니다.
     """
     stmt = (
         select(func.count(func.distinct(Walk.id)))
         .join(WalkPet, WalkPet.walk_id == Walk.id)
         .where(
-            WalkPet.pet_id == pet_id,
+            WalkPet.pet_id.in_(set(pet_ids)),
             Walk.started_at >= start,
             Walk.started_at < end,
         )
@@ -167,7 +174,7 @@ class WalkActivitySums:
     last_started_at: datetime | None
 
 
-def _walked_stmt(pet_id: uuid.UUID, start: datetime, end: datetime):
+def _walked_stmt(pet_ids: Sequence[uuid.UUID], start: datetime, end: datetime):
     """건수·마지막 시작 시각 — head 를 거치지 않는다(측정 여부와 무관하게 전부 센다).
 
     모듈 수준 함수로 꺼낸 이유는 테스트가 조인 사슬을 컴파일된 SQL 로 직접 보기
@@ -184,14 +191,14 @@ def _walked_stmt(pet_id: uuid.UUID, start: datetime, end: datetime):
         )
         .join(WalkPet, WalkPet.walk_id == Walk.id)
         .where(
-            WalkPet.pet_id == pet_id,
+            WalkPet.pet_id.in_(set(pet_ids)),
             Walk.started_at >= start,
             Walk.started_at < end,
         )
     )
 
 
-def _measured_stmt(pet_id: uuid.UUID, start: datetime, end: datetime):
+def _measured_stmt(pet_ids: Sequence[uuid.UUID], start: datetime, end: datetime):
     """측정 건수·합계 거리·합계 이동 시간 — **반드시 `activity_walk_heads` 를 경유한다.**
 
     `walk_analyses` 에 `Walk` 를 직접(`WalkAnalysis.walk_id == Walk.id`) 잇지 않는다 —
@@ -214,7 +221,7 @@ def _measured_stmt(pet_id: uuid.UUID, start: datetime, end: datetime):
         .join(ActivityWalkHead, ActivityWalkHead.walk_id == Walk.id)
         .join(WalkAnalysis, WalkAnalysis.id == ActivityWalkHead.analysis_id)
         .where(
-            WalkPet.pet_id == pet_id,
+            WalkPet.pet_id.in_(set(pet_ids)),
             Walk.started_at >= start,
             Walk.started_at < end,
         )
@@ -223,7 +230,7 @@ def _measured_stmt(pet_id: uuid.UUID, start: datetime, end: datetime):
 
 async def activity_for_pet_between(
     session: AsyncSession,
-    pet_id: uuid.UUID,
+    pet_ids: Sequence[uuid.UUID],
     start: datetime,
     end: datetime,
 ) -> WalkActivitySums:
@@ -243,12 +250,15 @@ async def activity_for_pet_between(
     산책은 애초에 head 가 생길 수 없다는 뜻이다. (`activity_game_enabled` 가 꺼져 있으면
     네 곳 다 아무것도 하지 않는다.)
 
+    `pet_ids` 묶음을 받는 이유는 `count_for_pet_between` 과 같습니다 — 논리 연결된 아이의
+    산책이 두 `pet_id` 에 갈려 있어도 한 마리의 활동량으로 합쳐 읽습니다 (MVP 결정 §7).
+
     head 가 없는 산책은 **건수에는 들어가고 합계에는 안 들어갑니다.** 봉인이 안 끝난 것을
     0m 로 더하면 "걸었는데 0km" 가 되고, 건수에서까지 빼면 "안 걸었다" 가 됩니다. 둘 다
     거짓이라 두 수를 따로 냅니다.
     """
-    walked_row = (await session.execute(_walked_stmt(pet_id, start, end))).one()
-    measured_row = (await session.execute(_measured_stmt(pet_id, start, end))).one()
+    walked_row = (await session.execute(_walked_stmt(pet_ids, start, end))).one()
+    measured_row = (await session.execute(_measured_stmt(pet_ids, start, end))).one()
     return WalkActivitySums(
         walk_count=int(walked_row.walk_count or 0),
         measured_walk_count=int(measured_row.measured_walk_count or 0),
@@ -256,6 +266,40 @@ async def activity_for_pet_between(
         moving_s=int(measured_row.moving_s or 0),
         last_started_at=walked_row.last_started_at,
     )
+
+
+async def list_for_pets_between(
+    session: AsyncSession,
+    pet_ids: Sequence[uuid.UUID],
+    start: datetime,
+    end: datetime,
+) -> list[Walk]:
+    """그 아이들이 나간 산책 **행 자체**를, 시작 시각 순으로.
+
+    `count_for_pet_between` 이 수만 세는 데 비해 이쪽은 **누가 다녀왔는지**(`app_user_id`)를
+    돌려줍니다 — 하루 요약이 "아빠가 아침에 한 번" 을 그릴 수 있게 하는 자리입니다
+    (MVP 결정 §7).
+
+    좌표는 안 붙입니다. 요약 한 줄에 수만 점이 딸려 올 이유가 없습니다.
+
+    **소유자 조건을 안 겁니다** — `count_for_pet_between` 과 같은 이유입니다. 사람으로
+    거르면 정확히 보여 주려던 그 산책이 빠집니다.
+
+    `distinct()` 가 필요합니다 — 그룹의 두 아이가 같은 산책에 태그돼 있으면 조인이 그
+    산책을 두 줄로 냅니다.
+    """
+    stmt = (
+        select(Walk)
+        .join(WalkPet, WalkPet.walk_id == Walk.id)
+        .where(
+            WalkPet.pet_id.in_(set(pet_ids)),
+            Walk.started_at >= start,
+            Walk.started_at < end,
+        )
+        .order_by(Walk.started_at, Walk.id)
+        .distinct()
+    )
+    return list(await session.scalars(stmt))
 
 
 async def delete_walks_only_with(session: AsyncSession, pet_id: uuid.UUID) -> int:

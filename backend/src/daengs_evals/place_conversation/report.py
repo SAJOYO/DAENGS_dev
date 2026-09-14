@@ -19,7 +19,7 @@ def key(row):
     return row["case_id"], row.get("variant", "production-baseline"), row["repetition"], row["turn"]
 
 
-def summarize(run):
+def summarize(run, *, judge_id=None):
     observations = read_jsonl(run / "observations.jsonl")
     reviews = read_jsonl(run / "reviews.jsonl")
     observed_keys = {key(row) for row in observations}
@@ -103,12 +103,148 @@ def summarize(run):
             {"reviewed_turns": len(reviews), "statuses": dict(turn_counts)}, ensure_ascii=False
         )
     )
+    if judge_id is not None:
+        judge_report(run, judge_id)
+
+
+def judge_report(run, judge_id):
+    """Keep model opinions beside code and explicit reviews, never promote them to passes."""
+    from .judge import judge_directory, load_inputs, read_judgments
+    from .judge_contract import AXES, TurnKey, file_hash
+
+    directory = judge_directory(run, judge_id)
+    meta = json.loads((directory / "metadata.json").read_text(encoding="utf-8"))
+    for name, expected in meta["identity"]["source_hashes"].items():
+        if file_hash(run / name) != expected:
+            raise ValueError("source observation run changed after judging")
+    if file_hash(directory / "inputs.jsonl") != meta["inputs_sha256"]:
+        raise ValueError("judge inputs changed")
+    judgments = read_judgments(directory)
+    observations = read_jsonl(run / "observations.jsonl")
+    reviews = {key(r): r for r in read_jsonl(run / "reviews.jsonl")}
+    rows = []
+    counts = Counter()
+    for observed in observations:
+        identity = TurnKey.of(observed).identity()
+        code = observed["status"]
+        if code not in {"blocked", "not_run"}:
+            code = (
+                "fail"
+                if code == "fail" or any(c["status"] == "fail" for c in observed.get("checks", []))
+                else "pass"
+            )
+            if code == "pass" and not any(
+                c["status"] == "pass" for c in observed.get("checks", [])
+            ):
+                code = "unmeasured"
+        review = reviews.get(identity)
+        reviewed = (
+            [review[a]["status"] for a in ("task_completion", "faithfulness")] if review else []
+        )
+        review_status = (
+            "fail"
+            if "fail" in reviewed
+            else ("pass" if reviewed == ["pass", "pass"] else "review_required")
+        )
+        axes = {}
+        for axis in AXES:
+            judgment = judgments.get((*identity, axis))
+            status = (
+                (judgment.verdict.status if judgment.verdict else judgment.status)
+                if judgment
+                else "not_run"
+            )
+            axes[axis] = {
+                "status": status,
+                "reason": judgment.verdict.rationale
+                if judgment and judgment.verdict
+                else (judgment.reason if judgment else "not judged"),
+                "evidence": [e.model_dump() for e in judgment.verdict.evidence]
+                if judgment and judgment.verdict
+                else [],
+            }
+            counts[f"{axis}.{status}"] += 1
+        rows.append(
+            {
+                "key": TurnKey.of(observed).model_dump(),
+                "code_status": code,
+                "review_status": review_status,
+                "final_status": code
+                if code in {"fail", "blocked", "not_run"}
+                else ("review_required" if code == "unmeasured" else review_status),
+                "judge_axes": axes,
+                "needs_attention": code != "pass"
+                or review_status == "review_required"
+                or any(a["status"] not in {"pass", "not_applicable"} for a in axes.values()),
+            }
+        )
+    calls = read_jsonl(directory / "calls.jsonl")
+    anchor_path = directory / "anchor-check.json"
+    anchors = json.loads(anchor_path.read_text(encoding="utf-8")) if anchor_path.exists() else {}
+    started_calls = sum(c["event"] == "started" for c in calls)
+    finished_calls = sum(c["event"] == "finished" for c in calls)
+    result = {
+        "source": meta["source"],
+        "judge_model": meta["identity"]["judge_model"],
+        "boundary": meta["identity"]["boundary"],
+        "rows": rows,
+        "axis_counts": dict(counts),
+        "expected_axis_rows": len(load_inputs(directory)),
+        "anchor_passed": anchors.get("passed"),
+        "anchor_count": len(anchors.get("results", [])),
+        "anchors_passed_count": sum(r["passed"] for r in anchors.get("results", [])),
+        "calls_started": started_calls,
+        "call_errors": sum("error_type" in c for c in calls),
+        "unfinished_calls": started_calls - finished_calls,
+        "usage_missing_calls": started_calls - sum(bool(c.get("usage")) for c in calls),
+        "usage": dict(sum((Counter(c.get("usage", {})) for c in calls), Counter())),
+    }
+    write_json(directory / "summary.json", result)
+    lines = [
+        "# 시설 Judge 검토 목록",
+        "",
+        "자동 판정은 검토 보조이며 독립 사람 리뷰나 출시 승인 점수가 아닙니다.",
+        "코드 검사 실패와 기존 리뷰는 유지합니다. 판단 보류·미측정·호출 오류는 통과가 아닙니다.",
+        "",
+        f"Judge: {result['judge_model']}. 호출 {result['calls_started']}회 / 오류 {result['call_errors']}회.",
+        f"앵커 {result['anchors_passed_count']}/{result['anchor_count']}. 앵커 미통과 시 실제 턴 판정은 실행하지 않습니다.",
+        "",
+        "| 사례 / 변형 / 반복 / 턴 | 코드 | 별도 리뷰 | 의도 | 범위 | 결과 설명 | 최종 |",
+        "| --- | --- | --- | --- | --- | --- | --- |",
+    ]
+    for row in rows:
+        identity = "/".join(str(x) for x in row["key"].values()).replace("|", "\\|")
+        statuses = [row["judge_axes"][a]["status"] for a in AXES]
+        lines.append(
+            "| "
+            + " | ".join(
+                [
+                    identity,
+                    row["code_status"],
+                    row["review_status"],
+                    *statuses,
+                    row["final_status"],
+                ]
+            )
+            + " |"
+        )
+    lines.extend(["", "## 근거", ""])
+    for row in rows:
+        for axis, judged in row["judge_axes"].items():
+            # Indented code keeps model text literal, including Markdown/HTML and backticks.
+            lines.append(
+                "    " + json.dumps({"key": row["key"], "axis": axis, **judged}, ensure_ascii=False)
+            )
+    (directory / "report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return result
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("run", type=Path)
-    summarize(parser.parse_args().run)
+    parser.add_argument("--judge-id")
+    args = parser.parse_args()
+    summarize(args.run, judge_id=args.judge_id)
 
 
 if __name__ == "__main__":

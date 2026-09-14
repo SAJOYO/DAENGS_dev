@@ -11,7 +11,7 @@ from urllib.parse import unquote
 from pyproj import Transformer
 
 from daengs_backend.services.walk_public_http import PublicSourceError, get_json
-from daengs_walk.diary_input import digest
+from daengs_walk.value_contracts import digest
 
 FORWARD = Transformer.from_crs(4326, 5179, always_xy=True)
 REVERSE = Transformer.from_crs(5179, 4326, always_xy=True)
@@ -49,7 +49,9 @@ def covers(catalog, point, radius):
     )
 
 
-async def pages(transport, endpoint, key, query, *, max_pages=30, identity_field=None):
+async def pages(
+    transport, endpoint, key, query, *, max_pages=30, identity_field=None, page_sink=None
+):
     """No partial publication on a missing/repeated/changed page or exhausted budget."""
     result, hashes, total = [], [], None
     seen_pages, seen_ids = set(), set()
@@ -104,6 +106,8 @@ async def pages(transport, endpoint, key, query, *, max_pages=30, identity_field
         seen_pages.add(signature)
         seen_ids.update(page_ids)
         hashes.append(digest(rows))  # Preserve receipts of the actual ordered response rows.
+        if page_sink is not None:
+            page_sink(root)
         result.extend(rows)
         if len(result) == total:
             return result, hashes

@@ -309,5 +309,8 @@ def test_설정이_켜져_있으면_백그라운드로_예열한다(monkeypatch:
         with TestClient(backend_main.app) as c:
             assert started.wait(5), "예열이 시작되지 않았다"
             assert c.get("/openapi.json").status_code == 200, "예열이 API 를 막고 있다"
+            # 닫기 전에 푼다 — lifespan 종료가 예열 스레드를 기다려서, 여기서 안 풀면
+            # `release.wait(10)` 을 꽉 채운다 (#519). `finally` 는 단언이 실패한 경로용이다.
+            release.set()
     finally:
         release.set()

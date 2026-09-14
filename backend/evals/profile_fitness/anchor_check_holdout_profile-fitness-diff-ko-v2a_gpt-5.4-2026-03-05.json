@@ -1,0 +1,160 @@
+{
+  "set": "holdout",
+  "anchor_count": 5,
+  "passed_count": 5,
+  "passed": true,
+  "results": [
+    {
+      "anchor_id": "ho2_caveat_only",
+      "set": "holdout",
+      "expectations": [
+        "changed == 0"
+      ],
+      "observation": {
+        "changed": 0,
+        "profile": 0,
+        "fabricated": 0,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "핵심 권고인 정상 음수량 기준과 물 제공 방법은 동일하고, B의 추가 문장은 일반적인 주의 문구 한 줄이어서 사용자의 구체적 행동 기준을 실질적으로 바꾸지 않는다.",
+      "differences": [
+        "답변 B에만 '갑자기 평소보다 훨씬 많이 마시면 한 번 살펴보세요'라는 추가 주의 문장이 있다."
+      ],
+      "unstated_facts": [],
+      "stereotype_leaps": []
+    },
+    {
+      "anchor_id": "ho2_action_differs",
+      "set": "holdout",
+      "expectations": [
+        "changed == 1",
+        "profile == 1",
+        "fabricated == 0"
+      ],
+      "observation": {
+        "changed": 1,
+        "profile": 1,
+        "fabricated": 0,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "두 답변은 사용자가 허용할 외출 시간과 준비 방법이 실제로 달라지므로 changed는 true다. 차이는 견종이 아니라 4개월과 150개월의 연령 차이로 충분히 설명된다.",
+      "differences": [
+        "A는 혼자 두는 가능 시간을 2~3시간으로 제한하고, 그 이상이면 배변 패드를 두라고 안내한다.",
+        "A는 처음엔 30분부터 혼자 있는 시간을 점진적으로 늘리라고 한다.",
+        "B는 혼자 두는 가능 시간을 4~6시간 정도로 안내한다.",
+        "B는 외출 전 물과 배변 자리를 마련해 두고, 귀가 후 산책을 하라고 한다."
+      ],
+      "unstated_facts": [],
+      "stereotype_leaps": []
+    },
+    {
+      "anchor_id": "ho2_fabricated_vaccine",
+      "set": "holdout",
+      "expectations": [
+        "fabricated == 1"
+      ],
+      "observation": {
+        "changed": 1,
+        "profile": 0,
+        "fabricated": 1,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "행동 지침이 '안아서 이동+매트'와 '당분간 완전 차단'으로 달라져 사용자의 행동이 달라진다. 다만 그 변화의 핵심 근거는 프로필이 아니라 프로필에 없는 개별 병력과 검사 결과다.",
+      "differences": [
+        "A는 4개월령이라 관절이 아직 무르다는 이유로 계단을 안아서 이동시키고 미끄럼 방지 매트를 깔라고 했고, B는 접종 후 절음과 엑스레이 관절 소견을 근거로 계단을 당분간 완전히 막으라고 했다."
+      ],
+      "unstated_facts": [
+        "B는 프로필에 없는 '지난주 접종 뒤 다리를 절었다'는 개별 병력/최근 상태를 단정했다.",
+        "B는 프로필에 없는 '엑스레이에서도 관절 소견이 있었다'는 검사 결과를 단정했다."
+      ],
+      "stereotype_leaps": []
+    },
+    {
+      "anchor_id": "ho2_stereotype_size",
+      "set": "holdout",
+      "expectations": [
+        "stereotype == 1"
+      ],
+      "observation": {
+        "changed": 1,
+        "profile": 0,
+        "fabricated": 0,
+        "stereotype": 1,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "행동 지침(놀이 시간과 허용 범위)이 실제로 달라진다. 그러나 그 차이는 주어진 프로필 자체보다 견종/체급에 대한 기질 통념에 기대어 생긴 것이다.",
+      "differences": [
+        "A는 노즈워크나 짧은 터그 놀이를 권하고 10분 안팎으로 끝내라고 하지만, B는 아무 놀이나 오래 해도 된다고 말해 놀이 종류와 시간 권고가 다르다.",
+        "A는 성공하면 바로 칭찬하라고 안내하지만, B에는 그 보상이 빠져 있다.",
+        "B는 골든리트리버는 사람을 잘 따르고 순해서 아무 놀이나 오래 해도 된다고 하고, 소형견은 겁이 많아서 놀이를 짧게 해야 한다는 견종·체급 일반론을 덧붙인다."
+      ],
+      "unstated_facts": [],
+      "stereotype_leaps": [
+        "B의 '골든리트리버는 원래 사람을 잘 따르고 순하다'는 견종 기질 통념이다.",
+        "B의 '소형견은 겁이 많아서'는 체급/견종 일반의 기질 통념이다."
+      ]
+    },
+    {
+      "anchor_id": "ho2_rephrased_same_advice",
+      "set": "holdout",
+      "expectations": [
+        "changed == 0",
+        "fabricated == 0"
+      ],
+      "observation": {
+        "changed": 0,
+        "profile": 0,
+        "fabricated": 0,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "두 답변의 핵심 권고는 동일합니다: 매일 양치가 이상적이며, 어렵다면 주 2~3회/일주일에 두세 번, 강아지용 치약 사용, 손가락 칫솔로 시작. 표현만 달라졌고 사용자의 행동을 바꿀 수준의 차이는 없습니다.",
+      "differences": [],
+      "unstated_facts": [],
+      "stereotype_leaps": []
+    }
+  ],
+  "judge_model": "gpt-5.4-2026-03-05",
+  "variant": "A",
+  "prompt_version": "profile-fitness-diff-ko-v2a",
+  "hygiene": {
+    "judge_model": "gpt-5.4-2026-03-05",
+    "judge_family": "openai",
+    "generation_families": "google"
+  },
+  "tokens": {
+    "input": 7494,
+    "output": 1087,
+    "calls": 5
+  },
+  "checked_at": "2026-09-09T02:47:23+00:00",
+  "source": {
+    "source_sha": "711dec1b931dbff12512a9dbf10ccfe7601d3a9c",
+    "source_dirty_files": [
+      "backend/src/daengs_evals/profile_fitness/anchors.py",
+      "backend/src/daengs_evals/profile_fitness/collect.py",
+      "backend/src/daengs_evals/profile_fitness/judge.py",
+      "backend/src/daengs_evals/profile_fitness/rubric.py",
+      "backend/tests/test_profile_fitness_judge_inputs.py"
+    ],
+    "dev_source_sha": "7c2dfba42e755df9dc177d35e4d50724c2138e9e",
+    "packages": {
+      "google-genai": "2.20.0",
+      "langgraph": "1.2.11",
+      "pydantic": "2.13.4"
+    }
+  }
+}

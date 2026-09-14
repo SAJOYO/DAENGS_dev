@@ -11,7 +11,7 @@ from __future__ import annotations
 import asyncio
 import math
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Literal
 
@@ -19,11 +19,13 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from daengs_backend.core.storage import (
+    StorageObjectChangedError,
     UploadTicket,
     build_territory_photo_key,
     get_storage,
 )
 from daengs_backend.models.territory import (
+    PHOTO_CLEANUP_BLOCKED_REASON,
     TERRITORY_EVIDENCE_VERSION,
     TerritoryAttempt,
     VerifiedVisit,
@@ -282,7 +284,7 @@ async def record_vision_decision(
 
     판정과 ``VerifiedVisit``을 먼저 commit한 뒤, confirm에서 고정한 generation만
     0바이트 tombstone으로 치환합니다. 저장소 작업이 실패해도 판정은 유실되지 않고 같은
-    호출을 재시도하면 정리만 이어집니다.
+    호출을 재시도하면 정리만 이어집니다. 원본 충돌은 DB에 남기고 명시적 재개까지 중단합니다.
     """
     if not model.strip() or not model_version.strip():
         raise ValueError("VLM 모델과 버전은 비어 있을 수 없습니다.")
@@ -313,9 +315,14 @@ async def record_vision_decision(
                 "vision_decision_conflict",
                 "이미 확정된 사진 판정을 다른 결과로 바꿀 수 없습니다.",
             )
-        if attempt.photo_redacted_at is None:
+        if (
+            attempt.photo_redacted_at is None
+            and attempt.vision_retry_reason != PHOTO_CLEANUP_BLOCKED_REASON
+        ):
             await session.commit()
             await _redact_decided_photo(session, attempt)
+        else:
+            await session.commit()
         return attempt
     if attempt.status != "VISION_PENDING":
         raise TerritoryAttemptConflictError(
@@ -355,11 +362,60 @@ async def _redact_decided_photo(
     session: AsyncSession,
     attempt: TerritoryAttempt,
 ) -> None:
+    attempt_id = attempt.id
     generation = attempt.photo_object_generation
+    storage_key = attempt.photo_storage_key
+    available_at = attempt.vision_available_at
     if not generation:
         raise RuntimeError("confirm된 사진 generation이 없습니다.")
-    await asyncio.to_thread(get_storage().redact, attempt.photo_storage_key, generation=generation)
+
+    def matches(current: TerritoryAttempt | None) -> bool:
+        return (
+            current is not None
+            and current.status in {"VERIFIED", "REJECTED", "FAILED"}
+            and current.photo_object_generation == generation
+            and current.photo_storage_key == storage_key
+            and current.photo_redacted_at is None
+        )
+
+    try:
+        await asyncio.to_thread(get_storage().redact, storage_key, generation=generation)
+    except StorageObjectChangedError:
+        current = await territory_repo.get_for_decision(session, attempt_id)
+        # A delayed failure cannot undo a completed cleanup or an operator resumption.
+        # Routine dispatch reservations must not suppress a still-current conflict.
+        if matches(current) and current.vision_available_at == available_at:
+            current.vision_retry_reason = PHOTO_CLEANUP_BLOCKED_REASON
+            current.updated_at = datetime.now(UTC)
+        await session.commit()
+        raise
+    # Reload after I/O so another cleanup's completion or an identity change is preserved.
+    current = await territory_repo.get_for_decision(session, attempt_id)
+    if matches(current):
+        current.photo_redacted_at = current.updated_at = datetime.now(UTC)
+        current.vision_retry_reason = None
+    await session.commit()
+
+
+async def resume_photo_cleanup(
+    session: AsyncSession, attempt_id: uuid.UUID, *, expected_generation: str
+) -> bool:
+    """Operator-only resumption of one blocked cleanup; never replay the model or verdict."""
+    attempt = await territory_repo.get_for_decision(session, attempt_id)
+    if (
+        attempt is None
+        or attempt.status not in {"VERIFIED", "REJECTED", "FAILED"}
+        or attempt.photo_redacted_at is not None
+        or attempt.vision_retry_reason != PHOTO_CLEANUP_BLOCKED_REASON
+        or attempt.photo_object_generation != expected_generation
+    ):
+        await session.commit()
+        return False
     now = datetime.now(UTC)
-    attempt.photo_redacted_at = now
+    attempt.vision_retry_reason = None
+    # Recovery changes dispatch_after, but only resumption advances available_at on terminal rows.
+    # Fence in-flight failures while preserving any current 30-second dispatch reservation.
+    attempt.vision_available_at = max(now, attempt.vision_available_at + timedelta(microseconds=1))
     attempt.updated_at = now
     await session.commit()
+    return True

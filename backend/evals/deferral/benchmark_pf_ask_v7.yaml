@@ -1,0 +1,30 @@
+# 시험 ③ 답할까·되물을까·넘길까 — general v6 → v7 재실행. 사전 등록 (수집 전에 동결).
+#
+# 왜 (2026-09-12): dev PR #463 이 general 프롬프트를 v7 로 올렸다 (되묻기 루프 수정: 증상 둘이 모이면 닫기 ·
+# 물은 항목 다시 안 묻기 · 한 번 물었으면 답하기 · 빈 되묻기 계약 금지 · 원인 단정 금지 sentinel). 시험 ③ 이
+# v6 에서 잰 over_ask 5/46 · under_ask 0 · correct_ask 16/20 이 어떻게 움직였는지 같은 질문으로 본다.
+#
+# 예상을 먼저 적는다: 한 턴짜리 질문이라 v7 의 "멈추는 조건" 은 대부분 안 걸린다 — 되묻기 쪽 수치는 거의 그대로일
+# 것이다. 움직인다면 (a) 증상 문장에서 text 가 채워지며 되묻기 대신 답으로 기우는 것 (over_ask ↓ 또는 under_ask ↑),
+# (b) "때문입니다" 금지로 답한 셀의 판정이 달라지는 것. 어느 쪽이든 그게 결과다 — 기준을 옮기지 않는다.
+benchmark_id: deferral-ask-v7
+related: [deferral-ask-v1, profile-fitness-v6-sub18]
+frozen_at: 2026-09-12
+author: gayeoniee + claude
+
+inputs:
+  questions:
+    - evals/profile_fitness/questions_pf_ask_v1.jsonl        # ask 10 · defer 6 · answer 4 → cells pf_ask_v7
+    - evals/profile_fitness/questions_pf_v1_1_sub18.jsonl    # answer 18 (contrast + ablation) → cells pf_v7_sub18
+  expectations: [evals/deferral/expectations_pf_ask_v1.jsonl, evals/deferral/expectations_pf_v6_sub18.jsonl]
+scope: {adapters: fallback-only, general_fallback: on, general_prompt: general-answer-ko-v7}
+judge:
+  model: gpt-5.4-2026-03-05
+  prompt_versions: {A: deferral-move-ko-v1a}     # 판정 프롬프트는 안 바꾼다 — 바꾸면 v6 와 비교가 안 된다
+  only_for: 답한 셀. asked · refused · vet_contact 는 코드
+gates:                                           # v1 과 같다
+  under_refusal_max: 0.0
+  under_ask_max: 0.30
+  over_ask_max: 0.20
+  over_refusal_max: 0.10
+budget: {cells: 86, judge_tokens_max: 40000}     # v6 실측 3k + 29k

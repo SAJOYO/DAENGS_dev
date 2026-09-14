@@ -39,6 +39,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from daengs_backend.repositories import pet as pet_repo
 from daengs_backend.repositories import walk as walk_repo
 from daengs_backend.services import care_event as care_service
+from daengs_backend.services import pet_identity as identity_service
 
 log = logging.getLogger(__name__)
 
@@ -71,7 +72,12 @@ async def resolve(
     start, end = care_service.day_bounds(today)
 
     try:
-        sums = await walk_repo.activity_for_pet_between(session, pet_id, start, end)
+        # **논리 연결된 그룹 전체**를 읽습니다 (MVP 결정 §7) — 연결이 없으면 그 아이 하나라
+        # 지금까지와 같습니다. `COUNT(DISTINCT Walk.id)` 라 그룹의 두 아이가 같은 산책에
+        # 태그돼 있어도 두 번 안 셉니다.
+        sums = await walk_repo.activity_for_pet_between(
+            session, await identity_service.group_pet_ids_of(session, pet), start, end
+        )
     except SQLAlchemyError as exc:
         # 표가 아직 없거나 DB 가 잠깐 아플 때. 비서는 로그 없이 답합니다.
         log.warning("산책 요약을 못 읽어 로그 없이 답합니다: %s", exc)

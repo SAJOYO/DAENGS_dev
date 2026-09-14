@@ -74,10 +74,9 @@ class Settings(BaseSettings):
         le=120_000,
         validation_alias=AliasChoices("GEMINI_TIMEOUT_MS"),
     )
-    # Facility proposals require scope, literal evidence and condition preservation together.
-    # Kept separate from discovery and the shared router's model selection.
+    # Facility and shared orchestration use Flash-Lite; an explicit facility override remains.
     facility_conversation_model: str = Field(
-        default="gemini-3-flash-preview",
+        default="gemini-3.1-flash-lite",
         min_length=1,
         validation_alias=AliasChoices("FACILITY_CONVERSATION_MODEL"),
     )

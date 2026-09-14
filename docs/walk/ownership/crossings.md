@@ -1,6 +1,6 @@
 # 영역 간 직접 import 판단표
 
-기준 `390ddd0c + #521 stage 1`. Python 소스에서 서로 다른 소유 영역으로 연결되는 직접 import와 같은 측정 영역 안의 계산/응답 결합 C1을 기록한다. [부채별 실제 수정 범위](README.md)를 함께 읽는다.
+기준 `f6ac5819 + #522 stage 2`. Python 소스에서 서로 다른 소유 영역으로 연결되는 직접 import와 같은 측정 영역 안의 계산/응답 결합 C1을 기록한다. [부채별 실제 수정 범위](README.md)를 함께 읽는다.
 
 `retain-interface`는 현재의 기능 소비/계층 관계를 보존한다는 뜻이다. 해당 모듈의 모든 함수나 비공개 구현을 영구적인 공개 API로 승인하지 않는다. `change`도 기능 제거가 아니라 명시한 경계 변경이다.
 
@@ -341,18 +341,18 @@
 | [backend/src/daengs_walk/diary/contracts/input.py](../../../backend/src/daengs_walk/diary/contracts/input.py) | [backend/src/daengs_walk/value_contracts.py](../../../backend/src/daengs_walk/value_contracts.py) | retain-interface | — |
 | [backend/src/daengs_walk/diary/legacy/writing.py](../../../backend/src/daengs_walk/diary/legacy/writing.py) | [backend/src/daengs_walk/diary/contracts/input.py](../../../backend/src/daengs_walk/diary/contracts/input.py) | retain-interface | — |
 | [backend/src/daengs_walk/diary/legacy/writing.py](../../../backend/src/daengs_walk/diary/legacy/writing.py) | [backend/src/daengs_walk/diary/contracts/output.py](../../../backend/src/daengs_walk/diary/contracts/output.py) | retain-interface | — |
-| [backend/src/daengs_walk/diary/route/binding.py](../../../backend/src/daengs_walk/diary/route/binding.py) | [backend/src/daengs_walk/storyboard_input.py](../../../backend/src/daengs_walk/storyboard_input.py) | change | A1 |
+| [backend/src/daengs_walk/diary/route/binding.py](../../../backend/src/daengs_walk/diary/route/binding.py) | [backend/src/daengs_walk/route/nodes.py](../../../backend/src/daengs_walk/route/nodes.py) | retain-interface | — |
 | [backend/src/daengs_walk/diary/route/geometry.py](../../../backend/src/daengs_walk/diary/route/geometry.py) | [backend/src/daengs_walk/contracts.py](../../../backend/src/daengs_walk/contracts.py) | retain-interface | — |
 | [backend/src/daengs_walk/diary/route/geometry.py](../../../backend/src/daengs_walk/diary/route/geometry.py) | [backend/src/daengs_walk/evidence.py](../../../backend/src/daengs_walk/evidence.py) | retain-interface | — |
-| [backend/src/daengs_walk/diary/route/movement.py](../../../backend/src/daengs_walk/diary/route/movement.py) | [backend/src/daengs_walk/storyboard_input.py](../../../backend/src/daengs_walk/storyboard_input.py) | change | A1 |
-| [backend/src/daengs_walk/diary/route/movement.py](../../../backend/src/daengs_walk/diary/route/movement.py) | [backend/src/daengs_walk/storyboard_selection.py](../../../backend/src/daengs_walk/storyboard_selection.py) | change | A2 |
+| [backend/src/daengs_walk/diary/route/movement.py](../../../backend/src/daengs_walk/diary/route/movement.py) | [backend/src/daengs_walk/route/nodes.py](../../../backend/src/daengs_walk/route/nodes.py) | retain-interface | — |
+| [backend/src/daengs_walk/diary/route/movement.py](../../../backend/src/daengs_walk/diary/route/movement.py) | [backend/src/daengs_walk/route/pace.py](../../../backend/src/daengs_walk/route/pace.py) | retain-interface | — |
 | [backend/src/daengs_walk/diary/route/observations.py](../../../backend/src/daengs_walk/diary/route/observations.py) | [backend/src/daengs_walk/evidence.py](../../../backend/src/daengs_walk/evidence.py) | retain-interface | — |
 | [backend/src/daengs_walk/diary/route/observations.py](../../../backend/src/daengs_walk/diary/route/observations.py) | [backend/src/daengs_walk/facts.py](../../../backend/src/daengs_walk/facts.py) | retain-interface | — |
-| [backend/src/daengs_walk/diary/route/observations.py](../../../backend/src/daengs_walk/diary/route/observations.py) | [backend/src/daengs_walk/storyboard_input.py](../../../backend/src/daengs_walk/storyboard_input.py) | change | A1 |
-| [backend/src/daengs_walk/diary/route/observations.py](../../../backend/src/daengs_walk/diary/route/observations.py) | [backend/src/daengs_walk/storyboard_selection.py](../../../backend/src/daengs_walk/storyboard_selection.py) | change | A2 |
-| [backend/src/daengs_walk/diary/selection/board.py](../../../backend/src/daengs_walk/diary/selection/board.py) | [backend/src/daengs_walk/storyboard_selection.py](../../../backend/src/daengs_walk/storyboard_selection.py) | change | A2 |
-| [backend/src/daengs_walk/diary/slots/sources.py](../../../backend/src/daengs_walk/diary/slots/sources.py) | [backend/src/daengs_walk/storyboard_input.py](../../../backend/src/daengs_walk/storyboard_input.py) | change | A1 |
-| [backend/src/daengs_walk/diary/slots/sources.py](../../../backend/src/daengs_walk/diary/slots/sources.py) | [backend/src/daengs_walk/storyboard_selection.py](../../../backend/src/daengs_walk/storyboard_selection.py) | change | A2 |
+| [backend/src/daengs_walk/diary/route/observations.py](../../../backend/src/daengs_walk/diary/route/observations.py) | [backend/src/daengs_walk/route/nodes.py](../../../backend/src/daengs_walk/route/nodes.py) | retain-interface | — |
+| [backend/src/daengs_walk/diary/route/observations.py](../../../backend/src/daengs_walk/diary/route/observations.py) | [backend/src/daengs_walk/route/pace.py](../../../backend/src/daengs_walk/route/pace.py) | retain-interface | — |
+| [backend/src/daengs_walk/diary/selection/board.py](../../../backend/src/daengs_walk/diary/selection/board.py) | [backend/src/daengs_walk/route/geometry.py](../../../backend/src/daengs_walk/route/geometry.py) | retain-interface | — |
+| [backend/src/daengs_walk/diary/slots/sources.py](../../../backend/src/daengs_walk/diary/slots/sources.py) | [backend/src/daengs_walk/route/geometry.py](../../../backend/src/daengs_walk/route/geometry.py) | retain-interface | — |
+| [backend/src/daengs_walk/diary/slots/sources.py](../../../backend/src/daengs_walk/diary/slots/sources.py) | [backend/src/daengs_walk/route/nodes.py](../../../backend/src/daengs_walk/route/nodes.py) | retain-interface | — |
 | [backend/src/daengs_walk/diary/slots/temperature.py](../../../backend/src/daengs_walk/diary/slots/temperature.py) | [backend/src/daengs_walk/weather.py](../../../backend/src/daengs_walk/weather.py) | retain-interface | — |
 | [backend/src/daengs_walk/evidence.py](../../../backend/src/daengs_walk/evidence.py) | [backend/src/daengs_walk/contracts.py](../../../backend/src/daengs_walk/contracts.py) | retain-interface | — |
 | [backend/src/daengs_walk/facts.py](../../../backend/src/daengs_walk/facts.py) | [backend/src/daengs_walk/contracts.py](../../../backend/src/daengs_walk/contracts.py) | retain-interface | — |
@@ -362,4 +362,7 @@
 | [backend/src/daengs_walk/spatial_diary.py](../../../backend/src/daengs_walk/spatial_diary.py) | [backend/src/daengs_walk/cellophane.py](../../../backend/src/daengs_walk/cellophane.py) | retain-interface | — |
 | [backend/src/daengs_walk/spatial_diary.py](../../../backend/src/daengs_walk/spatial_diary.py) | [backend/src/daengs_walk/contracts.py](../../../backend/src/daengs_walk/contracts.py) | retain-interface | — |
 | [backend/src/daengs_walk/spatial_diary.py](../../../backend/src/daengs_walk/spatial_diary.py) | [backend/src/daengs_walk/hex_grid.py](../../../backend/src/daengs_walk/hex_grid.py) | retain-interface | — |
+| [backend/src/daengs_walk/storyboard_input.py](../../../backend/src/daengs_walk/storyboard_input.py) | [backend/src/daengs_walk/route/nodes.py](../../../backend/src/daengs_walk/route/nodes.py) | retain-interface | — |
+| [backend/src/daengs_walk/storyboard_selection.py](../../../backend/src/daengs_walk/storyboard_selection.py) | [backend/src/daengs_walk/route/geometry.py](../../../backend/src/daengs_walk/route/geometry.py) | retain-interface | — |
+| [backend/src/daengs_walk/storyboard_selection.py](../../../backend/src/daengs_walk/storyboard_selection.py) | [backend/src/daengs_walk/route/pace.py](../../../backend/src/daengs_walk/route/pace.py) | retain-interface | — |
 | [backend/src/daengs_walk/weather.py](../../../backend/src/daengs_walk/weather.py) | [backend/src/daengs_walk/value_contracts.py](../../../backend/src/daengs_walk/value_contracts.py) | retain-interface | — |

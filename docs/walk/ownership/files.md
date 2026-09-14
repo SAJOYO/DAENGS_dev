@@ -1,6 +1,6 @@
 # 파일별 소유권 목록
 
-기준 `390ddd0c + #521 stage 1`. [범위·판단·부채 목록](README.md)이 정본 설명이다. 이 표는 `inventory.json`의 읽기용 표현이다.
+기준 `f6ac5819 + #522 stage 2`. [범위·판단·부채 목록](README.md)이 정본 설명이다. 이 표는 `inventory.json`의 읽기용 표현이다.
 
 소유 영역은 최종 폴더 이름이 아니다. `split` 파일은 주 소유 영역과 분리할 책임을 함께 기록한다. `integration`은 파일 전체 이관 대상이 아니다.
 
@@ -53,6 +53,10 @@
 | [backend/src/daengs_walk/facts.py](../../../backend/src/daengs_walk/facts.py) | domain | repackage | 증거 계산·동선 투영·측정 저장 및 조회. 후속 배치는 소유권 기준이며 계산/버전은 보존.  |
 | [backend/src/daengs_walk/measurement.py](../../../backend/src/daengs_walk/measurement.py) | domain | repackage | 증거 계산·동선 투영·측정 저장 및 조회. 후속 배치는 소유권 기준이며 계산/버전은 보존.  |
 | [backend/src/daengs_walk/observation.py](../../../backend/src/daengs_walk/observation.py) | domain | repackage | 증거 계산·동선 투영·측정 저장 및 조회. 후속 배치는 소유권 기준이며 계산/버전은 보존.  |
+| [backend/src/daengs_walk/route/__init__.py](../../../backend/src/daengs_walk/route/__init__.py) | domain | retain | 연속 경로/거리/관측 계산. 현재/과거 소비자가 기준값을 소유하며 일기·storyboard 역참조 없음.  |
+| [backend/src/daengs_walk/route/geometry.py](../../../backend/src/daengs_walk/route/geometry.py) | domain | retain | 연속 경로/거리/관측 계산. 현재/과거 소비자가 기준값을 소유하며 일기·storyboard 역참조 없음.  |
+| [backend/src/daengs_walk/route/nodes.py](../../../backend/src/daengs_walk/route/nodes.py) | domain | retain | 연속 경로/거리/관측 계산. 현재/과거 소비자가 기준값을 소유하며 일기·storyboard 역참조 없음.  |
+| [backend/src/daengs_walk/route/pace.py](../../../backend/src/daengs_walk/route/pace.py) | domain | retain | 연속 경로/거리/관측 계산. 현재/과거 소비자가 기준값을 소유하며 일기·storyboard 역참조 없음.  |
 | [backend/src/daengs_walk/trajectory.py](../../../backend/src/daengs_walk/trajectory.py) | domain | repackage | 증거 계산·동선 투영·측정 저장 및 조회. 후속 배치는 소유권 기준이며 계산/버전은 보존.  |
 | [backend/src/daengs_walk/trajectory_projection.py](../../../backend/src/daengs_walk/trajectory_projection.py) | domain | repackage | 증거 계산·동선 투영·측정 저장 및 조회. 후속 배치는 소유권 기준이며 계산/버전은 보존.  |
 | [backend/src/daengs_walk/trajectory_selection.py](../../../backend/src/daengs_walk/trajectory_selection.py) | domain | repackage | 증거 계산·동선 투영·측정 저장 및 조회. 후속 배치는 소유권 기준이며 계산/버전은 보존.  |
@@ -204,14 +208,14 @@
 | [backend/src/daengs_walk/diary/contracts/slot_receipt.py](../../../backend/src/daengs_walk/diary/contracts/slot_receipt.py) | domain | retain | 일기 전용 계약·정책·조립 책임. 외부 기능의 역참조는 별도 부채 목록에서 제거.  |
 | [backend/src/daengs_walk/diary/contracts/slots.py](../../../backend/src/daengs_walk/diary/contracts/slots.py) | domain | retain | 일기 전용 계약·정책·조립 책임. 외부 기능의 역참조는 별도 부채 목록에서 제거.  |
 | [backend/src/daengs_walk/diary/route/__init__.py](../../../backend/src/daengs_walk/diary/route/__init__.py) | domain | retain | 일기 전용 계약·정책·조립 책임. 외부 기능의 역참조는 별도 부채 목록에서 제거.  |
-| [backend/src/daengs_walk/diary/route/binding.py](../../../backend/src/daengs_walk/diary/route/binding.py) | domain | retain | 일기 전용 계약·정책·조립 책임. 외부 기능의 역참조는 별도 부채 목록에서 제거. A1 |
+| [backend/src/daengs_walk/diary/route/binding.py](../../../backend/src/daengs_walk/diary/route/binding.py) | domain | retain | 일기 전용 계약·정책·조립 책임. 외부 기능의 역참조는 별도 부채 목록에서 제거.  |
 | [backend/src/daengs_walk/diary/route/geometry.py](../../../backend/src/daengs_walk/diary/route/geometry.py) | domain | retain | 일기 전용 계약·정책·조립 책임. 외부 기능의 역참조는 별도 부채 목록에서 제거.  |
-| [backend/src/daengs_walk/diary/route/movement.py](../../../backend/src/daengs_walk/diary/route/movement.py) | domain | retain | 일기 전용 계약·정책·조립 책임. 외부 기능의 역참조는 별도 부채 목록에서 제거. A1 A2 |
+| [backend/src/daengs_walk/diary/route/movement.py](../../../backend/src/daengs_walk/diary/route/movement.py) | domain | retain | 일기 전용 계약·정책·조립 책임. 외부 기능의 역참조는 별도 부채 목록에서 제거.  |
 | [backend/src/daengs_walk/diary/route/movement_policy.py](../../../backend/src/daengs_walk/diary/route/movement_policy.py) | domain | retain | 일기 전용 계약·정책·조립 책임. 외부 기능의 역참조는 별도 부채 목록에서 제거.  |
-| [backend/src/daengs_walk/diary/route/observations.py](../../../backend/src/daengs_walk/diary/route/observations.py) | domain | retain | 일기 전용 계약·정책·조립 책임. 외부 기능의 역참조는 별도 부채 목록에서 제거. A1 A2 |
+| [backend/src/daengs_walk/diary/route/observations.py](../../../backend/src/daengs_walk/diary/route/observations.py) | domain | retain | 일기 전용 계약·정책·조립 책임. 외부 기능의 역참조는 별도 부채 목록에서 제거.  |
 | [backend/src/daengs_walk/diary/route/patterns.py](../../../backend/src/daengs_walk/diary/route/patterns.py) | domain | retain | 일기 전용 계약·정책·조립 책임. 외부 기능의 역참조는 별도 부채 목록에서 제거.  |
 | [backend/src/daengs_walk/diary/selection/__init__.py](../../../backend/src/daengs_walk/diary/selection/__init__.py) | domain | retain | 일기 전용 계약·정책·조립 책임. 외부 기능의 역참조는 별도 부채 목록에서 제거.  |
-| [backend/src/daengs_walk/diary/selection/board.py](../../../backend/src/daengs_walk/diary/selection/board.py) | domain | retain | 일기 전용 계약·정책·조립 책임. 외부 기능의 역참조는 별도 부채 목록에서 제거. A2 |
+| [backend/src/daengs_walk/diary/selection/board.py](../../../backend/src/daengs_walk/diary/selection/board.py) | domain | retain | 일기 전용 계약·정책·조립 책임. 외부 기능의 역참조는 별도 부채 목록에서 제거.  |
 | [backend/src/daengs_walk/diary/selection/stamps.py](../../../backend/src/daengs_walk/diary/selection/stamps.py) | domain | retain | 일기 전용 계약·정책·조립 책임. 외부 기능의 역참조는 별도 부채 목록에서 제거.  |
 | [backend/src/daengs_walk/diary/slots/__init__.py](../../../backend/src/daengs_walk/diary/slots/__init__.py) | domain | retain | 일기 전용 계약·정책·조립 책임. 외부 기능의 역참조는 별도 부채 목록에서 제거.  |
 | [backend/src/daengs_walk/diary/slots/admission.py](../../../backend/src/daengs_walk/diary/slots/admission.py) | domain | retain | 일기 전용 계약·정책·조립 책임. 외부 기능의 역참조는 별도 부채 목록에서 제거.  |
@@ -220,7 +224,7 @@
 | [backend/src/daengs_walk/diary/slots/movement.py](../../../backend/src/daengs_walk/diary/slots/movement.py) | domain | retain | 일기 전용 계약·정책·조립 책임. 외부 기능의 역참조는 별도 부채 목록에서 제거.  |
 | [backend/src/daengs_walk/diary/slots/route.py](../../../backend/src/daengs_walk/diary/slots/route.py) | domain | retain | 일기 전용 계약·정책·조립 책임. 외부 기능의 역참조는 별도 부채 목록에서 제거.  |
 | [backend/src/daengs_walk/diary/slots/service.py](../../../backend/src/daengs_walk/diary/slots/service.py) | domain | retain | 일기 전용 계약·정책·조립 책임. 외부 기능의 역참조는 별도 부채 목록에서 제거.  |
-| [backend/src/daengs_walk/diary/slots/sources.py](../../../backend/src/daengs_walk/diary/slots/sources.py) | domain | retain | 일기 전용 계약·정책·조립 책임. 외부 기능의 역참조는 별도 부채 목록에서 제거. A1 A2 |
+| [backend/src/daengs_walk/diary/slots/sources.py](../../../backend/src/daengs_walk/diary/slots/sources.py) | domain | retain | 일기 전용 계약·정책·조립 책임. 외부 기능의 역참조는 별도 부채 목록에서 제거.  |
 | [backend/src/daengs_walk/diary/slots/space.py](../../../backend/src/daengs_walk/diary/slots/space.py) | domain | retain | 일기 전용 계약·정책·조립 책임. 외부 기능의 역참조는 별도 부채 목록에서 제거.  |
 | [backend/src/daengs_walk/diary/slots/spatial.py](../../../backend/src/daengs_walk/diary/slots/spatial.py) | domain | retain | 일기 전용 계약·정책·조립 책임. 외부 기능의 역참조는 별도 부채 목록에서 제거.  |
 | [backend/src/daengs_walk/diary/slots/temperature.py](../../../backend/src/daengs_walk/diary/slots/temperature.py) | domain | retain | 공급 관측을 소비하는 일기 장면 채택 정책. 기존 관측 타입 이름은 같은 객체를 재노출.  |
@@ -252,8 +256,8 @@
 | [backend/src/daengs_walk/diary/legacy/__init__.py](../../../backend/src/daengs_walk/diary/legacy/__init__.py) | domain | retain | 지원 중인 과거 작성 계약 유지.  |
 | [backend/src/daengs_walk/diary/legacy/writing.py](../../../backend/src/daengs_walk/diary/legacy/writing.py) | domain | retain | 지원 중인 과거 작성 계약 유지.  |
 | [backend/src/daengs_walk/storyboard.py](../../../backend/src/daengs_walk/storyboard.py) | domain | repackage | 지원 중인 과거 스토리보드/bundle/slot 계약. 후속 배치는 소유권 기준이며 계산/버전은 보존.  |
-| [backend/src/daengs_walk/storyboard_input.py](../../../backend/src/daengs_walk/storyboard_input.py) | domain | split | 연속 경로 구성은 공통 계산으로 추출; 과거 입력/선정 연결은 호환 영역에 유지. A1 |
-| [backend/src/daengs_walk/storyboard_selection.py](../../../backend/src/daengs_walk/storyboard_selection.py) | domain | split | 거리/빈 구간 계산과 상대 속도 정책을 분리; 과거 select_nodes는 호환 영역에 유지. A2 |
+| [backend/src/daengs_walk/storyboard_input.py](../../../backend/src/daengs_walk/storyboard_input.py) | domain | retain | 과거 기록 투영/scene_inputs 소유. 연속 경로는 공통 route.nodes를 소비하며 기존 route_nodes 이름 유지.  |
+| [backend/src/daengs_walk/storyboard_selection.py](../../../backend/src/daengs_walk/storyboard_selection.py) | domain | retain | 과거 우선순위 선정 및 속도 정책 소유. 공통 route 계산을 소비하며 기존 함수 시그니처 보존.  |
 
 ## generation_state: 현재·과거 생성 시도의 공통 상태 전이
 
@@ -648,6 +652,7 @@
 | [backend/tests/walk/diary/test_diary_writer_entrypoints.py](../../../backend/tests/walk/diary/test_diary_writer_entrypoints.py) | support | retain | 검증/표본 소유. 제품 경계 이동 시 import·golden 의미를 함께 점검; 이번 단계에서는 실행하지 않음.  |
 | [backend/tests/walk/diary/test_diary_writing.py](../../../backend/tests/walk/diary/test_diary_writing.py) | support | retain | 검증/표본 소유. 제품 경계 이동 시 import·golden 의미를 함께 점검; 이번 단계에서는 실행하지 않음.  |
 | [backend/tests/walk/diary/test_diary_writing_boundaries.py](../../../backend/tests/walk/diary/test_diary_writing_boundaries.py) | support | retain | 검증/표본 소유. 제품 경계 이동 시 import·golden 의미를 함께 점검; 이번 단계에서는 실행하지 않음.  |
+| [backend/tests/walk/diary/test_route_calculation_boundary.py](../../../backend/tests/walk/diary/test_route_calculation_boundary.py) | support | retain | 경로 경계 회귀 및 변경 전 d9b1b2da의 관측/장면/이동/과거 선정 고정 표본.  |
 | [backend/tests/walk/diary/test_spatial_diary.py](../../../backend/tests/walk/diary/test_spatial_diary.py) | support | retain | 검증/표본 소유. 제품 경계 이동 시 import·golden 의미를 함께 점검; 이번 단계에서는 실행하지 않음.  |
 | [backend/tests/walk/diary/test_spatial_diary_query.py](../../../backend/tests/walk/diary/test_spatial_diary_query.py) | support | retain | 검증/표본 소유. 제품 경계 이동 시 import·golden 의미를 함께 점검; 이번 단계에서는 실행하지 않음.  |
 | [backend/tests/walk/entries/conftest.py](../../../backend/tests/walk/entries/conftest.py) | support | retain | 검증/표본 소유. 제품 경계 이동 시 import·golden 의미를 함께 점검; 이번 단계에서는 실행하지 않음.  |
@@ -666,6 +671,7 @@
 | [backend/tests/walk/fixtures/gps-recording-v1.json](../../../backend/tests/walk/fixtures/gps-recording-v1.json) | support | retain | 검증/표본 소유. 제품 경계 이동 시 import·golden 의미를 함께 점검; 이번 단계에서는 실행하지 않음.  |
 | [backend/tests/walk/fixtures/hex-grid-golden.json](../../../backend/tests/walk/fixtures/hex-grid-golden.json) | support | retain | 검증/표본 소유. 제품 경계 이동 시 import·golden 의미를 함께 점검; 이번 단계에서는 실행하지 않음.  |
 | [backend/tests/walk/fixtures/provider-contracts-v1.json](../../../backend/tests/walk/fixtures/provider-contracts-v1.json) | support | retain | 공급 경계 회귀 및 변경 전 390ddd0c의 JSON/schema/hash 고정 표본.  |
+| [backend/tests/walk/fixtures/route-boundary-v1.json](../../../backend/tests/walk/fixtures/route-boundary-v1.json) | support | retain | 경로 경계 회귀 및 변경 전 d9b1b2da의 관측/장면/이동/과거 선정 고정 표본.  |
 | [backend/tests/walk/fixtures/spatial-diary-view-promotion-v1.json](../../../backend/tests/walk/fixtures/spatial-diary-view-promotion-v1.json) | support | retain | 검증/표본 소유. 제품 경계 이동 시 import·golden 의미를 함께 점검; 이번 단계에서는 실행하지 않음.  |
 | [backend/tests/walk/fixtures/trajectory-contract-v1.json](../../../backend/tests/walk/fixtures/trajectory-contract-v1.json) | support | retain | 검증/표본 소유. 제품 경계 이동 시 import·golden 의미를 함께 점검; 이번 단계에서는 실행하지 않음.  |
 | [backend/tests/walk/fixtures/v2-after.json](../../../backend/tests/walk/fixtures/v2-after.json) | support | retain | 검증/표본 소유. 제품 경계 이동 시 import·golden 의미를 함께 점검; 이번 단계에서는 실행하지 않음.  |
@@ -711,6 +717,7 @@
 | [backend/tests/walk/support/photo_database.py](../../../backend/tests/walk/support/photo_database.py) | support | retain | 검증/표본 소유. 제품 경계 이동 시 import·golden 의미를 함께 점검; 이번 단계에서는 실행하지 않음.  |
 | [backend/tests/walk/support/photo_input.py](../../../backend/tests/walk/support/photo_input.py) | support | retain | 검증/표본 소유. 제품 경계 이동 시 import·golden 의미를 함께 점검; 이번 단계에서는 실행하지 않음.  |
 | [backend/tests/walk/support/pin_database.py](../../../backend/tests/walk/support/pin_database.py) | support | retain | 검증/표본 소유. 제품 경계 이동 시 import·golden 의미를 함께 점검; 이번 단계에서는 실행하지 않음.  |
+| [backend/tests/walk/support/route_contracts.py](../../../backend/tests/walk/support/route_contracts.py) | support | retain | 경로 경계 회귀 및 변경 전 d9b1b2da의 관측/장면/이동/과거 선정 고정 표본.  |
 | [backend/tests/walk/support/route_patterns.py](../../../backend/tests/walk/support/route_patterns.py) | support | retain | 검증/표본 소유. 제품 경계 이동 시 import·golden 의미를 함께 점검; 이번 단계에서는 실행하지 않음.  |
 | [backend/tests/walk/support/storyboard.py](../../../backend/tests/walk/support/storyboard.py) | support | retain | 검증/표본 소유. 제품 경계 이동 시 import·golden 의미를 함께 점검; 이번 단계에서는 실행하지 않음.  |
 | [backend/tests/walk/support/writing_boundary.py](../../../backend/tests/walk/support/writing_boundary.py) | support | retain | 검증/표본 소유. 제품 경계 이동 시 import·golden 의미를 함께 점검; 이번 단계에서는 실행하지 않음.  |

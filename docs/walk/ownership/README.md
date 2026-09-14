@@ -1,22 +1,22 @@
 # 산책 기능의 소유권과 의존 경계 — 0단계
 
-0단계 조사 기준은 DEV `8e3d1589`, 현재 목록은 `390ddd0c` 위의 #521(1단계) 변경을 반영한다. 조사·갱신일은 2026-09-14다.
+0단계 조사 기준은 DEV `8e3d1589`, 현재 목록은 `f6ac5819` 위의 #522(2단계) 변경을 반영한다. 조사·갱신일은 2026-09-14다.
 이 문서는 **남은 구조 변경의 범위를 고정하는 조사 결과**이며 리팩토링 전체 완료 선언이 아니다.
 0단계는 조사만 수행했다. 1단계는 B1·B2·B3의 공급 계약/일기 어댑터를 분리하며 DB·공개 계약·정책은 유지한다.
 
 ## 먼저 읽을 결과
 
-- [파일별 소유권 표](files.md): 범위 내 661개 파일, 소유 영역·현재 계층·처리·근거·부채.
-- [직접 import 판단표](crossings.md): 제품 소스의 교차 영역과 측정 내부 계산/조회 결합 357개.
-- [기계 판독 목록](inventory.json): 위 파일 목록, 1,599개 직접 로컬 import 관계, 판단과 관련 영역.
+- [파일별 소유권 표](files.md): 범위 내 668개 파일, 소유 영역·현재 계층·처리·근거·부채.
+- [직접 import 판단표](crossings.md): 제품 소스의 교차 영역과 측정 내부 계산/조회 결합 360개.
+- [기계 판독 목록](inventory.json): 위 파일 목록, 1,617개 직접 로컬 import 관계, 판단과 관련 영역.
 - [범위 재검사 도구](../../../tools/check_walk_ownership.py): 새 파일·삭제·import 변경·미분류 판단 검출.
 
-범위에 속한 **핵심 Python 217개**, 직접 import 접점 156개, 검증 자산 222개,
+범위에 속한 **핵심 Python 221개**, 직접 import 접점 158개, 검증 자산 223개,
 SQL 접점 52개, 문자열로 확인한 UI/운영 접점 8개, 명명된 도구 4개, 명시한 통합 접점 2개다.
-각 파일은 발견 사유 하나로만 집계한다. 661개를 모두 제품 구현 파일이라고 세지 않는다.
+각 파일은 발견 사유 하나로만 집계한다. 668개를 모두 제품 구현 파일이라고 세지 않는다.
 서비스 루트의 `walk.py`·`walk_*.py` **45개는 모두 포함**했다.
 
-357개 관계 중 21개는 명시한 후속 경계 변경 대상, 336개는 기능 소비·계층 조립·공통 계약
+360개 관계 중 13개는 명시한 후속 경계 변경 대상, 347개는 기능 소비·계층 조립·공통 계약
 관계를 보존하는 대상으로 분류했다. 이는 코드의 결함 개수나 필요한 PR 개수가 아니다.
 동일 원인의 여러 import가 별도 행으로 기록된다. `retain-interface`는 **현재의 기능 소비
 관계를 유지**한다는 뜻이며 비공개 함수까지 영구적인 API로 승인하지 않는다.
@@ -72,15 +72,15 @@ SQL 접점 52개, 문자열로 확인한 UI/운영 접점 8개, 명명된 도구
 
 ## 제거할 결합과 보존할 계약
 
-B1·B2·B3은 **#521에서 구현·직접 검증**했다. 나머지 8개 항목은 미완료다. 아래 표는 원래 문제와 보존 계약을 함께 남긴다.
+B1·B2·B3은 **#521**, A1·A2는 **#522에서 구현·직접 검증**했다. 나머지 6개 항목은 미완료다. 아래 표는 원래 문제와 보존 계약을 함께 남긴다.
 
 | ID / 단계 | 근거가 되는 현재 코드 | 변경 방향 | 반드시 보존할 것 |
 | --- | --- | --- | --- |
 | B3 / 1 · #521 구현 | `walk_photo.transition` 및 사진 schema, area/park/river 카탈로그 → `diary.contracts.input` | 사진 요청 digest와 실제 공용 값의 독립 계약 추출. 이름이 digest인 함수를 전부 합치지 않음 | 키 정렬·공백·유니코드·숫자·datetime/model 직렬화·기존 요청 해시, 같은 revision 재시도/충돌 판정 |
 | B2 / 1 · #521 구현 | `walk_weather_context` → `diary.slots.temperature.GridTemperature`·`Point` | 시간/좌표/공급자에 묶인 관측 자료형은 공급 계약으로, `temperature_candidate`의 장면 일치·나이 제한은 일기에 유지 | 과거 hourly 관측 검증, query/request/fetch 시각, 날씨 채택/제외 이유와 저장 payload |
 | B1 / 1 · #521 구현 | `walk_space_catalog_input.retain_page/retained_fields/normalization_input` | 원자료 보존/검증은 카탈로그, `AreaInput` 구성은 일기 수집 어댑터로 분리 | pagination/metadata·잘못된 행·충돌 행 보존, 원자료 hash, coverage 검증. 요약 결과에서 원자료 복원 금지 |
-| A1 / 2 | `diary.route.binding/observations`, `diary.slots.sources` → `storyboard_input.route_nodes` | 연속 경로/원본 관측 주소를 공통 계산으로 분리; 과거 `scene_inputs`는 호환 소유 | 끊긴 경로 block, 실제 GPS 출처, moving 거리 누적, 장면/관측 식별자 |
-| A2 / 2 | `diary.selection.board`·`route.observations` → `storyboard_selection` | 거리/빈 구간 계산은 공유; 상대 속도 관측 정책은 소유자와 명시 파라미터/버전을 구분 | 기존 기준 속도·비율·지속 시간·후보 순위·동률 처리·미선정 구간. 정책 통합 금지 |
+| A1 / 2 · #522 구현 | `diary.route.binding/observations`, `diary.slots.sources` → `storyboard_input.route_nodes` | 연속 경로/원본 관측 주소를 공통 계산으로 분리; 과거 `scene_inputs`는 호환 소유 | 끊긴 경로 block, 실제 GPS 출처, moving 거리 누적, 장면/관측 식별자 |
+| A2 / 2 · #522 구현 | `diary.selection.board`·`route.observations` → `storyboard_selection` | 거리/빈 구간 계산은 공유; 상대 속도 관측 정책은 소유자와 명시 파라미터/버전을 구분 | 기존 기준 속도·비율·지속 시간·후보 순위·동률 처리·미선정 구간. 정책 통합 금지 |
 | D1 / 3 | `lifecycle.generation.generate_diary`의 `CardWritingResult` 타입에 따른 완료기 선택 | 실행 전에 작성기·완료기·기대 결과 계약을 함께 결정하고 결과를 검증 | provider 대역 주입이 전략을 바꾸지 않음, 현재/과거 지원 계약, 수집 적용·마감·실패 fallback |
 | D2 / 3 | `services.walk_storyboard`·`schemas.walk_storyboard`의 현재/과거 분기 | HTTP 협상 진입과 과거 실행/응답 소유권을 분리 | 기존 URL·지원 format·협상 결과·공개 JSON. **같은 board format에도 현재/과거 슬롯 경로가 있으므로 format만으로 전략을 결정하지 않음** |
 | D3 / 3 | `walk_storyboard_state`의 `reusable/reserve/complete` | 공통 생성 상태로 이름/소유권 명시; 모델·DAO 계층과 공유 행 유지 | generation/input revision/lease 비교, 원본 재확인, 중복/늦은 결과 차단. 현재/과거 상태 복제 금지 |
@@ -94,7 +94,7 @@ B1·B2·B3은 **#521에서 구현·직접 검증**했다. 나머지 8개 항목�
 
 ### 같은 속도 정책이라고 합치면 안 되는 두 경로
 
-`diary.route.observations`가 참조하는 기존 `movement_candidates`는 느림 0.5배 미만,
+`diary.route.observations`가 소유하는 `OBSERVATION_PACE`는 느림 0.5배 미만,
 빠름 1.75배 초과, 지속 20초 이상이다. #508의 `diary.route.movement_policy.MovementPolicy`
 기본값은 느림 0.5배, 빠름 1.5배, 최소 10초다. 전자는 장면의 관측 후보 공급, 후자는
 새 이동 재료/장면 결합 정책의 경로다. `movement.py`·`slots/movement.py`·`board/activity.py`·
@@ -161,7 +161,41 @@ DB 검사는 `docs/ci/README.md`의 **폐기용 loopback DB**를 사용하며 sk
 사진 DB 검사는 재시도·삭제·권한·동시 CAS·계정 삭제를 확인했다. 기온 DB 검사는
 수집→작성기 전달→JSONB 저장→원자료 제거 이후 판독을 확인했다. 변경 파일 Ruff,
 `uv run --no-sync check`, 목록 재검사도 통과했다. 전체 스위트·실환경 공급자·모델·실기기
-검증은 실행하지 않았다. A1/A2·C1·D1/D2/D3·E1/E2는 여전히 후속 작업이다.
+검증은 실행하지 않았다. 1단계 종료 시 A1/A2·C1·D1/D2/D3·E1/E2가 후속 작업이었다.
+
+## 2단계 구현·검증 기록 (#522)
+
+- `daengs_walk.route.nodes`: canonical 연속 block, moving 거리 누적, 원본 GPS 관측 주소.
+- `route.geometry`: 기존 거리 및 block별 미포함 구간 계산. 장면 개수/선정 정책 없음.
+- `route.pace`: 기준 속도와 상대 속도 후보 계산. 기본 임계값을 숨기지 않고 호출자가
+  최소 속도·표본 수와 `PacePolicy`를 명시한다. 현재 관측의 `OBSERVATION_PACE`와
+  과거 선정의 `STORYBOARD_PACE`는 각각 독립적으로 소유한다.
+- 새 이동 재료의 `MovementPolicy`와 `pace_claims`는 일기에 유지한다. 기존 관측과
+  연속성/ID 구성 방식도 다르므로 이름이 비슷하다고 같은 알고리즘으로 합치지 않았다.
+- 현재 일기 도메인의 `storyboard_*` import를 모두 제거했다. 과거 소비자는 공통 계산을
+  사용하되 기존 `route_nodes`, `distance`, `uncovered`, 속도 함수 이름/시그니처를 유지한다.
+
+변경 전 `d9b1b2da`에서 11개 합성 경로의 결과를 `route-boundary-v1.json`에 고정했다.
+검증 대상은 노드, 관측 ID/버전, 장면 계획, 새 이동 재료와 과거 스토리보드 결과의 hash다.
+표본에는 정지·회전·되짚기·단절 및 변속 경로가 포함된다. #521이 머지된 최신 DEV
+`f6ac5819`를 통합한 뒤에도 기대값 수정 없이 동일했다.
+
+2026-09-14, backend에서 `uv run --no-sync pytest -q`로 아래 파일을 실행하여
+**157 passed, skip 0**을 확인했다. 최초 136개 실행과 합산하지 않는다.
+
+- `tests/walk/diary/`: `test_route_calculation_boundary.py`, `test_diary_observations.py`,
+  `test_diary_base_selection.py`, `test_diary_route_patterns.py`, `test_diary_activity.py`,
+  `test_diary_domain_package.py`.
+- `tests/walk/storyboard/`: `test_walk_storyboard.py`, `test_storyboard_observations.py`,
+  `test_storyboard_pins.py`.
+- `tests/walk/context/`: `test_provider_contract_boundaries.py`,
+  `test_provider_contract_compatibility.py` (#521 통합 뒤 공급 계약 보존 확인).
+
+함수 내부/상대 import 검사와 새 인터프리터에서 과거 모듈 차단, strict 속도 경계·최소
+지속 시간·기준 속도 표본 수·block 단절, 소비자 간 정책 변경 격리를 확인했다.
+Ruff check/format, 저장소 규칙 검사, 소유권 목록 검사도 통과했다. 이번 단계는 순수 계산의
+의존성 변경이므로 DB/전체 스위트/실환경 공급자·모델·실기기 검증은 실행하지 않았다.
+생성·호환(D1/D2/D3), 측정 투영(C1), 산출물/공개 패키지 경계(E1/E2)는 미완료다.
 
 ## 재검사와 완료 기준
 

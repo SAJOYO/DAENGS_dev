@@ -1,6 +1,7 @@
 # 산책 일기: 대화의 경위와 남은 기획
 
-#512의 서비스 패키징으로 바뀐 현재 경로는 [이동표와 의존 경계](diary-service-package.md)를
+#512·#514의 패키징으로 바뀐 현재 경로는 [서비스](diary-service-package.md)와
+[기획 규칙](diary-domain-package.md)의 이동표·의존 경계를
 따른다. 아래 과거 커밋의 호출 경위·제품 결정은 보존하며 장면 정책을 변경한 작업은 아니다.
 
 이 문서는 **왜 지금 구조가 되었고, 무엇을 더 확인해야 산책 일기 기획이 완성되는지**를 설명한다. 다음 담당자는 남은 작업 표만 보고 구현을 시작하지 말고 1~5절의 문제와 결정 이유를 먼저 읽는다.
@@ -271,7 +272,7 @@
 반대로 앞에서 완료한 조건부 행동 호출·공통 실행 연결을 다시 ‘앞으로 분리할 것’이라고 쓰지도 않는다. 후속 구현은 기존 접점을 사용한다.
 
 - 입력/공간 수집: `walk_diary/preparation/input.py`, `walk_diary/collection/service.py`, 기존 SGIS·피복 정규화.
-- 공간 후보·적용 실험: `daengs_walk.diary_space_*`, 기존 `prepare_board_slots` 경로.
+- 공간 후보·적용 실험: `daengs_walk.diary.space`, `daengs_walk.diary.slots`, 기존 `prepare_board_slots` 경로.
 - 작성용 재료·검증: `walk_diary/writing/jobs.py`, 계약은 `walk_diary/contracts.py`, 조립은 `walk_diary/writing/assembly.py`(#507). 현재 모델·예산은 `walk_diary/writing/policy.py`, 전송은 `walk_diary/writing/provider.py`, 문체/역할은 기존 `walk_diary/writing/prompts.py`다. `walk_diary/runtime.py`는 그래프 호출과 기존 import 호환을 유지한다.
 - 실행: `orchestration/runtime.py`, `diary.py`, 기존 채팅과 공유하는 `execution.py`.
 - 발행/보존: `walk_diary/lifecycle/generation.py`가 `walk_diary/lifecycle/snapshot.py`의 준비·응답과 `walk_diary/lifecycle/reservation.py`의 예약·완료를 연결한다(#506). 공개 마감은 기존 `walk_diary/lifecycle/publication.py`, 저장은 기존 카드 영수증과 저장 경로를 유지한다.
@@ -373,7 +374,7 @@ APP WalkDiarySync: capabilities의 제공 형식 선택
 
 ### 9.4 SGIS의 ‘시’는 원래 정규화에 있다
 
-기존 [walk_sgis.py](../../backend/src/daengs_backend/services/walk_sgis.py)의 응답을 [diary_public_background.py](../../backend/src/daengs_walk/diary_public_background.py)가 다음과 같이 투영한다. 새로 추가한 주소 규칙이 아니라 기존 매핑이다.
+기존 [walk_sgis.py](../../backend/src/daengs_backend/services/walk_sgis.py)의 응답을 [diary_public_background.py](../../backend/src/daengs_walk/diary/space/public.py)가 다음과 같이 투영한다. 새로 추가한 주소 규칙이 아니라 기존 매핑이다.
 
 | SGIS 원자료 | 정규화된 `facts` | 의미 |
 | --- | --- | --- |
@@ -389,7 +390,7 @@ APP WalkDiarySync: capabilities의 제공 형식 선택
 
 ### 9.5 공간 적격성은 장면 구성의 완료 조건이 아니다
 
-확인할 구현은 [수집](../../backend/src/daengs_backend/services/walk_diary/collection/service.py), [재료 정규화](../../backend/src/daengs_walk/diary_space_materials.py), [적용 정책](../../backend/src/daengs_walk/diary_space_policy.py), [슬롯](../../backend/src/daengs_walk/diary_space_slots.py)이다. 먼저 각 자료의 범위·위치·가용 상태를 보고 사용할 수 있는 후보를 만든다. 이 단계에서 피복 조회가 실패했다고 독립적으로 유효한 공원 자료까지 거짓이 되지는 않는다.
+확인할 구현은 [수집](../../backend/src/daengs_backend/services/walk_diary/collection/service.py), [재료 정규화](../../backend/src/daengs_walk/diary/space/materials.py), [적용 정책](../../backend/src/daengs_walk/diary/space/policy.py), [슬롯](../../backend/src/daengs_walk/diary/slots/space.py)이다. 먼저 각 자료의 범위·위치·가용 상태를 보고 사용할 수 있는 후보를 만든다. 이 단계에서 피복 조회가 실패했다고 독립적으로 유효한 공원 자료까지 거짓이 되지는 않는다.
 
 그다음 남은 기획은 현재 지면과 주변 피복으로 공간 맥락을 해석하고, 실제로 확인한 대상·관계가 그 맥락을 구체화하도록 선정하는 것이다. 공원·상권이 각각 적격이어도 둘을 반드시 본문에 쓰거나 같은 비중으로 나열할 필요는 없다. 반대로 ‘수변’이라는 해석만으로 가까운 공원을 같은 수변공원에 소속시킬 수도 없다.
 

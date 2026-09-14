@@ -8,7 +8,7 @@ task; direct/legacy collectors create their own ledger. Never a shared result ca
 import asyncio
 from contextvars import ContextVar
 
-from daengs_walk.diary_scene_backgrounds import (
+from daengs_walk.diary.board.backgrounds import (
     SceneBackgroundSnapshot,
     board_background_revision,
     scene_background_targets,

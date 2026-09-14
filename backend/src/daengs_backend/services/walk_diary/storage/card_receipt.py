@@ -5,7 +5,7 @@ from typing import Literal
 from pydantic import JsonValue, model_validator
 
 from daengs_backend.services.walk_diary.contracts import CardWritingResult
-from daengs_walk.diary_input import DiaryContract, Digest, digest
+from daengs_walk.diary.contracts.input import DiaryContract, Digest, digest
 
 
 class StoredCardWriting(DiaryContract):

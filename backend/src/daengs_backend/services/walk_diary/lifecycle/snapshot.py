@@ -23,10 +23,10 @@ from daengs_backend.services.walk_storyboard_state import (
     StoryboardConflict,
     StoryboardNotFound,
 )
-from daengs_walk.diary_board import BaseBoardPolicy
-from daengs_walk.diary_board_output import BOARD_FORMAT, BOARD_RESPONSE
-from daengs_walk.diary_input import digest
-from daengs_walk.diary_stamps import StampPolicy
+from daengs_walk.diary.board.models import BaseBoardPolicy
+from daengs_walk.diary.board.output import BOARD_FORMAT, BOARD_RESPONSE
+from daengs_walk.diary.contracts.input import digest
+from daengs_walk.diary.selection.stamps import StampPolicy
 
 
 async def snapshot(session, owner, walk_id, target, bundle_format="walk-diary-bundle-v1"):

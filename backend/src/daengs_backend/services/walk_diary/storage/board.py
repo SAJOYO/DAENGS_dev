@@ -5,10 +5,10 @@ from typing import Literal
 from pydantic import Field, model_validator
 
 from daengs_backend.services.walk_diary.storage.card_receipt import StoredCardWriting
-from daengs_walk.diary_board_output import PublishedBoard
-from daengs_walk.diary_board_receipt import StoredSlotWriting
-from daengs_walk.diary_input import DiaryContract, Digest, digest
-from daengs_walk.diary_scene_backgrounds import SceneBackgroundSnapshot
+from daengs_walk.diary.board.backgrounds import SceneBackgroundSnapshot
+from daengs_walk.diary.board.output import PublishedBoard
+from daengs_walk.diary.contracts.input import DiaryContract, Digest, digest
+from daengs_walk.diary.contracts.slot_receipt import StoredSlotWriting
 
 STORAGE_FORMAT = "walk-diary-board-storage-v2"
 

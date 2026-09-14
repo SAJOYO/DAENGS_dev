@@ -7,7 +7,7 @@ from sqlalchemy import text
 from daengs_backend.config import settings
 from daengs_backend.schemas.walk_storyboard import StoryboardRequest
 from daengs_backend.services.walk_diary.lifecycle.generation import generate_diary, get_diary
-from daengs_walk.diary_output import assemble_diary
+from daengs_walk.diary.contracts.output import assemble_diary
 from tests.walk.support.entry_v2 import OWNER, WALK
 from tests.walk.support.paths import REPO as REPO_ROOT
 from tests.walk.support.photo_database import publish, request

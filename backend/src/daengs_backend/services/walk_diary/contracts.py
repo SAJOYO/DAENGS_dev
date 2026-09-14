@@ -4,9 +4,9 @@ from typing import Literal
 
 from pydantic import Field, JsonValue
 
-from daengs_walk.diary_board_output import PublishedBoard
-from daengs_walk.diary_input import DiaryContract, Digest, Identifier
-from daengs_walk.diary_scene_backgrounds import SceneBackgroundSnapshot
+from daengs_walk.diary.board.backgrounds import SceneBackgroundSnapshot
+from daengs_walk.diary.board.output import PublishedBoard
+from daengs_walk.diary.contracts.input import DiaryContract, Digest, Identifier
 
 MAX_CARDS = 12
 

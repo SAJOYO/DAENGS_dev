@@ -23,7 +23,7 @@ from daengs_backend.services.walk_diary.preparation.input import InputAssembly
 from daengs_backend.services.walk_diary.preparation.observations import ObservationSource
 from daengs_backend.services.walk_diary.storage.board import load_board, store_board
 from daengs_backend.services.walk_diary.writing import jobs as diary_jobs
-from daengs_walk.diary_input import DiaryInput, digest
+from daengs_walk.diary.contracts.input import DiaryInput, digest
 from tests.walk.diary.test_diary_board_slot_writing import prepared_case
 from tests.walk.diary.test_diary_route_patterns import input_case
 from tests.walk.diary.test_diary_space_integration import public_response
@@ -148,7 +148,7 @@ async def test_action_edit_does_not_change_space_request():
 
 
 async def test_note_edit_reuses_bodies_and_titles_but_preserves_latest_note():
-    from daengs_walk.diary_input import UserRecord, material_ref
+    from daengs_walk.diary.contracts.input import UserRecord, material_ref
 
     base = prepared_case().board
     previous = await writing.write_cards(base.input.source, base, generate=prose)
@@ -216,7 +216,7 @@ async def test_note_is_preserved_and_not_sent_even_to_title():
 
 
 async def test_previous_public_card_hashes_remain_readable():
-    from daengs_walk.diary_board_output import PublishedBoard
+    from daengs_walk.diary.board.output import PublishedBoard
 
     # v1 hashes included original text; the stored public shape must remain readable.
     base = prepared_case().board

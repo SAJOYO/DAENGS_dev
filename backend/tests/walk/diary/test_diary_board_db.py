@@ -19,8 +19,8 @@ from daengs_backend.services.walk_diary.legacy.board_slots import write_legacy_s
 from daengs_backend.services.walk_diary.lifecycle.generation import generate_diary, get_diary
 from daengs_backend.services.walk_diary.runtime import write_board
 from daengs_backend.services.walk_storyboard_state import StoryboardConflict
-from daengs_walk.diary_board_output import BOARD_FORMAT
-from daengs_walk.diary_input import digest
+from daengs_walk.diary.board.output import BOARD_FORMAT
+from daengs_walk.diary.contracts.input import digest
 from tests.walk.support.diary import place_payload
 from tests.walk.support.entry_v2 import AT, ENTRY, OWNER, WALK
 from tests.walk.support.paths import REPO

@@ -13,10 +13,11 @@ from daengs_backend.services.walk_diary.legacy.slots import generate_slot_prose,
 from daengs_evals.diary_slots_demo import demo_input
 from daengs_walk import analyze_walk
 from daengs_walk.contracts import WalkEvidencePoint
-from daengs_walk.diary_board import BaseBoardPolicy, VerifiedBoardRoute
-from daengs_walk.diary_input import DiaryInput
-from daengs_walk.diary_slots import SlotPolicy, prepare_slot_preview
-from daengs_walk.diary_stamps import StampPolicy
+from daengs_walk.diary.board.models import BaseBoardPolicy, VerifiedBoardRoute
+from daengs_walk.diary.board.preview import prepare_slot_preview
+from daengs_walk.diary.contracts.input import DiaryInput
+from daengs_walk.diary.contracts.slots import SlotPolicy
+from daengs_walk.diary.selection.stamps import StampPolicy
 
 
 def read_key(path):

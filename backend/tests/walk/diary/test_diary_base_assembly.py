@@ -7,12 +7,12 @@ import pytest
 from daengs_backend.orchestration.contracts import PrincipalContext
 from daengs_backend.services.walk_diary.preparation import board as service
 from daengs_backend.services.walk_diary.preparation.input import InputAssembly
-from daengs_walk.diary_board import BaseBoard
-from daengs_walk.diary_board_assembly import assemble_base_board
-from daengs_walk.diary_board_selection import prepare_base_board
-from daengs_walk.diary_input import DiaryInput
-from daengs_walk.diary_output import WritingReceipt, assemble_diary
-from daengs_walk.diary_stamps import prepare_stamps
+from daengs_walk.diary.board.assembly import assemble_base_board
+from daengs_walk.diary.board.models import BaseBoard
+from daengs_walk.diary.contracts.input import DiaryInput
+from daengs_walk.diary.contracts.output import WritingReceipt, assemble_diary
+from daengs_walk.diary.selection.board import prepare_base_board
+from daengs_walk.diary.selection.stamps import prepare_stamps
 from tests.walk.support.base_board import policy, saved_case
 from tests.walk.support.diary import nearby, record, source, with_backgrounds
 from tests.walk.support.photo_input import OWNER, WALK

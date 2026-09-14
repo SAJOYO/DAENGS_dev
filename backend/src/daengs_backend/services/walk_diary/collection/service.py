@@ -19,9 +19,9 @@ from daengs_backend.services.walk_diary.collection.snapshot import source_backgr
 from daengs_backend.services.walk_public_http import get_json
 from daengs_backend.services.walk_sgis import sgis
 from daengs_backend.services.walk_space_catalog_input import normalization_input, retain_page
-from daengs_walk.diary_input import digest
-from daengs_walk.diary_scene_backgrounds import scene_background_targets
-from daengs_walk.diary_space_materials import SpaceInput, normalize_spaces
+from daengs_walk.diary.board.backgrounds import scene_background_targets
+from daengs_walk.diary.contracts.input import digest
+from daengs_walk.diary.space.materials import SpaceInput, normalize_spaces
 
 LAND_ENDPOINT = "https://api.mcee.go.kr/geoserver/wms"
 COLLECTION_SECONDS = 4.0

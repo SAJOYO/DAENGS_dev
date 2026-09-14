@@ -18,8 +18,8 @@ from daengs_backend.services.walk_diary.collection.application import collect_fo
 from daengs_backend.services.walk_diary.deadline import publication_deadline
 from daengs_backend.services.walk_diary.writing import assembly, policy
 from daengs_backend.services.walk_diary.writing import jobs as card_jobs
-from daengs_walk.diary_board_output import PublishedBoard, publish_board
-from daengs_walk.diary_input import digest
+from daengs_walk.diary.board.output import PublishedBoard, publish_board
+from daengs_walk.diary.contracts.input import digest
 
 
 class DiaryState(TypedDict, total=False):

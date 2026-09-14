@@ -5,13 +5,13 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from pydantic import ValidationError
 
-from daengs_walk.diary_input import Point, digest
-from daengs_walk.diary_space_coverage import PreparedFeature
-from daengs_walk.diary_space_geometry import distance, feature_contains
-from daengs_walk.diary_space_materials import normalize_spaces
-from daengs_walk.diary_space_memory import replay_spaces
-from daengs_walk.diary_space_policy import SpacePolicy, apply_space
-from daengs_walk.diary_space_replay import load_replay, main
+from daengs_walk.diary.cli.space_replay import load_replay, main
+from daengs_walk.diary.contracts.input import Point, digest
+from daengs_walk.diary.slots.memory import replay_spaces
+from daengs_walk.diary.space.coverage import PreparedFeature
+from daengs_walk.diary.space.geometry import distance, feature_contains
+from daengs_walk.diary.space.materials import normalize_spaces
+from daengs_walk.diary.space.policy import SpacePolicy, apply_space
 from tests.walk.diary.test_diary_space_materials import (
     POINT,
     area,
@@ -228,7 +228,7 @@ def test_policy_requires_explicit_distance_and_rejects_invalid_order():
     with pytest.raises(ValidationError):
         SpacePolicy()
     with pytest.raises(ValueError, match="increasing"):
-        from daengs_walk.diary_space_memory import SpaceReplay
+        from daengs_walk.diary.slots.memory import SpaceReplay
 
         SpaceReplay(
             policy={"park_radius_m": 100},

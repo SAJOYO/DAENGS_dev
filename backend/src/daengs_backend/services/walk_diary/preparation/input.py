@@ -23,7 +23,7 @@ from daengs_backend.services.walk_diary.preparation.observations import (
     ObservationSource,
     prepare_observation_source,
 )
-from daengs_walk.diary_input import (
+from daengs_walk.diary.contracts.input import (
     Anchor,
     Behavior,
     DiaryInput,

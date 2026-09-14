@@ -3,10 +3,10 @@
 New board generations use walk_diary.runtime instead.
 """
 
-from daengs_walk.diary_board import VerifiedBoardRoute
-from daengs_walk.diary_board_assembly import assemble_base_board
-from daengs_walk.diary_board_output import publish_board
-from daengs_walk.diary_output import DiaryBundle, WritingReceipt
+from daengs_walk.diary.board.assembly import assemble_base_board
+from daengs_walk.diary.board.models import VerifiedBoardRoute
+from daengs_walk.diary.board.output import publish_board
+from daengs_walk.diary.contracts.output import DiaryBundle, WritingReceipt
 
 
 def complete_board(prepared, output):

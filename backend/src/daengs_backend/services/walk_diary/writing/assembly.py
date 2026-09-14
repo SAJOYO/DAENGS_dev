@@ -2,15 +2,15 @@
 
 from daengs_backend.services.walk_diary.contracts import CardWritingResult
 from daengs_backend.services.walk_diary.writing.policy import writing_version
-from daengs_walk.diary_board_output import publish_board
-from daengs_walk.diary_card_narrative import (
+from daengs_walk.diary.board.output import publish_board
+from daengs_walk.diary.contracts.input import digest
+from daengs_walk.diary.contracts.narrative import (
     CardNarrative,
     CardPart,
     content_revision,
     observation_content,
 )
-from daengs_walk.diary_input import digest
-from daengs_walk.diary_output import BackgroundPiece
+from daengs_walk.diary.contracts.output import BackgroundPiece
 
 
 def places_for(stamp, previous):

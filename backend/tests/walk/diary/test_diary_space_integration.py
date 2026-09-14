@@ -24,8 +24,9 @@ from daengs_backend.services.walk_space_catalog_input import (
     retained_fields,
 )
 from daengs_backend.services.walk_storyboard_state import StoryboardConflict
-from daengs_walk.diary_slots import SlotPolicy, admit
-from daengs_walk.diary_space_materials import AreaInput, normalize_spaces
+from daengs_walk.diary.contracts.slots import SlotPolicy
+from daengs_walk.diary.slots.admission import admit
+from daengs_walk.diary.space.materials import AreaInput, normalize_spaces
 from tests.walk.diary.test_diary_space_materials import POINT, area, page, park, shop
 from tests.walk.support.base_board import policy, saved_case
 from tests.walk.support.diary_generation import PATH, body

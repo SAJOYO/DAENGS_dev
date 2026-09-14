@@ -18,7 +18,7 @@ from daengs_backend.services.walk_diary.lifecycle import generation
 from daengs_backend.services.walk_diary.lifecycle.generation import generate_diary
 from daengs_backend.services.walk_diary.preparation import input as reader
 from daengs_backend.services.walk_diary.storage.board import StoredBoard
-from daengs_walk.diary_board_output import BOARD_FORMAT, BOARD_RESPONSE, PublishedBoard
+from daengs_walk.diary.board.output import BOARD_FORMAT, BOARD_RESPONSE, PublishedBoard
 from tests.walk.support.diary_generation import FORMAT, PATH, body
 from tests.walk.support.observations import stored, uploaded
 from tests.walk.support.photo_input import OWNER, WALK

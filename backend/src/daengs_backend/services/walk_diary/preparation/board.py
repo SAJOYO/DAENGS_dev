@@ -11,16 +11,17 @@ from daengs_backend.orchestration.contracts import PrincipalContext
 from daengs_backend.services.walk_diary.guard import require_owner
 from daengs_backend.services.walk_diary.preparation.input import InputAssembly, read_input
 from daengs_backend.services.walk_diary.preparation.route_policy import configured_route_patterns
-from daengs_walk.diary_board import (
+from daengs_walk.diary.board.assembly import assemble_base_board
+from daengs_walk.diary.board.backgrounds import SceneBackgroundSnapshot
+from daengs_walk.diary.board.models import (
     BaseBoard,
     BaseBoardPolicy,
     PreparedBaseBoard,
     VerifiedBoardRoute,
 )
-from daengs_walk.diary_board_assembly import assemble_base_board
-from daengs_walk.diary_board_selection import prepare_base_board
-from daengs_walk.diary_scene_backgrounds import SceneBackgroundSnapshot
-from daengs_walk.diary_slots import BoardSlotSnapshot, SlotPolicy, prepare_board_slots
+from daengs_walk.diary.contracts.slots import BoardSlotSnapshot, SlotPolicy
+from daengs_walk.diary.selection.board import prepare_base_board
+from daengs_walk.diary.slots.service import prepare_board_slots
 
 
 @dataclass(frozen=True)

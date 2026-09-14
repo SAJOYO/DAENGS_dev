@@ -31,8 +31,8 @@ from daengs_backend.services.walk_diary.storage.board import (
 )
 from daengs_backend.services.walk_storyboard_state import StoryboardConflict
 from daengs_evals.diary_slots_demo import demo_input
-from daengs_walk.diary_input import digest
-from daengs_walk.diary_scene_input import scene_materials
+from daengs_walk.diary.board.scene_input import scene_materials
+from daengs_walk.diary.contracts.input import digest
 from tests.walk.support.base_board import policy
 
 

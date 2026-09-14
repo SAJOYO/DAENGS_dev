@@ -1,7 +1,7 @@
 """Bind a completed source result to its selected scene cores before publishing progress."""
 
-from daengs_walk.diary_board import RecordCore
-from daengs_walk.diary_input import SavedBackground, digest
+from daengs_walk.diary.board.models import RecordCore
+from daengs_walk.diary.contracts.input import SavedBackground, digest
 
 
 def source_background(target, scene, kind, value=None, at=None, reason="source_unavailable"):

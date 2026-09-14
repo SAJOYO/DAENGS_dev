@@ -2,10 +2,8 @@
 
 from daengs_backend.services.walk_diary.contracts import MAX_CARDS
 from daengs_backend.services.walk_diary.writing.prompts import PROMPTS
-from daengs_walk.diary_card_narrative import (
-    OBSERVATION_TEXT,
-)
-from daengs_walk.diary_input import digest
+from daengs_walk.diary.contracts.input import digest
+from daengs_walk.diary.contracts.narrative import OBSERVATION_TEXT
 
 MODEL = "gemini-3.1-flash-lite"
 MAX_INPUT_BYTES = 32_000

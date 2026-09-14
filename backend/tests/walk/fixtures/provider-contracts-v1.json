@@ -1,0 +1,321 @@
+{
+  "baseline": "390ddd0c",
+  "models": {
+    "photo": {
+      "input": {
+        "publisher_id": "00000000-0000-0000-0000-000000000001",
+        "revision": 1,
+        "expected_revision": 0,
+        "photos": [
+          {
+            "id": "00000000-0000-0000-0000-000000000002",
+            "captured_at": "2026-09-14T12:10:00+09:00",
+            "location_captured_at": "2026-09-14T12:09:59+09:00",
+            "point": {
+              "lat": 37.5,
+              "lng": 127
+            },
+            "accuracy_m": 5
+          }
+        ]
+      },
+      "json": "{\"format\":\"walk-photo-metadata-v1\",\"publisher_id\":\"00000000-0000-0000-0000-000000000001\",\"revision\":1,\"expected_revision\":0,\"photos\":[{\"id\":\"00000000-0000-0000-0000-000000000002\",\"captured_at\":\"2026-09-14T03:10:00Z\",\"location_captured_at\":\"2026-09-14T03:09:59Z\",\"point\":{\"lat\":37.5,\"lng\":127.0},\"accuracy_m\":5.0}]}",
+      "sha256": "ba96af3935c09be86df63b15dcd518ecae2ca1f3dccb7943f2571913c7a1ad47",
+      "schema": {
+        "$defs": {
+          "PhotoMetadata": {
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "format": "uuid",
+                "title": "Id",
+                "type": "string"
+              },
+              "captured_at": {
+                "format": "date-time",
+                "title": "Captured At",
+                "type": "string"
+              },
+              "location_captured_at": {
+                "format": "date-time",
+                "title": "Location Captured At",
+                "type": "string"
+              },
+              "point": {
+                "$ref": "#/$defs/Point"
+              },
+              "accuracy_m": {
+                "minimum": 0,
+                "title": "Accuracy M",
+                "type": "number"
+              }
+            },
+            "required": [
+              "id",
+              "captured_at",
+              "location_captured_at",
+              "point",
+              "accuracy_m"
+            ],
+            "title": "PhotoMetadata",
+            "type": "object"
+          },
+          "Point": {
+            "additionalProperties": false,
+            "properties": {
+              "lat": {
+                "maximum": 90,
+                "minimum": -90,
+                "title": "Lat",
+                "type": "number"
+              },
+              "lng": {
+                "maximum": 180,
+                "minimum": -180,
+                "title": "Lng",
+                "type": "number"
+              }
+            },
+            "required": [
+              "lat",
+              "lng"
+            ],
+            "title": "Point",
+            "type": "object"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "format": {
+            "const": "walk-photo-metadata-v1",
+            "default": "walk-photo-metadata-v1",
+            "title": "Format",
+            "type": "string"
+          },
+          "publisher_id": {
+            "format": "uuid",
+            "title": "Publisher Id",
+            "type": "string"
+          },
+          "revision": {
+            "maximum": 2147483647,
+            "minimum": 1,
+            "title": "Revision",
+            "type": "integer"
+          },
+          "expected_revision": {
+            "maximum": 2147483647,
+            "minimum": 0,
+            "title": "Expected Revision",
+            "type": "integer"
+          },
+          "photos": {
+            "items": {
+              "$ref": "#/$defs/PhotoMetadata"
+            },
+            "maxItems": 200,
+            "title": "Photos",
+            "type": "array"
+          }
+        },
+        "required": [
+          "publisher_id",
+          "revision",
+          "expected_revision",
+          "photos"
+        ],
+        "title": "PhotoManifestWrite",
+        "type": "object"
+      }
+    },
+    "weather": {
+      "input": {
+        "provider": "kma-vilage-fcst:ncst",
+        "query_point": {
+          "lat": 37.5,
+          "lng": 127
+        },
+        "requested_at": "2026-09-14T12:10:00+09:00",
+        "fetched_at": "2026-09-14T12:15:00+09:00",
+        "grid": [
+          61,
+          125
+        ],
+        "observed_at": "2026-09-14T12:00:00+09:00",
+        "issued_at": "2026-09-14T12:00:00+09:00",
+        "temperature_c": 22.5
+      },
+      "json": "{\"format\":\"kma-grid-temperature-v1\",\"provider\":\"kma-vilage-fcst:ncst\",\"query_point\":{\"lat\":37.5,\"lng\":127.0},\"requested_at\":\"2026-09-14T03:10:00Z\",\"fetched_at\":\"2026-09-14T03:15:00Z\",\"grid\":[61,125],\"observed_at\":\"2026-09-14T03:00:00Z\",\"issued_at\":\"2026-09-14T03:00:00Z\",\"temperature_c\":22.5,\"unit\":\"celsius\"}",
+      "sha256": "f23f0c0c105fc73b41105d51a0a4c926c67e77efc7082e70288ba1eb0f26f753",
+      "schema": {
+        "$defs": {
+          "Point": {
+            "additionalProperties": false,
+            "properties": {
+              "lat": {
+                "maximum": 90,
+                "minimum": -90,
+                "title": "Lat",
+                "type": "number"
+              },
+              "lng": {
+                "maximum": 180,
+                "minimum": -180,
+                "title": "Lng",
+                "type": "number"
+              }
+            },
+            "required": [
+              "lat",
+              "lng"
+            ],
+            "title": "Point",
+            "type": "object"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "format": {
+            "const": "kma-grid-temperature-v1",
+            "default": "kma-grid-temperature-v1",
+            "title": "Format",
+            "type": "string"
+          },
+          "provider": {
+            "const": "kma-vilage-fcst:ncst",
+            "title": "Provider",
+            "type": "string"
+          },
+          "query_point": {
+            "$ref": "#/$defs/Point"
+          },
+          "requested_at": {
+            "format": "date-time",
+            "title": "Requested At",
+            "type": "string"
+          },
+          "fetched_at": {
+            "format": "date-time",
+            "title": "Fetched At",
+            "type": "string"
+          },
+          "grid": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "exclusiveMinimum": 0,
+                "type": "integer"
+              },
+              {
+                "exclusiveMinimum": 0,
+                "type": "integer"
+              }
+            ],
+            "title": "Grid",
+            "type": "array"
+          },
+          "observed_at": {
+            "format": "date-time",
+            "title": "Observed At",
+            "type": "string"
+          },
+          "issued_at": {
+            "format": "date-time",
+            "title": "Issued At",
+            "type": "string"
+          },
+          "temperature_c": {
+            "maximum": 60,
+            "minimum": -90,
+            "title": "Temperature C",
+            "type": "number"
+          },
+          "unit": {
+            "const": "celsius",
+            "default": "celsius",
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider",
+          "query_point",
+          "requested_at",
+          "fetched_at",
+          "grid",
+          "observed_at",
+          "issued_at",
+          "temperature_c"
+        ],
+        "title": "GridTemperature",
+        "type": "object"
+      }
+    },
+    "note": {
+      "input": {
+        "kind": "note",
+        "text": "  한글 산책\n🙂  "
+      },
+      "json": "{\"kind\":\"note\",\"text\":\"  한글 산책\\n🙂  \"}",
+      "sha256": "1a64003c0bd4e9a50b1bd284ca23d7b8ced6c8ea538040f9ecf252f70425c431",
+      "schema": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "note",
+            "title": "Kind",
+            "type": "string"
+          },
+          "text": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "text"
+        ],
+        "title": "Note",
+        "type": "object"
+      }
+    }
+  },
+  "json_values": [
+    {
+      "input": {
+        "z": -0.0,
+        "a": [
+          "한글",
+          null,
+          true,
+          1,
+          1.0
+        ]
+      },
+      "sha256": "a58e2d24b121c26a72ec09519a4fcaaac89871fdc29e0fc7ed6c7939adf4ac3d"
+    },
+    {
+      "input": [
+        {
+          "response": {
+            "body": {
+              "items": [
+                {
+                  "parkNm": "  공원  ",
+                  "parkAr": "bad"
+                },
+                null,
+                42
+              ],
+              "totalCount": 3
+            }
+          }
+        }
+      ],
+      "sha256": "4269decf5b293777b8a8c7bf494187f9fdbf2dbf51e07f8d275478c672bd1955"
+    }
+  ]
+}

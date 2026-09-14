@@ -10,7 +10,7 @@ from pathlib import Path
 from urllib.parse import unquote
 
 from daengs_backend.services.walk_public_http import PublicSourceError, get_json
-from daengs_walk.diary.contracts.input import digest
+from daengs_walk.value_contracts import digest
 
 ENDPOINT = "https://api.data.go.kr/openapi/tn_pubr_public_cty_park_info_api"
 FORMAT = "public-park-catalog-v1"

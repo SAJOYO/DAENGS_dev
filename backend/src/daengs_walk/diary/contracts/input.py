@@ -7,33 +7,15 @@ snapshot. These contracts do not implement their acquisition or scene selection.
 
 from __future__ import annotations
 
-import hashlib
-import json
-from datetime import UTC
 from typing import Annotated, Literal
 
-from pydantic import AfterValidator, AwareDatetime, ConfigDict, Field, JsonValue, model_validator
+from pydantic import Field, JsonValue, model_validator
 
-from daengs_walk.contracts import FrozenContract
+from daengs_walk.value_contracts import Instant, Point, digest
+from daengs_walk.value_contracts import ValueContract as DiaryContract
 
-Instant = Annotated[AwareDatetime, AfterValidator(lambda at: at.astimezone(UTC))]
 Digest = Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
 Identifier = Annotated[str, Field(min_length=1, max_length=200)]
-
-
-class DiaryContract(FrozenContract):
-    # The shared assistant ContractModel strips strings. User notes must not use it.
-    model_config = ConfigDict(extra="forbid", frozen=True, allow_inf_nan=False)
-
-
-def digest(value) -> str:
-    if isinstance(value, DiaryContract):
-        value = value.model_dump(mode="json")
-    return hashlib.sha256(
-        json.dumps(
-            value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False
-        ).encode()
-    ).hexdigest()
 
 
 class RecordRef(DiaryContract):
@@ -61,11 +43,6 @@ class RecordRef(DiaryContract):
         ):
             raise ValueError("metadata version must be a SHA256 digest")
         return self
-
-
-class Point(DiaryContract):
-    lat: float = Field(ge=-90, le=90)
-    lng: float = Field(ge=-180, le=180)
 
 
 class FixRef(DiaryContract):

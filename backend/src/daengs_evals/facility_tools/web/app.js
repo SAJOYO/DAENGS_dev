@@ -190,5 +190,5 @@ $('#load-trace').addEventListener('click', async () => {
 api('/api/state').then((data) => {
   render(data);
   data.recent.forEach((turn) => { bubble('user', turn.query); bubble('assistant', turn.answer); });
-  if (!data.recent.length) bubble('assistant', '어떤 곳을 찾고 있어? 🐾');
+  if (!data.recent.length) bubble('assistant', '어떤 곳을 찾아드릴까요, 멍? 🐾');
 }).catch((error) => bubble('assistant', error.message, true));

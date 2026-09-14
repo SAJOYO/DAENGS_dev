@@ -10,7 +10,7 @@ from shapely.ops import nearest_points, transform
 
 from daengs_backend.services import walk_area_catalog as catalog
 from daengs_backend.services.walk_public_http import PublicSourceError, get_json
-from daengs_walk.diary.contracts.input import digest
+from daengs_walk.value_contracts import digest
 
 STANDARD = "https://api.data.go.kr/openapi/tn_pubr_public_river_info_api"
 EGIS = "https://api.mcee.go.kr/geoserver/wfs"

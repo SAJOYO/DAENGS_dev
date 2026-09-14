@@ -1,22 +1,22 @@
 # 산책 기능의 소유권과 의존 경계 — 0단계
 
-기준은 DEV `8e3d1589`(#514, #508, #517 포함), 조사일은 2026-09-14다.
+0단계 조사 기준은 DEV `8e3d1589`, 현재 목록은 `390ddd0c` 위의 #521(1단계) 변경을 반영한다. 조사·갱신일은 2026-09-14다.
 이 문서는 **남은 구조 변경의 범위를 고정하는 조사 결과**이며 리팩토링 전체 완료 선언이 아니다.
-런타임 코드·DB·공개 계약·정책을 변경하지 않았다. 기존 일기 패키징은 유지한다.
+0단계는 조사만 수행했다. 1단계는 B1·B2·B3의 공급 계약/일기 어댑터를 분리하며 DB·공개 계약·정책은 유지한다.
 
 ## 먼저 읽을 결과
 
-- [파일별 소유권 표](files.md): 범위 내 655개 파일, 소유 영역·현재 계층·처리·근거·부채.
-- [직접 import 판단표](crossings.md): 제품 소스의 교차 영역과 측정 내부 계산/조회 결합 355개.
-- [기계 판독 목록](inventory.json): 위 파일 목록, 1,588개 직접 로컬 import 관계, 판단과 관련 영역.
+- [파일별 소유권 표](files.md): 범위 내 661개 파일, 소유 영역·현재 계층·처리·근거·부채.
+- [직접 import 판단표](crossings.md): 제품 소스의 교차 영역과 측정 내부 계산/조회 결합 357개.
+- [기계 판독 목록](inventory.json): 위 파일 목록, 1,599개 직접 로컬 import 관계, 판단과 관련 영역.
 - [범위 재검사 도구](../../../tools/check_walk_ownership.py): 새 파일·삭제·import 변경·미분류 판단 검출.
 
-범위에 속한 **핵심 Python 214개**, 직접 import 접점 155개, 검증 자산 220개,
+범위에 속한 **핵심 Python 217개**, 직접 import 접점 156개, 검증 자산 222개,
 SQL 접점 52개, 문자열로 확인한 UI/운영 접점 8개, 명명된 도구 4개, 명시한 통합 접점 2개다.
-각 파일은 발견 사유 하나로만 집계한다. 655개를 모두 제품 구현 파일이라고 세지 않는다.
+각 파일은 발견 사유 하나로만 집계한다. 661개를 모두 제품 구현 파일이라고 세지 않는다.
 서비스 루트의 `walk.py`·`walk_*.py` **45개는 모두 포함**했다.
 
-355개 관계 중 30개는 명시한 후속 경계 변경 대상, 325개는 기능 소비·계층 조립·공통 계약
+357개 관계 중 21개는 명시한 후속 경계 변경 대상, 336개는 기능 소비·계층 조립·공통 계약
 관계를 보존하는 대상으로 분류했다. 이는 코드의 결함 개수나 필요한 PR 개수가 아니다.
 동일 원인의 여러 import가 별도 행으로 기록된다. `retain-interface`는 **현재의 기능 소비
 관계를 유지**한다는 뜻이며 비공개 함수까지 영구적인 API로 승인하지 않는다.
@@ -61,7 +61,7 @@ SQL 접점 52개, 문자열로 확인한 UI/운영 접점 8개, 명명된 도구
 | 한 산책의 봉인 산출물 | capsule·cellophane 생성, 분석 산출물의 직렬화/복원 | 봉인에서 생성되고 공간 조회가 소비함. 여러 산책 집계와 같은 책임이 아님 |
 | 공간 조회·집계 | 봉인된 원판 조회, 조건별 여러 산책 집계 | 원본 기록·측정·일기를 다시 생성하거나 고치지 않음 |
 | 사용자 기록 | 메모·행동 핀 수정/삭제, CAS, 위치 출처 검증 | 일기 입력 공급자. 배경 outbox 예약은 기록 변경과 원자성을 유지 |
-| 사진 | manifest CAS·재시도 해시·삭제 기록 | 일기 입력 공급자. 일기 내부 직렬화 함수의 소비자가 되지 않도록 B3 수행 |
+| 사진 | manifest CAS·재시도 해시·삭제 기록 | 일기 입력 공급자. B3에서 공용 값/해시 계약을 직접 소비하도록 분리 |
 | 배경 공급·카탈로그 | 원본 관측·페이지 보존·갱신·예산·기록별 수집/재수집 | 일기와 기록이 함께 소비. 일기 `AreaInput` 변환/장면 채택은 공급자에 넣지 않음 |
 | 현재 일기 | 재료 해석, 장면 선정, 카드/행동/활동/제목 작성, 발행 | 원본·사진·배경·측정을 소비. 기존 그래프와 공통 실행기를 사용 |
 | 과거 형식 지원 | storyboard 후보 v1~v5, 지원 중인 bundle/slot 실행·읽기 | 현재 정책을 암묵적으로 소유하지 않음. 지원 폐지는 이번 계획이 아님 |
@@ -72,13 +72,13 @@ SQL 접점 52개, 문자열로 확인한 UI/운영 접점 8개, 명명된 도구
 
 ## 제거할 결합과 보존할 계약
 
-모든 항목은 **미완료**다. 표의 단계 번호는 후속 작업 계획이며 이 PR에서 구현하지 않는다.
+B1·B2·B3은 **#521에서 구현·직접 검증**했다. 나머지 8개 항목은 미완료다. 아래 표는 원래 문제와 보존 계약을 함께 남긴다.
 
 | ID / 단계 | 근거가 되는 현재 코드 | 변경 방향 | 반드시 보존할 것 |
 | --- | --- | --- | --- |
-| B3 / 1 | `walk_photo.transition` 및 사진 schema, area/park/river 카탈로그 → `diary.contracts.input` | 사진 요청 digest와 실제 공용 값의 독립 계약 추출. 이름이 digest인 함수를 전부 합치지 않음 | 키 정렬·공백·유니코드·숫자·datetime/model 직렬화·기존 요청 해시, 같은 revision 재시도/충돌 판정 |
-| B2 / 1 | `walk_weather_context` → `diary.slots.temperature.GridTemperature`·`Point` | 시간/좌표/공급자에 묶인 관측 자료형은 공급 계약으로, `temperature_candidate`의 장면 일치·나이 제한은 일기에 유지 | 과거 hourly 관측 검증, query/request/fetch 시각, 날씨 채택/제외 이유와 저장 payload |
-| B1 / 1 | `walk_space_catalog_input.retain_page/retained_fields/normalization_input` | 원자료 보존/검증은 카탈로그, `AreaInput` 구성은 일기 수집 어댑터로 분리 | pagination/metadata·잘못된 행·충돌 행 보존, 원자료 hash, coverage 검증. 요약 결과에서 원자료 복원 금지 |
+| B3 / 1 · #521 구현 | `walk_photo.transition` 및 사진 schema, area/park/river 카탈로그 → `diary.contracts.input` | 사진 요청 digest와 실제 공용 값의 독립 계약 추출. 이름이 digest인 함수를 전부 합치지 않음 | 키 정렬·공백·유니코드·숫자·datetime/model 직렬화·기존 요청 해시, 같은 revision 재시도/충돌 판정 |
+| B2 / 1 · #521 구현 | `walk_weather_context` → `diary.slots.temperature.GridTemperature`·`Point` | 시간/좌표/공급자에 묶인 관측 자료형은 공급 계약으로, `temperature_candidate`의 장면 일치·나이 제한은 일기에 유지 | 과거 hourly 관측 검증, query/request/fetch 시각, 날씨 채택/제외 이유와 저장 payload |
+| B1 / 1 · #521 구현 | `walk_space_catalog_input.retain_page/retained_fields/normalization_input` | 원자료 보존/검증은 카탈로그, `AreaInput` 구성은 일기 수집 어댑터로 분리 | pagination/metadata·잘못된 행·충돌 행 보존, 원자료 hash, coverage 검증. 요약 결과에서 원자료 복원 금지 |
 | A1 / 2 | `diary.route.binding/observations`, `diary.slots.sources` → `storyboard_input.route_nodes` | 연속 경로/원본 관측 주소를 공통 계산으로 분리; 과거 `scene_inputs`는 호환 소유 | 끊긴 경로 block, 실제 GPS 출처, moving 거리 누적, 장면/관측 식별자 |
 | A2 / 2 | `diary.selection.board`·`route.observations` → `storyboard_selection` | 거리/빈 구간 계산은 공유; 상대 속도 관측 정책은 소유자와 명시 파라미터/버전을 구분 | 기존 기준 속도·비율·지속 시간·후보 순위·동률 처리·미선정 구간. 정책 통합 금지 |
 | D1 / 3 | `lifecycle.generation.generate_diary`의 `CardWritingResult` 타입에 따른 완료기 선택 | 실행 전에 작성기·완료기·기대 결과 계약을 함께 결정하고 결과를 검증 | provider 대역 주입이 전략을 바꾸지 않음, 현재/과거 지원 계약, 수집 적용·마감·실패 fallback |
@@ -119,7 +119,7 @@ SQL 접점 52개, 문자열로 확인한 UI/운영 접점 8개, 명명된 도구
 
 ## 후속 작업의 검증 지도
 
-0단계에서는 아래 제품 테스트를 **실행하지 않았다**. 후속 변경의 실제 diff와 저장소
+0단계에서는 아래 제품 테스트를 실행하지 않았다. 1단계 실행 결과는 아래 별도 기록을 따른다. 후속 변경의 실제 diff와 저장소
 테스트 지침을 보고 해당 파일/selector를 선택한다. 전체 walk/전체 저장소 재실행을 미리
 승인하거나 성공 건수로 고정하지 않는다.
 
@@ -134,6 +134,34 @@ SQL 접점 52개, 문자열로 확인한 UI/운영 접점 8개, 명명된 도구
 
 DB 검사는 `docs/ci/README.md`의 **폐기용 loopback DB**를 사용하며 skip을 통과로 보고하지
 않는다. 해시/응답이 달라지면 golden을 갱신해서 통과시키지 말고 의미 변화인지 먼저 판정한다.
+
+## 1단계 구현·검증 기록 (#521)
+
+- `daengs_walk.value_contracts`: 사진·배경·일기의 동일한 값/정규 JSON hash 계약.
+  `DiaryContract`·`Point`·`Instant`·`digest`의 기존 일기 import는 같은 객체를 가리킨다.
+  `daengs_walk.weather.GridTemperature`는 관측 검증만 소유하고, 기온의 장면 채택은
+  기존 `diary.slots.temperature.temperature_candidate`에 남는다.
+- `walk_space_catalog_input`은 보존/해시만 제공한다. 일기의 `AreaInput` 변환과
+  소비 범위 확인은 `walk_diary.collection.catalog.normalization_input`으로 옮겼다.
+- 사진·배경·공용 계약으로 분류된 소스의 함수 내부/상대 import까지 검사하고,
+  10개 공급 모듈을 일기 import가 금지된 새 인터프리터에서 각각 로딩한다.
+- `provider-contracts-v1.json`은 변경 전 `390ddd0c`의 코드에서 추출한 사진 요청·기온·
+  공백/한글 메모의 JSON, JSON Schema, SHA-256과 일반 JSON hash 표본이다.
+  변경 후 출력으로 기대값을 갱신하지 않았다.
+
+실행일 2026-09-14. backend에서 `uv run --no-sync pytest -q`로 다음 묶음을 실행했다.
+세 묶음의 경계 테스트 일부는 중복 실행이므로 건수를 합쳐 고유 테스트 수로 보고하지 않는다.
+
+| 실행 묶음 | 결과 |
+| --- | --- |
+| `context/test_provider_contract_boundaries.py`, `photos/test_walk_photo_input.py`, `context/test_walk_weather_context.py`, `context/test_walk_catalog_refresh.py`, `diary/test_diary_temperature.py`, `diary/test_diary_space_materials.py`, `diary/test_diary_space_integration.py`, `diary/test_diary_domain_package.py` (모두 `tests/walk/` 아래) | 120 passed (최초 경계 테스트 10개) |
+| `context/test_provider_contract_compatibility.py`, `photos/test_walk_photo_db.py`, `diary/test_diary_temperature_db.py` | 14 passed, skip 0. `127.0.0.1:55432/walk_pin_test`의 폐기용 PostgreSQL 17 사용 |
+| 최종 `context/test_provider_contract_boundaries.py`(11개), `diary/test_diary_contract.py`, `diary/test_diary_board_contract.py`, `diary/test_diary_board_receipt.py` | 64 passed |
+
+사진 DB 검사는 재시도·삭제·권한·동시 CAS·계정 삭제를 확인했다. 기온 DB 검사는
+수집→작성기 전달→JSONB 저장→원자료 제거 이후 판독을 확인했다. 변경 파일 Ruff,
+`uv run --no-sync check`, 목록 재검사도 통과했다. 전체 스위트·실환경 공급자·모델·실기기
+검증은 실행하지 않았다. A1/A2·C1·D1/D2/D3·E1/E2는 여전히 후속 작업이다.
 
 ## 재검사와 완료 기준
 

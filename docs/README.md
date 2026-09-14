@@ -27,6 +27,7 @@
 | [walk/diary-stamps.md](walk/diary-stamps.md) | 사용자 기록 중심 장면 선택·관측 보충·배경 슬롯과 재현 가능한 스탬프 |
 | [walk/action-pin-context.md](walk/action-pin-context.md) | 행동 핀 v5 장면·주변 정보 — 추정 위치 출처, 미확정/위치 없음, 버전 협상과 적용 순서 |
 | [orchestration/README.md](orchestration/README.md) | 오케스트레이션 유닛 문서 색인 — 아키텍처 · 공통 계약 · 라우팅 정책 · 라우터 벤치마크 |
+| [cardimage/README.md](cardimage/README.md) | 사용자 강아지 사진으로 도감 4월 카드 만들기 (#496) — 세션 인수인계: 상태 · 파일 위치 · 정해진 것 · 실험 순서. 조사는 `research-*.md`, 진행은 `worklog.md` |
 | [chat-transaction-flow.md](chat-transaction-flow.md) | 제품 대화·AI 요약의 짧은 트랜잭션 경계 — 예약 TX → DB 세션 종료 → 외부 호출 → 조건부 완료 TX |
 | [co-care.md](co-care.md) | 공동 돌봄 설계 — 한 강아지를 여러 보호자가. `pet_members` · 대표/돌보미 · 초대·승계·탈퇴 · 약 중복 확인. **`app_users` 는 탈퇴해도 안 지워진다**는 함정이 이 문서 전체를 관통한다 |
 | [decisions.md](decisions.md) | 의사결정 기록 (D-001 ~) |

@@ -3,9 +3,10 @@ import InspectTabs from "../../components/inspect-tabs";
 /**
  * `기능 / 검색 점검` — 콘솔 메뉴의 두 번째 카드가 여는 화면.
  *
- * **갈래가 넷입니다.** 훈련 RAG(`/training/chat`, `#25`) · 생활 RAG(`/life/ask`·`/life/walk-conditions`) ·
- * 피부 스크리닝(`/screen/v1/screen`) · 어시스턴트(`/assistant/query`).
- * 앞의 셋은 **직접 API** 고, 마지막 하나만 앱 ChatScreen 이 실제로 쓰는 경로입니다.
+ * **갈래가 다섯입니다.** 훈련 RAG(`/training/chat`, `#25`) · 생활 RAG(`/life/ask`·`/life/walk-conditions`) ·
+ * 피부 스크리닝(`/screen/v1/screen`) · 어시스턴트(`/assistant/query`) · 도감 카드 생성
+ * (`/admin/cardimage/generate`, `#496`).
+ * 어시스턴트만 앱 ChatScreen 이 실제로 쓰는 경로이고, 나머지 넷은 **직접 API** 입니다.
  * 원래는 훈련 RAG 하나뿐이었고, 그 챗봇도 처음에는 `/` 랜딩에 붙어 있었습니다 — 그때는
  * 콘솔이 없어서 임시로 거기 둔 것이었습니다.
  *

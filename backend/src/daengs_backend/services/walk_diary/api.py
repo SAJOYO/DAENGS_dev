@@ -6,8 +6,16 @@ __all__ = [
     "get_diary",
     "get_slot_writer",
     "guard_old_writer",
+    "legacy_slot_writer",
     "preview_saved_slots",
 ]
+
+
+def legacy_slot_writer(writer=None):
+    """Explicitly bind a historical slot writer; ordinary provider overrides stay cards."""
+    from .writer_contract import LegacySlotWriter
+
+    return LegacySlotWriter(writer)
 
 
 async def existing_format(session, owner, walk_id, target):

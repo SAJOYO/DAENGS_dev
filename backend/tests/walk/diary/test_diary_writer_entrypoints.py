@@ -73,7 +73,7 @@ async def test_legacy_collection_is_explicit_and_keeps_its_snapshot(api, monkeyp
         OWNER,
         WALK,
         StoryboardRequest.model_validate(body(state, bundle_format="walk-diary-board-v1")),
-        writer=state.writer,
+        writer=state.slot_writer,
         legacy_collector=spy,
     )
     assert result.status == "ready" and result.bundle.model_status == "accepted"

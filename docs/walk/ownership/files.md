@@ -1,6 +1,6 @@
 # 파일별 소유권 목록
 
-기준 `f6ac5819 + #522 stage 2`. [범위·판단·부채 목록](README.md)이 정본 설명이다. 이 표는 `inventory.json`의 읽기용 표현이다.
+기준 `4d7407f6 + #524 stage 3`. [범위·판단·부채 목록](README.md)이 정본 설명이다. 이 표는 `inventory.json`의 읽기용 표현이다.
 
 소유 영역은 최종 폴더 이름이 아니다. `split` 파일은 주 소유 영역과 분리할 책임을 함께 기록한다. `integration`은 파일 전체 이관 대상이 아니다.
 
@@ -146,6 +146,7 @@
 | --- | --- | --- | --- |
 | [backend/src/daengs_backend/orchestration/diary.py](../../../backend/src/daengs_backend/orchestration/diary.py) | orchestration | retain | 일기 작업 그래프. 공통 JobExecutor를 사용하며 별도 실행기 생성 금지.  |
 | [backend/src/daengs_backend/routers/walk_diary_slots.py](../../../backend/src/daengs_backend/routers/walk_diary_slots.py) | routers | retain | 현재 일기 재료 해석·선정·작성·발행. MVC/작업자 계층 유지; 내부 계약/호출만 소유 영역과 일치시킴.  |
+| [backend/src/daengs_backend/schemas/walk_diary.py](../../../backend/src/daengs_backend/schemas/walk_diary.py) | schemas | retain | 현재 일기/board 응답과 저장 bundle 검증.  |
 | [backend/src/daengs_backend/schemas/walk_diary_slots.py](../../../backend/src/daengs_backend/schemas/walk_diary_slots.py) | schemas | retain | 현재 일기 재료 해석·선정·작성·발행. MVC/작업자 계층 유지; 내부 계약/호출만 소유 영역과 일치시킴.  |
 | [backend/src/daengs_backend/services/walk_diary/__init__.py](../../../backend/src/daengs_backend/services/walk_diary/__init__.py) | services | retain | 일기 전용 계약·정책·조립 책임. 외부 기능의 역참조는 별도 부채 목록에서 제거.  |
 | [backend/src/daengs_backend/services/walk_diary/api.py](../../../backend/src/daengs_backend/services/walk_diary/api.py) | services | retain | 일기 전용 계약·정책·조립 책임. 외부 기능의 역참조는 별도 부채 목록에서 제거.  |
@@ -160,11 +161,12 @@
 | [backend/src/daengs_backend/services/walk_diary/deadline.py](../../../backend/src/daengs_backend/services/walk_diary/deadline.py) | services | retain | 일기 전용 계약·정책·조립 책임. 외부 기능의 역참조는 별도 부채 목록에서 제거.  |
 | [backend/src/daengs_backend/services/walk_diary/guard.py](../../../backend/src/daengs_backend/services/walk_diary/guard.py) | services | retain | 일기 전용 계약·정책·조립 책임. 외부 기능의 역참조는 별도 부채 목록에서 제거.  |
 | [backend/src/daengs_backend/services/walk_diary/lifecycle/__init__.py](../../../backend/src/daengs_backend/services/walk_diary/lifecycle/__init__.py) | services | retain | 일기 전용 계약·정책·조립 책임. 외부 기능의 역참조는 별도 부채 목록에서 제거.  |
-| [backend/src/daengs_backend/services/walk_diary/lifecycle/generation.py](../../../backend/src/daengs_backend/services/walk_diary/lifecycle/generation.py) | services | split | 실행 전 작성/완료/결과 계약을 함께 선택; 결과 타입으로 전략을 추측하는 분기 제거. D1 |
-| [backend/src/daengs_backend/services/walk_diary/lifecycle/negotiation.py](../../../backend/src/daengs_backend/services/walk_diary/lifecycle/negotiation.py) | services | retain | 일기 전용 계약·정책·조립 책임. 외부 기능의 역참조는 별도 부채 목록에서 제거. D3 |
-| [backend/src/daengs_backend/services/walk_diary/lifecycle/publication.py](../../../backend/src/daengs_backend/services/walk_diary/lifecycle/publication.py) | services | retain | 일기 전용 계약·정책·조립 책임. 외부 기능의 역참조는 별도 부채 목록에서 제거. D3 |
-| [backend/src/daengs_backend/services/walk_diary/lifecycle/reservation.py](../../../backend/src/daengs_backend/services/walk_diary/lifecycle/reservation.py) | services | retain | 일기 전용 계약·정책·조립 책임. 외부 기능의 역참조는 별도 부채 목록에서 제거. D3 |
-| [backend/src/daengs_backend/services/walk_diary/lifecycle/snapshot.py](../../../backend/src/daengs_backend/services/walk_diary/lifecycle/snapshot.py) | services | retain | 일기 전용 계약·정책·조립 책임. 외부 기능의 역참조는 별도 부채 목록에서 제거. D3 |
+| [backend/src/daengs_backend/services/walk_diary/lifecycle/generation.py](../../../backend/src/daengs_backend/services/walk_diary/lifecycle/generation.py) | services | retain | 예약 전 확정한 작성/결과/완료 계약으로 생성. 결과 타입에 따른 전략 전환 없음.  |
+| [backend/src/daengs_backend/services/walk_diary/lifecycle/negotiation.py](../../../backend/src/daengs_backend/services/walk_diary/lifecycle/negotiation.py) | services | retain | 일기 전용 계약·정책·조립 책임. 외부 기능의 역참조는 별도 부채 목록에서 제거.  |
+| [backend/src/daengs_backend/services/walk_diary/lifecycle/publication.py](../../../backend/src/daengs_backend/services/walk_diary/lifecycle/publication.py) | services | retain | 일기 전용 계약·정책·조립 책임. 외부 기능의 역참조는 별도 부채 목록에서 제거.  |
+| [backend/src/daengs_backend/services/walk_diary/lifecycle/reservation.py](../../../backend/src/daengs_backend/services/walk_diary/lifecycle/reservation.py) | services | retain | 일기 전용 계약·정책·조립 책임. 외부 기능의 역참조는 별도 부채 목록에서 제거.  |
+| [backend/src/daengs_backend/services/walk_diary/lifecycle/snapshot.py](../../../backend/src/daengs_backend/services/walk_diary/lifecycle/snapshot.py) | services | retain | 일기 전용 계약·정책·조립 책임. 외부 기능의 역참조는 별도 부채 목록에서 제거.  |
+| [backend/src/daengs_backend/services/walk_diary/lifecycle/strategy.py](../../../backend/src/daengs_backend/services/walk_diary/lifecycle/strategy.py) | services | retain | 협상된 형식과 명시 override로 작성·결과·완료를 실행 전에 고정하는 호환 어댑터.  |
 | [backend/src/daengs_backend/services/walk_diary/model_input.py](../../../backend/src/daengs_backend/services/walk_diary/model_input.py) | services | retain | 일기 전용 계약·정책·조립 책임. 외부 기능의 역참조는 별도 부채 목록에서 제거.  |
 | [backend/src/daengs_backend/services/walk_diary/model_materials.py](../../../backend/src/daengs_backend/services/walk_diary/model_materials.py) | services | retain | 일기 전용 계약·정책·조립 책임. 외부 기능의 역참조는 별도 부채 목록에서 제거.  |
 | [backend/src/daengs_backend/services/walk_diary/preparation/__init__.py](../../../backend/src/daengs_backend/services/walk_diary/preparation/__init__.py) | services | retain | 일기 전용 계약·정책·조립 책임. 외부 기능의 역참조는 별도 부채 목록에서 제거.  |
@@ -180,6 +182,7 @@
 | [backend/src/daengs_backend/services/walk_diary/storage/bundle.py](../../../backend/src/daengs_backend/services/walk_diary/storage/bundle.py) | services | retain | 일기 전용 계약·정책·조립 책임. 외부 기능의 역참조는 별도 부채 목록에서 제거.  |
 | [backend/src/daengs_backend/services/walk_diary/storage/card_receipt.py](../../../backend/src/daengs_backend/services/walk_diary/storage/card_receipt.py) | services | retain | 일기 전용 계약·정책·조립 책임. 외부 기능의 역참조는 별도 부채 목록에서 제거.  |
 | [backend/src/daengs_backend/services/walk_diary/storage/provenance.py](../../../backend/src/daengs_backend/services/walk_diary/storage/provenance.py) | services | retain | 일기 전용 계약·정책·조립 책임. 외부 기능의 역참조는 별도 부채 목록에서 제거.  |
+| [backend/src/daengs_backend/services/walk_diary/writer_contract.py](../../../backend/src/daengs_backend/services/walk_diary/writer_contract.py) | services | retain | 과거 슬롯 작성에 대한 명시적인 내부 override 계약.  |
 | [backend/src/daengs_backend/services/walk_diary/writing/__init__.py](../../../backend/src/daengs_backend/services/walk_diary/writing/__init__.py) | services | retain | 일기 전용 계약·정책·조립 책임. 외부 기능의 역참조는 별도 부채 목록에서 제거.  |
 | [backend/src/daengs_backend/services/walk_diary/writing/assembly.py](../../../backend/src/daengs_backend/services/walk_diary/writing/assembly.py) | services | retain | 일기 전용 계약·정책·조립 책임. 외부 기능의 역참조는 별도 부채 목록에서 제거.  |
 | [backend/src/daengs_backend/services/walk_diary/writing/jobs.py](../../../backend/src/daengs_backend/services/walk_diary/writing/jobs.py) | services | retain | 일기 전용 계약·정책·조립 책임. 외부 기능의 역참조는 별도 부채 목록에서 제거.  |
@@ -244,13 +247,14 @@
 | 파일 | 현재 계층 | 처리 | 근거 / 후속 부채 |
 | --- | --- | --- | --- |
 | [backend/src/daengs_backend/routers/walk_storyboard.py](../../../backend/src/daengs_backend/routers/walk_storyboard.py) | routers | retain | 지원 중인 과거 스토리보드/bundle/slot 계약. MVC/작업자 계층 유지; 내부 계약/호출만 소유 영역과 일치시킴.  |
-| [backend/src/daengs_backend/schemas/walk_storyboard.py](../../../backend/src/daengs_backend/schemas/walk_storyboard.py) | schemas | split | 현재 일기 응답과 과거 후보 응답/협상 요청이 혼재. 와이어 계약을 보존하며 소유권 분리. D2 |
+| [backend/src/daengs_backend/schemas/walk_legacy.py](../../../backend/src/daengs_backend/schemas/walk_legacy.py) | schemas | retain | 지원 중인 과거 후보 응답 계약.  |
 | [backend/src/daengs_backend/services/walk_diary/legacy/__init__.py](../../../backend/src/daengs_backend/services/walk_diary/legacy/__init__.py) | services | retain | 지원 중인 과거 작성 계약 유지.  |
 | [backend/src/daengs_backend/services/walk_diary/legacy/board_bundle.py](../../../backend/src/daengs_backend/services/walk_diary/legacy/board_bundle.py) | services | retain | 지원 중인 과거 작성 계약 유지.  |
-| [backend/src/daengs_backend/services/walk_diary/legacy/board_slots.py](../../../backend/src/daengs_backend/services/walk_diary/legacy/board_slots.py) | services | retain | 지원 중인 과거 작성 계약 유지. D1 |
-| [backend/src/daengs_backend/services/walk_diary/legacy/bundle.py](../../../backend/src/daengs_backend/services/walk_diary/legacy/bundle.py) | services | retain | 지원 중인 과거 작성 계약 유지. D1 |
+| [backend/src/daengs_backend/services/walk_diary/legacy/board_slots.py](../../../backend/src/daengs_backend/services/walk_diary/legacy/board_slots.py) | services | retain | 지원 중인 과거 작성 계약 유지.  |
+| [backend/src/daengs_backend/services/walk_diary/legacy/bundle.py](../../../backend/src/daengs_backend/services/walk_diary/legacy/bundle.py) | services | retain | 지원 중인 과거 작성 계약 유지.  |
 | [backend/src/daengs_backend/services/walk_diary/legacy/slots.py](../../../backend/src/daengs_backend/services/walk_diary/legacy/slots.py) | services | retain | 지원 중인 과거 작성 계약 유지.  |
-| [backend/src/daengs_backend/services/walk_storyboard.py](../../../backend/src/daengs_backend/services/walk_storyboard.py) | services | split | 현재 일기 API 진입/형식 협상과 과거 생성 구현의 소유권 구분. HTTP 경로 보존. D2 D3 |
+| [backend/src/daengs_backend/services/walk_legacy/__init__.py](../../../backend/src/daengs_backend/services/walk_legacy/__init__.py) | services | retain | 지원 중인 과거 생성 구현의 소유 영역.  |
+| [backend/src/daengs_backend/services/walk_legacy/storyboard.py](../../../backend/src/daengs_backend/services/walk_legacy/storyboard.py) | services | retain | 과거 후보 생성/조회 및 과거 기록 투영. 상태 전이는 공통 구현 소비.  |
 | [backend/src/daengs_backend/services/walk_storyboard_context.py](../../../backend/src/daengs_backend/services/walk_storyboard_context.py) | services | repackage | 지원 중인 과거 스토리보드/bundle/slot 계약. 후속 소유 영역별 서비스 패키지 재배치 대상.  |
 | [backend/src/daengs_backend/services/walk_storyboard_titles.py](../../../backend/src/daengs_backend/services/walk_storyboard_titles.py) | services | repackage | 지원 중인 과거 스토리보드/bundle/slot 계약. 후속 소유 영역별 서비스 패키지 재배치 대상.  |
 | [backend/src/daengs_walk/diary/legacy/__init__.py](../../../backend/src/daengs_walk/diary/legacy/__init__.py) | domain | retain | 지원 중인 과거 작성 계약 유지.  |
@@ -265,7 +269,8 @@
 | --- | --- | --- | --- |
 | [backend/src/daengs_backend/models/walk_storyboard.py](../../../backend/src/daengs_backend/models/walk_storyboard.py) | models | retain | 현재/과거 형식이 공유하는 저장 행과 생성 접근. ORM/DAO 계층과 스키마는 보존; 과거 전용으로 분류하지 않음.  |
 | [backend/src/daengs_backend/repositories/walk_storyboard.py](../../../backend/src/daengs_backend/repositories/walk_storyboard.py) | repositories | retain | 현재/과거 형식이 공유하는 저장 행과 생성 접근. ORM/DAO 계층과 스키마는 보존; 과거 전용으로 분류하지 않음.  |
-| [backend/src/daengs_backend/services/walk_storyboard_state.py](../../../backend/src/daengs_backend/services/walk_storyboard_state.py) | services | repackage | 동일 행/생성 번호를 보호하는 공통 상태 코드로 명명/배치; 현재·과거로 복제 금지. D3 |
+| [backend/src/daengs_backend/services/walk_generation/state.py](../../../backend/src/daengs_backend/services/walk_generation/state.py) | services | retain | 현재/과거가 같은 저장 행의 lease·세대·revision을 보호하는 유일한 상태 전이.  |
+| [backend/src/daengs_backend/services/walk_storyboard_state.py](../../../backend/src/daengs_backend/services/walk_storyboard_state.py) | services | repackage | 기존 이름의 호환 import. 공통 상태 함수/예외와 동일 객체이며 별도 상태 전이 없음.  |
 
 ## shared_contracts: 소비자에 종속되지 않는 값·좌표·정규 직렬화 계약
 
@@ -298,6 +303,8 @@
 | [backend/src/daengs_backend/repositories/activity.py](../../../backend/src/daengs_backend/repositories/activity.py) | repositories | integration | 산책과 직접 연결된 기존 공통/다른 제품 모듈. 이 파일 전체를 이관하지 않고 해당 import/call 접점만 관리.  |
 | [backend/src/daengs_backend/repositories/pet.py](../../../backend/src/daengs_backend/repositories/pet.py) | repositories | integration | 산책과 직접 연결된 기존 공통/다른 제품 모듈. 이 파일 전체를 이관하지 않고 해당 import/call 접점만 관리.  |
 | [backend/src/daengs_backend/routers/assistant.py](../../../backend/src/daengs_backend/routers/assistant.py) | routers | integration | 산책과 직접 연결된 기존 공통/다른 제품 모듈. 이 파일 전체를 이관하지 않고 해당 import/call 접점만 관리.  |
+| [backend/src/daengs_backend/schemas/walk_generation.py](../../../backend/src/daengs_backend/schemas/walk_generation.py) | schemas | retain | 현재/과거가 공유하는 HTTP 형식 협상 요청 계약.  |
+| [backend/src/daengs_backend/schemas/walk_storyboard.py](../../../backend/src/daengs_backend/schemas/walk_storyboard.py) | schemas | retain | 기존 schema import 호환. 현재/과거 응답 및 공통 요청은 각 소유 모듈에서 재노출.  |
 | [backend/src/daengs_backend/services/__init__.py](../../../backend/src/daengs_backend/services/__init__.py) | services | integration | 산책과 직접 연결된 기존 공통/다른 제품 모듈. 이 파일 전체를 이관하지 않고 해당 import/call 접점만 관리.  |
 | [backend/src/daengs_backend/services/activity.py](../../../backend/src/daengs_backend/services/activity.py) | services | integration | 산책과 직접 연결된 기존 공통/다른 제품 모듈. 이 파일 전체를 이관하지 않고 해당 import/call 접점만 관리.  |
 | [backend/src/daengs_backend/services/activity_core/common.py](../../../backend/src/daengs_backend/services/activity_core/common.py) | services | integration | 산책과 직접 연결된 기존 공통/다른 제품 모듈. 이 파일 전체를 이관하지 않고 해당 import/call 접점만 관리.  |
@@ -310,6 +317,9 @@
 | [backend/src/daengs_backend/services/pet.py](../../../backend/src/daengs_backend/services/pet.py) | services | integration | 산책과 직접 연결된 기존 공통/다른 제품 모듈. 이 파일 전체를 이관하지 않고 해당 import/call 접점만 관리.  |
 | [backend/src/daengs_backend/services/pet_identity.py](../../../backend/src/daengs_backend/services/pet_identity.py) | services | integration | 산책과 직접 연결된 기존 공통/다른 제품 모듈. 이 파일 전체를 이관하지 않고 해당 import/call 접점만 관리.  |
 | [backend/src/daengs_backend/services/walk_activity_context.py](../../../backend/src/daengs_backend/services/walk_activity_context.py) | services | repackage | 다른 제품/공통 실행/인증/설정/배포의 연결 접점. 후속 소유 영역별 서비스 패키지 재배치 대상.  |
+| [backend/src/daengs_backend/services/walk_generation/__init__.py](../../../backend/src/daengs_backend/services/walk_generation/__init__.py) | services | retain | 형식 협상과 공통 생성 상태의 소유 영역; 별도 런타임 없음.  |
+| [backend/src/daengs_backend/services/walk_generation/api.py](../../../backend/src/daengs_backend/services/walk_generation/api.py) | services | retain | 저장 형식 협상 후 현재/과거 실행 진입을 선택; 기존 URL과 요청 보존.  |
+| [backend/src/daengs_backend/services/walk_storyboard.py](../../../backend/src/daengs_backend/services/walk_storyboard.py) | services | retain | 기존 URL 호출자의 호환 import. 실행/협상 구현은 walk_generation.api 소유.  |
 | [backend/src/daengs_walk/__init__.py](../../../backend/src/daengs_walk/__init__.py) | domain | repackage | 최상위 import가 측정·캡슐·셀로판·공간 집계를 함께 로딩함. 명시 진입/호환 공개 이름 검토. E2 |
 | [db/init/06_walks.sql](../../../db/init/06_walks.sql) | support | integration | 저장/HTTP/UI/운영 접점만 범위에 포함. 파일 전체의 기능을 산책이나 일기로 이관하지 않음.  |
 | [db/init/08_territory_visits.sql](../../../db/init/08_territory_visits.sql) | support | integration | 저장/HTTP/UI/운영 접점만 범위에 포함. 파일 전체의 기능을 산책이나 일기로 이관하지 않음.  |
@@ -652,6 +662,7 @@
 | [backend/tests/walk/diary/test_diary_writer_entrypoints.py](../../../backend/tests/walk/diary/test_diary_writer_entrypoints.py) | support | retain | 검증/표본 소유. 제품 경계 이동 시 import·golden 의미를 함께 점검; 이번 단계에서는 실행하지 않음.  |
 | [backend/tests/walk/diary/test_diary_writing.py](../../../backend/tests/walk/diary/test_diary_writing.py) | support | retain | 검증/표본 소유. 제품 경계 이동 시 import·golden 의미를 함께 점검; 이번 단계에서는 실행하지 않음.  |
 | [backend/tests/walk/diary/test_diary_writing_boundaries.py](../../../backend/tests/walk/diary/test_diary_writing_boundaries.py) | support | retain | 검증/표본 소유. 제품 경계 이동 시 import·golden 의미를 함께 점검; 이번 단계에서는 실행하지 않음.  |
+| [backend/tests/walk/diary/test_generation_contract_boundary.py](../../../backend/tests/walk/diary/test_generation_contract_boundary.py) | support | retain | 생성 계약 경계 회귀 및 변경 전 4d7407f6의 HTTP schema 고정 표본.  |
 | [backend/tests/walk/diary/test_route_calculation_boundary.py](../../../backend/tests/walk/diary/test_route_calculation_boundary.py) | support | retain | 경로 경계 회귀 및 변경 전 d9b1b2da의 관측/장면/이동/과거 선정 고정 표본.  |
 | [backend/tests/walk/diary/test_spatial_diary.py](../../../backend/tests/walk/diary/test_spatial_diary.py) | support | retain | 검증/표본 소유. 제품 경계 이동 시 import·golden 의미를 함께 점검; 이번 단계에서는 실행하지 않음.  |
 | [backend/tests/walk/diary/test_spatial_diary_query.py](../../../backend/tests/walk/diary/test_spatial_diary_query.py) | support | retain | 검증/표본 소유. 제품 경계 이동 시 import·golden 의미를 함께 점검; 이번 단계에서는 실행하지 않음.  |
@@ -665,6 +676,7 @@
 | [backend/tests/walk/environment/test_walk_weather_adapter.py](../../../backend/tests/walk/environment/test_walk_weather_adapter.py) | support | retain | 검증/표본 소유. 제품 경계 이동 시 import·golden 의미를 함께 점검; 이번 단계에서는 실행하지 않음.  |
 | [backend/tests/walk/fixtures/MotionReplayFixtureExportTest.kt](../../../backend/tests/walk/fixtures/MotionReplayFixtureExportTest.kt) | support | retain | 검증/표본 소유. 제품 경계 이동 시 import·golden 의미를 함께 점검; 이번 단계에서는 실행하지 않음.  |
 | [backend/tests/walk/fixtures/finalize-promotion-v1.json](../../../backend/tests/walk/fixtures/finalize-promotion-v1.json) | support | retain | 검증/표본 소유. 제품 경계 이동 시 import·golden 의미를 함께 점검; 이번 단계에서는 실행하지 않음.  |
+| [backend/tests/walk/fixtures/generation-schema-v1.json](../../../backend/tests/walk/fixtures/generation-schema-v1.json) | support | retain | 생성 계약 경계 회귀 및 변경 전 4d7407f6의 HTTP schema 고정 표본.  |
 | [backend/tests/walk/fixtures/gps-motion-backup-v1.json](../../../backend/tests/walk/fixtures/gps-motion-backup-v1.json) | support | retain | 검증/표본 소유. 제품 경계 이동 시 import·golden 의미를 함께 점검; 이번 단계에서는 실행하지 않음.  |
 | [backend/tests/walk/fixtures/gps-motion-precision-v1.json](../../../backend/tests/walk/fixtures/gps-motion-precision-v1.json) | support | retain | 검증/표본 소유. 제품 경계 이동 시 import·golden 의미를 함께 점검; 이번 단계에서는 실행하지 않음.  |
 | [backend/tests/walk/fixtures/gps-motion-replay-v1.json](../../../backend/tests/walk/fixtures/gps-motion-replay-v1.json) | support | retain | 검증/표본 소유. 제품 경계 이동 시 import·golden 의미를 함께 점검; 이번 단계에서는 실행하지 않음.  |

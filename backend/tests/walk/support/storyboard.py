@@ -13,9 +13,9 @@ from daengs_backend.core.database import get_session
 from daengs_backend.core.deps import AppPrincipal, CurrentAppUser
 from daengs_backend.routers import walk_storyboard as router
 from daengs_backend.schemas.walk import WalkPointUpload
-from daengs_backend.services import walk_storyboard as service
 from daengs_backend.services.walk_chunk import encode_chunk
 from daengs_backend.services.walk_finalize import walk_input_fingerprint
+from daengs_backend.services.walk_legacy import storyboard as service
 
 OWNER, WALK, SESSION, ENTRY = [uuid.uuid4() for _ in range(4)]
 

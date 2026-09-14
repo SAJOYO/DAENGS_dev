@@ -14,6 +14,7 @@ from daengs_backend.models.walk_entry import WalkEntry
 from daengs_backend.models.walk_entry_context import WalkEntryContextEnvelope, WalkEntryContextJob
 from daengs_backend.models.walk_storyboard import WalkStoryboard
 from daengs_backend.schemas.walk_storyboard import StoryboardRequest
+from daengs_backend.services.walk_diary.api import legacy_slot_writer
 from daengs_backend.services.walk_diary.legacy import slots as writing
 from daengs_backend.services.walk_diary.legacy.board_slots import write_legacy_slot_board
 from daengs_backend.services.walk_diary.lifecycle.generation import generate_diary, get_diary
@@ -286,7 +287,7 @@ async def test_cited_facts_round_trip_and_survive_context_loss_without_regenerat
 
     request = spec(expected_entries={str(ENTRY): 1})
     async with factory() as db:
-        first = await generate_diary(db, OWNER, WALK, request, writer=write)
+        first = await generate_diary(db, OWNER, WALK, request, writer=legacy_slot_writer(write))
     assert first.bundle.model_status == "accepted"
     async with factory() as db:
         saved = deepcopy((await db.get(WalkStoryboard, WALK)).bundle)
@@ -298,7 +299,7 @@ async def test_cited_facts_round_trip_and_survive_context_loss_without_regenerat
         second = await get_diary(db, OWNER, WALK, 3, BOARD_FORMAT)
         assert second.bundle == first.bundle and second.background_update_available
     async with factory() as db:
-        repeated = await generate_diary(db, OWNER, WALK, request, writer=write)
+        repeated = await generate_diary(db, OWNER, WALK, request, writer=legacy_slot_writer(write))
         assert repeated.bundle == first.bundle and repeated.generation == first.generation
         assert (await db.get(WalkStoryboard, WALK)).bundle == saved
     assert calls == 1
@@ -323,7 +324,7 @@ async def test_late_cited_result_cannot_replace_new_original_and_its_receipt(
                     await release.wait()
                 return await write_legacy_slot_board(source, base, cited_prose)
 
-            return await generate_diary(db, OWNER, WALK, request, writer=write)
+            return await generate_diary(db, OWNER, WALK, request, writer=legacy_slot_writer(write))
 
     old = asyncio.create_task(call(spec(expected_entries={str(ENTRY): 1}), wait=True))
     try:

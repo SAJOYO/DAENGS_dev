@@ -1,5 +1,5 @@
 {
-  "baseline": "f6ac5819 + #522 stage 2",
+  "baseline": "4d7407f6 + #524 stage 3",
   "scope_version": 1,
   "owners": {
     "recording": "산책 원본·업로드·불변 보조 입력·봉인 트랜잭션",
@@ -2563,6 +2563,16 @@
       "related_owners": []
     },
     {
+      "path": "backend/src/daengs_backend/schemas/walk_diary.py",
+      "owner": "diary",
+      "layer": "schemas",
+      "disposition": "retain",
+      "rationale": "현재 일기/board 응답과 저장 bundle 검증.",
+      "debts": [],
+      "scope_reason": "core",
+      "related_owners": []
+    },
+    {
       "path": "backend/src/daengs_backend/schemas/walk_diary_slots.py",
       "owner": "diary",
       "layer": "schemas",
@@ -2600,6 +2610,28 @@
       "disposition": "retain",
       "rationale": "사용자 메모·행동 핀의 원본/수정/삭제/버전 계약. MVC/작업자 계층 유지; 내부 계약/호출만 소유 영역과 일치시킴.",
       "debts": [],
+      "related_owners": []
+    },
+    {
+      "path": "backend/src/daengs_backend/schemas/walk_generation.py",
+      "owner": "integration",
+      "layer": "schemas",
+      "disposition": "retain",
+      "rationale": "현재/과거가 공유하는 HTTP 형식 협상 요청 계약.",
+      "debts": [],
+      "scope_reason": "core",
+      "related_owners": [
+        "diary"
+      ]
+    },
+    {
+      "path": "backend/src/daengs_backend/schemas/walk_legacy.py",
+      "owner": "legacy",
+      "layer": "schemas",
+      "disposition": "retain",
+      "rationale": "지원 중인 과거 후보 응답 계약.",
+      "debts": [],
+      "scope_reason": "core",
       "related_owners": []
     },
     {
@@ -2656,16 +2688,15 @@
     },
     {
       "path": "backend/src/daengs_backend/schemas/walk_storyboard.py",
-      "owner": "legacy",
+      "owner": "integration",
       "layer": "schemas",
       "scope_reason": "core",
-      "disposition": "split",
-      "rationale": "현재 일기 응답과 과거 후보 응답/협상 요청이 혼재. 와이어 계약을 보존하며 소유권 분리.",
-      "debts": [
-        "D2"
-      ],
+      "disposition": "retain",
+      "rationale": "기존 schema import 호환. 현재/과거 응답 및 공통 요청은 각 소유 모듈에서 재노출.",
+      "debts": [],
       "related_owners": [
-        "diary"
+        "diary",
+        "legacy"
       ]
     },
     {
@@ -3115,9 +3146,7 @@
       "scope_reason": "core",
       "disposition": "retain",
       "rationale": "지원 중인 과거 작성 계약 유지.",
-      "debts": [
-        "D1"
-      ],
+      "debts": [],
       "related_owners": [
         "diary"
       ]
@@ -3129,9 +3158,7 @@
       "scope_reason": "core",
       "disposition": "retain",
       "rationale": "지원 중인 과거 작성 계약 유지.",
-      "debts": [
-        "D1"
-      ],
+      "debts": [],
       "related_owners": [
         "diary",
         "integration"
@@ -3165,15 +3192,12 @@
       "owner": "diary",
       "layer": "services",
       "scope_reason": "core",
-      "disposition": "split",
-      "rationale": "실행 전 작성/완료/결과 계약을 함께 선택; 결과 타입으로 전략을 추측하는 분기 제거.",
-      "debts": [
-        "D1"
-      ],
+      "disposition": "retain",
+      "rationale": "예약 전 확정한 작성/결과/완료 계약으로 생성. 결과 타입에 따른 전략 전환 없음.",
+      "debts": [],
       "related_owners": [
         "generation_state",
-        "integration",
-        "legacy"
+        "integration"
       ]
     },
     {
@@ -3183,9 +3207,7 @@
       "scope_reason": "core",
       "disposition": "retain",
       "rationale": "일기 전용 계약·정책·조립 책임. 외부 기능의 역참조는 별도 부채 목록에서 제거.",
-      "debts": [
-        "D3"
-      ],
+      "debts": [],
       "related_owners": [
         "generation_state",
         "integration",
@@ -3199,9 +3221,7 @@
       "scope_reason": "core",
       "disposition": "retain",
       "rationale": "일기 전용 계약·정책·조립 책임. 외부 기능의 역참조는 별도 부채 목록에서 제거.",
-      "debts": [
-        "D3"
-      ],
+      "debts": [],
       "related_owners": [
         "generation_state"
       ]
@@ -3213,13 +3233,10 @@
       "scope_reason": "core",
       "disposition": "retain",
       "rationale": "일기 전용 계약·정책·조립 책임. 외부 기능의 역참조는 별도 부채 목록에서 제거.",
-      "debts": [
-        "D3"
-      ],
+      "debts": [],
       "related_owners": [
         "generation_state",
-        "integration",
-        "legacy"
+        "integration"
       ]
     },
     {
@@ -3229,12 +3246,22 @@
       "scope_reason": "core",
       "disposition": "retain",
       "rationale": "일기 전용 계약·정책·조립 책임. 외부 기능의 역참조는 별도 부채 목록에서 제거.",
-      "debts": [
-        "D3"
-      ],
+      "debts": [],
       "related_owners": [
         "generation_state",
         "integration",
+        "legacy"
+      ]
+    },
+    {
+      "path": "backend/src/daengs_backend/services/walk_diary/lifecycle/strategy.py",
+      "owner": "diary",
+      "layer": "services",
+      "disposition": "retain",
+      "rationale": "협상된 형식과 명시 override로 작성·결과·완료를 실행 전에 고정하는 호환 어댑터.",
+      "debts": [],
+      "scope_reason": "core",
+      "related_owners": [
         "legacy"
       ]
     },
@@ -3415,6 +3442,16 @@
       ]
     },
     {
+      "path": "backend/src/daengs_backend/services/walk_diary/writer_contract.py",
+      "owner": "diary",
+      "layer": "services",
+      "disposition": "retain",
+      "rationale": "과거 슬롯 작성에 대한 명시적인 내부 override 계약.",
+      "debts": [],
+      "scope_reason": "core",
+      "related_owners": []
+    },
+    {
       "path": "backend/src/daengs_backend/services/walk_diary/writing/__init__.py",
       "owner": "diary",
       "layer": "services",
@@ -3584,6 +3621,65 @@
       "debts": [],
       "related_owners": [
         "integration"
+      ]
+    },
+    {
+      "path": "backend/src/daengs_backend/services/walk_generation/__init__.py",
+      "owner": "integration",
+      "layer": "services",
+      "disposition": "retain",
+      "rationale": "형식 협상과 공통 생성 상태의 소유 영역; 별도 런타임 없음.",
+      "debts": [],
+      "scope_reason": "core",
+      "related_owners": []
+    },
+    {
+      "path": "backend/src/daengs_backend/services/walk_generation/api.py",
+      "owner": "integration",
+      "layer": "services",
+      "disposition": "retain",
+      "rationale": "저장 형식 협상 후 현재/과거 실행 진입을 선택; 기존 URL과 요청 보존.",
+      "debts": [],
+      "scope_reason": "core",
+      "related_owners": [
+        "diary",
+        "legacy"
+      ]
+    },
+    {
+      "path": "backend/src/daengs_backend/services/walk_generation/state.py",
+      "owner": "generation_state",
+      "layer": "services",
+      "disposition": "retain",
+      "rationale": "현재/과거가 같은 저장 행의 lease·세대·revision을 보호하는 유일한 상태 전이.",
+      "debts": [],
+      "scope_reason": "core",
+      "related_owners": []
+    },
+    {
+      "path": "backend/src/daengs_backend/services/walk_legacy/__init__.py",
+      "owner": "legacy",
+      "layer": "services",
+      "disposition": "retain",
+      "rationale": "지원 중인 과거 생성 구현의 소유 영역.",
+      "debts": [],
+      "scope_reason": "core",
+      "related_owners": []
+    },
+    {
+      "path": "backend/src/daengs_backend/services/walk_legacy/storyboard.py",
+      "owner": "legacy",
+      "layer": "services",
+      "disposition": "retain",
+      "rationale": "과거 후보 생성/조회 및 과거 기록 투영. 상태 전이는 공통 구현 소비.",
+      "debts": [],
+      "scope_reason": "core",
+      "related_owners": [
+        "diary",
+        "generation_state",
+        "integration",
+        "recording",
+        "records"
       ]
     },
     {
@@ -3782,21 +3878,14 @@
     },
     {
       "path": "backend/src/daengs_backend/services/walk_storyboard.py",
-      "owner": "legacy",
+      "owner": "integration",
       "layer": "services",
       "scope_reason": "core",
-      "disposition": "split",
-      "rationale": "현재 일기 API 진입/형식 협상과 과거 생성 구현의 소유권 구분. HTTP 경로 보존.",
-      "debts": [
-        "D2",
-        "D3"
-      ],
+      "disposition": "retain",
+      "rationale": "기존 URL 호출자의 호환 import. 실행/협상 구현은 walk_generation.api 소유.",
+      "debts": [],
       "related_owners": [
-        "diary",
-        "generation_state",
-        "integration",
-        "recording",
-        "records"
+        "generation_state"
       ]
     },
     {
@@ -3817,10 +3906,8 @@
       "layer": "services",
       "scope_reason": "core",
       "disposition": "repackage",
-      "rationale": "동일 행/생성 번호를 보호하는 공통 상태 코드로 명명/배치; 현재·과거로 복제 금지.",
-      "debts": [
-        "D3"
-      ],
+      "rationale": "기존 이름의 호환 import. 공통 상태 함수/예외와 동일 객체이며 별도 상태 전이 없음.",
+      "debts": [],
       "related_owners": []
     },
     {
@@ -5343,6 +5430,7 @@
       "debts": [],
       "related_owners": [
         "diary",
+        "integration",
         "legacy"
       ]
     },
@@ -5355,7 +5443,7 @@
       "rationale": "검증/표본 소유. 제품 경계 이동 시 import·golden 의미를 함께 점검; 이번 단계에서는 실행하지 않음.",
       "debts": [],
       "related_owners": [
-        "legacy"
+        "integration"
       ]
     },
     {
@@ -5370,6 +5458,7 @@
         "background",
         "diary",
         "generation_state",
+        "integration",
         "legacy",
         "records"
       ]
@@ -5398,6 +5487,7 @@
       "debts": [],
       "related_owners": [
         "diary",
+        "integration",
         "legacy"
       ]
     },
@@ -5496,6 +5586,7 @@
       "rationale": "검증/표본 소유. 제품 경계 이동 시 import·golden 의미를 함께 점검; 이번 단계에서는 실행하지 않음.",
       "debts": [],
       "related_owners": [
+        "integration",
         "legacy"
       ]
     },
@@ -5509,7 +5600,7 @@
       "debts": [],
       "related_owners": [
         "diary",
-        "legacy"
+        "integration"
       ]
     },
     {
@@ -5572,7 +5663,7 @@
       "debts": [],
       "related_owners": [
         "diary",
-        "legacy"
+        "integration"
       ]
     },
     {
@@ -5599,6 +5690,7 @@
         "background",
         "diary",
         "generation_state",
+        "integration",
         "legacy",
         "records"
       ]
@@ -5728,6 +5820,7 @@
         "background",
         "diary",
         "generation_state",
+        "integration",
         "legacy"
       ]
     },
@@ -5819,6 +5912,7 @@
       "debts": [],
       "related_owners": [
         "diary",
+        "integration",
         "legacy"
       ]
     },
@@ -5845,6 +5939,22 @@
       "debts": [],
       "related_owners": [
         "diary"
+      ]
+    },
+    {
+      "path": "backend/tests/walk/diary/test_generation_contract_boundary.py",
+      "owner": "verification",
+      "layer": "support",
+      "disposition": "retain",
+      "rationale": "생성 계약 경계 회귀 및 변경 전 4d7407f6의 HTTP schema 고정 표본.",
+      "debts": [],
+      "scope_reason": "direct-import-seam",
+      "related_owners": [
+        "diary",
+        "generation_state",
+        "integration",
+        "legacy",
+        "shared_contracts"
       ]
     },
     {
@@ -6003,6 +6113,16 @@
       "disposition": "retain",
       "rationale": "검증/표본 소유. 제품 경계 이동 시 import·golden 의미를 함께 점검; 이번 단계에서는 실행하지 않음.",
       "debts": [],
+      "related_owners": []
+    },
+    {
+      "path": "backend/tests/walk/fixtures/generation-schema-v1.json",
+      "owner": "verification",
+      "layer": "support",
+      "disposition": "retain",
+      "rationale": "생성 계약 경계 회귀 및 변경 전 4d7407f6의 HTTP schema 고정 표본.",
+      "debts": [],
+      "scope_reason": "verification-assets",
       "related_owners": []
     },
     {
@@ -6532,6 +6652,7 @@
       "debts": [],
       "related_owners": [
         "diary",
+        "generation_state",
         "legacy"
       ]
     },
@@ -7444,7 +7565,7 @@
       "related_owners": [
         "background",
         "diary",
-        "legacy",
+        "integration",
         "recording"
       ]
     }
@@ -8191,6 +8312,18 @@
       "backend/src/daengs_backend/services/walk_trajectory.py"
     ],
     [
+      "backend/src/daengs_backend/schemas/walk_diary.py",
+      "backend/src/daengs_walk/diary/board/output.py"
+    ],
+    [
+      "backend/src/daengs_backend/schemas/walk_diary.py",
+      "backend/src/daengs_walk/diary/contracts/input.py"
+    ],
+    [
+      "backend/src/daengs_backend/schemas/walk_diary.py",
+      "backend/src/daengs_walk/diary/contracts/output.py"
+    ],
+    [
       "backend/src/daengs_backend/schemas/walk_diary_slots.py",
       "backend/src/daengs_walk/diary/board/preview.py"
     ],
@@ -8205,6 +8338,18 @@
     [
       "backend/src/daengs_backend/schemas/walk_entry_v2.py",
       "backend/src/daengs_backend/schemas/walk_entry.py"
+    ],
+    [
+      "backend/src/daengs_backend/schemas/walk_generation.py",
+      "backend/src/daengs_walk/diary/board/output.py"
+    ],
+    [
+      "backend/src/daengs_backend/schemas/walk_generation.py",
+      "backend/src/daengs_walk/diary/contracts/input.py"
+    ],
+    [
+      "backend/src/daengs_backend/schemas/walk_legacy.py",
+      "backend/src/daengs_walk/storyboard.py"
     ],
     [
       "backend/src/daengs_backend/schemas/walk_measurement.py",
@@ -8236,19 +8381,15 @@
     ],
     [
       "backend/src/daengs_backend/schemas/walk_storyboard.py",
-      "backend/src/daengs_walk/diary/board/output.py"
+      "backend/src/daengs_backend/schemas/walk_diary.py"
     ],
     [
       "backend/src/daengs_backend/schemas/walk_storyboard.py",
-      "backend/src/daengs_walk/diary/contracts/input.py"
+      "backend/src/daengs_backend/schemas/walk_generation.py"
     ],
     [
       "backend/src/daengs_backend/schemas/walk_storyboard.py",
-      "backend/src/daengs_walk/diary/contracts/output.py"
-    ],
-    [
-      "backend/src/daengs_backend/schemas/walk_storyboard.py",
-      "backend/src/daengs_walk/storyboard.py"
+      "backend/src/daengs_backend/schemas/walk_legacy.py"
     ],
     [
       "backend/src/daengs_backend/schemas/walk_trajectory.py",
@@ -8571,6 +8712,10 @@
       "backend/src/daengs_backend/services/walk_diary/preview.py"
     ],
     [
+      "backend/src/daengs_backend/services/walk_diary/api.py",
+      "backend/src/daengs_backend/services/walk_diary/writer_contract.py"
+    ],
+    [
       "backend/src/daengs_backend/services/walk_diary/collection/application.py",
       "backend/src/daengs_backend/services/walk_diary/collection/progress.py"
     ],
@@ -8772,19 +8917,7 @@
     ],
     [
       "backend/src/daengs_backend/services/walk_diary/lifecycle/generation.py",
-      "backend/src/daengs_backend/schemas/walk_storyboard.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_diary/lifecycle/generation.py",
-      "backend/src/daengs_backend/services/walk_diary/contracts.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_diary/lifecycle/generation.py",
-      "backend/src/daengs_backend/services/walk_diary/legacy/board_slots.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_diary/lifecycle/generation.py",
-      "backend/src/daengs_backend/services/walk_diary/legacy/bundle.py"
+      "backend/src/daengs_backend/schemas/walk_diary.py"
     ],
     [
       "backend/src/daengs_backend/services/walk_diary/lifecycle/generation.py",
@@ -8800,19 +8933,11 @@
     ],
     [
       "backend/src/daengs_backend/services/walk_diary/lifecycle/generation.py",
-      "backend/src/daengs_backend/services/walk_diary/runtime.py"
+      "backend/src/daengs_backend/services/walk_diary/lifecycle/strategy.py"
     ],
     [
       "backend/src/daengs_backend/services/walk_diary/lifecycle/generation.py",
       "backend/src/daengs_backend/services/walk_diary/storage/board.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_diary/lifecycle/generation.py",
-      "backend/src/daengs_backend/services/walk_diary/storage/bundle.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_diary/lifecycle/generation.py",
-      "backend/src/daengs_backend/services/walk_diary/writing/assembly.py"
     ],
     [
       "backend/src/daengs_backend/services/walk_diary/lifecycle/generation.py",
@@ -8836,7 +8961,7 @@
     ],
     [
       "backend/src/daengs_backend/services/walk_diary/lifecycle/negotiation.py",
-      "backend/src/daengs_backend/services/walk_storyboard_state.py"
+      "backend/src/daengs_backend/services/walk_generation/state.py"
     ],
     [
       "backend/src/daengs_backend/services/walk_diary/lifecycle/negotiation.py",
@@ -8852,7 +8977,7 @@
     ],
     [
       "backend/src/daengs_backend/services/walk_diary/lifecycle/publication.py",
-      "backend/src/daengs_backend/services/walk_storyboard_state.py"
+      "backend/src/daengs_backend/services/walk_generation/state.py"
     ],
     [
       "backend/src/daengs_backend/services/walk_diary/lifecycle/publication.py",
@@ -8872,7 +8997,7 @@
     ],
     [
       "backend/src/daengs_backend/services/walk_diary/lifecycle/reservation.py",
-      "backend/src/daengs_backend/schemas/walk_storyboard.py"
+      "backend/src/daengs_backend/schemas/walk_diary.py"
     ],
     [
       "backend/src/daengs_backend/services/walk_diary/lifecycle/reservation.py",
@@ -8900,7 +9025,7 @@
     ],
     [
       "backend/src/daengs_backend/services/walk_diary/lifecycle/reservation.py",
-      "backend/src/daengs_backend/services/walk_storyboard_state.py"
+      "backend/src/daengs_backend/services/walk_generation/state.py"
     ],
     [
       "backend/src/daengs_backend/services/walk_diary/lifecycle/reservation.py",
@@ -8920,7 +9045,7 @@
     ],
     [
       "backend/src/daengs_backend/services/walk_diary/lifecycle/snapshot.py",
-      "backend/src/daengs_backend/schemas/walk_storyboard.py"
+      "backend/src/daengs_backend/schemas/walk_diary.py"
     ],
     [
       "backend/src/daengs_backend/services/walk_diary/lifecycle/snapshot.py",
@@ -8948,7 +9073,7 @@
     ],
     [
       "backend/src/daengs_backend/services/walk_diary/lifecycle/snapshot.py",
-      "backend/src/daengs_backend/services/walk_storyboard_state.py"
+      "backend/src/daengs_backend/services/walk_generation/state.py"
     ],
     [
       "backend/src/daengs_backend/services/walk_diary/lifecycle/snapshot.py",
@@ -8965,6 +9090,50 @@
     [
       "backend/src/daengs_backend/services/walk_diary/lifecycle/snapshot.py",
       "backend/src/daengs_walk/diary/selection/stamps.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_diary/lifecycle/strategy.py",
+      "backend/src/daengs_backend/services/walk_diary/contracts.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_diary/lifecycle/strategy.py",
+      "backend/src/daengs_backend/services/walk_diary/legacy/board_slots.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_diary/lifecycle/strategy.py",
+      "backend/src/daengs_backend/services/walk_diary/legacy/bundle.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_diary/lifecycle/strategy.py",
+      "backend/src/daengs_backend/services/walk_diary/legacy/slots.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_diary/lifecycle/strategy.py",
+      "backend/src/daengs_backend/services/walk_diary/runtime.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_diary/lifecycle/strategy.py",
+      "backend/src/daengs_backend/services/walk_diary/storage/board.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_diary/lifecycle/strategy.py",
+      "backend/src/daengs_backend/services/walk_diary/storage/bundle.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_diary/lifecycle/strategy.py",
+      "backend/src/daengs_backend/services/walk_diary/writer_contract.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_diary/lifecycle/strategy.py",
+      "backend/src/daengs_backend/services/walk_diary/writing/assembly.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_diary/lifecycle/strategy.py",
+      "backend/src/daengs_walk/diary/board/output.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_diary/lifecycle/strategy.py",
+      "backend/src/daengs_walk/diary/contracts/output.py"
     ],
     [
       "backend/src/daengs_backend/services/walk_diary/model_input.py",
@@ -9567,6 +9736,114 @@
       "backend/src/daengs_walk/__init__.py"
     ],
     [
+      "backend/src/daengs_backend/services/walk_generation/api.py",
+      "backend/src/daengs_backend/services/walk_diary/api.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_generation/api.py",
+      "backend/src/daengs_backend/services/walk_legacy/__init__.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_generation/api.py",
+      "backend/src/daengs_backend/services/walk_legacy/storyboard.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_generation/api.py",
+      "backend/src/daengs_backend/services/walk_storyboard_titles.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_generation/api.py",
+      "backend/src/daengs_walk/diary/board/output.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_generation/state.py",
+      "backend/src/daengs_backend/models/walk_storyboard.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_legacy/storyboard.py",
+      "backend/src/daengs_backend/config.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_legacy/storyboard.py",
+      "backend/src/daengs_backend/repositories/__init__.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_legacy/storyboard.py",
+      "backend/src/daengs_backend/repositories/walk.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_legacy/storyboard.py",
+      "backend/src/daengs_backend/repositories/walk_entry.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_legacy/storyboard.py",
+      "backend/src/daengs_backend/repositories/walk_entry_v2.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_legacy/storyboard.py",
+      "backend/src/daengs_backend/repositories/walk_storyboard.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_legacy/storyboard.py",
+      "backend/src/daengs_backend/schemas/walk.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_legacy/storyboard.py",
+      "backend/src/daengs_backend/schemas/walk_legacy.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_legacy/storyboard.py",
+      "backend/src/daengs_backend/services/walk_diary/api.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_legacy/storyboard.py",
+      "backend/src/daengs_backend/services/walk_entry.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_legacy/storyboard.py",
+      "backend/src/daengs_backend/services/walk_entry_errors.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_legacy/storyboard.py",
+      "backend/src/daengs_backend/services/walk_entry_policy.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_legacy/storyboard.py",
+      "backend/src/daengs_backend/services/walk_entry_v2.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_legacy/storyboard.py",
+      "backend/src/daengs_backend/services/walk_finalize.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_legacy/storyboard.py",
+      "backend/src/daengs_backend/services/walk_generation/state.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_legacy/storyboard.py",
+      "backend/src/daengs_backend/services/walk_storyboard_context.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_legacy/storyboard.py",
+      "backend/src/daengs_backend/services/walk_storyboard_titles.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_legacy/storyboard.py",
+      "backend/src/daengs_walk/__init__.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_legacy/storyboard.py",
+      "backend/src/daengs_walk/storyboard.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_legacy/storyboard.py",
+      "backend/src/daengs_walk/storyboard_input.py"
+    ],
+    [
+      "backend/src/daengs_backend/services/walk_legacy/storyboard.py",
+      "backend/src/daengs_walk/storyboard_selection.py"
+    ],
+    [
       "backend/src/daengs_backend/services/walk_measurement.py",
       "backend/src/daengs_backend/models/walk_measurement.py"
     ],
@@ -9896,91 +10173,11 @@
     ],
     [
       "backend/src/daengs_backend/services/walk_storyboard.py",
-      "backend/src/daengs_backend/config.py"
+      "backend/src/daengs_backend/services/walk_generation/api.py"
     ],
     [
       "backend/src/daengs_backend/services/walk_storyboard.py",
-      "backend/src/daengs_backend/repositories/__init__.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_storyboard.py",
-      "backend/src/daengs_backend/repositories/walk.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_storyboard.py",
-      "backend/src/daengs_backend/repositories/walk_entry.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_storyboard.py",
-      "backend/src/daengs_backend/repositories/walk_entry_v2.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_storyboard.py",
-      "backend/src/daengs_backend/repositories/walk_storyboard.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_storyboard.py",
-      "backend/src/daengs_backend/schemas/walk.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_storyboard.py",
-      "backend/src/daengs_backend/schemas/walk_storyboard.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_storyboard.py",
-      "backend/src/daengs_backend/services/walk_diary/api.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_storyboard.py",
-      "backend/src/daengs_backend/services/walk_entry.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_storyboard.py",
-      "backend/src/daengs_backend/services/walk_entry_errors.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_storyboard.py",
-      "backend/src/daengs_backend/services/walk_entry_policy.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_storyboard.py",
-      "backend/src/daengs_backend/services/walk_entry_v2.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_storyboard.py",
-      "backend/src/daengs_backend/services/walk_finalize.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_storyboard.py",
-      "backend/src/daengs_backend/services/walk_storyboard_context.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_storyboard.py",
-      "backend/src/daengs_backend/services/walk_storyboard_state.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_storyboard.py",
-      "backend/src/daengs_backend/services/walk_storyboard_titles.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_storyboard.py",
-      "backend/src/daengs_walk/__init__.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_storyboard.py",
-      "backend/src/daengs_walk/diary/board/output.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_storyboard.py",
-      "backend/src/daengs_walk/storyboard.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_storyboard.py",
-      "backend/src/daengs_walk/storyboard_input.py"
-    ],
-    [
-      "backend/src/daengs_backend/services/walk_storyboard.py",
-      "backend/src/daengs_walk/storyboard_selection.py"
+      "backend/src/daengs_backend/services/walk_generation/state.py"
     ],
     [
       "backend/src/daengs_backend/services/walk_storyboard_context.py",
@@ -9988,7 +10185,7 @@
     ],
     [
       "backend/src/daengs_backend/services/walk_storyboard_state.py",
-      "backend/src/daengs_backend/models/walk_storyboard.py"
+      "backend/src/daengs_backend/services/walk_generation/state.py"
     ],
     [
       "backend/src/daengs_backend/services/walk_storyboard_titles.py",
@@ -11672,6 +11869,10 @@
     ],
     [
       "backend/tests/walk/diary/test_diary_board_db.py",
+      "backend/src/daengs_backend/services/walk_diary/api.py"
+    ],
+    [
+      "backend/tests/walk/diary/test_diary_board_db.py",
       "backend/src/daengs_backend/services/walk_diary/legacy/__init__.py"
     ],
     [
@@ -11761,6 +11962,10 @@
     [
       "backend/tests/walk/diary/test_diary_board_slot_writing.py",
       "backend/src/daengs_backend/schemas/walk_storyboard.py"
+    ],
+    [
+      "backend/tests/walk/diary/test_diary_board_slot_writing.py",
+      "backend/src/daengs_backend/services/walk_diary/api.py"
     ],
     [
       "backend/tests/walk/diary/test_diary_board_slot_writing.py",
@@ -12672,6 +12877,10 @@
     ],
     [
       "backend/tests/walk/diary/test_diary_temperature_db.py",
+      "backend/src/daengs_backend/services/walk_diary/api.py"
+    ],
+    [
+      "backend/tests/walk/diary/test_diary_temperature_db.py",
       "backend/src/daengs_backend/services/walk_diary/legacy/board_slots.py"
     ],
     [
@@ -12801,6 +13010,54 @@
     [
       "backend/tests/walk/diary/test_diary_writing_boundaries.py",
       "backend/src/daengs_walk/diary/contracts/input.py"
+    ],
+    [
+      "backend/tests/walk/diary/test_generation_contract_boundary.py",
+      "backend/src/daengs_backend/routers/walk_storyboard.py"
+    ],
+    [
+      "backend/tests/walk/diary/test_generation_contract_boundary.py",
+      "backend/src/daengs_backend/schemas/walk_storyboard.py"
+    ],
+    [
+      "backend/tests/walk/diary/test_generation_contract_boundary.py",
+      "backend/src/daengs_backend/services/walk_diary/api.py"
+    ],
+    [
+      "backend/tests/walk/diary/test_generation_contract_boundary.py",
+      "backend/src/daengs_backend/services/walk_diary/contracts.py"
+    ],
+    [
+      "backend/tests/walk/diary/test_generation_contract_boundary.py",
+      "backend/src/daengs_backend/services/walk_diary/legacy/slots.py"
+    ],
+    [
+      "backend/tests/walk/diary/test_generation_contract_boundary.py",
+      "backend/src/daengs_backend/services/walk_diary/lifecycle/strategy.py"
+    ],
+    [
+      "backend/tests/walk/diary/test_generation_contract_boundary.py",
+      "backend/src/daengs_backend/services/walk_generation/__init__.py"
+    ],
+    [
+      "backend/tests/walk/diary/test_generation_contract_boundary.py",
+      "backend/src/daengs_backend/services/walk_generation/state.py"
+    ],
+    [
+      "backend/tests/walk/diary/test_generation_contract_boundary.py",
+      "backend/src/daengs_backend/services/walk_storyboard_state.py"
+    ],
+    [
+      "backend/tests/walk/diary/test_generation_contract_boundary.py",
+      "backend/src/daengs_walk/diary/board/output.py"
+    ],
+    [
+      "backend/tests/walk/diary/test_generation_contract_boundary.py",
+      "backend/src/daengs_walk/diary/contracts/output.py"
+    ],
+    [
+      "backend/tests/walk/diary/test_generation_contract_boundary.py",
+      "backend/src/daengs_walk/value_contracts.py"
     ],
     [
       "backend/tests/walk/diary/test_route_calculation_boundary.py",
@@ -13296,7 +13553,11 @@
     ],
     [
       "backend/tests/walk/storyboard/test_walk_storyboard.py",
-      "backend/src/daengs_backend/services/walk_storyboard.py"
+      "backend/src/daengs_backend/services/walk_legacy/__init__.py"
+    ],
+    [
+      "backend/tests/walk/storyboard/test_walk_storyboard.py",
+      "backend/src/daengs_backend/services/walk_legacy/storyboard.py"
     ],
     [
       "backend/tests/walk/storyboard/test_walk_storyboard.py",
@@ -13392,7 +13653,15 @@
     ],
     [
       "backend/tests/walk/support/diary_generation.py",
+      "backend/src/daengs_backend/repositories/walk_storyboard.py"
+    ],
+    [
+      "backend/tests/walk/support/diary_generation.py",
       "backend/src/daengs_backend/routers/walk_storyboard.py"
+    ],
+    [
+      "backend/tests/walk/support/diary_generation.py",
+      "backend/src/daengs_backend/services/walk_diary/api.py"
     ],
     [
       "backend/tests/walk/support/diary_generation.py",
@@ -13417,10 +13686,6 @@
     [
       "backend/tests/walk/support/diary_generation.py",
       "backend/src/daengs_backend/services/walk_diary/preparation/input.py"
-    ],
-    [
-      "backend/tests/walk/support/diary_generation.py",
-      "backend/src/daengs_backend/services/walk_storyboard.py"
     ],
     [
       "backend/tests/walk/support/diary_generation.py",
@@ -13544,7 +13809,11 @@
     ],
     [
       "backend/tests/walk/support/storyboard.py",
-      "backend/src/daengs_backend/services/walk_storyboard.py"
+      "backend/src/daengs_backend/services/walk_legacy/__init__.py"
+    ],
+    [
+      "backend/tests/walk/support/storyboard.py",
+      "backend/src/daengs_backend/services/walk_legacy/storyboard.py"
     ],
     [
       "backend/tests/walk/support/writing_boundary.py",
@@ -14573,10 +14842,24 @@
     },
     {
       "from": "backend/src/daengs_backend/routers/walk_storyboard.py",
+      "to": "backend/src/daengs_backend/schemas/walk_storyboard.py",
+      "decision": "retain-interface",
+      "debt": null,
+      "reason": "형식 협상·명시 전략 어댑터·공통 상태 전이의 허용된 소비 관계. 결과 타입으로 다른 완료 전략을 선택하지 않는다."
+    },
+    {
+      "from": "backend/src/daengs_backend/routers/walk_storyboard.py",
       "to": "backend/src/daengs_backend/services/__init__.py",
       "decision": "retain-interface",
       "debt": null,
       "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
+    },
+    {
+      "from": "backend/src/daengs_backend/routers/walk_storyboard.py",
+      "to": "backend/src/daengs_backend/services/walk_storyboard.py",
+      "decision": "retain-interface",
+      "debt": null,
+      "reason": "형식 협상·명시 전략 어댑터·공통 상태 전이의 허용된 소비 관계. 결과 타입으로 다른 완료 전략을 선택하지 않는다."
     },
     {
       "from": "backend/src/daengs_backend/routers/walk_storyboard.py",
@@ -14642,6 +14925,20 @@
       "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
     },
     {
+      "from": "backend/src/daengs_backend/schemas/walk_generation.py",
+      "to": "backend/src/daengs_walk/diary/board/output.py",
+      "decision": "retain-interface",
+      "debt": null,
+      "reason": "형식 협상·명시 전략 어댑터·공통 상태 전이의 허용된 소비 관계. 결과 타입으로 다른 완료 전략을 선택하지 않는다."
+    },
+    {
+      "from": "backend/src/daengs_backend/schemas/walk_generation.py",
+      "to": "backend/src/daengs_walk/diary/contracts/input.py",
+      "decision": "retain-interface",
+      "debt": null,
+      "reason": "형식 협상·명시 전략 어댑터·공통 상태 전이의 허용된 소비 관계. 결과 타입으로 다른 완료 전략을 선택하지 않는다."
+    },
+    {
       "from": "backend/src/daengs_backend/schemas/walk_photo.py",
       "to": "backend/src/daengs_walk/value_contracts.py",
       "decision": "retain-interface",
@@ -14650,24 +14947,17 @@
     },
     {
       "from": "backend/src/daengs_backend/schemas/walk_storyboard.py",
-      "to": "backend/src/daengs_walk/diary/board/output.py",
+      "to": "backend/src/daengs_backend/schemas/walk_diary.py",
       "decision": "retain-interface",
       "debt": null,
-      "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
+      "reason": "형식 협상·명시 전략 어댑터·공통 상태 전이의 허용된 소비 관계. 결과 타입으로 다른 완료 전략을 선택하지 않는다."
     },
     {
       "from": "backend/src/daengs_backend/schemas/walk_storyboard.py",
-      "to": "backend/src/daengs_walk/diary/contracts/input.py",
+      "to": "backend/src/daengs_backend/schemas/walk_legacy.py",
       "decision": "retain-interface",
       "debt": null,
-      "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
-    },
-    {
-      "from": "backend/src/daengs_backend/schemas/walk_storyboard.py",
-      "to": "backend/src/daengs_walk/diary/contracts/output.py",
-      "decision": "retain-interface",
-      "debt": null,
-      "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
+      "reason": "형식 협상·명시 전략 어댑터·공통 상태 전이의 허용된 소비 관계. 결과 타입으로 다른 완료 전략을 선택하지 않는다."
     },
     {
       "from": "backend/src/daengs_backend/services/activity.py",
@@ -15118,27 +15408,6 @@
       "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
     },
     {
-      "from": "backend/src/daengs_backend/services/walk_diary/lifecycle/generation.py",
-      "to": "backend/src/daengs_backend/schemas/walk_storyboard.py",
-      "decision": "retain-interface",
-      "debt": null,
-      "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
-    },
-    {
-      "from": "backend/src/daengs_backend/services/walk_diary/lifecycle/generation.py",
-      "to": "backend/src/daengs_backend/services/walk_diary/legacy/board_slots.py",
-      "decision": "change",
-      "debt": "D1",
-      "reason": "명시된 후속 작업에서 소유권/정책/진입 경계를 변경한다."
-    },
-    {
-      "from": "backend/src/daengs_backend/services/walk_diary/lifecycle/generation.py",
-      "to": "backend/src/daengs_backend/services/walk_diary/legacy/bundle.py",
-      "decision": "change",
-      "debt": "D1",
-      "reason": "명시된 후속 작업에서 소유권/정책/진입 경계를 변경한다."
-    },
-    {
       "from": "backend/src/daengs_backend/services/walk_diary/lifecycle/negotiation.py",
       "to": "backend/src/daengs_backend/config.py",
       "decision": "retain-interface",
@@ -15168,17 +15437,17 @@
     },
     {
       "from": "backend/src/daengs_backend/services/walk_diary/lifecycle/negotiation.py",
-      "to": "backend/src/daengs_backend/services/walk_storyboard_state.py",
-      "decision": "change",
-      "debt": "D3",
-      "reason": "명시된 후속 작업에서 소유권/정책/진입 경계를 변경한다."
+      "to": "backend/src/daengs_backend/services/walk_generation/state.py",
+      "decision": "retain-interface",
+      "debt": null,
+      "reason": "형식 협상·명시 전략 어댑터·공통 상태 전이의 허용된 소비 관계. 결과 타입으로 다른 완료 전략을 선택하지 않는다."
     },
     {
       "from": "backend/src/daengs_backend/services/walk_diary/lifecycle/publication.py",
-      "to": "backend/src/daengs_backend/services/walk_storyboard_state.py",
-      "decision": "change",
-      "debt": "D3",
-      "reason": "명시된 후속 작업에서 소유권/정책/진입 경계를 변경한다."
+      "to": "backend/src/daengs_backend/services/walk_generation/state.py",
+      "decision": "retain-interface",
+      "debt": null,
+      "reason": "형식 협상·명시 전략 어댑터·공통 상태 전이의 허용된 소비 관계. 결과 타입으로 다른 완료 전략을 선택하지 않는다."
     },
     {
       "from": "backend/src/daengs_backend/services/walk_diary/lifecycle/reservation.py",
@@ -15203,17 +15472,10 @@
     },
     {
       "from": "backend/src/daengs_backend/services/walk_diary/lifecycle/reservation.py",
-      "to": "backend/src/daengs_backend/schemas/walk_storyboard.py",
+      "to": "backend/src/daengs_backend/services/walk_generation/state.py",
       "decision": "retain-interface",
       "debt": null,
-      "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
-    },
-    {
-      "from": "backend/src/daengs_backend/services/walk_diary/lifecycle/reservation.py",
-      "to": "backend/src/daengs_backend/services/walk_storyboard_state.py",
-      "decision": "change",
-      "debt": "D3",
-      "reason": "명시된 후속 작업에서 소유권/정책/진입 경계를 변경한다."
+      "reason": "형식 협상·명시 전략 어댑터·공통 상태 전이의 허용된 소비 관계. 결과 타입으로 다른 완료 전략을 선택하지 않는다."
     },
     {
       "from": "backend/src/daengs_backend/services/walk_diary/lifecycle/snapshot.py",
@@ -15231,13 +15493,6 @@
     },
     {
       "from": "backend/src/daengs_backend/services/walk_diary/lifecycle/snapshot.py",
-      "to": "backend/src/daengs_backend/schemas/walk_storyboard.py",
-      "decision": "retain-interface",
-      "debt": null,
-      "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
-    },
-    {
-      "from": "backend/src/daengs_backend/services/walk_diary/lifecycle/snapshot.py",
       "to": "backend/src/daengs_backend/services/walk_diary/legacy/bundle.py",
       "decision": "retain-interface",
       "debt": null,
@@ -15245,10 +15500,31 @@
     },
     {
       "from": "backend/src/daengs_backend/services/walk_diary/lifecycle/snapshot.py",
-      "to": "backend/src/daengs_backend/services/walk_storyboard_state.py",
-      "decision": "change",
-      "debt": "D3",
-      "reason": "명시된 후속 작업에서 소유권/정책/진입 경계를 변경한다."
+      "to": "backend/src/daengs_backend/services/walk_generation/state.py",
+      "decision": "retain-interface",
+      "debt": null,
+      "reason": "형식 협상·명시 전략 어댑터·공통 상태 전이의 허용된 소비 관계. 결과 타입으로 다른 완료 전략을 선택하지 않는다."
+    },
+    {
+      "from": "backend/src/daengs_backend/services/walk_diary/lifecycle/strategy.py",
+      "to": "backend/src/daengs_backend/services/walk_diary/legacy/board_slots.py",
+      "decision": "retain-interface",
+      "debt": null,
+      "reason": "형식 협상·명시 전략 어댑터·공통 상태 전이의 허용된 소비 관계. 결과 타입으로 다른 완료 전략을 선택하지 않는다."
+    },
+    {
+      "from": "backend/src/daengs_backend/services/walk_diary/lifecycle/strategy.py",
+      "to": "backend/src/daengs_backend/services/walk_diary/legacy/bundle.py",
+      "decision": "retain-interface",
+      "debt": null,
+      "reason": "형식 협상·명시 전략 어댑터·공통 상태 전이의 허용된 소비 관계. 결과 타입으로 다른 완료 전략을 선택하지 않는다."
+    },
+    {
+      "from": "backend/src/daengs_backend/services/walk_diary/lifecycle/strategy.py",
+      "to": "backend/src/daengs_backend/services/walk_diary/legacy/slots.py",
+      "decision": "retain-interface",
+      "debt": null,
+      "reason": "형식 협상·명시 전략 어댑터·공통 상태 전이의 허용된 소비 관계. 결과 타입으로 다른 완료 전략을 선택하지 않는다."
     },
     {
       "from": "backend/src/daengs_backend/services/walk_diary/preparation/board.py",
@@ -15580,6 +15856,146 @@
       "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
     },
     {
+      "from": "backend/src/daengs_backend/services/walk_generation/api.py",
+      "to": "backend/src/daengs_backend/services/walk_diary/api.py",
+      "decision": "retain-interface",
+      "debt": null,
+      "reason": "형식 협상·명시 전략 어댑터·공통 상태 전이의 허용된 소비 관계. 결과 타입으로 다른 완료 전략을 선택하지 않는다."
+    },
+    {
+      "from": "backend/src/daengs_backend/services/walk_generation/api.py",
+      "to": "backend/src/daengs_backend/services/walk_legacy/__init__.py",
+      "decision": "retain-interface",
+      "debt": null,
+      "reason": "형식 협상·명시 전략 어댑터·공통 상태 전이의 허용된 소비 관계. 결과 타입으로 다른 완료 전략을 선택하지 않는다."
+    },
+    {
+      "from": "backend/src/daengs_backend/services/walk_generation/api.py",
+      "to": "backend/src/daengs_backend/services/walk_legacy/storyboard.py",
+      "decision": "retain-interface",
+      "debt": null,
+      "reason": "형식 협상·명시 전략 어댑터·공통 상태 전이의 허용된 소비 관계. 결과 타입으로 다른 완료 전략을 선택하지 않는다."
+    },
+    {
+      "from": "backend/src/daengs_backend/services/walk_generation/api.py",
+      "to": "backend/src/daengs_backend/services/walk_storyboard_titles.py",
+      "decision": "retain-interface",
+      "debt": null,
+      "reason": "형식 협상·명시 전략 어댑터·공통 상태 전이의 허용된 소비 관계. 결과 타입으로 다른 완료 전략을 선택하지 않는다."
+    },
+    {
+      "from": "backend/src/daengs_backend/services/walk_generation/api.py",
+      "to": "backend/src/daengs_walk/diary/board/output.py",
+      "decision": "retain-interface",
+      "debt": null,
+      "reason": "형식 협상·명시 전략 어댑터·공통 상태 전이의 허용된 소비 관계. 결과 타입으로 다른 완료 전략을 선택하지 않는다."
+    },
+    {
+      "from": "backend/src/daengs_backend/services/walk_legacy/storyboard.py",
+      "to": "backend/src/daengs_backend/config.py",
+      "decision": "retain-interface",
+      "debt": null,
+      "reason": "형식 협상·명시 전략 어댑터·공통 상태 전이의 허용된 소비 관계. 결과 타입으로 다른 완료 전략을 선택하지 않는다."
+    },
+    {
+      "from": "backend/src/daengs_backend/services/walk_legacy/storyboard.py",
+      "to": "backend/src/daengs_backend/repositories/__init__.py",
+      "decision": "retain-interface",
+      "debt": null,
+      "reason": "형식 협상·명시 전략 어댑터·공통 상태 전이의 허용된 소비 관계. 결과 타입으로 다른 완료 전략을 선택하지 않는다."
+    },
+    {
+      "from": "backend/src/daengs_backend/services/walk_legacy/storyboard.py",
+      "to": "backend/src/daengs_backend/repositories/walk.py",
+      "decision": "retain-interface",
+      "debt": null,
+      "reason": "형식 협상·명시 전략 어댑터·공통 상태 전이의 허용된 소비 관계. 결과 타입으로 다른 완료 전략을 선택하지 않는다."
+    },
+    {
+      "from": "backend/src/daengs_backend/services/walk_legacy/storyboard.py",
+      "to": "backend/src/daengs_backend/repositories/walk_entry.py",
+      "decision": "retain-interface",
+      "debt": null,
+      "reason": "형식 협상·명시 전략 어댑터·공통 상태 전이의 허용된 소비 관계. 결과 타입으로 다른 완료 전략을 선택하지 않는다."
+    },
+    {
+      "from": "backend/src/daengs_backend/services/walk_legacy/storyboard.py",
+      "to": "backend/src/daengs_backend/repositories/walk_entry_v2.py",
+      "decision": "retain-interface",
+      "debt": null,
+      "reason": "형식 협상·명시 전략 어댑터·공통 상태 전이의 허용된 소비 관계. 결과 타입으로 다른 완료 전략을 선택하지 않는다."
+    },
+    {
+      "from": "backend/src/daengs_backend/services/walk_legacy/storyboard.py",
+      "to": "backend/src/daengs_backend/repositories/walk_storyboard.py",
+      "decision": "retain-interface",
+      "debt": null,
+      "reason": "형식 협상·명시 전략 어댑터·공통 상태 전이의 허용된 소비 관계. 결과 타입으로 다른 완료 전략을 선택하지 않는다."
+    },
+    {
+      "from": "backend/src/daengs_backend/services/walk_legacy/storyboard.py",
+      "to": "backend/src/daengs_backend/schemas/walk.py",
+      "decision": "retain-interface",
+      "debt": null,
+      "reason": "형식 협상·명시 전략 어댑터·공통 상태 전이의 허용된 소비 관계. 결과 타입으로 다른 완료 전략을 선택하지 않는다."
+    },
+    {
+      "from": "backend/src/daengs_backend/services/walk_legacy/storyboard.py",
+      "to": "backend/src/daengs_backend/services/walk_diary/api.py",
+      "decision": "retain-interface",
+      "debt": null,
+      "reason": "형식 협상·명시 전략 어댑터·공통 상태 전이의 허용된 소비 관계. 결과 타입으로 다른 완료 전략을 선택하지 않는다."
+    },
+    {
+      "from": "backend/src/daengs_backend/services/walk_legacy/storyboard.py",
+      "to": "backend/src/daengs_backend/services/walk_entry.py",
+      "decision": "retain-interface",
+      "debt": null,
+      "reason": "형식 협상·명시 전략 어댑터·공통 상태 전이의 허용된 소비 관계. 결과 타입으로 다른 완료 전략을 선택하지 않는다."
+    },
+    {
+      "from": "backend/src/daengs_backend/services/walk_legacy/storyboard.py",
+      "to": "backend/src/daengs_backend/services/walk_entry_errors.py",
+      "decision": "retain-interface",
+      "debt": null,
+      "reason": "형식 협상·명시 전략 어댑터·공통 상태 전이의 허용된 소비 관계. 결과 타입으로 다른 완료 전략을 선택하지 않는다."
+    },
+    {
+      "from": "backend/src/daengs_backend/services/walk_legacy/storyboard.py",
+      "to": "backend/src/daengs_backend/services/walk_entry_policy.py",
+      "decision": "retain-interface",
+      "debt": null,
+      "reason": "형식 협상·명시 전략 어댑터·공통 상태 전이의 허용된 소비 관계. 결과 타입으로 다른 완료 전략을 선택하지 않는다."
+    },
+    {
+      "from": "backend/src/daengs_backend/services/walk_legacy/storyboard.py",
+      "to": "backend/src/daengs_backend/services/walk_entry_v2.py",
+      "decision": "retain-interface",
+      "debt": null,
+      "reason": "형식 협상·명시 전략 어댑터·공통 상태 전이의 허용된 소비 관계. 결과 타입으로 다른 완료 전략을 선택하지 않는다."
+    },
+    {
+      "from": "backend/src/daengs_backend/services/walk_legacy/storyboard.py",
+      "to": "backend/src/daengs_backend/services/walk_finalize.py",
+      "decision": "retain-interface",
+      "debt": null,
+      "reason": "형식 협상·명시 전략 어댑터·공통 상태 전이의 허용된 소비 관계. 결과 타입으로 다른 완료 전략을 선택하지 않는다."
+    },
+    {
+      "from": "backend/src/daengs_backend/services/walk_legacy/storyboard.py",
+      "to": "backend/src/daengs_backend/services/walk_generation/state.py",
+      "decision": "retain-interface",
+      "debt": null,
+      "reason": "형식 협상·명시 전략 어댑터·공통 상태 전이의 허용된 소비 관계. 결과 타입으로 다른 완료 전략을 선택하지 않는다."
+    },
+    {
+      "from": "backend/src/daengs_backend/services/walk_legacy/storyboard.py",
+      "to": "backend/src/daengs_walk/__init__.py",
+      "decision": "retain-interface",
+      "debt": null,
+      "reason": "형식 협상·명시 전략 어댑터·공통 상태 전이의 허용된 소비 관계. 결과 타입으로 다른 완료 전략을 선택하지 않는다."
+    },
+    {
       "from": "backend/src/daengs_backend/services/walk_measurement.py",
       "to": "backend/src/daengs_backend/repositories/__init__.py",
       "decision": "retain-interface",
@@ -15819,115 +16235,10 @@
     },
     {
       "from": "backend/src/daengs_backend/services/walk_storyboard.py",
-      "to": "backend/src/daengs_backend/config.py",
+      "to": "backend/src/daengs_backend/services/walk_generation/state.py",
       "decision": "retain-interface",
       "debt": null,
-      "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
-    },
-    {
-      "from": "backend/src/daengs_backend/services/walk_storyboard.py",
-      "to": "backend/src/daengs_backend/repositories/__init__.py",
-      "decision": "retain-interface",
-      "debt": null,
-      "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
-    },
-    {
-      "from": "backend/src/daengs_backend/services/walk_storyboard.py",
-      "to": "backend/src/daengs_backend/repositories/walk.py",
-      "decision": "retain-interface",
-      "debt": null,
-      "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
-    },
-    {
-      "from": "backend/src/daengs_backend/services/walk_storyboard.py",
-      "to": "backend/src/daengs_backend/repositories/walk_entry.py",
-      "decision": "retain-interface",
-      "debt": null,
-      "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
-    },
-    {
-      "from": "backend/src/daengs_backend/services/walk_storyboard.py",
-      "to": "backend/src/daengs_backend/repositories/walk_entry_v2.py",
-      "decision": "retain-interface",
-      "debt": null,
-      "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
-    },
-    {
-      "from": "backend/src/daengs_backend/services/walk_storyboard.py",
-      "to": "backend/src/daengs_backend/repositories/walk_storyboard.py",
-      "decision": "retain-interface",
-      "debt": null,
-      "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
-    },
-    {
-      "from": "backend/src/daengs_backend/services/walk_storyboard.py",
-      "to": "backend/src/daengs_backend/schemas/walk.py",
-      "decision": "retain-interface",
-      "debt": null,
-      "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
-    },
-    {
-      "from": "backend/src/daengs_backend/services/walk_storyboard.py",
-      "to": "backend/src/daengs_backend/services/walk_diary/api.py",
-      "decision": "retain-interface",
-      "debt": null,
-      "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
-    },
-    {
-      "from": "backend/src/daengs_backend/services/walk_storyboard.py",
-      "to": "backend/src/daengs_backend/services/walk_entry.py",
-      "decision": "retain-interface",
-      "debt": null,
-      "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
-    },
-    {
-      "from": "backend/src/daengs_backend/services/walk_storyboard.py",
-      "to": "backend/src/daengs_backend/services/walk_entry_errors.py",
-      "decision": "retain-interface",
-      "debt": null,
-      "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
-    },
-    {
-      "from": "backend/src/daengs_backend/services/walk_storyboard.py",
-      "to": "backend/src/daengs_backend/services/walk_entry_policy.py",
-      "decision": "retain-interface",
-      "debt": null,
-      "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
-    },
-    {
-      "from": "backend/src/daengs_backend/services/walk_storyboard.py",
-      "to": "backend/src/daengs_backend/services/walk_entry_v2.py",
-      "decision": "retain-interface",
-      "debt": null,
-      "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
-    },
-    {
-      "from": "backend/src/daengs_backend/services/walk_storyboard.py",
-      "to": "backend/src/daengs_backend/services/walk_finalize.py",
-      "decision": "retain-interface",
-      "debt": null,
-      "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
-    },
-    {
-      "from": "backend/src/daengs_backend/services/walk_storyboard.py",
-      "to": "backend/src/daengs_backend/services/walk_storyboard_state.py",
-      "decision": "change",
-      "debt": "D3",
-      "reason": "명시된 후속 작업에서 소유권/정책/진입 경계를 변경한다."
-    },
-    {
-      "from": "backend/src/daengs_backend/services/walk_storyboard.py",
-      "to": "backend/src/daengs_walk/__init__.py",
-      "decision": "retain-interface",
-      "debt": null,
-      "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
-    },
-    {
-      "from": "backend/src/daengs_backend/services/walk_storyboard.py",
-      "to": "backend/src/daengs_walk/diary/board/output.py",
-      "decision": "retain-interface",
-      "debt": null,
-      "reason": "기존 기능 소비·계층 조립·공통 계약 관계는 보존한다. 모듈 전체를 공개 API로 승인하는 뜻은 아니다."
+      "reason": "형식 협상·명시 전략 어댑터·공통 상태 전이의 허용된 소비 관계. 결과 타입으로 다른 완료 전략을 선택하지 않는다."
     },
     {
       "from": "backend/src/daengs_backend/services/walk_storyboard_context.py",
@@ -16446,6 +16757,9 @@
     "B2",
     "B3",
     "A1",
-    "A2"
+    "A2",
+    "D1",
+    "D2",
+    "D3"
   ]
 }

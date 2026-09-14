@@ -1,22 +1,22 @@
 # 산책 기능의 소유권과 의존 경계 — 0단계
 
-0단계 조사 기준은 DEV `8e3d1589`, 현재 목록은 `f6ac5819` 위의 #522(2단계) 변경을 반영한다. 조사·갱신일은 2026-09-14다.
+0단계 조사 기준은 DEV `8e3d1589`, 현재 목록은 `4d7407f6` 위의 #524(3단계) 변경을 반영한다. 조사·갱신일은 2026-09-14다.
 이 문서는 **남은 구조 변경의 범위를 고정하는 조사 결과**이며 리팩토링 전체 완료 선언이 아니다.
 0단계는 조사만 수행했다. 1단계는 B1·B2·B3의 공급 계약/일기 어댑터를 분리하며 DB·공개 계약·정책은 유지한다.
 
 ## 먼저 읽을 결과
 
-- [파일별 소유권 표](files.md): 범위 내 668개 파일, 소유 영역·현재 계층·처리·근거·부채.
-- [직접 import 판단표](crossings.md): 제품 소스의 교차 영역과 측정 내부 계산/조회 결합 360개.
-- [기계 판독 목록](inventory.json): 위 파일 목록, 1,617개 직접 로컬 import 관계, 판단과 관련 영역.
+- [파일별 소유권 표](files.md): 범위 내 680개 파일, 소유 영역·현재 계층·처리·근거·부채.
+- [직접 import 판단표](crossings.md): 제품 소스의 교차 영역과 측정 내부 계산/조회 결합 366개.
+- [기계 판독 목록](inventory.json): 위 파일 목록, 1,654개 직접 로컬 import 관계, 판단과 관련 영역.
 - [범위 재검사 도구](../../../tools/check_walk_ownership.py): 새 파일·삭제·import 변경·미분류 판단 검출.
 
-범위에 속한 **핵심 Python 221개**, 직접 import 접점 158개, 검증 자산 223개,
+범위에 속한 **핵심 Python 231개**, 직접 import 접점 159개, 검증 자산 224개,
 SQL 접점 52개, 문자열로 확인한 UI/운영 접점 8개, 명명된 도구 4개, 명시한 통합 접점 2개다.
-각 파일은 발견 사유 하나로만 집계한다. 668개를 모두 제품 구현 파일이라고 세지 않는다.
+각 파일은 발견 사유 하나로만 집계한다. 680개를 모두 제품 구현 파일이라고 세지 않는다.
 서비스 루트의 `walk.py`·`walk_*.py` **45개는 모두 포함**했다.
 
-360개 관계 중 13개는 명시한 후속 경계 변경 대상, 347개는 기능 소비·계층 조립·공통 계약
+366개 관계 중 6개는 명시한 후속 경계 변경 대상, 360개는 기능 소비·계층 조립·공통 계약
 관계를 보존하는 대상으로 분류했다. 이는 코드의 결함 개수나 필요한 PR 개수가 아니다.
 동일 원인의 여러 import가 별도 행으로 기록된다. `retain-interface`는 **현재의 기능 소비
 관계를 유지**한다는 뜻이며 비공개 함수까지 영구적인 API로 승인하지 않는다.
@@ -26,7 +26,7 @@ SQL 접점 52개, 문자열로 확인한 UI/운영 접점 8개, 명명된 도구
 파일 이름만으로 완료를 판단하지 않도록 다음 합집합을 사용한다.
 
 1. 추적 중인 `backend/src/daengs_walk/**/*.py` 전부.
-2. backend의 모든 계층에서 `walk.py`·`walk_*.py`, `services/walk_diary/**`,
+2. backend의 모든 계층에서 `walk.py`·`walk_*.py`, `services/walk_diary/**`·`walk_generation/**`·`walk_legacy/**`,
    일기 그래프 `orchestration/diary.py`. 활동·어시스턴트의 `walk` 접점도 포함한다.
 3. 위 핵심 코드가 직접 import하는 로컬 파일과, 핵심 코드를 직접 import하는 모든 로컬
    Python 호출자. 함수 내부·상대 import·별칭·TYPE_CHECKING import도 포함한다.
@@ -72,18 +72,18 @@ SQL 접점 52개, 문자열로 확인한 UI/운영 접점 8개, 명명된 도구
 
 ## 제거할 결합과 보존할 계약
 
-B1·B2·B3은 **#521**, A1·A2는 **#522에서 구현·직접 검증**했다. 나머지 6개 항목은 미완료다. 아래 표는 원래 문제와 보존 계약을 함께 남긴다.
+B1·B2·B3은 **#521**, A1·A2는 **#522**, D1·D2·D3은 **#524에서 구현·직접 검증**했다. C1·E1·E2는 미완료다. 아래 표는 원래 문제와 보존 계약을 함께 남긴다.
 
-| ID / 단계 | 근거가 되는 현재 코드 | 변경 방향 | 반드시 보존할 것 |
+| ID / 단계 | 정리 전 결합 / 근거 | 변경 방향 | 반드시 보존할 것 |
 | --- | --- | --- | --- |
 | B3 / 1 · #521 구현 | `walk_photo.transition` 및 사진 schema, area/park/river 카탈로그 → `diary.contracts.input` | 사진 요청 digest와 실제 공용 값의 독립 계약 추출. 이름이 digest인 함수를 전부 합치지 않음 | 키 정렬·공백·유니코드·숫자·datetime/model 직렬화·기존 요청 해시, 같은 revision 재시도/충돌 판정 |
 | B2 / 1 · #521 구현 | `walk_weather_context` → `diary.slots.temperature.GridTemperature`·`Point` | 시간/좌표/공급자에 묶인 관측 자료형은 공급 계약으로, `temperature_candidate`의 장면 일치·나이 제한은 일기에 유지 | 과거 hourly 관측 검증, query/request/fetch 시각, 날씨 채택/제외 이유와 저장 payload |
 | B1 / 1 · #521 구현 | `walk_space_catalog_input.retain_page/retained_fields/normalization_input` | 원자료 보존/검증은 카탈로그, `AreaInput` 구성은 일기 수집 어댑터로 분리 | pagination/metadata·잘못된 행·충돌 행 보존, 원자료 hash, coverage 검증. 요약 결과에서 원자료 복원 금지 |
 | A1 / 2 · #522 구현 | `diary.route.binding/observations`, `diary.slots.sources` → `storyboard_input.route_nodes` | 연속 경로/원본 관측 주소를 공통 계산으로 분리; 과거 `scene_inputs`는 호환 소유 | 끊긴 경로 block, 실제 GPS 출처, moving 거리 누적, 장면/관측 식별자 |
 | A2 / 2 · #522 구현 | `diary.selection.board`·`route.observations` → `storyboard_selection` | 거리/빈 구간 계산은 공유; 상대 속도 관측 정책은 소유자와 명시 파라미터/버전을 구분 | 기존 기준 속도·비율·지속 시간·후보 순위·동률 처리·미선정 구간. 정책 통합 금지 |
-| D1 / 3 | `lifecycle.generation.generate_diary`의 `CardWritingResult` 타입에 따른 완료기 선택 | 실행 전에 작성기·완료기·기대 결과 계약을 함께 결정하고 결과를 검증 | provider 대역 주입이 전략을 바꾸지 않음, 현재/과거 지원 계약, 수집 적용·마감·실패 fallback |
-| D2 / 3 | `services.walk_storyboard`·`schemas.walk_storyboard`의 현재/과거 분기 | HTTP 협상 진입과 과거 실행/응답 소유권을 분리 | 기존 URL·지원 format·협상 결과·공개 JSON. **같은 board format에도 현재/과거 슬롯 경로가 있으므로 format만으로 전략을 결정하지 않음** |
-| D3 / 3 | `walk_storyboard_state`의 `reusable/reserve/complete` | 공통 생성 상태로 이름/소유권 명시; 모델·DAO 계층과 공유 행 유지 | generation/input revision/lease 비교, 원본 재확인, 중복/늦은 결과 차단. 현재/과거 상태 복제 금지 |
+| D1 / 3 · #524 구현 | `lifecycle.generation.generate_diary`의 `CardWritingResult` 타입에 따른 완료기 선택 | 실행 전에 작성기·완료기·기대 결과 계약을 함께 결정하고 결과를 검증 | provider 대역 주입이 전략을 바꾸지 않음, 현재/과거 지원 계약, 수집 적용·마감·실패 fallback |
+| D2 / 3 · #524 구현 | `services.walk_storyboard`·`schemas.walk_storyboard`의 현재/과거 분기 | HTTP 협상 진입과 과거 실행/응답 소유권을 분리 | 기존 URL·지원 format·협상 결과·공개 JSON. **같은 board format에도 현재/과거 슬롯 경로가 있으므로 format만으로 전략을 결정하지 않음** |
+| D3 / 3 · #524 구현 | `walk_storyboard_state`의 `reusable/reserve/complete` | 공통 생성 상태로 이름/소유권 명시; 모델·DAO 계층과 공유 행 유지 | generation/input revision/lease 비교, 원본 재확인, 중복/늦은 결과 차단. 현재/과거 상태 복제 금지 |
 | C1 / 4 | `walk_measurement.project` → `walk_trajectory._project` → JSON → `TrajectoryCalculation` 재파싱 | 검증된 공통 투영 결과 → 조회 응답 직렬화 / 측정 요약·페이지 조립으로 분리 | measurement ID·응답 바이트·페이지 hash·원본 시각·정밀도·순서·예외 계약, 계산/직렬화의 off-lock 실행 |
 | E1 / 5 | `walk_analysis`가 측정 모델과 셀로판 직렬화를 함께 제공 | 실제 사용자를 기준으로 한 산책의 산출물 생성/저장 어댑터 경계 정리 | WalkAnalysis와 capsule의 1:1 바인딩·cellophane 봉인 형식·복원 검증. DB 분할/스키마 변경 없음 |
 | E2 / 5 | `daengs_walk.__init__`에서 측정·capsule·cellophane·spatial_diary를 함께 import | 소유 영역의 명시 진입과 기존 공개 이름 호환 범위 정의 | 공유 타입 객체와 기존 사용자 import의 호환, 불필요한 제품 기능의 암묵 로딩 점검 |
@@ -196,6 +196,48 @@ DB 검사는 `docs/ci/README.md`의 **폐기용 loopback DB**를 사용하며 sk
 Ruff check/format, 저장소 규칙 검사, 소유권 목록 검사도 통과했다. 이번 단계는 순수 계산의
 의존성 변경이므로 DB/전체 스위트/실환경 공급자·모델·실기기 검증은 실행하지 않았다.
 생성·호환(D1/D2/D3), 측정 투영(C1), 산출물/공개 패키지 경계(E1/E2)는 미완료다.
+
+## 3단계 구현·검증 기록 (#524)
+
+- `walk_diary.lifecycle.strategy`가 협상된 형식과 명시적 override로 작성기·기대 결과
+  자료형·완료 함수를 **예약/외부 실행 전에 함께 확정**한다. 결과 종류는 계약 검사에만
+  사용한다. 잘못된 결과에서 다른 완료기로 전환하지 않고 기존 실패/base 발행 처리를 한다.
+- 일반 `writer=` 대역과 wrapper는 현재 카드 계약을 유지한다. 같은 board 형식의 과거
+  슬롯 작성은 `walk_diary.api.legacy_slot_writer(writer)`로 명시한다. 이는 HTTP 옵션이
+  아닌 내부 주입 계약이다. 과거 슬롯 테스트는 이 계약을 명시하도록 전환했으며, 의도 없이
+  일반 writer가 슬롯 결과를 반환하면 카드 실패 base가 발행되는 것을 별도로 검사했다.
+- `walk_generation.api`가 저장 형식 협상을, `walk_legacy.storyboard`가 과거 후보 생성/
+  조회를 소유한다. 요청 schema는 `schemas.walk_generation`, 현재 응답은 `walk_diary`,
+  과거 응답은 `walk_legacy`가 소유한다. 기존 `walk_storyboard` 서비스/schema import는
+  호환 진입으로 남기고 URL·요청/응답 JSON Schema는 유지한다.
+- `walk_generation.state`가 유일한 공통 reserve/complete/reusable 구현이다.
+  `walk_storyboard_state`의 함수/예외는 같은 객체를 재노출한다. ORM/DAO·같은 저장 행·
+  60초 lease·세대/revision 비교·원본 재확인·잠금/커밋 순서는 변경하지 않았다.
+- `walk_generation/**`와 `walk_legacy/**`도 목록 검사의 핵심 범위에 명시했다.
+  새로운 디렉터리 아래로 이동했다고 직접 import 접점만 검사하는 누락이 생기지 않게 한다.
+
+2026-09-14, backend `uv run --no-sync pytest -q`로 최종 **134 passed**를 확인했다.
+최초 133개 실행과 합산하지 않는다. 실행 파일은 모두 `tests/walk/` 아래다.
+
+- `diary/`: `test_generation_contract_boundary.py`, `test_diary_generation.py`,
+  `test_diary_board_api.py`, `test_diary_board_slot_writing.py`, `test_diary_writer_entrypoints.py`,
+  `test_diary_writing_boundaries.py`, `test_diary_publication.py`, `test_diary_service_package.py`,
+  `test_diary_space_integration.py`.
+- `storyboard/`: `test_walk_storyboard.py`, `test_storyboard_pins.py`,
+  `test_storyboard_observations.py`.
+
+폐기용 PostgreSQL 17 (`127.0.0.1:55432/walk_pin_test`)에서 아래 6개 파일을
+`uv run --no-sync pytest -q -rs`로 실행하여 **15 passed, skip 0**을 확인했다.
+`WALK_PIN_TEST_DATABASE_URL`과 `LIVE_STORYBOARD_TEST_DSN` 모두 이 loopback DB를 가리켰다.
+
+- `diary/test_diary_generation_db.py`, `test_diary_board_db.py`, `test_diary_collection_db.py`,
+  `test_diary_retention_db.py`, `test_diary_temperature_db.py`.
+- `storyboard/test_walk_storyboard_db.py`.
+
+현재/과거 작성과 저장본 판독, HTTP schema hash(`4d7407f6` 고정 표본), 중복/취소/마감과
+늦은 결과 보호, 배경 보존·새 사진 입력 이후 덮어쓰기 차단을 확인했다. Ruff, 저장소 규칙,
+목록 재검사/자체 검증도 통과했다. 전체 스위트·실환경 공급자/모델·실기기 검증은 실행하지
+않았다. **C1(측정 투영), E1/E2(산출물/공개 패키지 경계)는 미완료**다.
 
 ## 재검사와 완료 기준
 

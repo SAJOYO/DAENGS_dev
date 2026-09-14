@@ -11,17 +11,18 @@ import httpx
 import pytest
 
 from daengs_backend.routers import walk_storyboard as router
-from daengs_backend.services import walk_diary_card_writing as writing
-from daengs_backend.services import walk_diary_space_collection as collection
-from daengs_backend.services.walk_diary_base_board import (
+from daengs_backend.services.walk_diary import runtime as writing
+from daengs_backend.services.walk_diary.collection import service as collection
+from daengs_backend.services.walk_diary.deadline import publication_deadline
+from daengs_backend.services.walk_diary.preparation.board import (
     assemble_saved_base_board,
     with_scene_backgrounds,
 )
-from daengs_backend.services.walk_diary_board_storage import load_board, store_board
-from daengs_backend.services.walk_diary_deadline import publication_deadline
-from daengs_backend.services.walk_diary_input import InputAssembly
-from daengs_backend.services.walk_diary_observations import ObservationSource
-from daengs_backend.services.walk_diary_prepare import PreparedWalkDiary
+from daengs_backend.services.walk_diary.preparation.diary import PreparedWalkDiary
+from daengs_backend.services.walk_diary.preparation.input import InputAssembly
+from daengs_backend.services.walk_diary.preparation.observations import ObservationSource
+from daengs_backend.services.walk_diary.storage.board import load_board, store_board
+from daengs_backend.services.walk_diary.writing import jobs as diary_jobs
 from daengs_walk.diary_input import DiaryInput, digest
 from tests.walk.diary.test_diary_board_slot_writing import prepared_case
 from tests.walk.diary.test_diary_route_patterns import input_case
@@ -128,14 +129,14 @@ async def test_action_edit_does_not_change_space_request():
     )
     target = next(s for s in after.board.scenes if s.id == before.id)
     assert (
-        writing.space_job(base, before, base.slots.stamps[index]).request
-        == writing.space_job(
+        diary_jobs.space_job(base, before, base.slots.stamps[index]).request
+        == diary_jobs.space_job(
             after, target, after.slots.stamps[after.board.scenes.index(target)]
         ).request
     )
     assert (
-        writing.action_job(base, before).request_revision
-        != writing.action_job(after, target).request_revision
+        diary_jobs.action_job(base, before).request_revision
+        != diary_jobs.action_job(after, target).request_revision
     )
     previous = await writing.write_cards(base.input.source, base, generate=prose)
     cached = replace(after, cached_jobs=tuple(j.model_dump(mode="json") for j in previous.jobs))
@@ -235,7 +236,7 @@ async def test_previous_public_card_hashes_remain_readable():
         )
         parts["content_revision"] = parts["title_based_on_content_revision"] = legacy
     assert PublishedBoard.model_validate(raw).model_dump(mode="json") == raw
-    assert "reused" not in writing.job("title", {"cards": []}).model_dump(mode="json")
+    assert "reused" not in diary_jobs.job("title", {"cards": []}).model_dump(mode="json")
 
 
 async def test_more_than_twelve_cards_still_run_and_titles_are_batched():
@@ -447,7 +448,7 @@ def test_actual_http_writer_publishes_once_and_exports_app_contract(api, monkeyp
     from copy import deepcopy
     from uuid import UUID
 
-    from daengs_backend.services import walk_diary_input as reader
+    from daengs_backend.services.walk_diary.preparation import input as reader
 
     client, state, db = api
     pet_id = UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")

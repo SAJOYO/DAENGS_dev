@@ -13,12 +13,11 @@ from typing import Any, TypedDict
 from langgraph.graph import END, START, StateGraph
 
 from daengs_backend.orchestration.execution import JobExecutor
-from daengs_backend.services import walk_diary_card_assembly as assembly
-from daengs_backend.services import walk_diary_card_contracts as contracts
-from daengs_backend.services import walk_diary_card_jobs as card_jobs
-from daengs_backend.services import walk_diary_card_policy as policy
-from daengs_backend.services.walk_diary_collection_application import collect_for_writing
-from daengs_backend.services.walk_diary_deadline import publication_deadline
+from daengs_backend.services.walk_diary import contracts
+from daengs_backend.services.walk_diary.collection.application import collect_for_writing
+from daengs_backend.services.walk_diary.deadline import publication_deadline
+from daengs_backend.services.walk_diary.writing import assembly, policy
+from daengs_backend.services.walk_diary.writing import jobs as card_jobs
 from daengs_walk.diary_board_output import PublishedBoard, publish_board
 from daengs_walk.diary_input import digest
 

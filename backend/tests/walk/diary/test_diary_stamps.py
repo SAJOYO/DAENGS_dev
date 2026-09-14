@@ -8,13 +8,13 @@ from unittest.mock import AsyncMock
 import pytest
 
 from daengs_backend.orchestration.contracts import PrincipalContext
-from daengs_backend.services import walk_diary_prepare as service
-from daengs_backend.services.walk_diary_contract import (
+from daengs_backend.services.walk_diary.guard import (
     StaleDiaryGeneration,
     bind_generation,
     require_current,
 )
-from daengs_backend.services.walk_diary_input import InputAssembly, assemble_input
+from daengs_backend.services.walk_diary.preparation import diary as service
+from daengs_backend.services.walk_diary.preparation.input import InputAssembly, assemble_input
 from daengs_walk.diary_input import DiaryInput, digest
 from daengs_walk.diary_output import assemble_diary
 from daengs_walk.diary_stamps import StampPolicy, prepare_stamps

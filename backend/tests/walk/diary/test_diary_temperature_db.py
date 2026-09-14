@@ -11,8 +11,8 @@ from daengs_backend.models.walk_entry import WalkEntry
 from daengs_backend.models.walk_entry_context import WalkEntryContextEnvelope, WalkEntryContextJob
 from daengs_backend.models.walk_storyboard import WalkStoryboard
 from daengs_backend.services import walk_entry_context
-from daengs_backend.services.walk_diary_board_slot_writing import write_legacy_slot_board
-from daengs_backend.services.walk_diary_generation import generate_diary, get_diary
+from daengs_backend.services.walk_diary.legacy.board_slots import write_legacy_slot_board
+from daengs_backend.services.walk_diary.lifecycle.generation import generate_diary, get_diary
 from daengs_life.app import deps
 from daengs_life.realtime.cache import Cache, MemoryStore
 from daengs_life.realtime.providers import kma_vilage_fcst

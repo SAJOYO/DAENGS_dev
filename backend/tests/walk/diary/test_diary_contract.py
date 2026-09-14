@@ -5,7 +5,7 @@ from copy import deepcopy
 import pytest
 
 from daengs_backend.orchestration.contracts import PrincipalContext
-from daengs_backend.services.walk_diary_contract import (
+from daengs_backend.services.walk_diary.guard import (
     StaleDiaryGeneration,
     bind_generation,
     require_current,

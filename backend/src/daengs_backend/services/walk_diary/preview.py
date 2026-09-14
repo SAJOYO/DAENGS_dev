@@ -1,10 +1,10 @@
 """Read snapshot, release walk lock, then optional prose. No generation/publication writes."""
 
 from daengs_backend.schemas.walk_diary_slots import SlotPreviewResponse
-from daengs_backend.services.walk_diary_input import read_input
-from daengs_backend.services.walk_diary_route_policy import configured_route_patterns
-from daengs_backend.services.walk_diary_slot_writing import write_slot_preview
-from daengs_backend.services.walk_diary_space_collection import configured_collection
+from daengs_backend.services.walk_diary.collection.service import configured_collection
+from daengs_backend.services.walk_diary.legacy.slots import write_slot_preview
+from daengs_backend.services.walk_diary.preparation.input import read_input
+from daengs_backend.services.walk_diary.preparation.route_policy import configured_route_patterns
 from daengs_walk.diary_board import BaseBoardPolicy, VerifiedBoardRoute
 from daengs_walk.diary_slots import prepare_board_slots, prepare_slot_preview
 from daengs_walk.diary_stamps import StampPolicy

@@ -19,7 +19,7 @@ from daengs_backend.repositories import walk_photo as photos
 from daengs_backend.repositories import walk_storyboard as storyboards
 from daengs_backend.schemas.walk_entry_v2 import Pin
 from daengs_backend.schemas.walk_photo import PhotoRecord
-from daengs_backend.services.walk_diary_observations import (
+from daengs_backend.services.walk_diary.preparation.observations import (
     ObservationSource,
     prepare_observation_source,
 )

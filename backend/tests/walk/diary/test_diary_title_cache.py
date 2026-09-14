@@ -7,12 +7,12 @@ from unittest.mock import AsyncMock
 import pytest
 
 from daengs_backend.routers import walk_storyboard as router
-from daengs_backend.services import walk_diary_card_policy as policy
-from daengs_backend.services import walk_diary_card_writing as writing
-from daengs_backend.services import walk_diary_space_collection as collection
-from daengs_backend.services.walk_diary_base_board import assemble_saved_base_board
-from daengs_backend.services.walk_diary_board_storage import load_board, store_board
-from daengs_backend.services.walk_diary_prepare import PreparedWalkDiary
+from daengs_backend.services.walk_diary import runtime as writing
+from daengs_backend.services.walk_diary.collection import service as collection
+from daengs_backend.services.walk_diary.preparation.board import assemble_saved_base_board
+from daengs_backend.services.walk_diary.preparation.diary import PreparedWalkDiary
+from daengs_backend.services.walk_diary.storage.board import load_board, store_board
+from daengs_backend.services.walk_diary.writing import policy
 from daengs_walk.diary_input import DiaryInput, UserRecord, digest, material_ref
 from tests.walk.diary.test_diary_board_slot_writing import prepared_case
 from tests.walk.diary.test_diary_card_writing import prose

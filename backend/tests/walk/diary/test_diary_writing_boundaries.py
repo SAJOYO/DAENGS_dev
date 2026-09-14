@@ -49,14 +49,14 @@ from types import SimpleNamespace
 class NoWriterRuntime(importlib.abc.MetaPathFinder):
     def find_spec(self, fullname, path=None, target=None):
         forbidden = (
-            "daengs_backend.services.walk_diary_card_writing",
-            "daengs_backend.services.walk_diary_card_provider",
-            "daengs_backend.services.walk_diary_card_jobs",
-            "daengs_backend.services.walk_diary_card_assembly",
-            "daengs_backend.services.walk_diary_card_policy",
-            "daengs_backend.services.walk_diary_board_provenance",
-            "daengs_backend.services.walk_diary_board_slot_writing",
-            "daengs_backend.services.walk_diary_slot_writing",
+            "daengs_backend.services.walk_diary.runtime",
+            "daengs_backend.services.walk_diary.writing.provider",
+            "daengs_backend.services.walk_diary.writing.jobs",
+            "daengs_backend.services.walk_diary.writing.assembly",
+            "daengs_backend.services.walk_diary.writing.policy",
+            "daengs_backend.services.walk_diary.storage.provenance",
+            "daengs_backend.services.walk_diary.legacy.board_slots",
+            "daengs_backend.services.walk_diary.legacy.slots",
             "daengs_backend.orchestration", "daengs_backend.config",
             "google.genai", "openai", "langgraph",
         )
@@ -64,7 +64,7 @@ class NoWriterRuntime(importlib.abc.MetaPathFinder):
             raise AssertionError("stored reader imported writer runtime: " + fullname)
 
 sys.meta_path.insert(0, NoWriterRuntime())
-from daengs_backend.services.walk_diary_board_storage import load_board, read_board
+from daengs_backend.services.walk_diary.storage.board import load_board, read_board
 from daengs_walk.diary_input import DiaryInput
 
 data = json.load(sys.stdin)
@@ -103,8 +103,8 @@ import sys
 class NoEntry(importlib.abc.MetaPathFinder):
     def find_spec(self, fullname, path=None, target=None):
         if fullname in {
-            "daengs_backend.services.walk_diary_card_writing",
-            "daengs_backend.services.walk_diary_card_provider",
+            "daengs_backend.services.walk_diary.runtime",
+            "daengs_backend.services.walk_diary.writing.provider",
             "google.genai",
         }:
             raise AssertionError("graph imported entry/provider: " + fullname)
@@ -119,16 +119,10 @@ assert callable(DiaryOrchestrationService.run)
     assert child.returncode == 0, child.stderr
 
 
-def test_compatibility_imports_are_the_same_contract_objects():
-    from daengs_backend.services import walk_diary_card_contracts as contracts
-    from daengs_backend.services import walk_diary_card_writing as writing
+def test_graph_and_receipt_share_canonical_contract_objects():
+    from daengs_backend.orchestration import diary
+    from daengs_backend.services.walk_diary import contracts
+    from daengs_backend.services.walk_diary.storage.card_receipt import StoredCardWriting
 
-    for name in (
-        "SpaceProse",
-        "ActionProse",
-        "CardTitle",
-        "CardTitles",
-        "WritingJob",
-        "CardWritingResult",
-    ):
-        assert getattr(writing, name) is getattr(contracts, name)
+    assert diary.contracts is contracts
+    assert StoredCardWriting.model_fields["result"].annotation is contracts.CardWritingResult

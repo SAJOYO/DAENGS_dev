@@ -4,7 +4,7 @@ from typing import Literal
 
 from pydantic import JsonValue, model_validator
 
-from daengs_backend.services.walk_diary_card_contracts import CardWritingResult
+from daengs_backend.services.walk_diary.contracts import CardWritingResult
 from daengs_walk.diary_input import DiaryContract, Digest, digest
 
 

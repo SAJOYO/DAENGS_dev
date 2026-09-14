@@ -8,8 +8,8 @@ from unittest.mock import AsyncMock
 import pytest
 
 from daengs_backend.schemas.walk_storyboard import StoryboardRequest
-from daengs_backend.services.walk_diary_generation import generate_diary
-from daengs_backend.services.walk_diary_publication import within_budget
+from daengs_backend.services.walk_diary.lifecycle.generation import generate_diary
+from daengs_backend.services.walk_diary.lifecycle.publication import within_budget
 from daengs_walk.diary_board_output import BOARD_FORMAT
 from tests.walk.support.diary_generation import PATH, body
 from tests.walk.support.photo_input import OWNER, WALK

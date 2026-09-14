@@ -1,11 +1,11 @@
 """Keep acquisition evidence independently of which backgrounds can enter scene slots."""
 
-from daengs_backend.services.walk_diary_base_board import with_scene_backgrounds
-from daengs_backend.services.walk_diary_card_contracts import CollectionReceipt
-from daengs_backend.services.walk_diary_collection_progress import (
+from daengs_backend.services.walk_diary.collection.progress import (
     CollectionProgress,
     active_collection,
 )
+from daengs_backend.services.walk_diary.contracts import CollectionReceipt
+from daengs_backend.services.walk_diary.preparation.board import with_scene_backgrounds
 
 
 async def collect_for_writing(base, collector, executor, deadline):

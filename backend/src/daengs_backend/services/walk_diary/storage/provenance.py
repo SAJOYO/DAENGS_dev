@@ -1,7 +1,7 @@
 """Freeze the exact cited materials when publishing, without copying rejected candidates."""
 
-from daengs_backend.services.walk_diary_board_slot_writing import complete_slot_board
-from daengs_backend.services.walk_diary_slot_writing import SlotWritingResult, writing_version
+from daengs_backend.services.walk_diary.legacy.board_slots import complete_slot_board
+from daengs_backend.services.walk_diary.legacy.slots import SlotWritingResult, writing_version
 from daengs_walk.diary_board_output import publish_board
 from daengs_walk.diary_board_receipt import CitedEvidence, StoredSceneWriting, StoredSlotWriting
 from daengs_walk.diary_input import digest
@@ -9,12 +9,14 @@ from daengs_walk.diary_scene_input import preserve_original
 
 
 def writing_receipt(prepared, bundle, revision, output=None):
-    from daengs_backend.services.walk_diary_card_contracts import CardWritingResult
-    from daengs_backend.services.walk_diary_card_policy import writing_version as card_version
-    from daengs_backend.services.walk_diary_card_receipt import StoredCardWriting
+    from daengs_backend.services.walk_diary.contracts import CardWritingResult
+    from daengs_backend.services.walk_diary.storage.card_receipt import StoredCardWriting
+    from daengs_backend.services.walk_diary.writing.policy import writing_version as card_version
 
     if isinstance(output, CardWritingResult):
-        expected = complete_slot_board(prepared, output)
+        from daengs_backend.services.walk_diary.writing.assembly import complete_cards
+
+        expected = complete_cards(prepared, output)
         if expected != bundle:
             raise ValueError("stored board differs from the adopted card result")
         receipt = StoredCardWriting(

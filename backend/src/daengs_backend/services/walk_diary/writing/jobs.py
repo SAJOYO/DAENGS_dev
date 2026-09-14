@@ -2,14 +2,14 @@
 
 import json
 
-from daengs_backend.services import walk_diary_card_policy as policy
-from daengs_backend.services.walk_diary_card_contracts import (
+from daengs_backend.services.walk_diary.contracts import (
     ActionProse,
     CardTitle,
     CardTitles,
     SpaceProse,
     WritingJob,
 )
+from daengs_backend.services.walk_diary.writing import policy
 from daengs_walk.diary_input import digest
 from daengs_walk.diary_scene_input import action_anchor
 from daengs_walk.diary_space_slots import writing_facts

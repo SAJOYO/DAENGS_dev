@@ -1,5 +1,8 @@
 # 실제 산책 카드 작성 경로
 
+서비스 코드는 #512에서 `services/walk_diary/`로 묶었다. 현재 진입점·의존 방향과
+이전 파일별 이동표는 [일기 서비스 패키지](diary-service-package.md)를 따른다.
+
 남은 공간 관계·슬롯 정책·실제 서술 검증과 그 대화 경위는 [산책 일기: 대화의 경위와 남은 기획](diary-remaining-plan.md)을 따른다. 아래 실행 연결 완료를 전체 일기 기획의 완료로 해석하지 않는다.
 
 착수할 때는 [실제 호출 분기와 혼동 방지](diary-remaining-plan.md#handoff-paths)를 함께 읽는다. 아래 도식은 보드 형식으로 새 작성이 필요한 기본 경로다. 과거 저장 형식 보존·공개본 재사용, 슬롯 미리보기, 명시적 `write_legacy_slot_board`는 구별해야 한다. `write_board`는 `generate`·`collector`를 주입해도 같은 카드 그래프를 실행한다(2026-09-14, #504의 호출자·회귀 검증 기준).
@@ -30,25 +33,25 @@ flowchart TD
 
 | 책임 | 코드 |
 | --- | --- |
-| 소유권과 입력 읽기, 접근 가능한 동행 이름 | `walk_diary_input.py:read_input` |
-| 입력 준비·생성 버전·저장 응답 복원 | `walk_diary_snapshot.py:snapshot`, `generation_revision`, `result` |
-| 예약·재사용·완료 시 원본 변경 검사 | `walk_diary_lifecycle.py:reserve_diary`, `complete_diary` |
-| GET 복구·외부 작성·공통 공개 마감 | `walk_diary_generation.py:get_diary`, `generate_diary`, `walk_diary_publication.py:within_budget` |
-| 실제 보드 작성 진입점 | `walk_diary_board_slot_writing.py:write_board` |
+| 소유권과 입력 읽기, 접근 가능한 동행 이름 | `walk_diary/preparation/input.py:read_input` |
+| 입력 준비·생성 버전·저장 응답 복원 | `walk_diary/lifecycle/snapshot.py:snapshot`, `generation_revision`, `result` |
+| 예약·재사용·완료 시 원본 변경 검사 | `walk_diary/lifecycle/reservation.py:reserve_diary`, `complete_diary` |
+| GET 복구·외부 작성·공통 공개 마감 | `walk_diary/lifecycle/generation.py:get_diary`, `generate_diary`, `walk_diary/lifecycle/publication.py:within_budget` |
+| 실제 보드 작성 진입점 | `walk_diary/runtime.py:write_board` |
 | 런타임 진입과 일기 그래프 | `orchestration/runtime.py:build_diary_orchestrator`, `orchestration/diary.py` |
 | 채팅·일기가 공유하는 제한 실행·시간 초과·오류 격리 | `orchestration/execution.py:JobExecutor` |
-| 작성 결과·작업·공급자 응답의 데이터 계약 | `walk_diary_card_contracts.py` |
-| 현재 모델·예산·버전 지문 | `walk_diary_card_policy.py` |
-| 작성용 작업 입력·응답 검증 | `walk_diary_card_jobs.py` |
-| 채택한 카드 부분 조립·완료 검증 | `walk_diary_card_assembly.py` |
-| Gemini 전송 | `walk_diary_card_provider.py:generate_card_prose` |
-| 그래프 호출·기존 import 호환 | `walk_diary_card_writing.py:write_cards` |
-| 공간/행동/제목의 개별 작성 지시 | `walk_diary_card_prompts.py` |
-| SGIS·공원·상권·EGIS 수집 | `walk_diary_space_collection.py:configured_collection` |
-| 요청별 수집 진행·마감 고정·자료별 적용 격리 | `walk_diary_collection_progress.py`, `walk_diary_collection_application.py` |
+| 작성 결과·작업·공급자 응답의 데이터 계약 | `walk_diary/contracts.py` |
+| 현재 모델·예산·버전 지문 | `walk_diary/writing/policy.py` |
+| 작성용 작업 입력·응답 검증 | `walk_diary/writing/jobs.py` |
+| 채택한 카드 부분 조립·완료 검증 | `walk_diary/writing/assembly.py` |
+| Gemini 전송 | `walk_diary/writing/provider.py:generate_card_prose` |
+| 그래프 호출·기존 import 호환 | `walk_diary/runtime.py:write_cards` |
+| 공간/행동/제목의 개별 작성 지시 | `walk_diary/writing/prompts.py` |
+| SGIS·공원·상권·EGIS 수집 | `walk_diary/collection/service.py:configured_collection` |
+| 요청별 수집 진행·마감 고정·자료별 적용 격리 | `walk_diary/collection/progress.py`, `walk_diary/collection/application.py` |
 | 원래 SGIS 변환·선정 | `walk_sgis.py`, `diary_public_background.py`, `diary_slots.py` |
 | 카드 부분과 내용 버전 계약 | `diary_card_narrative.py`, `diary_board_output.py` |
-| 독립 작업의 요청·채택 결과 저장 | `walk_diary_card_receipt.py`, `walk_diary_board_storage.py` |
+| 독립 작업의 요청·채택 결과 저장 | `walk_diary/storage/card_receipt.py`, `walk_diary/storage/board.py` |
 
 제목의 문체·단어 선택 정책은 제목 전략의 책임이다. 오케스트레이터는 제목만 받아 카드 ID와 내용 버전을 검사하며, 본문 수정 권한을 주지 않는다. 제목은 세션 전체 제목이 아닌 **각 카드의 `title`**이다.
 
@@ -56,13 +59,16 @@ flowchart TD
 
 기존 `OrchestrationEngine._execute_requests`도 `JobExecutor.run`을 호출한다. 채팅은 기존 순차 실행·capability 계약·집계 진리표를 유지한다. 일기는 같은 실행 계층 위에 `space || actions → freeze_card_content → titles → assemble` 그래프를 두고, 실행 동시성을 4로 제한한다. 자료 조회는 작성 슬롯을 점유하지 않으므로 SGIS가 늦어도 행동은 실행된다.
 
-일기 작업을 기존 산책 적합도 `walk`로 등록하거나 `AssistantResponse`로 포장하지 않는다. 자연어 의미 라우터는 호출하지 않는다. 일기 그래프의 입력은 저장된 산책과 준비된 보드이며, 출력은 기존 일기 영수증이다. `walk_diary_card_writing.write_cards`에는 독립 실행 루프가 없고 런타임 호출만 남는다.
+일기 작업을 기존 산책 적합도 `walk`로 등록하거나 `AssistantResponse`로 포장하지 않는다. 자연어 의미 라우터는 호출하지 않는다. 일기 그래프의 입력은 저장된 산책과 준비된 보드이며, 출력은 기존 일기 영수증이다. `walk_diary.runtime.write_cards`에는 독립 실행 루프가 없고 런타임 호출만 남는다.
 
 ### 저장 판독과 작성 실행의 의존 방향 (#507)
 
-`write_cards → runtime → orchestration/diary`가 실행 입구다. 그래프는 계약·정책·작업·조립 모듈을 직접 사용하고 `walk_diary_card_writing`이나 모델 provider를 역참조하지 않는다. 공급자 함수는 입구에서 주입한다. 기존 `walk_diary_card_writing`의 공개 계약·함수 import는 새 모듈과 **동일한 객체**를 재노출한다.
+`walk_diary.runtime.write_cards → orchestration.runtime → orchestration.diary`가 실행 입구다.
+그래프는 계약·정책·작업·조립 모듈을 직접 사용하고 일기 runtime이나 모델 provider를
+역참조하지 않는다. 공급자 함수는 입구에서 주입한다. #512에서 옛 작성 입구의 광범위한
+재노출을 제거했으며 계약·작업·정책을 각각 해당 소유 모듈에서 가져온다.
 
-`walk_diary_board_storage.load_board/read_board → walk_diary_card_receipt → walk_diary_card_contracts`는 작성 실행과 별개다. reader는 저장된 writer 지문과 근거로 영수증을 검증하며 현재 모델·프롬프트를 불러오지 않는다. 새 영수증을 만드는 `store_board`만 호출 시 `walk_diary_board_provenance`를 가져온다. 과거 슬롯 영수증과 저장 v1/v2 판독은 유지한다. 과거 bundle의 정책 비교·영수증 보완은 기존 `walk_diary_storage` 책임 그대로다.
+`walk_diary.storage.board.load_board/read_board → walk_diary.storage.card_receipt → walk_diary.contracts`는 작성 실행과 별개다. reader는 저장된 writer 지문과 근거로 영수증을 검증하며 현재 모델·프롬프트를 불러오지 않는다. 새 영수증을 만드는 `store_board`만 호출 시 `walk_diary.storage.provenance`를 가져온다. 과거 슬롯 영수증과 저장 v1/v2 판독은 유지한다. 과거 bundle의 정책 비교·영수증 보완은 기존 `walk_diary.storage.bundle` 책임 그대로다.
 
 2026-09-14, #507은 변경 전 dev `e718e08`에서 고정 원본·SGIS/공간 조회 시각·외부 대역으로 기준을 캡처했다. [기준 해시](../../backend/evals/walk-diary/writing-boundary-v1.json)와 [회귀 검사](../../backend/tests/walk/diary/test_diary_writing_boundaries.py)는 정상 카드, 캐시 재사용, 공급자 실패, 기본 보드, 슬롯 영수증, 저장 v1의 공개/저장 JSON 및 응답과 9개 스키마를 대조한다. `reused=false` 등 생략 필드와 과거 해시도 그대로 비교하므로 실패 시 기준을 자동 교체하지 않는다.
 
@@ -164,7 +170,7 @@ APP의 `diary-observation-card-v1.json`과 같은 바이트다. 기존 표본도
 
 ## 실행·재사용·공개
 
-생성 수명주기는 #506에서 준비·응답(`walk_diary_snapshot`), 예약·완료(`walk_diary_lifecycle`), GET·외부 작성(`walk_diary_generation`)으로 분리했다. `reserve_diary`는 재사용 응답을 commit하고 반환하거나, 새 예약을 commit한 뒤 `ReservedDiary`로 준비 입력·revision·ticket·수집 스냅샷을 반환한다. 작성기는 이 경계 뒤에서 실행되며, `complete_diary`는 원본을 새로 읽고 만료 발행·generation·원본 revision을 확인한 뒤 완료와 응답을 commit한다. 작성 중 ORM 생성 행을 전달하지 않는다.
+생성 수명주기는 #506에서 준비·응답(`walk_diary.lifecycle.snapshot`), 예약·완료(`walk_diary.lifecycle.reservation`), GET·외부 작성(`walk_diary.lifecycle.generation`)으로 분리했다. `reserve_diary`는 재사용 응답을 commit하고 반환하거나, 새 예약을 commit한 뒤 `ReservedDiary`로 준비 입력·revision·ticket·수집 스냅샷을 반환한다. 작성기는 이 경계 뒤에서 실행되며, `complete_diary`는 원본을 새로 읽고 만료 발행·generation·원본 revision을 확인한 뒤 완료와 응답을 commit한다. 작성 중 ORM 생성 행을 전달하지 않는다.
 
 GET은 상태 변경을 포함한다. 마감이 지난 예약은 저장된 기본 보드로 완료하고, 원본이 일치하는 과거 bare bundle은 reader가 영수증을 보완할 수 있으므로 `result` 뒤의 commit을 유지한다. 원본이 바뀌면 옛 기본 보드를 발행하지 않으며, GET이 먼저 완료했거나 다른 요청이 새 generation을 예약했으면 늦은 작성 결과로 덮어쓰지 않는다. 요청 시작 시각·마감과 각 판정의 시계 조회 순서는 그대로다.
 

@@ -5,7 +5,7 @@ from datetime import timedelta
 
 import pytest
 
-from daengs_backend.services.walk_diary_slot_writing import write_slot_preview, writing_payload
+from daengs_backend.services.walk_diary.legacy.slots import write_slot_preview, writing_payload
 from daengs_evals.diary_slots_demo import demo_input
 from daengs_walk.diary_board import BaseBoardPolicy
 from daengs_walk.diary_input import DiaryInput, digest

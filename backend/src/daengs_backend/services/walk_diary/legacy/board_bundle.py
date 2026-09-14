@@ -1,6 +1,6 @@
 """Legacy writer bridge for replaying the existing published-board contract fixture.
 
-New board generations use walk_diary_board_slot_writing instead.
+New board generations use walk_diary.runtime instead.
 """
 
 from daengs_walk.diary_board import VerifiedBoardRoute

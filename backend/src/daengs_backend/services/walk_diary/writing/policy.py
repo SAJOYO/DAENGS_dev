@@ -1,7 +1,7 @@
 """Current card writing policy and request fingerprints; no execution dependencies."""
 
-from daengs_backend.services.walk_diary_card_contracts import MAX_CARDS
-from daengs_backend.services.walk_diary_card_prompts import PROMPTS
+from daengs_backend.services.walk_diary.contracts import MAX_CARDS
+from daengs_backend.services.walk_diary.writing.prompts import PROMPTS
 from daengs_walk.diary_card_narrative import (
     OBSERVATION_TEXT,
 )

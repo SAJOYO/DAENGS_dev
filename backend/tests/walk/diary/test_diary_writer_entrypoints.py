@@ -11,10 +11,11 @@ import pytest
 from daengs_backend.config import settings
 from daengs_backend.routers import walk_storyboard as router
 from daengs_backend.schemas.walk_storyboard import StoryboardRequest
-from daengs_backend.services import walk_diary_card_writing as cards
-from daengs_backend.services import walk_diary_space_collection as collection
-from daengs_backend.services.walk_diary_board_slot_writing import write_board
-from daengs_backend.services.walk_diary_generation import generate_diary
+from daengs_backend.services.walk_diary import contracts as diary_contracts
+from daengs_backend.services.walk_diary import runtime as cards
+from daengs_backend.services.walk_diary.collection import service as collection
+from daengs_backend.services.walk_diary.lifecycle.generation import generate_diary
+from daengs_backend.services.walk_diary.runtime import write_board
 from tests.walk.diary.test_diary_card_writing import (
     collect_with_sgis,
     prepared,
@@ -31,7 +32,7 @@ async def test_injected_model_keeps_card_jobs_and_card_receipt(monkeypatch):
     collect = AsyncMock(side_effect=collect_with_sgis)
     monkeypatch.setattr(collection, "configured_collection", collect)
     result = await write_board(base.input.source, base, generate=provider)
-    assert isinstance(result, cards.CardWritingResult)
+    assert isinstance(result, diary_contracts.CardWritingResult)
     assert {job.stage for job in result.jobs} == {"space", "action", "title"}
     assert provider.call_args_list[-1].args[0] == "title"
     collect.assert_awaited_once()
@@ -44,7 +45,7 @@ async def test_injected_card_collector_keeps_graph_and_does_not_call_default(mon
     monkeypatch.setattr(collection, "configured_collection", configured)
     collect = AsyncMock(side_effect=collect_with_sgis)
     result = await write_board(base.input.source, base, generate=prose, collector=collect)
-    assert isinstance(result, cards.CardWritingResult)
+    assert isinstance(result, diary_contracts.CardWritingResult)
     assert {job.stage for job in result.jobs} == {"space", "action", "title"}
     collect.assert_awaited_once()
     configured.assert_not_awaited()

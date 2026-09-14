@@ -21,9 +21,11 @@ START = datetime(2026, 9, 9, tzinfo=UTC)
 
 
 def example(case, samples, *, note=False):
-    from daengs_backend.services.walk_diary_base_board import assemble_saved_base_board
-    from daengs_backend.services.walk_diary_input import assemble_input
-    from daengs_backend.services.walk_diary_observations import prepare_observation_source
+    from daengs_backend.services.walk_diary.preparation.board import assemble_saved_base_board
+    from daengs_backend.services.walk_diary.preparation.input import assemble_input
+    from daengs_backend.services.walk_diary.preparation.observations import (
+        prepare_observation_source,
+    )
 
     walk_id = uuid.uuid5(uuid.NAMESPACE_URL, "synthetic-base-board:" + case)
     points = [

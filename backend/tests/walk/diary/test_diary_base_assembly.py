@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock
 import pytest
 
 from daengs_backend.orchestration.contracts import PrincipalContext
-from daengs_backend.services import walk_diary_base_board as service
-from daengs_backend.services.walk_diary_input import InputAssembly
+from daengs_backend.services.walk_diary.preparation import board as service
+from daengs_backend.services.walk_diary.preparation.input import InputAssembly
 from daengs_walk.diary_board import BaseBoard
 from daengs_walk.diary_board_assembly import assemble_base_board
 from daengs_walk.diary_board_selection import prepare_base_board

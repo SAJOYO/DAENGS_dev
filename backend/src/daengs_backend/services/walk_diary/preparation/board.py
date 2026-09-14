@@ -8,9 +8,9 @@ import uuid
 from dataclasses import dataclass, replace
 
 from daengs_backend.orchestration.contracts import PrincipalContext
-from daengs_backend.services.walk_diary_contract import require_owner
-from daengs_backend.services.walk_diary_input import InputAssembly, read_input
-from daengs_backend.services.walk_diary_route_policy import configured_route_patterns
+from daengs_backend.services.walk_diary.guard import require_owner
+from daengs_backend.services.walk_diary.preparation.input import InputAssembly, read_input
+from daengs_backend.services.walk_diary.preparation.route_policy import configured_route_patterns
 from daengs_walk.diary_board import (
     BaseBoard,
     BaseBoardPolicy,

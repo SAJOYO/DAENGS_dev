@@ -5,7 +5,7 @@ from runpy import run_path
 
 import pytest
 
-from daengs_backend.services.walk_diary_slot_writing import write_slot_preview, writing_payload
+from daengs_backend.services.walk_diary.legacy.slots import write_slot_preview, writing_payload
 from daengs_backend.services.walk_public_context import collect_public
 from daengs_walk.diary_background import project_background
 from daengs_walk.diary_board import BaseBoardPolicy

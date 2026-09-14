@@ -7,27 +7,27 @@ from types import SimpleNamespace
 
 import pytest
 
-from daengs_backend.services import walk_diary_slot_writing as writer
-from daengs_backend.services.walk_diary_base_board import assemble_saved_base_board
-from daengs_backend.services.walk_diary_board_slot_writing import (
+from daengs_backend.services.walk_diary.legacy import slots as writer
+from daengs_backend.services.walk_diary.legacy.board_slots import (
     complete_slot_board,
     write_legacy_slot_board,
 )
-from daengs_backend.services.walk_diary_board_storage import (
+from daengs_backend.services.walk_diary.lifecycle.negotiation import guard_old_writer
+from daengs_backend.services.walk_diary.lifecycle.publication import (
+    fallback,
+    publication_reservation,
+    settle_expired,
+)
+from daengs_backend.services.walk_diary.preparation.board import assemble_saved_base_board
+from daengs_backend.services.walk_diary.preparation.diary import PreparedWalkDiary
+from daengs_backend.services.walk_diary.preparation.input import InputAssembly
+from daengs_backend.services.walk_diary.preparation.observations import ObservationSource
+from daengs_backend.services.walk_diary.storage.board import (
     LegacyStoredBoard,
     StoredBoard,
     load_board,
     read_board,
     store_board,
-)
-from daengs_backend.services.walk_diary_input import InputAssembly
-from daengs_backend.services.walk_diary_negotiation import guard_old_writer
-from daengs_backend.services.walk_diary_observations import ObservationSource
-from daengs_backend.services.walk_diary_prepare import PreparedWalkDiary
-from daengs_backend.services.walk_diary_publication import (
-    fallback,
-    publication_reservation,
-    settle_expired,
 )
 from daengs_backend.services.walk_storyboard_state import StoryboardConflict
 from daengs_evals.diary_slots_demo import demo_input

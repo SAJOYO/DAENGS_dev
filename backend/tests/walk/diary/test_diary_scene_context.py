@@ -7,9 +7,9 @@ import httpx
 import pytest
 
 from daengs_backend.schemas.walk_diary_slots import SlotPreviewRequest
-from daengs_backend.services import walk_diary_slots as service
-from daengs_backend.services.walk_diary_scene_collection import collect_scene_backgrounds
-from daengs_backend.services.walk_diary_slot_writing import slot_payload, write_slot_stamps
+from daengs_backend.services.walk_diary import preview as service
+from daengs_backend.services.walk_diary.collection.comparison import collect_scene_backgrounds
+from daengs_backend.services.walk_diary.legacy.slots import slot_payload, write_slot_stamps
 from daengs_evals.diary_slots_demo import demo_input
 from daengs_walk.diary_input import digest
 from daengs_walk.diary_kakao_background import project_kakao_background

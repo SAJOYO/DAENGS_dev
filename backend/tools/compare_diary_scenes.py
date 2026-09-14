@@ -16,8 +16,8 @@ from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from daengs_backend.schemas.walk import WalkPointUpload
-from daengs_backend.services.walk_diary_scene_collection import collect_scene_backgrounds
-from daengs_backend.services.walk_diary_slot_writing import (
+from daengs_backend.services.walk_diary.collection.comparison import collect_scene_backgrounds
+from daengs_backend.services.walk_diary.legacy.slots import (
     MODEL,
     PROMPT,
     generate_slot_prose,

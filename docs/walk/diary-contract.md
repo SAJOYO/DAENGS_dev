@@ -42,7 +42,7 @@ flowchart TD
 | --- | --- |
 | [`diary_input.py`](../../backend/src/daengs_walk/diary_input.py) | 인증 후 도메인 입력, 원본 시각·위치·버전, 저장 배경의 근거 연결과 입력 해시 |
 | [`diary_output.py`](../../backend/src/daengs_walk/diary_output.py) | 준비된 스탬프·딕셔너리·모델 응답·앱용 결과 계약, 근거 범위 검사와 원본 조립 |
-| [`walk_diary_contract.py`](../../backend/src/daengs_backend/services/walk_diary_contract.py) | 기존 `PrincipalContext` 재사용, 생성 예약 바인딩, 완료 시 버전 검사 |
+| [`walk_diary_contract.py`](../../backend/src/daengs_backend/services/walk_diary/guard.py) | 기존 `PrincipalContext` 재사용, 생성 예약 바인딩, 완료 시 버전 검사 |
 
 `daengs_walk`는 HTTP·DB·provider를 모른다. 서비스의 `require_owner()`는 기존
 repository `owned()`를 대체하지 않는다. 이미 인증되고 소유권을 조회한 입력을 받는 추가 검사다.

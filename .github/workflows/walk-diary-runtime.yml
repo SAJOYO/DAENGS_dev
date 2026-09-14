@@ -21,6 +21,10 @@ on:
         description: 'Two synthetic walks using distinct managed region caches'
         type: boolean
         default: false
+      phase_profile:
+        description: 'Time diary phases in an isolated process with real providers'
+        type: boolean
+        default: false
       backfill_mode:
         type: choice
         options: [Preview, Apply, Migrate, Smoke]
@@ -74,6 +78,7 @@ jobs:
     timeout-minutes: 10
     env:
       WALK_REGIONAL_SMOKE: ${{ inputs.regional_smoke }}
+      WALK_PHASE_PROFILE: ${{ inputs.phase_profile }}
     steps:
       # Only the probe is copied. Feature-branch checks must not replace live backend/src.
       - uses: actions/checkout@v5
@@ -94,6 +99,7 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw 'Probe copy failed' }
             $arguments = @('exec', '-w', '/app', 'daengs-backend', 'uv', 'run', '--no-sync', 'python', $target, '--execute')
             if ($env:WALK_REGIONAL_SMOKE -eq 'true') { $arguments += '--regional' }
+            if ($env:WALK_PHASE_PROFILE -eq 'true') { $arguments += '--phase-profile' }
             & docker @arguments
             if ($LASTEXITCODE -ne 0) { throw 'Walk runtime probe failed' }
           } finally {

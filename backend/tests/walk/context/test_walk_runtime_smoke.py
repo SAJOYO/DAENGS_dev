@@ -279,3 +279,33 @@ async def test_probe_entries_match_gps_and_diary_source_contract(monkeypatch, no
             assert result["backfill"]["prior_envelopes_preserved"]
     assert checked == ["behavior", "note", "note"]
     assert raw_chunks.await_count == 3
+
+
+@pytest.mark.parametrize("outcome", ["ok", "error", "cancelled"])
+async def test_phase_trace_preserves_outcome_without_logging_payload(outcome):
+    import asyncio
+
+    spec = importlib.util.spec_from_file_location(
+        "walk_phase_smoke_test", REPO / "tools/walk_runtime_smoke.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    trace = module.PhaseTrace()
+    sentinel = object()
+
+    async def operation(secret):
+        if outcome == "error":
+            raise ValueError(secret)
+        if outcome == "cancelled":
+            raise asyncio.CancelledError(secret)
+        return sentinel
+
+    wrapped = trace.wrap(operation, "provider")
+    if outcome == "ok":
+        assert await wrapped("private-payload") is sentinel
+    else:
+        with pytest.raises(ValueError if outcome == "error" else asyncio.CancelledError):
+            await wrapped("private-payload")
+    assert trace.events[0]["status"] == outcome
+    assert trace.events[0]["elapsed_ms"] >= 0
+    assert "private-payload" not in json.dumps(trace.events)

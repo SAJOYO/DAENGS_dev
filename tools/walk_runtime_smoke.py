@@ -316,8 +316,119 @@ async def card_publication(request, owner, walk_id, entries, notes):
     return {**diagnostics, "synthetic_response": result}
 
 
+class PhaseTrace:
+    """Timings only; never capture arguments, provider text, or exception messages."""
+
+    def __init__(self):
+        self.started = time.monotonic()
+        self.events = []
+
+    def wrap(self, function, label):
+        async def measured(*args, **kwargs):
+            started = time.monotonic()
+            event = {
+                "phase": label,
+                "start_ms": round((started - self.started) * 1000),
+                "status": "running",
+            }
+            if (
+                label == "generate_card_prose"
+                and args
+                and args[0] in {"space", "action", "title"}
+            ):
+                event["stage"] = args[0]
+            self.events.append(event)
+            try:
+                result = await function(*args, **kwargs)
+                event["status"] = "ok"
+                return result
+            except BaseException as exc:
+                event["status"] = (
+                    "cancelled" if isinstance(exc, asyncio.CancelledError) else "error"
+                )
+                event["error_type"] = type(exc).__name__
+                raise
+            finally:
+                event["elapsed_ms"] = round((time.monotonic() - started) * 1000)
+
+        return measured
+
+
+async def profiled_card_publication(owner, walk_id, entries, notes):
+    # Instrument only this disposable process, never the serving web worker.
+    from contextlib import ExitStack
+    from unittest.mock import patch
+
+    from daengs_backend.orchestration import diary
+    from daengs_backend.routers.walk_storyboard import router
+    from daengs_backend.services.walk_diary import runtime
+    from daengs_backend.services.walk_diary.lifecycle import generation
+    from fastapi import FastAPI
+
+    app = FastAPI()
+    app.include_router(router)
+    trace = PhaseTrace()
+    with ExitStack() as stack:
+        targets = [
+            (diary, "collect_for_writing"),
+            (runtime, "generate_card_prose"),
+            (generation, "reserve_diary"),
+            (generation, "complete_diary"),
+        ]
+        targets += [
+            (diary._DiaryRun, name)
+            for name in ("execute", "actions", "space", "freeze", "titles", "assemble")
+        ]
+        for target, name in targets:
+            stack.enter_context(
+                patch.object(target, name, trace.wrap(getattr(target, name), name))
+            )
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app),
+            base_url="http://diagnostic",
+            timeout=60,
+        ) as client:
+
+            async def request(method, path, body=None):
+                response = await client.request(
+                    method,
+                    path,
+                    json=body,
+                    headers={
+                        "Authorization": "Bearer "
+                        + create_access_token(owner, SubjectType.APP)
+                    },
+                )
+                if response.status_code >= 400:
+                    raise SmokeFailure(
+                        "isolated diary HTTP request failed",
+                        diagnostics={"http_status": response.status_code},
+                    )
+                return response.json()
+
+            try:
+                result = await card_publication(request, owner, walk_id, entries, notes)
+            except SmokeFailure as exc:
+                exc.diagnostics = {
+                    **(exc.diagnostics or {}),
+                    "execution_mode": "isolated_asgi_preloaded",
+                    "phase_timings": trace.events,
+                }
+                raise
+            result.update(
+                execution_mode="isolated_asgi_preloaded", phase_timings=trace.events
+            )
+            return result
+
+
 async def cycle(
-    owner, *, center=None, require_regional=False, backfill=False, card=False
+    owner,
+    *,
+    center=None,
+    require_regional=False,
+    backfill=False,
+    card=False,
+    phase_profile=False,
 ):
     # GPS chunks store milliseconds. Synthetic action/source times must survive that encoding.
     started = datetime.now(UTC).replace(microsecond=0) - timedelta(minutes=21)
@@ -461,6 +572,8 @@ async def cycle(
                 },
             )
             entries.append(entry)
+        if card and phase_profile:
+            return await profiled_card_publication(owner, wid, entries, notes)
         if card:
             return await card_publication(request, owner, wid, entries, notes)
         saved = await prepare_backfill(owner, wid) if backfill else None
@@ -569,7 +682,7 @@ async def cycle(
         }
 
 
-async def main(*, regional=False, backfill=False):
+async def main(*, regional=False, backfill=False, phase_profile=False):
     owner = uuid.uuid4()
     kakao = -(
         owner.int % (2**62) + 1
@@ -612,6 +725,8 @@ async def main(*, regional=False, backfill=False):
                 result.update(
                     await cycle(owner, backfill=True)
                     if backfill
+                    else await cycle(owner, card=True, phase_profile=True)
+                    if phase_profile
                     else await cycle(owner, card=True)
                 )
         result["ok"] = True
@@ -646,9 +761,16 @@ if __name__ == "__main__":
     parser.add_argument("--execute", action="store_true", required=True)
     parser.add_argument("--regional", action="store_true")
     parser.add_argument("--backfill", action="store_true")
+    parser.add_argument("--phase-profile", action="store_true")
     arguments = parser.parse_args()
-    if arguments.regional and arguments.backfill:
+    if sum((arguments.regional, arguments.backfill, arguments.phase_profile)) > 1:
         parser.error("choose one probe mode")
     raise SystemExit(
-        asyncio.run(main(regional=arguments.regional, backfill=arguments.backfill))
+        asyncio.run(
+            main(
+                regional=arguments.regional,
+                backfill=arguments.backfill,
+                phase_profile=arguments.phase_profile,
+            )
+        )
     )

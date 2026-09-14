@@ -465,6 +465,17 @@ def svc_store(monkeypatch: pytest.MonkeyPatch):
             None,
         )
 
+    async def get_many_by_client_events(_session, app_user_id, client_event_ids):
+        wanted = set(client_event_ids)
+        return {
+            v.client_event_id: v
+            for v in visits.values()
+            if v.app_user_id == app_user_id and v.client_event_id in wanted
+        }
+
+    async def count_by_image_key(_session, storage_key):
+        return sum(1 for v in visits.values() if v.receipt_image_key == storage_key)
+
     async def get_by_client_event(_session, app_user_id, client_event_id):
         return next(
             (
@@ -513,6 +524,8 @@ def svc_store(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(vet_repo, "expired_drafts", expired_drafts)
     monkeypatch.setattr(vet_repo, "find_duplicate", find_duplicate)
     monkeypatch.setattr(vet_repo, "get_by_client_event", get_by_client_event)
+    monkeypatch.setattr(vet_repo, "get_many_by_client_events", get_many_by_client_events)
+    monkeypatch.setattr(vet_repo, "count_by_image_key", count_by_image_key)
     monkeypatch.setattr(vet_repo, "get_owned", get_owned_visit)
     monkeypatch.setattr(vet_repo, "delete", delete_visit_row)
     monkeypatch.setattr(vet_repo, "list_between", list_between)
@@ -678,7 +691,7 @@ async def test_revoked_consent_still_strips_items_on_sha_reuse_path(
     await vet_service.extract_draft(svc_session, SVC_OWNER, draft2.id)
     assert "items" not in draft2.extracted
 
-    visit = await vet_service.confirm_draft(svc_session, SVC_OWNER, draft2.id, _confirm_body())
+    [visit] = await vet_service.confirm_draft(svc_session, SVC_OWNER, draft2.id, _confirm_body())
     assert visit.raw_ocr_items == []
 
 
@@ -760,14 +773,30 @@ async def test_possible_duplicate_recomputed_on_sha_reuse_path(
 
 
 def _confirm_body(**kw) -> "vet_service.ConfirmDraftRequest":
-    defaults = {
-        "client_event_id": uuid.uuid4(),
-        "reason_code": "cardiac",
-        "visited_on": date(2026, 9, 2),
-        "total_krw": 80000,
-    }
+    """한 마리 확정 = `splits` 하나. **한 마리가 특수 케이스가 아니라 N=1 이다.**"""
+    splits = kw.pop("splits", None)
+    if splits is None:
+        # 한 마리 — 확정 값이 영수증 값과 같다. 그래서 검산이 공짜로 통과한다.
+        split_keys = (
+            "client_event_id", "reason_code", "reason_detail",
+            "pet_id", "is_emergency", "is_oncology", "patient_index",
+        )
+        split_kw = {k: kw.pop(k) for k in list(kw) if k in split_keys}
+        defaults = {"visited_on": date(2026, 9, 2), "total_krw": 80000}
+        defaults.update(kw)
+        split = {
+            "client_event_id": uuid.uuid4(),
+            "reason_code": "cardiac",
+            "total_krw": defaults["total_krw"],
+        }
+        split.update(split_kw)
+        return vet_service.ConfirmDraftRequest(
+            splits=(vet_service.ConfirmSplit(**split),), **defaults
+        )
+    # splits 를 직접 준 경우 kw 는 전부 영수증 단위다 (total_krw 포함).
+    defaults = {"visited_on": date(2026, 9, 2), "total_krw": 80000}
     defaults.update(kw)
-    return vet_service.ConfirmDraftRequest(**defaults)
+    return vet_service.ConfirmDraftRequest(splits=tuple(splits), **defaults)
 
 
 async def test_confirm_reads_items_from_draft(
@@ -783,7 +812,7 @@ async def test_confirm_reads_items_from_draft(
     stored_items = draft.extracted["items"]
 
     body = _confirm_body()
-    visit = await vet_service.confirm_draft(svc_session, SVC_OWNER, draft.id, body)
+    [visit] = await vet_service.confirm_draft(svc_session, SVC_OWNER, draft.id, body)
     assert visit.raw_ocr_items == stored_items
 
 
@@ -797,7 +826,7 @@ async def test_confirm_without_consent_stores_empty_items(
     await vet_service.extract_draft(svc_session, SVC_OWNER, draft.id)
 
     body = _confirm_body()
-    visit = await vet_service.confirm_draft(svc_session, SVC_OWNER, draft.id, body)
+    [visit] = await vet_service.confirm_draft(svc_session, SVC_OWNER, draft.id, body)
     assert visit.raw_ocr_items == []
 
 
@@ -812,7 +841,7 @@ async def test_confirm_records_suggested_code_for_comparison(
     await vet_service.extract_draft(svc_session, SVC_OWNER, draft.id)
 
     body = _confirm_body(reason_code="cardiac")
-    visit = await vet_service.confirm_draft(svc_session, SVC_OWNER, draft.id, body)
+    [visit] = await vet_service.confirm_draft(svc_session, SVC_OWNER, draft.id, body)
     assert visit.suggested_reason_code == "skin"
     assert visit.reason_code == "cardiac"
 
@@ -828,7 +857,7 @@ async def test_confirm_deletes_draft_but_keeps_the_photo(
     await vet_service.extract_draft(svc_session, SVC_OWNER, draft.id)
     key = draft.receipt_image_key
 
-    visit = await vet_service.confirm_draft(svc_session, SVC_OWNER, draft.id, _confirm_body())
+    [visit] = await vet_service.confirm_draft(svc_session, SVC_OWNER, draft.id, _confirm_body())
     assert draft.id not in svc_store.drafts
     assert visit.receipt_image_key == key
     assert svc_storage.local_path(key).exists()
@@ -844,12 +873,294 @@ async def test_confirm_is_idempotent_on_its_own_client_event_id(
     await vet_service.extract_draft(svc_session, SVC_OWNER, draft.id)
 
     body = _confirm_body()
-    first = await vet_service.confirm_draft(svc_session, SVC_OWNER, draft.id, body)
+    [first] = await vet_service.confirm_draft(svc_session, SVC_OWNER, draft.id, body)
     assert draft.id not in svc_store.drafts
     # 두 번째는 draft 가 이미 지워졌어도 vet_visits 자신의 멱등키로 잡힌다 — 404 가 아니다.
-    second = await vet_service.confirm_draft(svc_session, SVC_OWNER, draft.id, body)
+    [second] = await vet_service.confirm_draft(svc_session, SVC_OWNER, draft.id, body)
     assert second is first
     assert len(svc_store.visits) == 1
+
+
+# ── 다견 영수증 — 한 장이 아이별 행 N개가 된다 ────────────────────────
+
+
+SECOND_PET = uuid.uuid4()
+
+
+def _add_second_pet(svc_store):
+    svc_store.pets[SECOND_PET] = SimpleNamespace(id=SECOND_PET, app_user_id=SVC_OWNER)
+
+
+def _two_splits(total_a=109_200, total_b=82_100):
+    """실측 다견 영수증의 두 블록 (2026-09-14). 합이 정확히 191,300 이다."""
+    return (
+        vet_service.ConfirmSplit(
+            client_event_id=uuid.uuid4(),
+            reason_code="ear",
+            total_krw=total_a,
+            patient_index=0,
+        ),
+        vet_service.ConfirmSplit(
+            client_event_id=uuid.uuid4(),
+            pet_id=SECOND_PET,
+            reason_code="skin",
+            total_krw=total_b,
+            patient_index=1,
+        ),
+    )
+
+
+async def _extracted_draft(svc_session, svc_store, svc_storage, monkeypatch, extraction=None):
+    draft, _t, _c = await _start(svc_session, svc_store)
+    _upload(svc_storage, draft)
+    if extraction is None:
+        monkeypatch.setattr(vet_receipt, "extract", _counting_extract([]))
+    else:
+        monkeypatch.setattr(vet_receipt, "extract", _counting_extract([], extraction))
+    await vet_service.extract_draft(svc_session, SVC_OWNER, draft.id)
+    return draft
+
+
+async def test_one_receipt_becomes_one_row_per_pet(
+    svc_session, svc_store, svc_storage, monkeypatch
+):
+    """실측 다견 영수증 그대로 — 191,300 이 109,200 + 82,100 으로 갈린다."""
+    _consent(svc_store, at=datetime.now(UTC), version="v1")
+    _add_second_pet(svc_store)
+    draft = await _extracted_draft(svc_session, svc_store, svc_storage, monkeypatch)
+
+    body = _confirm_body(total_krw=191_300, splits=_two_splits())
+    visits = await vet_service.confirm_draft(svc_session, SVC_OWNER, draft.id, body)
+
+    assert len(visits) == 2
+    assert [v.total_krw for v in visits] == [109_200, 82_100]
+    assert {v.pet_id for v in visits} == {SVC_PET, SECOND_PET}
+    assert {v.visited_on for v in visits} == {date(2026, 9, 2)}
+
+
+async def test_splits_that_do_not_add_up_are_rejected(
+    svc_session, svc_store, svc_storage, monkeypatch
+):
+    """합이 영수증 총액과 다르면 확정 자체를 막는다 — 조용히 틀린 누계보다 낫다.
+
+    **이 검사는 items 를 안 쓴다**(요청 안에서 닫힌다). 그래서 OCR 학습 미동의
+    유저에게도 똑같이 돈다 — 미동의면 초안에 items 가 없다 (docs §3).
+    """
+    _consent(svc_store, at=None, version=None)
+    _add_second_pet(svc_store)
+    draft = await _extracted_draft(svc_session, svc_store, svc_storage, monkeypatch)
+
+    body = _confirm_body(total_krw=191_300, splits=_two_splits(total_b=82_099))
+    with pytest.raises(vet_service.VetSplitSumError):
+        await vet_service.confirm_draft(svc_session, SVC_OWNER, draft.id, body)
+    assert svc_store.visits == {}
+
+
+async def test_split_rejects_a_pet_i_do_not_own(
+    svc_session, svc_store, svc_storage, monkeypatch
+):
+    """**이 PR 에서 소유권 검사가 처음 생기는 자리다.** 예전에는 pet_id 가 초안에서
+    와서 `start_draft` 의 검사 하나로 충분했는데, splits 는 앱이 보낸다."""
+    _consent(svc_store, at=datetime.now(UTC), version="v1")
+    draft = await _extracted_draft(svc_session, svc_store, svc_storage, monkeypatch)
+
+    mine = vet_service.ConfirmSplit(
+        client_event_id=uuid.uuid4(), reason_code="ear", total_krw=20000, patient_index=0
+    )
+    stranger = vet_service.ConfirmSplit(
+        client_event_id=uuid.uuid4(),
+        pet_id=uuid.uuid4(),
+        reason_code="skin",
+        total_krw=80000,
+        patient_index=1,
+    )
+    body = _confirm_body(total_krw=100_000, splits=(mine, stranger))
+    with pytest.raises(vet_service.VetVisitNotFoundError):
+        await vet_service.confirm_draft(svc_session, SVC_OWNER, draft.id, body)
+
+
+async def test_items_are_cut_by_block_not_copied_to_every_row(
+    svc_session, svc_store, svc_storage, monkeypatch
+):
+    """항목을 통째로 복사하면 학습 코퍼스에 잘못 라벨된 데이터가 N배로 쌓인다."""
+    _consent(svc_store, at=datetime.now(UTC), version="v1")
+    _add_second_pet(svc_store)
+    extraction = _OK_EXTRACTION.model_copy(
+        update={
+            "patient_count": 2,
+            # `model_copy` 는 검증을 안 하므로 직렬화 경고가 안 나게 모델로 넣는다.
+            "items": [
+                ReceiptItem(name="*검사-귀-도말", amount_krw=20000, patient_index=0),
+                ReceiptItem(name="소염위생관리", amount_krw=15000, patient_index=1),
+                ReceiptItem(name="어느 블록인지 모를 항목", amount_krw=1000),
+            ],
+        }
+    )
+    draft = await _extracted_draft(
+        svc_session, svc_store, svc_storage, monkeypatch, extraction=extraction
+    )
+
+    body = _confirm_body(total_krw=191_300, splits=_two_splits())
+    first, second = await vet_service.confirm_draft(svc_session, SVC_OWNER, draft.id, body)
+
+    assert [i["name"] for i in first.raw_ocr_items] == ["*검사-귀-도말"]
+    assert [i["name"] for i in second.raw_ocr_items] == ["소염위생관리"]
+    # 어느 블록인지 모를 항목은 **버린다** — 아무 아이에게나 붙이면 코퍼스가 틀린다.
+    assert all(
+        "모를" not in i["name"] for v in (first, second) for i in v.raw_ocr_items
+    )
+
+
+async def test_suggested_code_is_null_when_the_receipt_is_split(
+    svc_session, svc_store, svc_storage, monkeypatch
+):
+    """추출의 제안은 **영수증 하나당 하나**라 아이별 제안이 아니다. N행에 복사하면
+    `suggested_reason_code` 와 `reason_code` 의 비교가 거짓이 되는데, `label_source`
+    칸을 안 둔 설계가 바로 그 비교에 기대고 있다 (25_vet_visits.sql:64-66)."""
+    _consent(svc_store, at=datetime.now(UTC), version="v1")
+    _add_second_pet(svc_store)
+    draft = await _extracted_draft(svc_session, svc_store, svc_storage, monkeypatch)
+    assert draft.extracted["suggested_reason_code"] == "skin"  # 제안은 분명히 있었다
+
+    body = _confirm_body(total_krw=191_300, splits=_two_splits())
+    visits = await vet_service.confirm_draft(svc_session, SVC_OWNER, draft.id, body)
+    assert [v.suggested_reason_code for v in visits] == [None, None]
+
+
+async def test_single_split_still_records_the_suggestion(
+    svc_session, svc_store, svc_storage, monkeypatch
+):
+    """한 마리면 제안이 그 아이 것이 맞다 — 비교가 살아 있어야 한다."""
+    _consent(svc_store, at=datetime.now(UTC), version="v1")
+    draft = await _extracted_draft(svc_session, svc_store, svc_storage, monkeypatch)
+    [visit] = await vet_service.confirm_draft(
+        svc_session, SVC_OWNER, draft.id, _confirm_body()
+    )
+    assert visit.suggested_reason_code == "skin"
+
+
+async def test_split_confirm_deletes_the_draft_exactly_once(
+    svc_session, svc_store, svc_storage, monkeypatch
+):
+    """**불변식이다.** 초안을 남기면 24시간 뒤 청소가 확정된 기록들의 사진을 지운다
+    (`_sweep_expired` 주석)."""
+    _consent(svc_store, at=datetime.now(UTC), version="v1")
+    _add_second_pet(svc_store)
+    draft = await _extracted_draft(svc_session, svc_store, svc_storage, monkeypatch)
+    key = draft.receipt_image_key
+
+    body = _confirm_body(total_krw=191_300, splits=_two_splits())
+    visits = await vet_service.confirm_draft(svc_session, SVC_OWNER, draft.id, body)
+
+    assert draft.id not in svc_store.drafts
+    assert {v.receipt_image_key for v in visits} == {key}  # 같은 사진을 공유한다
+    assert svc_storage.local_path(key).exists()
+
+
+async def test_deleting_one_pet_keeps_the_shared_photo(
+    svc_session, svc_store, svc_storage, monkeypatch
+):
+    """마지막 참조가 사라질 때만 사진을 지운다 — 아이 하나를 지울 때 나머지의 사진까지
+    날아가면 안 된다."""
+    _consent(svc_store, at=datetime.now(UTC), version="v1")
+    _add_second_pet(svc_store)
+    draft = await _extracted_draft(svc_session, svc_store, svc_storage, monkeypatch)
+    key = draft.receipt_image_key
+    first, second = await vet_service.confirm_draft(
+        svc_session, SVC_OWNER, draft.id, _confirm_body(total_krw=191_300, splits=_two_splits())
+    )
+
+    await vet_service.delete_visit(svc_session, SVC_OWNER, first.id)
+    assert svc_storage.local_path(key).exists(), "아직 둘째가 물고 있다"
+
+    await vet_service.delete_visit(svc_session, SVC_OWNER, second.id)
+    assert not svc_storage.local_path(key).exists(), "마지막 참조가 사라지면 지운다"
+
+
+async def test_split_confirm_is_idempotent_on_every_key(
+    svc_session, svc_store, svc_storage, monkeypatch
+):
+    """재시도는 키별로 잡힌다 — 요청 단위 all-or-nothing 이라는 개념은 이 저장소에
+    없다 (`care_event.create` · docs/walk/upload-idempotency.md)."""
+    _consent(svc_store, at=datetime.now(UTC), version="v1")
+    _add_second_pet(svc_store)
+    draft = await _extracted_draft(svc_session, svc_store, svc_storage, monkeypatch)
+
+    body = _confirm_body(total_krw=191_300, splits=_two_splits())
+    first = await vet_service.confirm_draft(svc_session, SVC_OWNER, draft.id, body)
+    # 초안은 이미 지워졌다. 그래도 키가 전부 있으므로 404 가 아니라 같은 행을 돌려준다.
+    second = await vet_service.confirm_draft(svc_session, SVC_OWNER, draft.id, body)
+    assert [v.id for v in second] == [v.id for v in first]
+    assert len(svc_store.visits) == 2
+
+
+# ── HTTP 경계의 구 모양 호환 ──────────────────────────────────────────
+
+
+def _split_json(total_b=82_100):
+    return {
+        "visited_on": "2026-09-02",
+        "total_krw": 191_300,
+        "splits": [
+            {
+                "client_event_id": str(uuid.uuid4()),
+                "reason_code": "ear",
+                "total_krw": 109_200,
+                "patient_index": 0,
+            },
+            {
+                "client_event_id": str(uuid.uuid4()),
+                "pet_id": str(SECOND_PET),
+                "reason_code": "skin",
+                "total_krw": total_b,
+                "patient_index": 1,
+            },
+        ],
+    }
+
+
+def test_flat_body_still_returns_a_single_object(app_client, svc_storage, monkeypatch):
+    """**구버전 앱이 깨지지 않는다.** 앱은 스토어를 거쳐 깔려서 한동안 남는다 —
+    배열을 주면 그 자리에서 깨진다."""
+    started, _extracted = _extract(app_client, svc_storage, monkeypatch)
+    r = app_client.post(
+        f"/app/vet-visits/{started['draft_id']}/confirm", json=_confirm_json_body()
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert isinstance(body, dict)
+    assert body["total_krw"] == 80000
+
+
+def test_splits_body_returns_a_list(app_client, svc_store, svc_storage, monkeypatch):
+    _add_second_pet(svc_store)
+    started, _extracted = _extract(app_client, svc_storage, monkeypatch)
+    r = app_client.post(
+        f"/app/vet-visits/{started['draft_id']}/confirm", json=_split_json()
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert isinstance(body, list)
+    assert [v["total_krw"] for v in body] == [109_200, 82_100]
+
+
+def test_splits_that_do_not_add_up_are_422(app_client, svc_store, svc_storage, monkeypatch):
+    _add_second_pet(svc_store)
+    started, _extracted = _extract(app_client, svc_storage, monkeypatch)
+    r = app_client.post(
+        f"/app/vet-visits/{started['draft_id']}/confirm", json=_split_json(total_b=1)
+    )
+    assert r.status_code == 422
+
+
+def test_empty_splits_is_422(app_client, svc_storage, monkeypatch):
+    """N≥1 이다 — 아무 행도 안 만드는 확정은 확정이 아니다."""
+    started, _extracted = _extract(app_client, svc_storage, monkeypatch)
+    r = app_client.post(
+        f"/app/vet-visits/{started['draft_id']}/confirm",
+        json={"visited_on": "2026-09-02", "total_krw": 0, "splits": []},
+    )
+    assert r.status_code == 422
 
 
 # ── reason_options ───────────────────────────────────────────────────

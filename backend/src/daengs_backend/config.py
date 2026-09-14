@@ -1,4 +1,4 @@
-import re
+import logging
 from pathlib import Path
 from typing import Annotated, Literal
 
@@ -16,10 +16,6 @@ from sqlalchemy import URL
 # backend/.env 를 가리킵니다. config.py 기준으로 잡아 두면
 # 어느 디렉터리에서 실행하든 같은 파일을 읽습니다.
 ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
-
-# `keytool -list -v` 가 찍는 SHA-256 인증서 지문 모양 — 대문자 16진수 32쌍, 콜론 구분.
-# `assetlinks.json` 의 `sha256_cert_fingerprints` 도 이 모양이다.
-_SHA256_FINGERPRINT = re.compile(r"^(?:[0-9A-F]{2}:){31}[0-9A-F]{2}$")
 
 
 class Settings(BaseSettings):
@@ -387,22 +383,31 @@ class Settings(BaseSettings):
     #    DAENGS_PLAY_SIGNING_SHA256_FINGERPRINTS=["AA:BB:…(32쌍)"]
     #    파일은 `backend/.env` 입니다 — 최상단 `.env` 는 compose 용이라 backend 가 안 읽습니다.
     #
-    # 모양이 틀리면(32쌍의 콜론 구분 16진수가 아니면) **부팅에서 막습니다** — 오타 난
-    # 지문은 검증만 조용히 실패해서 원인이 안 보이기 때문입니다. 소문자는 대문자로 맞춥니다.
-    play_signing_sha256_fingerprints: list[str] = Field(default_factory=list)
+    # ⚠️ **모양이 틀려도 부팅을 막지 않습니다** — 선택 기능이라서입니다. 틀리면 전부 버리고
+    #    (일부만 채택하지 않음) 부팅 로그에 오류를 남기고 `/admin/status` 에 `app_links` 항목으로
+    #    보입니다. 규칙은 `app_links.py` 입니다. 위의 필수 보안 설정(카카오 앱 키·DB·키)은
+    #    여전히 부팅에서 막습니다.
+    #
+    # **원문 문자열로 받습니다.** `list[str]` 로 두면 pydantic-settings 가 검증기보다 먼저
+    # JSON 디코드를 해서, JSON 이 아닌 값 하나에 `SettingsError` 로 부팅이 죽습니다.
+    play_signing_sha256_fingerprints_raw: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("DAENGS_PLAY_SIGNING_SHA256_FINGERPRINTS"),
+    )
 
-    @field_validator("play_signing_sha256_fingerprints")
-    @classmethod
-    def _sha256_fingerprints(cls, values: list[str]) -> list[str]:
-        cleaned: list[str] = []
-        for raw in values:
-            value = raw.strip().upper()
-            if not _SHA256_FINGERPRINT.fullmatch(value):
-                raise ValueError(
-                    "SHA-256 인증서 지문 모양이 아닙니다 — 'AA:BB:…' 꼴 16진수 32쌍이어야 합니다"
-                )
-            cleaned.append(value)
-        return cleaned
+    @property
+    def play_signing_sha256_fingerprints(self) -> list[str]:
+        """검증을 통과한 지문. 설정이 틀렸으면 빈 목록이다."""
+        from daengs_backend.app_links import parse_play_signing_fingerprints
+
+        return list(parse_play_signing_fingerprints(self.play_signing_sha256_fingerprints_raw).fingerprints)
+
+    @property
+    def play_signing_config_error(self) -> str | None:
+        """설정이 틀렸으면 그 사유(값은 싣지 않음). 비었거나 맞으면 None."""
+        from daengs_backend.app_links import parse_play_signing_fingerprints
+
+        return parse_play_signing_fingerprints(self.play_signing_sha256_fingerprints_raw).error
 
     # ── 보행 분석 엔진 (#304 · D-063) ──────────────────────────────────
     # **지금 값은 `v4` 하나입니다** — `daengs_gait.inference`(ssdlite + RTMPose AP-10K).
@@ -577,7 +582,7 @@ def _load_settings(**overrides: object) -> Settings:
     트레이스백에 그대로 찍힙니다.
     """
     try:
-        return Settings(**overrides)  # type: ignore[arg-type]
+        loaded = Settings(**overrides)  # type: ignore[arg-type]
     except ValidationError as exc:
         problems = "\n".join(
             f"  {'.'.join(str(part) for part in error['loc']) or '(전체)'}: {error['msg']}"
@@ -587,6 +592,12 @@ def _load_settings(**overrides: object) -> Settings:
             "설정을 읽지 못했습니다. backend/.env 를 확인하세요 "
             f"(backend/.env.example 참고).\n{problems}"
         ) from None
+
+    # **선택 기능의 설정 오류는 부팅을 막지 않고 여기서 크게 남깁니다** (`app_links.py`).
+    # 사유에는 값이 없습니다. 콘솔 `/admin/status` 의 `app_links` 항목에도 같은 말이 뜹니다.
+    if loaded.play_signing_config_error:
+        logging.getLogger(__name__).error(loaded.play_signing_config_error)
+    return loaded
 
 
 settings = _load_settings()

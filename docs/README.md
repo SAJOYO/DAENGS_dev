@@ -5,6 +5,10 @@
 
 | 파일 | 내용 |
 | --- | --- |
+| [walk/session-package.md](walk/session-package.md) | 8단계 원본·업로드·봉인 패키징, 공통 오류·백업 독립 경계와 검증 |
+| [walk/remaining-packages.md](walk/remaining-packages.md) | 측정·공간 조회·과거 지원의 잔여 패키징, 최종 소유권과 완료 범위 |
+| [walk/records-package.md](walk/records-package.md) | 7단계 기록·사진 패키징과 outbox 트랜잭션 소유권 |
+| [walk/background-package.md](walk/background-package.md) | 6단계 배경 공급·계약·카탈로그 패키징 |
 | [walk/stored-measurements.md](walk/stored-measurements.md) | 불변 측정 저장·경로 청크와 일반 APP 상세 소비 계약 |
 | [walk/card-orchestration.md](walk/card-orchestration.md) | 실제 API의 SGIS·EGIS 준비, 독립 공간·조건부 행동·카드 제목 작업과 APP 저장 연결 |
 | [walk/diary-remaining-plan.md](walk/diary-remaining-plan.md) | 대화 경위·남은 기획·완료 기준, 실제 작성/미리보기/호환 분기와 SGIS·공간 선정·공통 실행의 혼동 방지 |

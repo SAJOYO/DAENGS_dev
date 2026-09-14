@@ -14,9 +14,9 @@ from daengs_backend.models.activity import ActivityWalkHead
 from daengs_backend.models.walk import WalkCapsule, WalkCellophaneSheet
 from daengs_backend.orchestration.adapters.life import WalkWeatherObservation
 from daengs_backend.schemas.walk import WalkFinalizeRequest, WalkPointsAppend
-from daengs_backend.services import walk as service
-from daengs_backend.services.walk_chunk import encode_chunk
-from daengs_backend.services.walk_finalize import FinalizeInputError
+from daengs_backend.services.walk_session import lifecycle as service
+from daengs_backend.services.walk_session.chunk import encode_chunk
+from daengs_backend.services.walk_session.finalize import FinalizeInputError
 from tests.walk.api.test_walk_upload_db import body
 
 

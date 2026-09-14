@@ -18,8 +18,8 @@ from daengs_backend.repositories import walk_motion as repo
 from daengs_backend.routers.walk_motion import router
 from daengs_backend.schemas.walk import WalkPointUpload
 from daengs_backend.schemas.walk_motion import CHUNK_SIZE, MotionObservation
-from daengs_backend.services.walk_chunk import encode_chunk
-from daengs_backend.services.walk_motion_contract import chunk_digest
+from daengs_backend.services.walk_session.chunk import encode_chunk
+from daengs_backend.services.walk_session.motion_contract import chunk_digest
 
 
 @pytest.fixture
@@ -113,7 +113,7 @@ def boundary(monkeypatch, request):
 
 
 def test_calculation_detaches_before_cpu_work_and_preserves_backup_contract(boundary, monkeypatch):
-    from daengs_backend.services import walk_motion_calculation as service
+    from daengs_backend.services.walk_metrics import motion_calculation as service
 
     original = service.replay
 
@@ -151,7 +151,9 @@ def test_missing_storage_does_not_advertise_calculation(boundary):
 def test_precision_calculation_uses_sealed_bound_bits(boundary, monkeypatch, damage, calculation):
     from daengs_backend.repositories import walk_precision as precision
     from daengs_backend.schemas.walk_precision import PrecisionPoint
-    from daengs_backend.services.walk_precision_contract import chunk_digest as precision_digest
+    from daengs_backend.services.walk_session.precision_contract import (
+        chunk_digest as precision_digest,
+    )
 
     case = next(
         c

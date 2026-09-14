@@ -59,7 +59,18 @@ def is_core(path):
             or Path(path).stem.startswith("walk_")
             or any(
                 f"/services/{package}/" in path
-                for package in ("walk_diary", "walk_generation", "walk_legacy")
+                for package in (
+                    "walk_diary",
+                    "walk_generation",
+                    "walk_legacy",
+                    "walk_artifacts",
+                    "walk_background",
+                    "walk_records",
+                    "walk_photos",
+                    "walk_session",
+                    "walk_metrics",
+                    "walk_views",
+                )
             )
             or path.endswith("/orchestration/diary.py")
         )

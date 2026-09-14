@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 from daengs_backend.core.database import get_session, get_snapshot_session
 from daengs_backend.core.deps import AppPrincipal, CurrentAppUser
 from daengs_backend.routers import walk_entry as router
-from daengs_backend.services.walk_entry import repo
+from daengs_backend.services.walk_records.v1 import repo
 
 OWNER, PET, WALK, ENTRY = [uuid.uuid4() for _ in range(4)]
 START = datetime(2026, 9, 5, tzinfo=UTC)

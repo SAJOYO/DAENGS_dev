@@ -7,7 +7,7 @@ from datetime import datetime
 from uuid import UUID
 
 from daengs_backend.core.database import SessionLocal, engine
-from daengs_backend.services.walk_context_backfill import run
+from daengs_backend.services.walk_records.backfill import run
 
 
 def parser():

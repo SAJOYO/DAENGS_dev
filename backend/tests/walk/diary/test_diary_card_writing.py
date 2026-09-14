@@ -447,7 +447,7 @@ async def collect_with_sgis(board):
 
 
 async def test_sgis_and_egis_follow_actual_normalizers_into_request_and_card(monkeypatch):
-    from daengs_backend.services.walk_sgis import SgisSource
+    from daengs_backend.services.walk_background.providers.sgis import SgisSource
 
     monkeypatch.setattr(collection, "sgis", SgisSource())
     base = prepared()

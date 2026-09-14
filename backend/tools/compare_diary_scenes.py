@@ -25,7 +25,7 @@ from daengs_backend.services.walk_diary.legacy.slots import (
     write_slot_stamps,
     writing_version,
 )
-from daengs_backend.services.walk_finalize import walk_input_fingerprint
+from daengs_backend.services.walk_session.finalize import walk_input_fingerprint
 from daengs_walk import analyze_walk
 from daengs_walk.contracts import WalkEvidencePoint
 from daengs_walk.diary.board.assembly import assemble_base_board

@@ -482,6 +482,13 @@ def svc_store(monkeypatch: pytest.MonkeyPatch):
     async def delete_visit_row(_session, visit):
         visits.pop(visit.id, None)
 
+    async def count_before(_session, app_user_id, pet_id, before):
+        return sum(
+            1
+            for v in visits.values()
+            if v.app_user_id == app_user_id and v.pet_id == pet_id and v.visited_on < before
+        )
+
     async def list_between(_session, app_user_id, pet_id, start, end):
         matched = [
             v
@@ -509,6 +516,7 @@ def svc_store(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(vet_repo, "get_owned", get_owned_visit)
     monkeypatch.setattr(vet_repo, "delete", delete_visit_row)
     monkeypatch.setattr(vet_repo, "list_between", list_between)
+    monkeypatch.setattr(vet_repo, "count_before", count_before)
     monkeypatch.setattr(pet_repo, "get_owned", get_owned_pet)
     monkeypatch.setattr(app_user_repo, "get_by_id", get_app_user)
 
@@ -1112,6 +1120,119 @@ def test_list_visits_returns_confirmed_records(app_client, svc_storage, monkeypa
     body = r.json()
     assert len(body["visits"]) == 1
     assert body["visits"][0]["total_krw"] == 80000
+
+
+class _FrozenClock:
+    """UTC 로는 9/12 23:30, **KST 로는 9/13 08:30** — 목록이 하루를 통째로 놓치던 그
+    9시간 안이다. `now(tz)` 만 있으면 되는 자리라 `datetime` 을 통째로 대역한다."""
+
+    _AT = datetime(2026, 9, 12, 23, 30, tzinfo=UTC)
+
+    @classmethod
+    def now(cls, tz=None):
+        return cls._AT if tz is None else cls._AT.astimezone(tz)
+
+
+def test_today_is_kst_not_utc(monkeypatch):
+    """`datetime.now(UTC).date()` 였을 때 이 자리가 9/12 를 냈다."""
+    monkeypatch.setattr(vet_service, "datetime", _FrozenClock)
+    assert vet_service.today_kst() == date(2026, 9, 13)
+    assert vet_service._window(None, None)[1] == date(2026, 9, 13)
+
+
+def test_list_shows_a_receipt_dated_today_kst(app_client, svc_storage, monkeypatch):
+    """테스터 제보의 회귀 — 오늘(KST) 영수증을 아침에 확정하면 목록에서 사라졌다.
+
+    UTC 의 오늘이 아직 9/12 라 목록의 `end` 가 어제였고, `visited_on=9/13` 이 창 밖으로
+    떨어졌다. 확정은 200 이고 재인식은 `possible_duplicate` 를 냈다(그쪽은 창이 없다) —
+    "저장은 됐다는데 저장소에 없다" 가 그 조합이다.
+    """
+    started, _extracted = _extract(app_client, svc_storage, monkeypatch)
+    monkeypatch.setattr(vet_service, "datetime", _FrozenClock)
+    confirmed = app_client.post(
+        f"/app/vet-visits/{started['draft_id']}/confirm",
+        json=_confirm_json_body(visited_on="2026-09-13"),
+    )
+    assert confirmed.status_code == 200, confirmed.text
+
+    body = app_client.get("/app/vet-visits", params={"pet_id": str(SVC_PET)}).json()
+    assert body["end"] == "2026-09-13"
+    assert [v["visited_on"] for v in body["visits"]] == ["2026-09-13"]
+
+
+def test_confirm_rejects_a_future_date(app_client, svc_storage, monkeypatch):
+    """미래로 확정된 기록은 어떤 창으로도 안 잡힌다(`end` 는 늘 오늘) — 저장 뒤에
+    못 고치느니 확인 화면에서 되돌린다."""
+    started, _extracted = _extract(app_client, svc_storage, monkeypatch)
+    monkeypatch.setattr(vet_service, "datetime", _FrozenClock)
+    r = app_client.post(
+        f"/app/vet-visits/{started['draft_id']}/confirm",
+        json=_confirm_json_body(visited_on="2026-09-20"),
+    )
+    assert r.status_code == 422
+
+
+def test_confirm_allows_one_day_ahead_for_timezones(app_client, svc_storage, monkeypatch):
+    """여유가 0 이 아닌 이유 — KST 보다 앞선 시간대(최대 UTC+14)의 오늘은 KST 로 내일이다."""
+    started, _extracted = _extract(app_client, svc_storage, monkeypatch)
+    monkeypatch.setattr(vet_service, "datetime", _FrozenClock)
+    r = app_client.post(
+        f"/app/vet-visits/{started['draft_id']}/confirm",
+        json=_confirm_json_body(visited_on="2026-09-14"),
+    )
+    assert r.status_code == 200, r.text
+
+
+def test_list_counts_records_older_than_the_window(app_client, svc_store, svc_storage, monkeypatch):
+    """묵은 영수증은 기본 창(최근 1년) 밖이라 안 보인다 — 그 사실을 앱이 말할 수 있게
+    건수를 같이 준다. 0 이면 안 띄우면 되니 평소 화면은 안 빡빡해진다."""
+    svc_store.visits[uuid.uuid4()] = VetVisit(
+        app_user_id=SVC_OWNER, pet_id=SVC_PET, visited_on=date(2019, 5, 17), total_krw=61700,
+        reason_code="skin", client_event_id=uuid.uuid4(),
+    )
+    started, _extracted = _extract(app_client, svc_storage, monkeypatch)
+    app_client.post(f"/app/vet-visits/{started['draft_id']}/confirm", json=_confirm_json_body())
+
+    body = app_client.get("/app/vet-visits", params={"pet_id": str(SVC_PET)}).json()
+    assert len(body["visits"]) == 1  # 창 안의 것만
+    assert body["older_count"] == 1  # 창 밖에 하나 더 있다
+
+
+def test_list_reaches_an_old_record_with_an_explicit_window(app_client, svc_store):
+    """날짜를 고르면 그 옛날도 보인다 — 기본 창이 감추는 것이지 잃어버리는 것이 아니다."""
+    # 응답으로 직렬화되는 유일한 행이라 DB 기본값이 채워 주는 칸까지 손으로 세운다.
+    visit_id = uuid.uuid4()
+    svc_store.visits[visit_id] = VetVisit(
+        id=visit_id, app_user_id=SVC_OWNER, pet_id=SVC_PET, visited_on=date(2019, 5, 17),
+        total_krw=61700, reason_code="skin", client_event_id=uuid.uuid4(),
+        is_emergency=False, is_oncology=False, created_at=datetime.now(UTC),
+    )
+    r = app_client.get(
+        "/app/vet-visits",
+        params={"pet_id": str(SVC_PET), "from": "2019-01-01", "to": "2019-12-31"},
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert [v["visited_on"] for v in body["visits"]] == ["2019-05-17"]
+    assert body["older_count"] == 0
+
+
+def test_list_has_no_range_cap(app_client, svc_store):
+    """저장소의 [전체] — `from` 을 아무리 멀리 잡아도 422 가 아니다. 상한이 있으면
+    앱이 창을 쪼개 여러 번 불러야 하고, 쪼개는 코드는 경계에서 한 건씩 흘린다."""
+    visit_id = uuid.uuid4()
+    svc_store.visits[visit_id] = VetVisit(
+        id=visit_id, app_user_id=SVC_OWNER, pet_id=SVC_PET, visited_on=date(2013, 4, 1),
+        total_krw=30000, reason_code="vaccination", client_event_id=uuid.uuid4(),
+        is_emergency=False, is_oncology=False, created_at=datetime.now(UTC),
+    )
+    r = app_client.get(
+        "/app/vet-visits", params={"pet_id": str(SVC_PET), "from": "0001-01-01"}
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert [v["visited_on"] for v in body["visits"]] == ["2013-04-01"]
+    assert body["older_count"] == 0
 
 
 def test_list_visits_rejects_reversed_range(app_client):

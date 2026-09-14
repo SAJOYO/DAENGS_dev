@@ -13,8 +13,8 @@ from sqlalchemy.pool import NullPool
 from daengs_backend.models.walk_entry import WalkEntry
 from daengs_backend.models.walk_entry_context import WalkEntryContextEnvelope, WalkEntryContextJob
 from daengs_backend.repositories import walk_entry_context as repo
-from daengs_backend.services import walk_entry_context as service
-from daengs_backend.services.walk_entry_context_source import Collected
+from daengs_backend.services.walk_background.contracts import Collected
+from daengs_backend.services.walk_records import context as service
 from tests.walk.support.paths import REPO as REPO_ROOT
 
 ROOT = REPO_ROOT

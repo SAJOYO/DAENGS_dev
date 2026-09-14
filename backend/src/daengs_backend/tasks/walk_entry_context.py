@@ -29,7 +29,7 @@ app.conf.update(
 @app.task(name="walk_entry_context.process")
 def process():
     from daengs_backend.core.database import worker_session
-    from daengs_backend.services.walk_entry_context import process as run
+    from daengs_backend.services.walk_records.context import process as run
 
     return asyncio.run(run(worker_session))
 
@@ -37,7 +37,7 @@ def process():
 @app.task(name="walk_public_catalog.refresh", ignore_result=True)
 def refresh_catalogs():
     from daengs_backend.core.database import worker_session
-    from daengs_backend.services.walk_catalog_refresh import run
+    from daengs_backend.services.walk_background.catalogs.refresh import run
 
     result = asyncio.run(run(worker_session))
     if result["status"] in {"unavailable", "not_configured"} or result.get("failed"):

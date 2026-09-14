@@ -22,7 +22,7 @@ from daengs_backend.schemas.walk import WalkUpload
 from daengs_backend.services import care_event as care_service
 from daengs_backend.services import dog_context
 from daengs_backend.services import pet as pet_service
-from daengs_backend.services import walk as walk_service
+from daengs_backend.services.walk_session import lifecycle as walk_service
 
 SEOUL = ZoneInfo("Asia/Seoul")
 
@@ -57,9 +57,9 @@ def client_as(app_user_id: uuid.UUID) -> TestClient:
     app = FastAPI()
     app.include_router(pet_member_router.router)
     app.include_router(pet_router.router)
-    app.dependency_overrides[
-        next(iter(CurrentAppUser.__metadata__)).dependency
-    ] = lambda: AppPrincipal(app_user_id=app_user_id)
+    app.dependency_overrides[next(iter(CurrentAppUser.__metadata__)).dependency] = lambda: (
+        AppPrincipal(app_user_id=app_user_id)
+    )
     return TestClient(app, raise_server_exceptions=False)
 
 
@@ -272,9 +272,7 @@ async def test_idempotent_branch_writes_the_receipt(store: Store, pet: FakePet):
     assert store.pet_invites[0].accepted_at is not None
 
 
-async def test_accept_retry_by_same_acceptor_returns_identical_receipt(
-    store: Store, pet: FakePet
-):
+async def test_accept_retry_by_same_acceptor_returns_identical_receipt(store: Store, pet: FakePet):
     """응답을 못 받은 재시도 — **같은 사람**이 같은 토큰을 다시 보내면 그때와 같은 200.
 
     이것이 이번 개정의 핵심이다: 예전에는 수락이 초대 행을 지워서 재시도가 무조건
@@ -303,16 +301,16 @@ async def test_accept_by_different_person_after_use_is_404(store: Store, pet: Fa
     분기가 `accepted_by` 를 안 가리고 아무에게나 200 을 주면 이 원칙이 깨진다.
     """
     token = _invite(store, pet)
-    assert client_as(CARER).post("/app/pet-invites/accept", json={"token": token}).status_code == 200
+    assert (
+        client_as(CARER).post("/app/pet-invites/accept", json={"token": token}).status_code == 200
+    )
 
     stranger = client_as(STRANGER).post("/app/pet-invites/accept", json={"token": token})
     assert stranger.status_code == 404
     assert (pet.id, STRANGER) not in store.pet_members
 
 
-async def test_accepted_invite_survives_and_does_not_count_toward_limit(
-    store: Store, pet: FakePet
-):
+async def test_accepted_invite_survives_and_does_not_count_toward_limit(store: Store, pet: FakePet):
     """수락된 초대는 **행이 남지만** 유효 초대 상한(3개)에는 안 걸린다.
 
     안 걸리게 하지 않으면 3명이 수락한 강아지는 영수증이 만료될 때까지(최대 24시간)
@@ -662,9 +660,7 @@ async def test_delete_pet_route_returns_409_with_carers(store: Store, pet: FakeP
     assert pet not in store.pets
 
 
-async def test_delete_pet_route_still_owner_only_even_with_confirm(
-    store: Store, pet: FakePet
-):
+async def test_delete_pet_route_still_owner_only_even_with_confirm(store: Store, pet: FakePet):
     """확인 게이트는 대표만 지운다 — 돌보미나 제3자가 confirm=true 를 붙여도 404 다.
 
     "게이트가 새로 지울 수 있는 사람을 늘리지 않는다"를 지키는 테스트다.
@@ -741,9 +737,7 @@ async def test_actor_labels_reuses_given_owners_map(
 
     monkeypatch.setattr(pet_repo, "owners_by_ids", counting)
 
-    await member_service.actor_labels(
-        None, [(pet.id, OWNER)], owners={pet.id: OWNER}
-    )
+    await member_service.actor_labels(None, [(pet.id, OWNER)], owners={pet.id: OWNER})
     assert calls == 0
 
 
@@ -755,8 +749,8 @@ async def test_transfer_swaps_roles(store: Store, pet: FakePet):
     r = client_as(OWNER).post(f"/app/pets/{pet.id}/owner", json={"app_user_id": str(CARER)})
     assert r.status_code == 200
     assert pet.app_user_id == CARER
-    assert (pet.id, CARER) not in store.pet_members   # 새 대표는 돌보미가 아니다
-    assert (pet.id, OWNER) in store.pet_members       # 옛 대표는 돌보미로 남는다
+    assert (pet.id, CARER) not in store.pet_members  # 새 대표는 돌보미가 아니다
+    assert (pet.id, OWNER) in store.pet_members  # 옛 대표는 돌보미로 남는다
 
 
 async def test_transfer_keeps_old_owner_primary_pet(store: Store, pet: FakePet):

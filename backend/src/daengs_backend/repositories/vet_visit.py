@@ -14,6 +14,7 @@ from daengs_backend.models import VetVisit, VetVisitDraft
 
 __all__ = [
     "add",
+    "count_before",
     "delete",
     "delete_draft",
     "expired_drafts",
@@ -79,6 +80,28 @@ async def list_between(
             )
             .order_by(VetVisit.visited_on.desc(), VetVisit.id)
         )
+    )
+
+
+async def count_before(
+    session: AsyncSession,
+    app_user_id: uuid.UUID,
+    pet_id: uuid.UUID,
+    before: date,
+) -> int:
+    """`visited_on < before` 인 기록 수. **목록이 감춘 것이 몇 건인지**를 앱에게 줍니다 —
+    "2025-09-13 이후만 보입니다" 를 건수가 0 일 때는 안 띄우게 하려는 값입니다."""
+    return int(
+        await session.scalar(
+            select(func.count())
+            .select_from(VetVisit)
+            .where(
+                VetVisit.app_user_id == app_user_id,
+                VetVisit.pet_id == pet_id,
+                VetVisit.visited_on < before,
+            )
+        )
+        or 0
     )
 
 

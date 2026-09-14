@@ -240,7 +240,9 @@ async def card_publication(request, owner, walk_id, entries, notes):
         raise SmokeFailure("repeated card request differs")
     scenes = parsed.bundle.scenes
     if parsed.bundle.model_status != "accepted":
-        raise SmokeFailure("card graph did not publish accepted writing", diagnostics=diagnosis)
+        raise SmokeFailure(
+            "card graph did not publish accepted writing", diagnostics=diagnosis
+        )
     if not all(
         any(s.writing and s.writing.original_text == note for s in scenes)
         for note in notes

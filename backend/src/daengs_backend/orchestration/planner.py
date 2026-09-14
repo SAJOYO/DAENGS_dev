@@ -37,16 +37,28 @@ runs before any LLM call (deterministic lexicon gate or explicit signal), builds
 exclusive single-request plan itself, and never lets `vet_contact` reach the shared
 `assemble_route_plan`/`_payload_for` machinery — see `resolve_emergency_route`'s
 docstring and D-051 ②.
+
+**`care_log` 도 같은 이유로 같은 길을 간다 — 그런데 이쪽은 쓴다** (#331 후속, D-074).
+이 모듈에서 DB 에 행을 남기는 계획을 만드는 함수는 `resolve_care_log_write` 하나이고, 그것은
+**사용자가 앞 턴의 제안에 승낙했을 때만** 계획을 낸다. 앞 턴의 제안을 만드는
+`resolve_care_log_route` 는 아무것도 안 쓴다 (확인 되묻기, 아니면 기록 화면 HANDOFF).
+둘 다 모델을 안 태우고, 기록될 값은 전부 신뢰된 context 와 서버 시계에서 온다 — 쓰기가
+붙어도 D-051 의 "모델은 payload 를 한 글자도 쓰지 않는다" 가 그대로인 이유다.
 """
 
 from __future__ import annotations
 
 import re
+import uuid
 from collections.abc import Mapping, Sequence
+from datetime import datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
+from daengs_backend.orchestration import care_log
 from daengs_backend.orchestration.contracts import (
     SCREENING_HISTORY_LIMIT,
+    CareLogProposal,
     ConversationContext,
     RoutePlan,
     RouterKind,
@@ -67,15 +79,20 @@ from daengs_backend.orchestration.semantic import (
 # a multiset. Order follows the `CapabilityName` declaration order.
 _GENERAL = "general"
 _VET_CONTACT = "vet_contact"
-_EXECUTION_ORDER = ("training", "life", "walk", "place", _GENERAL, _VET_CONTACT)
+_CARE_LOG = "care_log"
+_EXECUTION_ORDER = ("training", "life", "walk", "place", _GENERAL, _VET_CONTACT, _CARE_LOG)
 # The names the router (and the explicit signal) may select. `general` is executable but
 # never selectable — it only ever enters a plan through the fallback rule below, so it is
 # excluded here on purpose: `requested_capability="general"` is an unresolved signal.
 # `general` 과 `vet_contact` 는 둘 다 `_EXECUTE_NAMES` 밖이지만 이유가 정반대다.
 # general 은 명시 신호로도 못 부르고, vet_contact 는 **명시 신호로만** 부른다 —
 # 그 신호는 `resolve_emergency_route` 가 라우터보다 앞에서 소비한다.
+# `care_log` 가 여기서 빠지는 이유는 `vet_contact` 와 같다 — 라우터도 명시 신호도 이 **쓰기**
+# 능력을 못 부른다. 여는 길은 `resolve_care_log_write` 하나뿐이고, 그것은 사용자가 앞 턴의
+# 제안에 승낙했을 때만 열린다. 대신 같은 이름의 HANDOFF 는 `_HANDOFF_REASONS` 에 있어서
+# 명시 신호로 부를 수 있다 — 그쪽은 아무것도 안 쓰고 기록 화면으로 보낼 뿐이다.
 _EXECUTE_NAMES = frozenset(
-    name for name in _EXECUTION_ORDER if name not in {_GENERAL, _VET_CONTACT}
+    name for name in _EXECUTION_ORDER if name not in {_GENERAL, _VET_CONTACT, _CARE_LOG}
 )
 _EXECUTION_INDEX = {name: index for index, name in enumerate(_EXECUTION_ORDER)}
 # Capabilities whose payload carries trusted coordinates. Missing coordinates make
@@ -85,14 +102,27 @@ _QUESTION_CAPABILITIES = frozenset({"training", "life"})
 # The verdicts `ScreeningContext` allows. Kept as a literal set rather than read off the
 # contract so a widened contract cannot silently widen what the planner copies (#283).
 _SCREENING_VERDICTS = frozenset({"normal", "abnormal", "retake"})
+# **의미 라우터가 고를 수 있는 handoff target 의 목록이기도 하다.** 키가 곧
+# `semantic.HandoffName` 의 값이어야 한다 — `resolve_deterministic_route` 가 명시 신호를
+# 여기서 찾아 `SemanticRoutingDecision(handoffs=[...])` 으로 넘기므로, 라우터 스키마에 없는
+# 이름을 여기 넣으면 그 신호가 500 이 된다 (실제로 한 번 그렇게 넣고 테스트가 잡았다).
 _HANDOFF_REASONS = {
     "skin": "image_upload_required",
     "gait": "video_upload_required",
 }
+#: 케어 기록 화면으로 (#331 후속, D-074). **위 표에 안 넣는 것이 의도다** — 라우터가 못 고르고
+#: 명시 신호로도 못 부른다. 들어오는 길은 `resolve_care_log_route` 의 결정론 게이트 하나뿐이다.
+#: "새 결정론 신호를 여기서 발명하지 않는다" (모듈 머리말 1번)는 규칙을 지키는 쪽이기도 하다 —
+#: 앱이 "기록" 버튼을 누르는 것은 어차피 `/app/care-events` POST 이고, 비서를 거칠 일이 없다.
+_CARE_LOG_HANDOFF_REASON = "care_log_entry_required"
 # The assistant contract's South Korea box. Place's own service accepts a wider box
 # (lat 32~40 · lng 123~133); the public boundary deliberately stays the stricter one
 # so Place cannot loosen validation for everyone else (discovery-migration.md §5).
 _COORDINATE_BOUNDS = (("lat", 33.0, 39.0), ("lon", 124.0, 132.0))
+# 확인 문장에 찍는 시각의 시간대. `services/care_event.DAY_TIMEZONE` 과 **같은 값이어야**
+# 한다 — 하루의 경계를 서울로 자르는 쪽과 사용자에게 시각을 보여 주는 쪽이 다르면,
+# 자정 전후에 "23:50에 기록할까요?" 라고 묻고 어제 칸에 넣는 일이 생긴다.
+_CARE_LOG_TZ = ZoneInfo("Asia/Seoul")
 
 
 def resolve_emergency_route(
@@ -134,6 +164,137 @@ def resolve_emergency_route(
             "prompt_version": None,
         }
     )
+
+
+def resolve_care_log_write(
+    *,
+    query: str,
+    pending: CareLogProposal | None,
+    now: datetime,
+) -> RoutePlan | None:
+    """앞 턴의 제안에 **승낙했을 때만** `care_log` 하나짜리 계획을, 아니면 None (#331 후속).
+
+    **쓰기가 열리는 유일한 자리다.** 라우터도, 명시 신호도, 다른 어떤 경로도 `care_log`
+    능력을 계획에 넣지 못한다 (`_EXECUTE_NAMES` 에서 빠진 이유) — 그래서 "무엇이 DB 에 쓸 수
+    있나" 의 답이 이 함수 하나이고, 감사하려면 이 호출자만 보면 된다.
+
+    **payload 를 만들지 않는다. 옮긴다.** `pending` 은 지난 턴에 사용자가 문장으로 보고
+    승낙한 바로 그 제안이고(`chat_turns.public_response` 에서 되읽은 값), 여기서 종류·시각·
+    강아지·멱등키 중 어느 것도 새로 고르지 않는다. 확인 단계의 약속이 "보여 준 것만
+    들어간다" 라서다 — 그래서 제안과 payload 가 같은 타입이다 (`CareLogProposal`).
+
+    **거절과 무관한 발화는 None 이다.** 셋을 가르는 것은 `care_log.confirmation_of` 이고,
+    이 함수는 `"affirm"` 만 계획으로 바꾼다. 거절 문구는 서비스가 고정 응답으로 내고
+    (`care_log.build_care_log_declined_response`), 무관한 발화는 제안을 흘리고 평소대로
+    라우팅된다.
+
+    **묵은 제안은 안 쓴다** (`care_log.PROPOSAL_TTL`). 대기는 한 턴짜리지만 그 한 턴이 며칠
+    전일 수 있어서다 — 이유는 그 상수의 주석에 있다. 묵었으면 None 이라, 사용자의 "네" 는
+    아무 일도 일으키지 않고 평소 라우팅으로 떨어진다.
+    """
+    if pending is None:
+        return None
+    if care_log.confirmation_of(query) != "affirm":
+        return None
+    if not care_log.is_proposal_fresh(pending, now=now):
+        return None
+    return RoutePlan.model_validate(
+        {
+            "requests": [{"capability": _CARE_LOG, "payload": pending, "timeout_ms": None}],
+            "handoffs": [],
+            "clarify": None,
+            "router": RouterKind.DETERMINISTIC,
+            "model": None,
+            "prompt_version": None,
+        }
+    )
+
+
+def resolve_care_log_route(
+    *,
+    query: str,
+    context: dict[str, Any],
+    now: datetime,
+    care_log_write: bool,
+) -> RoutePlan | None:
+    """"방금 밥 먹였어" 를 받는 자리 — 확인 되묻기, 아니면 기록 화면 HANDOFF (#331 후속).
+
+    **아무것도 안 쓴다.** 이 함수가 내는 가장 센 것은 "이렇게 기록할까요?" 라는 질문이다.
+    쓰기는 다음 턴의 `resolve_care_log_write` 가 하고, 그 사이에 사용자의 승낙이 있다.
+
+    갈림은 하나뿐이다 — **제안에 필요한 것이 다 있나.** 셋이 필요하다:
+
+    | 필요한 것 | 없으면 |
+    | --- | --- |
+    | 쓰기 플래그(`DAENGS_CARE_LOG_WRITE`)와 쓸 수 있는 요청(`care_log_writable`) | HANDOFF |
+    | 신뢰된 `active_dog_id` | HANDOFF |
+    | 어휘로 읽히는 **한** 종류 (`care_log.kind_of`) | HANDOFF |
+
+    **없을 때 HANDOFF 인 것이 이 설계의 기본값이다.** 추측해서 쓰지 않고, 사람이 화면에서
+    적게 보낸다 — `docs/care-events.md` 가 적어 둔 순서("로그·화면 → 채팅에서 기록 화면으로
+    HANDOFF → 확인 단계 있는 자동 쓰기")의 가운데 칸이 바로 이 갈래이고, 플래그가 꺼진
+    운영에서는 **이쪽만** 돈다.
+
+    `occurred_at` 은 `now` 다 — 서버 시계이고, 사용자는 그 값을 확인 문장에서 보고 승낙한다.
+    `proposal_id` 는 서버가 만든 UUID 로 `care_events.client_event_id` 가 된다 (그 칸이 원래
+    앱 것인데 왜 여기서 만드는지는 `CareLogProposal` 독스트링).
+    """
+    if not care_log.is_care_log_statement(query):
+        return None
+
+    kind = care_log.kind_of(query)
+    pet_id = _trusted_pet_id(context)
+    writable = care_log_write and context.get("care_log_writable") is True
+    if kind is None or pet_id is None or not writable:
+        return RoutePlan.model_validate(
+            {
+                "requests": [],
+                "handoffs": [{"target": _CARE_LOG, "reason": _CARE_LOG_HANDOFF_REASON}],
+                "clarify": None,
+                "router": RouterKind.DETERMINISTIC,
+                "model": None,
+                "prompt_version": None,
+            }
+        )
+
+    proposal = CareLogProposal(
+        kind=kind, pet_id=pet_id, occurred_at=now, proposal_id=uuid.uuid4()
+    )
+    return RoutePlan.model_validate(
+        {
+            "requests": [],
+            "handoffs": [],
+            "clarify": {
+                "question": care_log.proposal_question(
+                    proposal, clock=now.astimezone(_CARE_LOG_TZ).strftime("%H:%M")
+                ),
+                # 좌표 게이트의 `location.lat` · General 되묻기의 `observation` 과 같은 자리의
+                # 어휘다. 되묻기를 종류별로 렌더하는 클라이언트가 이 값으로 가른다.
+                "missing": ["care_log_confirmation"],
+                "care_log": proposal,
+            },
+            "router": RouterKind.DETERMINISTIC,
+            "model": None,
+            "prompt_version": None,
+        }
+    )
+
+
+def _trusted_pet_id(context: dict[str, Any]) -> uuid.UUID | None:
+    """`context["active_dog_id"]` → UUID. 모양이 틀리면 None.
+
+    **소유권은 여기서 안 본다.** 이 값은 이미 HTTP 경계가 세운 것이고(저장 경로는 대화의
+    `pet_id` 로 덮어쓴다), 실제로 쓸 때 `services/care_event.record` 가 `get_accessible` 로
+    다시 묶는다 — 남의 강아지면 그 자리에서 404 감이다. 계획 단계에서 DB 를 열면
+    `planner` 가 세션을 알게 된다.
+    """
+    raw = context.get("active_dog_id")
+    if not isinstance(raw, str):
+        return None
+    try:
+        return uuid.UUID(raw)
+    except ValueError:
+        return None
 
 
 def _trusted_location(context: dict[str, Any]) -> dict[str, float] | None:
@@ -676,4 +837,10 @@ def _clarify_question(missing: list[str], *, needs: frozenset[str] | set[str]) -
     return "현재 위치의 경도를 알려주세요."
 
 
-__all__ = ["assemble_route_plan", "resolve_deterministic_route", "resolve_emergency_route"]
+__all__ = [
+    "assemble_route_plan",
+    "resolve_care_log_route",
+    "resolve_care_log_write",
+    "resolve_deterministic_route",
+    "resolve_emergency_route",
+]

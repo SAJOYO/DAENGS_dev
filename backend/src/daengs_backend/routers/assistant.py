@@ -25,14 +25,16 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from daengs_backend.config import settings
 from daengs_backend.core.database import (
     get_chat_session_factory,
     get_metrics_session_factory,
 )
 from daengs_backend.core.deps import AppPrincipal, Perm, Principal, admin_or_app_user
+from daengs_backend.orchestration.adapters.care_log import CareLogCapabilityAdapter
 from daengs_backend.orchestration.adapters.facility import FacilityCapabilityAdapter
 from daengs_backend.orchestration.contracts import AssistantResponse, PrincipalContext
-from daengs_backend.orchestration.graph import OrchestrationEngine
+from daengs_backend.orchestration.graph import CapabilityAdapter, OrchestrationEngine
 from daengs_backend.orchestration.resolver import PendingClarification, PriorTurn
 from daengs_backend.orchestration.runtime import Orchestrator, build_orchestrator
 from daengs_backend.schemas.assistant import AssistantQueryRequest
@@ -290,20 +292,27 @@ async def _dispatch(
     principal_context = _principal_context(principal)
     include_route_trace = _may_inspect_route(principal)
     context = _structured_context(body)
+    place_adapter: CapabilityAdapter | None = None
+    care_log_adapter: CapabilityAdapter | None = None
+    if settings.care_log_write and isinstance(principal, AppPrincipal):
+        # **쓰기 어댑터를 넣는 자리와 쓰기를 허용한다고 알리는 자리가 같은 `if` 다** (D-074).
+        # 갈라 두면 한쪽만 참인 상태가 생기고, 그 상태의 뜻은 "제안은 나가는데 승낙하면
+        # `unsupported_capability` 로 끝난다" 다 — 사용자에게는 기록이 됐는지 안 됐는지
+        # 모르는 응답이다. 관리자 토큰은 여기 안 들어온다: 대화도 pets 도 앱 회원 것이다.
+        care_log_adapter = CareLogCapabilityAdapter(
+            session_factory=session_factory, app_user_id=principal.app_user_id
+        )
+        context["care_log_writable"] = True
     if body.facility is not None:
         if not isinstance(principal, AppPrincipal):
             raise HTTPException(status.HTTP_403_FORBIDDEN, {"code": "FACILITY_APP_USER_ONLY"})
         facility_service = facility_service or get_facility_conversation_service()
         owner = str(principal.app_user_id)
         # Request-bound dependencies carry the owner/view, never model payloads or global state.
-        service = build_orchestrator(
-            engine=OrchestrationEngine(
-                place_adapter=FacilityCapabilityAdapter(
-                    owner=owner,
-                    view=body.facility,
-                    service=facility_service,
-                )
-            )
+        place_adapter = FacilityCapabilityAdapter(
+            owner=owner,
+            view=body.facility,
+            service=facility_service,
         )
         context["facility_response"] = True
         if body.facility.session_id is not None:
@@ -311,6 +320,15 @@ async def _dispatch(
             # that owner-bound session, so unrelated queries work and expiry reaches recovery.
             context["facility_session_id"] = str(body.facility.session_id)
             context["facility_view"] = True
+    if place_adapter is not None or care_log_adapter is not None:
+        # **엔진을 한 번만 만든다.** 시설 대화와 케어 기록 쓰기가 각자 엔진을 만들면, 둘이
+        # 겹친 요청에서 뒤에 만든 쪽이 앞의 어댑터를 지운다 — 시설 뷰를 보는 중에 "밥
+        # 먹였어" 라고 하면 기록이 안 되거나, 그 반대가 된다.
+        service = build_orchestrator(
+            engine=OrchestrationEngine(
+                place_adapter=place_adapter, care_log_adapter=care_log_adapter
+            )
+        )
     if not body.persists:
         return await service.run(
             query=body.query,

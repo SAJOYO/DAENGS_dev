@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from enum import StrEnum
 from typing import Any, Literal, TypedDict
 from uuid import UUID
@@ -28,6 +28,13 @@ class CapabilityName(StrEnum):
     #: 이유가 정반대다 — GENERAL 은 모델이 근거 있는 능력과 바꿔치기하지 못하게 뺐고,
     #: 이것은 **모델을 아예 안 태우려고** 뺐다. 결정론적 어휘 게이트와 명시 신호로만 들어온다.
     VET_CONTACT = "vet_contact"
+    #: 케어 기록 쓰기 (#331 후속). **이 저장소에서 유일하게 쓰는 능력이다.**
+    #:
+    #: `vet_contact` 와 같은 이유로 `semantic.ExecuteName` 에 없다 — 모델을 아예 안 태운다.
+    #: 다만 여기서는 한 단계 더 좁다: `vet_contact` 는 어휘 게이트가 **질의 원문**으로 열지만,
+    #: 이것은 **사용자가 앞 턴의 제안에 승낙했을 때만** 열린다 (`planner.resolve_care_log_write`).
+    #: 라우터가 낼 수 있는 것은 같은 뜻의 HANDOFF 하나뿐이고, 그 HANDOFF 는 아무것도 안 쓴다.
+    CARE_LOG = "care_log"
 
 
 class CapabilityStatus(StrEnum):
@@ -131,6 +138,59 @@ class CareLogContext(ContractModel):
     last_meal_at: str | None = Field(default=None, pattern=_CLOCK_PATTERN)
     last_medication_at: str | None = Field(default=None, pattern=_CLOCK_PATTERN)
     last_snack_at: str | None = Field(default=None, pattern=_CLOCK_PATTERN)
+
+
+class CareLogKind(StrEnum):
+    """기록할 수 있는 케어 종류. `care_events.kind` 의 CHECK 제약과 같은 값이다 (#332).
+
+    **`walk` 가 없다.** 산책은 `walks` 가 진실이라 `care_events` 에도 없고, 여기에도 없다 —
+    한 사실이 두 곳에 있으면 반드시 어긋난다 (`db/init/23_care_events.sql` 머리말).
+
+    `schemas/care_event.CareEventKind`(Literal)의 **사본**이다. 두 벌인 것은 방향 때문이다:
+    orchestration 계약은 HTTP 스키마를 import 하지 않는다(D-035 의 반대 방향). 사본끼리는
+    `tests/test_assistant_care_log_write.py` 가 대조한다 (`aggregate._SCREENING_VERDICTS` 와
+    같은 장치).
+    """
+
+    MEAL = "meal"
+    MEDICATION = "medication"
+    SNACK = "snack"
+
+
+class CareLogProposal(ContractModel):
+    """"이대로 기록할까요?" 의 **이대로** — 그리고 승낙 뒤 실제로 쓰이는 값 (#331 후속).
+
+    한 타입이 제안과 payload 를 겸하는 것이 의도다. 확인 단계의 약속은 "보여 준 것만
+    들어간다" 이고, 제안과 payload 가 다른 타입이면 그 약속을 **코드가 아니라 사람이** 지켜야
+    한다 — 필드를 하나 더한 payload 는 아무 검증도 안 걸리고 통과한다.
+
+    **모델이 만든 값이 하나도 없다** (D-051). `kind` 는 결정론 어휘가 읽고
+    (`care_log.kind_of`), `occurred_at` 은 **서버 시계**이고, `pet_id` 는 신뢰된
+    `context["active_dog_id"]` 이고, `proposal_id` 는 서버가 만든 UUID 다.
+
+    `occurred_at` 이 제안 시점인 이유: 이 기능이 받는 말은 "방금 먹였어" 다. 사용자가 말한
+    시점이 곧 챙긴 시점이고, 그 값을 사용자가 확인 문장에서 눈으로 보고 승낙한다. 지난 시각을
+    적는 것은 기록 화면의 일이다 — 그쪽은 시각을 손으로 고른다.
+
+    `proposal_id` 가 `care_events.client_event_id` 로 간다. 그 칸은 원래 **앱이** 만드는
+    멱등키인데(`db/init/23_care_events.sql`) 이 경로에서는 서버가 만든다 — 채팅에는 그 키를
+    만들 앱 코드가 없고, 같은 제안에 두 번 "네" 라고 답해도 한 줄이어야 한다. 키의 출처가
+    갈리는 것은 감수한 것이고, 유일성은 어느 쪽이 만들어도 같은 UNIQUE 가 보장한다.
+    """
+
+    kind: CareLogKind
+    pet_id: UUID
+    occurred_at: datetime
+    proposal_id: UUID
+
+    @field_validator("occurred_at")
+    @classmethod
+    def occurred_at_is_aware(cls, value: datetime) -> datetime:
+        # `schemas/care_event.CareEventCreate` 와 같은 규칙. naive 로 받으면 어느 하루에
+        # 넣을지 서버가 추측하게 되고, 이 값은 `public_response` 로 JSON 왕복을 한다.
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("occurred_at requires a timezone")
+        return value
 
 
 class WalkActivityContext(ContractModel):
@@ -401,6 +461,7 @@ CapabilityPayload = (
     | FacilitySessionPayload
     | GeneralPayload
     | VetContactPayload
+    | CareLogProposal
 )
 _PAYLOAD_TYPES = {
     CapabilityName.TRAINING: TrainingPayload,
@@ -409,6 +470,9 @@ _PAYLOAD_TYPES = {
     CapabilityName.PLACE: PlacePayload,
     CapabilityName.GENERAL: GeneralPayload,
     CapabilityName.VET_CONTACT: VetContactPayload,
+    # 제안과 payload 가 같은 타입이다 — 확인 단계의 약속("보여 준 것만 들어간다")을
+    # 사람이 아니라 타입이 지키게 하려는 것이고, 이유는 `CareLogProposal` 독스트링에 있다.
+    CapabilityName.CARE_LOG: CareLogProposal,
 }
 
 
@@ -488,6 +552,15 @@ class ClarifyRequest(ContractModel):
     #: 넣어 주지 않는다. 모델이 안 고르면 빈 채로 나가고, `#416` 은 그것을 "축을 모른다"
     #: 로 읽어야지 "물은 것이 없다" 로 읽으면 안 된다.
     missing_axes: list[ObservationAxis] = Field(default_factory=list, max_length=2)
+    #: **이 되묻기가 승낙을 받으려는 기록** (#331 후속). 케어 기록 확인일 때만 채워지고,
+    #: 다른 되묻기(좌표 게이트 · 관찰 되묻기)에서는 늘 `None` 이다.
+    #:
+    #: 새 칸도 새 테이블도 필요 없다 — `services/chat.public_response_of` 가
+    #: `model_dump(mode="json")` 라 이 값은 `chat_turns.public_response` 에 통째로 저장되고,
+    #: `pending_clarification_of` 가 다음 턴에 그대로 읽어 온다 (`missing_axes` 와 같은 길).
+    #: 그것이 "확인 단계" 를 **상태 없이** 만드는 방법이다: 대기 중인 쓰기를 담아 둘 서버
+    #: 메모리도, 만료 잡도 없다. 대기가 한 턴짜리인 것도 거기서 따라온다.
+    care_log: CareLogProposal | None = None
 
 
 class TurnRelation(StrEnum):
@@ -649,6 +722,8 @@ __all__ = [
     "CapabilityRequest",
     "CapabilityResult",
     "CapabilityStatus",
+    "CareLogKind",
+    "CareLogProposal",
     "ClarifyRequest",
     "ConversationContext",
     "ErrorDetail",

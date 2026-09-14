@@ -54,6 +54,7 @@ class OrchestrationEngine:
         adapters: Mapping[CapabilityName, CapabilityAdapter] | None = None,
         *,
         place_adapter: CapabilityAdapter | None = None,
+        care_log_adapter: CapabilityAdapter | None = None,
     ) -> None:
         if adapters is None:
             adapters = {
@@ -72,6 +73,17 @@ class OrchestrationEngine:
             if place_adapter.capability != CapabilityName.PLACE:
                 raise ValueError("the facility override must implement Place")
             self._adapters[CapabilityName.PLACE] = place_adapter
+        # 케어 기록 쓰기는 **기본 어댑터가 없다** (위 dict 에 CARE_LOG 가 없는 것이 의도다).
+        # 요청마다 만들어 넣어야 하는 이유는 `adapters/care_log.py` 머리말에 있다 —
+        # `app_user_id` 를 들고 있고 그것이 "누구 이름으로 기록되는가" 라서다. 안 넣으면
+        # `_execute_requests` 가 `unsupported_capability` 로 끝내지만, 실무에서 그 자리에
+        # 닿지 않는다: `planner.resolve_care_log_route` 가 `context["care_log_writable"]`
+        # 없이는 제안 자체를 안 내므로 승낙받을 제안이 없다. 그 플래그를 세우는 곳과 이
+        # 어댑터를 넣는 곳이 `routers/assistant.py` 의 같은 `if` 다.
+        if care_log_adapter is not None:
+            if care_log_adapter.capability != CapabilityName.CARE_LOG:
+                raise ValueError("the care-log override must implement CareLog")
+            self._adapters[CapabilityName.CARE_LOG] = care_log_adapter
         self.graph = self._build_graph()
 
     def _build_graph(self):

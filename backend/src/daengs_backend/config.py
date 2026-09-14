@@ -173,6 +173,21 @@ class Settings(BaseSettings):
         default=True, validation_alias=AliasChoices("DAENGS_TURN_RESOLVER")
     )
 
+    # ── 채팅에서 케어 기록 쓰기 (#331 후속, D-074) ──────────────────────
+    # `general_fallback` 과 같은 기본값(꺼짐)이고 같은 이유입니다 — **켜기 전까지 운영은
+    # 지금과 같습니다.** 다만 여기서 "지금과 같다" 가 뜻하는 것이 하나 더 있습니다:
+    # 꺼져 있어도 `"방금 밥 먹였어"` 는 **기록 화면 HANDOFF** 로 답합니다. 그것이
+    # `docs/care-events.md` 가 적어 둔 순서의 가운데 칸이고, 플래그가 가르는 것은
+    # 그 뒤(확인 되묻기 → 실제 쓰기)뿐입니다.
+    #
+    # ⚠ 이 플래그 하나로는 안 켜집니다. `routers/assistant.py` 가 요청마다
+    # `CareLogCapabilityAdapter` 를 엔진에 넣고 `context["care_log_writable"]` 를 세울 때만
+    # 제안이 나가므로(앱 회원 + 활성 강아지), 관리자 토큰·무상태 점검 요청은 이 값이
+    # 켜져 있어도 HANDOFF 로 떨어집니다.
+    care_log_write: bool = Field(
+        default=False, validation_alias=AliasChoices("DAENGS_CARE_LOG_WRITE")
+    )
+
     # ── 의미 라우터 (D-041) ───────────────────────────────────────────
     # backend/.env 에 이미 있는 GEMINI_API_KEY / GEMINI_TIMEOUT_MS 를 접두사 없이
     # 그대로 읽습니다. `daengs_life.rag` 의 Settings 와 같은 env 를 각자 읽는

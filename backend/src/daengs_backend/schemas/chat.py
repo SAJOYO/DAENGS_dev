@@ -16,7 +16,18 @@ from daengs_backend.orchestration.contracts import AssistantResponse
 #: `services/chat.py` 의 `categories_of()` 가 넣어 준 capability 이름이고, 좁으면 이미
 #: 저장된 행을 읽을 때 응답 검증에 걸려 500 이 됩니다. 능력이 늘 때 같이 넓히는 세 자리와
 #: 그것을 지키는 테스트는 `docs/orchestration/contracts.md` 를 보세요.
-AgentCategory = Literal["training", "life", "walk", "place", "general", "vet_contact"]
+AgentCategory = Literal[
+    "training",
+    "life",
+    "walk",
+    "place",
+    "general",
+    "vet_contact",
+    # 케어 기록 쓰기 (D-074). 라우터가 못 고르는 능력이라도 **결과가 OK 면**
+    # `categories_of()` 가 이름을 그대로 넣으므로 여기도 넓혀야 합니다 — 이것이 #269 의
+    # 사고 모양이고, `tests/test_orchestration_contracts.py` 가 그 대조를 들고 있습니다.
+    "care_log",
+]
 
 
 class ChatSessionCreate(BaseModel):

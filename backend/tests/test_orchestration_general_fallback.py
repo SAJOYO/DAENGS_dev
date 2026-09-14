@@ -362,7 +362,23 @@ async def test_flag_on_general_refusal_is_a_refused_answer(fallback_on: None) ->
 
 
 def test_default_engine_registers_the_general_adapter() -> None:
-    assert set(OrchestrationEngine()._adapters) == set(CapabilityName)
+    """`care_log` 만 기본 어댑터가 없다 — **요청마다 만들어 넣어야 하는 유일한 능력**이다.
+
+    `app_user_id` 를 들고 있고 그것이 "누구 이름으로 기록되는가" 라서다 (D-074).
+    전역 어댑터로 두고 payload 에 사용자를 실으면, 그 값이 어디서 왔는지를 payload 검증이
+    보장하지 못한다. 안 넣은 요청은 애초에 제안을 못 받으므로(`context["care_log_writable"]`)
+    승낙받을 것도 없다 — `graph.py` 의 그 `if` 주석이 이 쌍을 설명한다.
+    """
+    registered = set(OrchestrationEngine()._adapters)
+    assert registered == set(CapabilityName) - {CapabilityName.CARE_LOG}
+    assert CapabilityName.CARE_LOG in set(OrchestrationEngine(care_log_adapter=_FakeCareLog())._adapters)
+
+
+class _FakeCareLog:
+    capability = CapabilityName.CARE_LOG
+
+    async def run(self, request, *, request_id):  # pragma: no cover - 등록만 보는 대역
+        raise AssertionError("등록만 확인한다")
 
 
 # ── adapter: 모델 출력 → CapabilityResult ─────────────────────────────

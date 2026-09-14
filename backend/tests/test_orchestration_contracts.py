@@ -140,5 +140,11 @@ def test_capability_names_have_exactly_three_copies_and_they_agree() -> None:
     # `general` (D-057) 은 v9 부터 라우터 목적지이기도 하다.
     # `vet_contact` 는 라우터가 고를 수 없는 능력이라 세 사본이 더는 완전히 같지 않다 —
     # 결정론적 어휘 게이트와 명시 신호로만 들어온다.
-    assert set(get_args(ExecuteName)) == names - {"vet_contact"}, "라우터가 고를 수 있는 목적지가 어긋났다"
+    # `care_log` (D-074) 도 라우터 밖이고, 한 겹 더 좁다 — 명시 신호로도 못 부르고,
+    # 사용자가 앞 턴의 제안에 승낙했을 때만 들어온다.
+    router_reachable = names - {"vet_contact", "care_log"}
+    assert set(get_args(ExecuteName)) == router_reachable, "라우터가 고를 수 있는 목적지가 어긋났다"
+    # **꼬리표는 안 좁힌다.** 라우터가 못 고르는 능력이라도 결과가 OK 면 `categories_of()` 가
+    # 이름을 그대로 넣고, 그 행을 읽을 때 `AgentCategory` 가 좁으면 500 이 난다 — 그것이
+    # 위 독스트링의 #269 사고다.
     assert names == set(get_args(AgentCategory)), "저장된 대화를 읽어 줄 꼬리표가 어긋났다"

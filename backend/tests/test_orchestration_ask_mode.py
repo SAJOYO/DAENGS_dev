@@ -109,7 +109,15 @@ async def test_adapter_carries_an_ask_as_a_clarify_shaped_result() -> None:
     assert result.status == CapabilityStatus.OK
     assert result.data == {
         "answer": GROUNDED,
-        "ask": {"question": ASK, "missing": [GENERAL_ASK_MISSING], "missing_axes": []},
+        # `care_log` 는 케어 기록 확인 되묻기에만 실린다 (D-074). General 되묻기에서는 늘
+        # None 이고, 이 정확 비교가 그것을 고정한다 — 여기에 제안이 실리면 다음 턴의 "네" 가
+        # 쓰기로 읽힌다.
+        "ask": {
+            "question": ASK,
+            "missing": [GENERAL_ASK_MISSING],
+            "missing_axes": [],
+            "care_log": None,
+        },
     }
     assert result.capability == CapabilityName.GENERAL and result.elapsed_ms >= 0
 
@@ -357,7 +365,15 @@ async def test_adapter_keeps_the_grounded_part_next_to_the_question() -> None:
     assert result.status == CapabilityStatus.OK
     assert result.data == {
         "answer": SUMMARY,
-        "ask": {"question": ASK, "missing": [GENERAL_ASK_MISSING], "missing_axes": []},
+        # `care_log` 는 케어 기록 확인 되묻기에만 실린다 (D-074). General 되묻기에서는 늘
+        # None 이고, 이 정확 비교가 그것을 고정한다 — 여기에 제안이 실리면 다음 턴의 "네" 가
+        # 쓰기로 읽힌다.
+        "ask": {
+            "question": ASK,
+            "missing": [GENERAL_ASK_MISSING],
+            "missing_axes": [],
+            "care_log": None,
+        },
     }
 
 
@@ -626,6 +642,8 @@ async def test_the_axes_reach_the_clarify_verbatim() -> None:
             "question": ASK,
             "missing": [GENERAL_ASK_MISSING],
             "missing_axes": ["APPETITE", "ENERGY"],
+            # 위 두 테스트와 같은 이유 (D-074).
+            "care_log": None,
         },
     }
     response = aggregate_results(request_id="r1", route_plan=plan("general"), results=[result])

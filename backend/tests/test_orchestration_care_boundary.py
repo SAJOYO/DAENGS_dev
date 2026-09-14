@@ -55,6 +55,7 @@ from daengs_backend.orchestration.semantic import (
     ROUTER_MODEL_ID,
     ExecuteName,
     GeminiSemanticRouter,
+    HandoffName,
     SemanticRoutingDecision,
     build_semantic_router_prompt,
     validate_semantic_decision,
@@ -277,7 +278,14 @@ def test_care_question_is_not_hard_routed_by_the_prompt_builder() -> None:
 def test_no_care_capability_exists_in_the_contracts() -> None:
     """No `care` capability was invented. `general` (D-057) is the one destination that
     receives husbandry questions now — additive, and stripped by the planner while the
-    fallback flag is off, so this file's deterministic cases still route as before."""
+    fallback flag is off, so this file's deterministic cases still route as before.
+
+    **`care_log` 는 발명된 능력이 아니다** (D-074). 육아 질문을 받는 목적지가 아니라
+    **케어 로그에 한 줄 쓰는 능력**이고, 라우터가 고를 수 없다 (`ExecuteName` 에 없다 —
+    아래 assert). 들어오는 길은 사용자가 앞 턴의 제안에 승낙하는 것 하나뿐이다
+    (`planner.resolve_care_log_write`). 이 파일이 막으려는 것 — "육아 질문을 받는 새 목적지를
+    슬쩍 만들기" — 은 그대로 막혀 있다.
+    """
     assert {name.value for name in CapabilityName} == {
         "training",
         "life",
@@ -286,10 +294,16 @@ def test_no_care_capability_exists_in_the_contracts() -> None:
         "general",
         # `vet_contact` 는 발명된 능력이 아니라 결정적 어휘 게이트로만 닿는 실제 계약이다.
         "vet_contact",
+        # `care_log` 도 결정적 게이트로만 닿는다 — 다만 이쪽은 **쓴다** (위 독스트링).
+        "care_log",
     }
     for invented in ("care", "husbandry", "nutrition"):
         assert invented not in {name.value for name in CapabilityName}
     assert "general" in get_args(ExecuteName)
+    # 이 두 줄이 "목적지가 아니다" 를 고정한다. 라우터가 `care_log` 를 고를 수 있게 되는 날
+    # (= 모델이 쓰기를 열 수 있게 되는 날) 이 테스트가 먼저 깨진다.
+    assert "care_log" not in get_args(ExecuteName)
+    assert "care_log" not in get_args(HandoffName)
 
 
 @pytest.mark.parametrize("invented", ["care", "husbandry", "nutrition"])

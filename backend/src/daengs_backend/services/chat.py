@@ -13,6 +13,7 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
+from pydantic import ValidationError
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -21,6 +22,7 @@ from daengs_backend.orchestration.contracts import (
     AssistantResponse,
     AssistantStatus,
     CapabilityStatus,
+    CareLogProposal,
     ObservationAxis,
 )
 from daengs_backend.orchestration.resolver import (
@@ -260,8 +262,32 @@ def pending_clarification_of(turns: list[ChatTurn]) -> PendingClarification | No
             continue  # 목록이 넓어진 뒤의 옛 행 — 축을 모르는 것으로 읽는다
     missing = [m for m in (clarify.get("missing") or []) if isinstance(m, str)]
     return PendingClarification(
-        turn_id=last.id, question=question, missing=missing, missing_axes=axes
+        turn_id=last.id,
+        question=question,
+        missing=missing,
+        missing_axes=axes,
+        care_log=_pending_care_log(clarify),
     )
+
+
+def _pending_care_log(clarify: dict) -> CareLogProposal | None:
+    """되묻기에 실린 케어 기록 제안 (#331 후속, D-074). 없거나 깨졌으면 None.
+
+    **여기서 조용히 None 이 되는 것이 안전한 방향이다.** 이 값이 있으면 다음 턴의 "네" 가
+    DB 에 행을 남기고, None 이면 그 "네" 가 아무 일도 안 한다 — 읽다 실패했을 때 쓰는 쪽으로
+    떨어지면 안 된다.
+
+    `missing_axes` 와 같은 방어적 읽기다(그 위 루프). 다만 이유가 한 겹 더 있다: 이 값은
+    `chat_turns.public_response` 의 JSON 이라 **옛 행에는 아예 없고**, 계약이 바뀌면 모양이
+    다른 행도 남는다. `model_validate` 가 그 둘을 같은 None 으로 만든다.
+    """
+    raw = clarify.get("care_log")
+    if not isinstance(raw, dict):
+        return None
+    try:
+        return CareLogProposal.model_validate(raw)
+    except ValidationError:
+        return None
 
 
 async def _require_accessible_pet(

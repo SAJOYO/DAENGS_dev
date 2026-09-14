@@ -1886,11 +1886,11 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
             if c.app_user_id == app_user_id and c.status == "ready" and c.created_at >= since
         )
 
-    async def ai_card_expire_generating(session, app_user_id, *, created_before, now):
+    async def ai_card_expire_generating(session, app_user_id, *, stale_before, now):
         expired = [
             c
             for c in store.ai_cards
-            if c.app_user_id == app_user_id and c.status == "generating" and c.created_at < created_before
+            if c.app_user_id == app_user_id and c.status == "generating" and c.updated_at < stale_before
         ]
         for c in expired:
             c.status, c.error_code, c.updated_at = "failed", "interrupted", now

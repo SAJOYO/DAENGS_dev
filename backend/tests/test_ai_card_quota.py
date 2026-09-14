@@ -28,11 +28,13 @@ def store(monkeypatch: pytest.MonkeyPatch) -> Store:
     return s
 
 
-def _card(status: str, created_at: datetime, owner: uuid.UUID = OWNER) -> AiCard:
+def _card(
+    status: str, created_at: datetime, owner: uuid.UUID = OWNER, *, updated_at: datetime | None = None
+) -> AiCard:
     return AiCard(
         id=uuid.uuid4(), app_user_id=owner, month=4, dog_name="네오", title="BLOSSOM 네오",
         status=status, error_code="upstream" if status == "failed" else None,
-        created_at=created_at, updated_at=created_at,
+        created_at=created_at, updated_at=updated_at if updated_at is not None else created_at,
     )
 
 
@@ -68,10 +70,21 @@ def test_fresh_generating_is_busy(store: Store) -> None:
 
 
 def test_stale_generating_is_expired_not_busy(store: Store) -> None:
-    card = _card("generating", NOW - timedelta(minutes=10))
+    # 정리 기준은 `updated_at` 이다 — 슬롯을 잡을 때마다 그 칸을 찍는다(_claim_slot).
+    old = NOW - timedelta(minutes=10)
+    card = _card("generating", old, updated_at=old)
     store.ai_cards.append(card)
     _check()
     assert card.status == "failed" and card.error_code == "interrupted"
+
+
+def test_old_created_at_but_fresh_updated_at_is_busy_not_expired(store: Store) -> None:
+    """오래 전에 만들어졌어도 슬롯을 최근에 잡았으면(_claim_slot 이 `updated_at` 을 찍음)
+    아직 도는 작업이다 — 정리 기준이 `created_at` 이 아니라 `updated_at` 인 것을 지킨다."""
+    card = _card("generating", NOW - timedelta(hours=2), updated_at=NOW - timedelta(minutes=1))
+    store.ai_cards.append(card)
+    with pytest.raises(quota.AiCardBusyError):
+        _check()
 
 
 def test_ready_today_hits_limit(store: Store) -> None:

@@ -55,18 +55,21 @@ async def count_ready_since(session: AsyncSession, app_user_id: uuid.UUID, since
 
 
 async def expire_generating(
-    session: AsyncSession, app_user_id: uuid.UUID, *, created_before: datetime, now: datetime
+    session: AsyncSession, app_user_id: uuid.UUID, *, stale_before: datetime, now: datetime
 ) -> int:
     """정리 기준보다 오래된 `generating` 을 `failed`/`interrupted` 로 바꿉니다.
 
-    배포 재시작과 겹쳐 사라진 백그라운드 작업의 행입니다. 커밋은 부르는 쪽이 합니다.
+    **`updated_at` 기준입니다**(`created_at` 이 아닙니다) — `services/ai_card.py::_claim_slot`
+    이 슬롯을 잡을 때마다 이 칸을 지금으로 찍으므로, 대기열에서 오래 기다린 것이 아니라
+    **슬롯을 잡고 실제로 도는 데** 걸린 시간만 이 기준에 들어갑니다. 배포 재시작과 겹쳐
+    사라진 백그라운드 작업의 행이 여기 걸립니다. 커밋은 부르는 쪽이 합니다.
     """
     result = await session.execute(
         update(AiCard)
         .where(
             AiCard.app_user_id == app_user_id,
             AiCard.status == "generating",
-            AiCard.created_at < created_before,
+            AiCard.updated_at < stale_before,
         )
         .values(status="failed", error_code="interrupted", updated_at=now)
     )

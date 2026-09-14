@@ -8,8 +8,10 @@ backend 프로세스 안의 백그라운드 작업(`_run`)이 하고, 끝나면 
 ⚠️ **백그라운드는 요청 세션을 쓰지 않습니다** — 요청이 끝나면 그 세션은 닫힙니다.
 ⚠️ **배포 재시작과 겹친 작업은 사라집니다.** 행은 `stale_after()` 가 지난 뒤 조회에서
    `failed`/`interrupted` 가 됩니다. 그것이 실제로 자주 보이면 워커로 옮길 때입니다 (D-076).
-⚠️ **생성 중에 행이 지워질 수 있습니다**(삭제·탈퇴). 끝난 작업은 행이 없거나 이미 `generating`
-   이 아니면 방금 쓴 객체를 지웁니다 — 안 그러면 FK 없는 저장소에 영구 고아가 남습니다.
+⚠️ **생성 중에 행이 지워질 수 있습니다**(삭제·탈퇴). 세마포어를 기다리는 동안 그리 됐으면
+   `_claim_slot` 이 돈이 나가는 호출(엔진) 전에 멈춥니다. 끝난 작업은 행이 없거나 이미
+   `generating` 이 아니면 방금 쓴 객체를 지웁니다 — 안 그러면 FK 없는 저장소에 영구 고아가
+   남습니다.
 """
 
 from __future__ import annotations
@@ -148,10 +150,32 @@ def _store_png(key: str, data: bytes) -> StoredObject:
     return stored
 
 
+async def _claim_slot(card_id: uuid.UUID) -> bool:
+    """세마포어를 얻은 뒤, 돈이 나가는 호출(엔진) **직전**에 행을 다시 봅니다.
+
+    대기열에 있는 동안 행이 지워졌거나(삭제·탈퇴) 이미 다른 경로로 끝났으면(`generating` 이
+    아니면) 엔진을 부르지 않고 멈춥니다 — "쓸 수 있는 것을 전부 돈이 나가기 전에 거른다"는
+    원칙이 큐 대기까지 지켜야 하기 때문입니다. 살아 있으면 `updated_at` 을 지금으로 찍습니다:
+    정리 기준(`stale_after`)은 **이 시각부터** 잽니다 — 세마포어 대기가 길어져도 그 시간만큼
+    정리 기준이 부풀지 않고, 아직 도는 작업을 다른 조회가 가로채 실패로 덮지 않습니다.
+    """
+    async with _session_factory() as session:
+        card = await ai_card_repo.get_for_update(session, card_id)
+        if card is None or card.status != "generating":
+            await session.rollback()
+            return False
+        card.updated_at = datetime.now(UTC)
+        await session.commit()
+        return True
+
+
 async def _run(card_id: uuid.UUID, app_user_id: uuid.UUID, photo_jpeg: bytes, month: int, dog_name: str) -> None:
     """백그라운드 한 건. **예외를 밖으로 내지 않습니다** — 낼 곳이 없고, 행에 결과를 남깁니다."""
     try:
         async with _slot():
+            if not await _claim_slot(card_id):
+                # 큐에서 기다리는 동안 지워졌거나 이미 정리됐습니다 — 엔진을 부르지 않습니다.
+                return
             try:
                 generated = await asyncio.to_thread(
                     ai_card_engine.generate,
@@ -217,7 +241,7 @@ async def _finish_failed(card_id: uuid.UUID, code: str) -> None:
 
 
 async def _expire_stale(session: AsyncSession, app_user_id: uuid.UUID, now: datetime) -> None:
-    if await ai_card_repo.expire_generating(session, app_user_id, created_before=now - stale_after(), now=now):
+    if await ai_card_repo.expire_generating(session, app_user_id, stale_before=now - stale_after(), now=now):
         await session.commit()
 
 

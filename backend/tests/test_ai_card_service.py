@@ -120,6 +120,30 @@ def test_engine_failure_marks_failed_without_object(store, storage, jobs, monkey
     assert not storage.local_path(f"ai-cards/{OWNER}/{card.id}.png").exists()
 
 
+def test_row_gone_before_slot_never_calls_engine(store, storage, jobs, monkeypatch) -> None:
+    """큐에서 기다리는 동안 행이 이미 정리(failed/interrupted)됐으면 엔진을 부르지 않는다
+    (`_claim_slot` — 돈이 나가는 호출 직전 재확인)."""
+    engine = FakeEngine()
+    monkeypatch.setattr(ai_card_engine, "default_engine", lambda: engine)
+    card = _start()
+    # 세마포어를 기다리는 사이에 정리 기준을 넘겨 다른 조회가 실패로 덮은 상태를 흉내 낸다.
+    card.status, card.error_code = "failed", "interrupted"
+    _run_all(jobs)
+    assert engine.calls == []
+    assert not storage.local_path(f"ai-cards/{OWNER}/{card.id}.png").exists()
+
+
+def test_row_deleted_before_slot_never_calls_engine(store, storage, jobs, monkeypatch) -> None:
+    """큐에서 기다리는 동안 카드가 삭제됐으면 엔진을 부르지 않는다 (`_claim_slot`)."""
+    engine = FakeEngine()
+    monkeypatch.setattr(ai_card_engine, "default_engine", lambda: engine)
+    card = _start()
+    asyncio.run(service.delete_card(FakeSession(), OWNER, card.id))
+    _run_all(jobs)
+    assert engine.calls == []
+    assert not storage.local_path(f"ai-cards/{OWNER}/{card.id}.png").exists()
+
+
 def test_failed_card_does_not_use_up_daily_limit(store, jobs, monkeypatch) -> None:
     monkeypatch.setattr(ai_card_engine, "default_engine", lambda: FakeEngine(error=EngineError("upstream", "x")))
     _start()

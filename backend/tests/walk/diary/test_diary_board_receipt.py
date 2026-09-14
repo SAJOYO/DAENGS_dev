@@ -9,7 +9,10 @@ import pytest
 
 from daengs_backend.services import walk_diary_slot_writing as writer
 from daengs_backend.services.walk_diary_base_board import assemble_saved_base_board
-from daengs_backend.services.walk_diary_board_slot_writing import complete_slot_board, write_board
+from daengs_backend.services.walk_diary_board_slot_writing import (
+    complete_slot_board,
+    write_legacy_slot_board,
+)
 from daengs_backend.services.walk_diary_board_storage import (
     LegacyStoredBoard,
     StoredBoard,
@@ -53,7 +56,7 @@ async def saved():
             ]
         }
 
-    output = await write_board(source, base, generate)
+    output = await write_legacy_slot_board(source, base, generate)
     bundle = complete_slot_board(prepared, output)
     revision = digest("generation-one")
     stored = store_board(prepared, bundle, revision, writing=output)

@@ -30,7 +30,6 @@ from daengs_backend.services.walk_diary_publication import (
     settle_expired,
     within_budget,
 )
-from daengs_backend.services.walk_diary_space_collection import configured_collection
 from daengs_backend.services.walk_diary_storage import read_diary, store_diary
 from daengs_backend.services.walk_diary_writing import write_diary, writing_version
 from daengs_backend.services.walk_storyboard_state import (
@@ -156,7 +155,13 @@ async def get_diary(session, owner, walk_id, target, bundle_format="walk-diary-b
     return value
 
 
-async def generate_diary(session, owner, walk_id, request, *, writer=None, collector=None):
+async def generate_diary(session, owner, walk_id, request, *, writer=None, legacy_collector=None):
+    """Publish with the negotiated writer.
+
+    legacy_collector explicitly opts historical writers into pre-reservation collection.
+    Card providers/collection belong to write_board, which runs after reservation;
+    wrapping a writer alone never changes collection timing.
+    """
     started = datetime.now(UTC)
     deadline = (
         started + timedelta(milliseconds=request.preparation_budget_ms)
@@ -217,14 +222,14 @@ async def generate_diary(session, owner, walk_id, request, *, writer=None, colle
         await session.commit()
         return value
     collected = None
-    if prepared.board and settings.walk_diary_space_enabled and writer not in (None, write_board):
+    if prepared.board and settings.walk_diary_space_enabled and legacy_collector is not None:
         selected_board = prepared.board.board
         await session.commit()  # Public acquisition must never hold the Walk lock.
         remaining = (deadline - datetime.now(UTC)).total_seconds() if deadline else 4.5
         if remaining > 0:
             try:
                 async with asyncio.timeout(min(4.5, remaining)):
-                    collected = await (collector or configured_collection)(selected_board)
+                    collected = await legacy_collector(selected_board)
             except TimeoutError:
                 pass  # A bounded first publication can still use its original base materials.
         principal, prepared, revision = await snapshot(

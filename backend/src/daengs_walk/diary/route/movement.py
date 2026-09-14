@@ -6,8 +6,8 @@ from itertools import groupby, pairwise
 
 from daengs_walk.diary.contracts.input import digest
 from daengs_walk.diary.route.patterns import RoutePatternBindingPolicy
-from daengs_walk.storyboard_input import route_nodes
-from daengs_walk.storyboard_selection import session_speed_baseline
+from daengs_walk.route.nodes import route_nodes
+from daengs_walk.route.pace import session_speed_baseline
 
 
 @dataclass(frozen=True)
@@ -80,7 +80,7 @@ def prepare_movement(source, route, policy, pattern_policy=None):
     patterns = normalize_route_patterns(route.evidence, route_revision, binding.geometry)
     nodes = route_nodes(route.evidence)
     origin = route.evidence.facts.started_at
-    baseline = session_speed_baseline(nodes)
+    baseline = session_speed_baseline(nodes, minimum_speed=0.5, minimum_samples=5)
     measured = [n for n in nodes if "speed" in n]
     included = [n for n in measured if n["speed"] >= 0.5]
     audit = {

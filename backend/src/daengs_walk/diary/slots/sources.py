@@ -12,8 +12,8 @@ from daengs_walk.diary.contracts.slots import SlotDecision, SlotEvidence, SlotSo
 from daengs_walk.diary.route.observations import build_observation_pool
 from daengs_walk.diary.slots.spatial import spatial_claim
 from daengs_walk.diary.space.projection import project_background
-from daengs_walk.storyboard_input import route_nodes
-from daengs_walk.storyboard_selection import distance
+from daengs_walk.route.geometry import distance
+from daengs_walk.route.nodes import route_nodes
 
 
 class RegionalWeather(DiaryContract):

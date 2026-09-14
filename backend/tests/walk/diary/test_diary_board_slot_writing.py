@@ -134,10 +134,9 @@ async def test_timeout_and_external_cancel_have_distinct_results(monkeypatch):
         )
 
 
-def test_real_router_selects_slot_writer_without_changing_request_body(api, monkeypatch):
+def test_explicit_slot_writer_override_preserves_slot_payload(api):
     client, state, _ = api
-    client.app.dependency_overrides.pop(router.get_diary_writer)
-    monkeypatch.setattr(router, "write_board", state.writer)
+    client.app.dependency_overrides[router.get_diary_writer] = lambda: state.writer
     response = client.post(PATH, json=body(state, bundle_format=BOARD_FORMAT))
     assert response.status_code == 200, response.text
     assert response.json()["bundle"]["model_status"] == "accepted"

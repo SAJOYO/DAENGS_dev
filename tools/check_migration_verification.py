@@ -239,6 +239,72 @@ GAIT_RECORDS_POSE_MODEL_ROWS = (
 # **모듈 수준에 둔다** — `coverage_checks()` 가 "등록됐나"를 이 목록에서 읽는다. 함수 안에
 # 있으면 그 검사가 소스를 정규식으로 긁어야 하고, 그러면 목록을 고칠 때마다 정규식이 낡는다.
 CHECKS = (
+        ('2026-09-13', 'walk_measurements', 'CREATE TABLE walks(id uuid PRIMARY KEY);', 'walk_measurements', [
+            'ALTER TABLE walk_measurement_chunks DROP COLUMN walk_id CASCADE',
+            'ALTER TABLE walk_measurement_chunks DROP COLUMN measurement_id CASCADE',
+            'ALTER TABLE walk_measurement_chunks DROP COLUMN chunk_index CASCADE',
+            'ALTER TABLE walk_measurement_chunks DROP COLUMN payload CASCADE',
+            'ALTER TABLE walk_measurement_chunks DROP COLUMN fingerprint CASCADE',
+            'ALTER TABLE walk_measurements DROP COLUMN walk_id CASCADE',
+            'ALTER TABLE walk_measurements DROP COLUMN measurement_id CASCADE',
+            'ALTER TABLE walk_measurements DROP COLUMN input_key CASCADE',
+            'ALTER TABLE walk_measurements DROP COLUMN payload CASCADE',
+            'ALTER TABLE walk_measurements DROP COLUMN fingerprint CASCADE',
+            'ALTER TABLE walk_measurement_chunks DROP CONSTRAINT walk_measurement_chunk_hash CASCADE',
+            'ALTER TABLE walk_measurement_chunks DROP CONSTRAINT walk_measurement_chunk_index CASCADE',
+            'ALTER TABLE walk_measurement_chunks DROP CONSTRAINT walk_measurement_chunks_pkey CASCADE',
+            'ALTER TABLE walk_measurement_chunks DROP CONSTRAINT walk_measurement_chunks_walk_id_measurement_id_fkey CASCADE',
+            'ALTER TABLE walk_measurements DROP CONSTRAINT walk_measurement_hash CASCADE',
+            'ALTER TABLE walk_measurements DROP CONSTRAINT walk_measurement_id CASCADE',
+            'ALTER TABLE walk_measurements DROP CONSTRAINT walk_measurement_input CASCADE',
+            'ALTER TABLE walk_measurements DROP CONSTRAINT walk_measurement_input_hash CASCADE',
+            'ALTER TABLE walk_measurements DROP CONSTRAINT walk_measurements_pkey CASCADE',
+            'ALTER TABLE walk_measurements DROP CONSTRAINT walk_measurements_walk_id_fkey CASCADE',
+        ]),
+        ('2026-09-11', 'walk_precision_backup', "CREATE TABLE walk_motion_backups(walk_id uuid PRIMARY KEY);", 'walk_precision_backups', [
+            'DROP TABLE walk_precision_chunks',
+            'ALTER TABLE walk_precision_backups DROP COLUMN manifest',
+            'ALTER TABLE walk_precision_backups ALTER COLUMN manifest_fingerprint TYPE text',
+            'ALTER TABLE walk_precision_backups ALTER COLUMN evidence_fingerprint SET NOT NULL',
+            'ALTER TABLE walk_precision_backups DROP CONSTRAINT walk_precision_backups_walk_id_fkey',
+            'ALTER TABLE walk_precision_chunks DROP CONSTRAINT walk_precision_chunks_pkey',
+            'ALTER TABLE walk_precision_chunks DROP CONSTRAINT walk_precision_chunks_walk_id_fkey',
+            'ALTER TABLE walk_precision_chunks DROP CONSTRAINT walk_precision_chunk_payload',
+            'ALTER TABLE walk_precision_chunks DROP CONSTRAINT walk_precision_chunk_index',
+            'ALTER TABLE walk_precision_backups DROP CONSTRAINT walk_precision_manifest_hash',
+            'ALTER TABLE walk_precision_backups DROP CONSTRAINT walk_precision_evidence_hash',
+            'ALTER TABLE walk_precision_chunks DROP CONSTRAINT walk_precision_chunk_hash',
+            'ALTER TABLE walk_precision_backups DROP CONSTRAINT walk_precision_manifest_object',
+        ]),
+        ('2026-09-11', 'walk_motion_backup', WALKS, 'walk_motion_backups', [
+            'DROP TABLE walk_motion_chunks',
+            'ALTER TABLE walk_motion_backups DROP COLUMN manifest',
+            'ALTER TABLE walk_motion_backups ALTER COLUMN manifest_fingerprint TYPE text',
+            'ALTER TABLE walk_motion_backups ALTER COLUMN evidence_fingerprint SET NOT NULL',
+            'ALTER TABLE walk_motion_backups DROP CONSTRAINT walk_motion_backups_walk_id_fkey',
+            'ALTER TABLE walk_motion_chunks DROP CONSTRAINT walk_motion_chunks_pkey',
+            'ALTER TABLE walk_motion_chunks DROP CONSTRAINT walk_motion_chunks_walk_id_fkey',
+            'ALTER TABLE walk_motion_chunks DROP CONSTRAINT walk_motion_chunk_payload',
+            'ALTER TABLE walk_motion_chunks DROP CONSTRAINT walk_motion_chunk_index',
+            'ALTER TABLE walk_motion_backups DROP CONSTRAINT walk_motion_manifest_hash',
+            'ALTER TABLE walk_motion_backups DROP CONSTRAINT walk_motion_evidence_hash',
+            'ALTER TABLE walk_motion_chunks DROP CONSTRAINT walk_motion_chunk_hash',
+            'ALTER TABLE walk_motion_backups DROP CONSTRAINT walk_motion_manifest_object',
+        ]),
+        ('2026-09-11', 'place_bookmarks', APP_USERS_WITH_STATUS, 'place_bookmarks', [
+            'ALTER TABLE place_bookmarks DROP COLUMN name',
+            'ALTER TABLE place_bookmarks ALTER COLUMN ref TYPE varchar(300)',
+            'ALTER TABLE place_bookmarks ALTER COLUMN name DROP NOT NULL',
+            'ALTER TABLE place_bookmarks ALTER COLUMN created_at DROP DEFAULT',
+            'ALTER TABLE place_bookmarks DROP CONSTRAINT place_bookmarks_pkey',
+            'ALTER TABLE place_bookmarks DROP CONSTRAINT place_bookmarks_app_user_id_fkey',
+            'ALTER TABLE place_bookmarks DROP CONSTRAINT place_bookmarks_source_check',
+            'ALTER TABLE place_bookmarks DROP CONSTRAINT place_bookmarks_ref_check',
+            'DROP TRIGGER place_bookmark_owner_cleanup ON app_users',
+            'ALTER TABLE app_users DISABLE TRIGGER place_bookmark_owner_cleanup',
+            'CREATE OR REPLACE FUNCTION place_bookmark_owner_cleanup() RETURNS trigger'
+            ' LANGUAGE plpgsql AS $f$ BEGIN RETURN NEW; END $f$',
+        ]),
         ('2026-09-10', 'territory_bookmarks', APP_USERS_WITH_STATUS,
          'territory_bookmarks', [
             'ALTER TABLE territory_bookmarks DROP COLUMN created_at',
@@ -492,6 +558,78 @@ CHECKS = (
             'ALTER TABLE pet_invites DROP CONSTRAINT pet_invites_accepted_by_fkey;'
             ' ALTER TABLE pet_invites ADD CONSTRAINT pet_invites_accepted_by_fkey'
             ' FOREIGN KEY (accepted_by) REFERENCES app_users(id) ON DELETE CASCADE',
+         ]),
+        # 2026-09-12 (co-care 초대 묶음 — 다중 초대 MVP) — pet_invite_pets 표와
+        # pet_invites.pet_count 한 칸. 픽스처는 9/9 pet_members + 9/10 영수증을 그대로
+        # 재사용한다(그래야 부모 표 pet_invites 가 이미 있다).
+        #
+        # **변조 셋이 이 항목의 이유다.**
+        #  · `linked_pet_id` 의 FK 를 SET NULL → CASCADE 로 — 연결 대상이 지워질 때
+        #    영수증 줄이 통째로 사라져, 재시도가 그때의 강아지별 매핑을 복원하지 못한다.
+        #  · `pet_count` 의 NOT NULL 을 떼는 것 — 그 칸이 비면 묶음 구성이 바뀌었는지
+        #    알 방법이 없어져 **부분 수락**이 조용히 열린다.
+        #  · backfill 을 되돌리는 것(`DELETE FROM pet_invite_pets`) — 카탈로그는 멀쩡한데
+        #    이미 뿌린 링크가 전부 죽는다. verify 의 ⑦ 이 그것만 잡는다.
+        ('2026-09-12', 'pet_invite_pets',
+         APP_USERS_WITH_STATUS + PETS_ONLY
+         + prerequisites('2026-09-08_care_events', '2026-09-09_pet_members',
+                         '2026-09-10_pet_invite_receipts')
+         + "INSERT INTO pet_invites(id, pet_id, invited_by, token_hash, expires_at)"
+           " VALUES ('44444444-4444-4444-4444-444444444444',"
+           "         '33333333-3333-3333-3333-333333333333',"
+           "         '11111111-1111-1111-1111-111111111111',"
+           "         repeat('a', 64), NOW() + interval '1 day');",
+         'pet_invite_pets', [
+            'ALTER TABLE pet_invites DROP COLUMN pet_count',
+            'ALTER TABLE pet_invites ALTER COLUMN pet_count DROP NOT NULL',
+            'ALTER TABLE pet_invites DROP CONSTRAINT pet_invites_pet_count_check',
+            'ALTER TABLE pet_invite_pets DROP COLUMN linked_pet_id',
+            'DROP INDEX idx_pet_invite_pets_pet',
+            'ALTER TABLE pet_invite_pets DROP CONSTRAINT pet_invite_pets_pkey',
+            'ALTER TABLE pet_invite_pets DROP CONSTRAINT pet_invite_pets_linked_pet_id_fkey;'
+            ' ALTER TABLE pet_invite_pets ADD CONSTRAINT pet_invite_pets_linked_pet_id_fkey'
+            ' FOREIGN KEY (linked_pet_id) REFERENCES pets(id) ON DELETE CASCADE',
+            'ALTER TABLE pet_invite_pets DROP CONSTRAINT pet_invite_pets_pet_id_fkey;'
+            ' ALTER TABLE pet_invite_pets ADD CONSTRAINT pet_invite_pets_pet_id_fkey'
+            ' FOREIGN KEY (pet_id) REFERENCES pets(id) ON DELETE SET NULL',
+            # backfill 을 되돌린다. 카탈로그는 그대로라 ①~⑥ 은 전부 통과한다.
+            'DELETE FROM pet_invite_pets',
+            # 자식은 그대로 두고 pet_count 만 틀리게 만든다.
+            'UPDATE pet_invites SET pet_count = 3',
+         ]),
+        # 2026-09-12 (co-care 논리 강아지 — 다중 초대 MVP) — pet_identities 표와
+        # pets.identity_id 한 칸. 픽스처는 pets 스텁뿐이다(앞선 마이그레이션에 안 기댄다).
+        #
+        # **변조 둘이 이 항목의 이유다.**
+        #  · `pets.identity_id` 의 FK 를 SET NULL → CASCADE 로 바꾸는 것 — 그룹 행 하나가
+        #    사라질 때 사람들의 강아지와 기록이 통째로 딸려 간다. 논리 연결의 전제("물리
+        #    병합을 하지 않는다")가 이 한 칸에 걸려 있다.
+        #  · `pets_identity_one_per_user` 에서 WHERE 를 떼 전체 UNIQUE 로 바꾸는 것 —
+        #    이름이 그대로라 카탈로그를 이름으로만 보면 통과한다. 그런데 부분이 아니면
+        #    뜻이 달라지고, 반대로 UNIQUE 자체를 잃으면 기존 강아지 하나를 초대 강아지
+        #    두 마리에 연결하는 것을 DB 가 더 이상 막지 못한다.
+        ('2026-09-12', 'pet_identities', PETS, 'pet_identities', [
+            'ALTER TABLE pets DROP COLUMN identity_id',
+            'DROP INDEX pets_identity_one_per_user',
+            'DROP INDEX idx_pets_identity',
+            'DROP INDEX pet_identities_owner_pet',
+            'ALTER TABLE pet_identities ALTER COLUMN owner_pet_id DROP NOT NULL',
+            # 부분 UNIQUE 가 전체 UNIQUE 로. 이름은 그대로다.
+            'DROP INDEX pets_identity_one_per_user;'
+            ' CREATE UNIQUE INDEX pets_identity_one_per_user'
+            ' ON pets (identity_id, app_user_id)',
+            # UNIQUE 를 잃고 평범한 인덱스가 됨. 역시 이름은 그대로다.
+            'DROP INDEX pets_identity_one_per_user;'
+            ' CREATE INDEX pets_identity_one_per_user'
+            ' ON pets (identity_id, app_user_id) WHERE identity_id IS NOT NULL',
+            'ALTER TABLE pets DROP CONSTRAINT pets_identity_id_fkey',
+            'ALTER TABLE pets DROP CONSTRAINT pets_identity_id_fkey;'
+            ' ALTER TABLE pets ADD CONSTRAINT pets_identity_id_fkey'
+            ' FOREIGN KEY (identity_id) REFERENCES pet_identities(id) ON DELETE CASCADE',
+            'ALTER TABLE pet_identities DROP CONSTRAINT pet_identities_owner_pet_id_fkey',
+            'ALTER TABLE pet_identities DROP CONSTRAINT pet_identities_owner_pet_id_fkey;'
+            ' ALTER TABLE pet_identities ADD CONSTRAINT pet_identities_owner_pet_id_fkey'
+            ' FOREIGN KEY (owner_pet_id) REFERENCES pets(id) ON DELETE SET NULL',
          ]),
         # 2026-09-10 (co-care 보행 확정 — "반쯤 열린" 돌보미 업로드, docs/co-care.md §2,
         # #388 · #261) — gait_records 에 actor_app_user_id(업로더) 한 칸. 픽스처는 9/2
@@ -939,6 +1077,27 @@ CHECKS = (
             # **옛 표를 되살리는 변조 — 이 항목의 이유다.** 옮기기만 하고 DROP 을 빠뜨리면
             # 같은 좌표가 두 곳에 남는데, 옛 verify 는 그것을 SELECT 로 찍기만 했다.
             'CREATE TABLE walk_points(walk_id uuid, client_seq integer)',
+        ]),
+        ('2026-09-12', 'territory_vision_jobs', APP_USERS + PETS_ONLY
+         + prerequisites('2026-09-03_territory_visits'), 'territory_attempts', [
+            'ALTER TABLE territory_attempts DROP COLUMN vision_retry_reason',
+            'ALTER TABLE territory_attempts ALTER COLUMN vision_attempts TYPE bigint',
+            'ALTER TABLE territory_attempts ALTER COLUMN vision_attempts SET DEFAULT 1',
+            'ALTER TABLE territory_attempts ALTER COLUMN vision_available_at DROP NOT NULL',
+            'ALTER TABLE territory_attempts ALTER COLUMN vision_dispatch_after DROP DEFAULT',
+            'ALTER TABLE territory_attempts ALTER COLUMN vision_lease_token SET NOT NULL',
+            'ALTER TABLE territory_attempts DROP CONSTRAINT territory_vision_attempts_check',
+            ('ALTER TABLE territory_attempts DROP CONSTRAINT territory_vision_lease_check;'
+             ' ALTER TABLE territory_attempts ADD CONSTRAINT territory_vision_lease_check'
+             ' CHECK (vision_lease_token IS NULL OR vision_lease_until IS NOT NULL)'),
+            ('ALTER TABLE territory_attempts DROP CONSTRAINT territory_vision_lease_check;'
+             ' ALTER TABLE territory_attempts ADD CONSTRAINT territory_vision_lease_check'
+             ' CHECK (TRUE) NOT VALID'),
+            'DROP INDEX territory_vision_dispatch_idx',
+            ('DROP INDEX territory_vision_dispatch_idx; CREATE INDEX territory_vision_dispatch_idx'
+             ' ON territory_attempts(vision_dispatch_after, id)'),
+            ('DROP INDEX territory_vision_dispatch_idx; CREATE INDEX territory_vision_dispatch_idx'
+             " ON territory_attempts(vision_dispatch_after, id) WHERE status='VISION_PENDING'"),
         ]),
         ('2026-09-03', 'territory_visits', APP_USERS + PETS_ONLY,
          'territory_verified_visits', [

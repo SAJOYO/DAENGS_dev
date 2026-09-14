@@ -232,6 +232,13 @@ async def test_adapter_exception_becomes_error_without_crashing_graph() -> None:
     )
     assert response.status == AssistantStatus.FAILED
     assert response.results[0].status == CapabilityStatus.ERROR
+    # The engine's catch-all writes a fixed sentence, never the exception text: an adapter
+    # that raises with a query, a path, or a provider payload in the message must not have
+    # it reach the user. `kind` keeps the class name so the log still says what broke.
+    assert response.results[0].error is not None
+    assert "boom" not in response.results[0].error.detail
+    assert "boom" not in response.message
+    assert response.results[0].error.kind == "RuntimeError"
 
 
 async def test_missing_adapter_fails_predictably_as_a_capability_error() -> None:

@@ -285,13 +285,12 @@ def render_conversation_context(resolved: ConversationContext) -> str:
         "repeat, a correction, or the answer to a pending question. If the current query is "
         "a new topic, ignore this block."
     )
-    return (
-        f"{instruction}\n"
-        f"CONVERSATION: {json.dumps(payload, ensure_ascii=False, sort_keys=True)}"
-    )
+    return f"{instruction}\nCONVERSATION: {json.dumps(payload, ensure_ascii=False, sort_keys=True)}"
 
 
-def router_prompt_version(resolved: ConversationContext | None) -> str:
+def router_prompt_version(
+    resolved: ConversationContext | None, *, facility_view: bool = False
+) -> str:
     """`build_semantic_router_prompt(resolved=...)` 가 실제로 쓸 `PROMPT_VERSION` 값.
 
     Fix round 1, R18 (#416 Task 6) — 이 계산이 프롬프트 빌더 밖에 따로 있던 것이 사고였다.
@@ -302,7 +301,19 @@ def router_prompt_version(resolved: ConversationContext | None) -> str:
     계산하면, 프롬프트 빌더의 분기와 기록의 분기가 같은 조건(`resolved is None`)에서
     갈라져 서로 못 어긋난다.
     """
-    return RESOLVED_PROMPT_VERSION if resolved is not None else PROMPT_VERSION
+    version = RESOLVED_PROMPT_VERSION if resolved is not None else PROMPT_VERSION
+    return version + "-facility1" if facility_view else version
+
+
+def render_facility_context(context: dict[str, Any]) -> str:
+    if context.get("facility_view") is not True:
+        return ""
+    return (
+        "FACILITY_VIEW: The user has a current facility search. Choose place for references to "
+        "its candidates, choosing a place, changing search filters, next/other places, bookmarks, "
+        "or answering a facility confirmation. Do not route an unrelated new topic to place. "
+        "Place resolves the actual cards and conditions; do not invent them.\n"
+    )
 
 
 def build_semantic_router_prompt(
@@ -316,25 +327,29 @@ def build_semantic_router_prompt(
     if not query.strip():
         raise ValueError("query must not be blank")
     metadata = routing_metadata(context)
+    facility = render_facility_context(context)
+    version = router_prompt_version(resolved, facility_view=bool(facility))
     schema = json.dumps(
         SemanticRoutingDecision.model_json_schema(), ensure_ascii=False, sort_keys=True
     )
     if resolved is None:
         return (
-            f"PROMPT_VERSION: {PROMPT_VERSION}\n\n"
+            f"PROMPT_VERSION: {version}\n\n"
             f"{_POLICY}\n\n"
             f"SEMANTIC_DECISION_JSON_SCHEMA:\n{schema}\n\n"
             f"INPUT_LOCALE: ko-KR\n"
             f"ROUTING_METADATA: {json.dumps(metadata, ensure_ascii=False, sort_keys=True)}\n"
+            f"{facility}"
             f"USER_QUERY: {query}\n"
         )
     return (
-        f"PROMPT_VERSION: {RESOLVED_PROMPT_VERSION}\n\n"
+        f"PROMPT_VERSION: {version}\n\n"
         f"{_POLICY}\n\n"
         f"SEMANTIC_DECISION_JSON_SCHEMA:\n{schema}\n\n"
         f"INPUT_LOCALE: ko-KR\n"
         f"ROUTING_METADATA: {json.dumps(metadata, ensure_ascii=False, sort_keys=True)}\n"
         f"{render_conversation_context(resolved)}\n"
+        f"{facility}"
         f"USER_QUERY: {query}\n"
     )
 
@@ -359,15 +374,14 @@ def validate_semantic_decision(raw: object) -> SemanticRoutingDecision | None:
 def _gemini_client() -> Any:
     # google-genai stays a function-local import so importing the router never
     # pulls provider machinery (mirrors the lazy-import rule for heavy stacks).
-    from google import genai
-    from google.genai import types
+    from daengs_backend.core.gemini import create_client
 
     api_key = settings.gemini_api_key.get_secret_value().strip()
     if not api_key:
         raise SemanticRoutingError("GEMINI_API_KEY is required for the semantic router")
-    return genai.Client(
+    return create_client(
         api_key=api_key,
-        http_options=types.HttpOptions(timeout=settings.gemini_timeout_ms),
+        timeout_ms=settings.gemini_timeout_ms,
     )
 
 

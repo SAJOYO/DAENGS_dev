@@ -1,0 +1,249 @@
+{
+  "label": "pf_carelog_v1",
+  "judge": {
+    "model": "gpt-5.4-2026-03-05",
+    "variant": "A",
+    "prompt_version": "profile-fitness-diff-ko-v2.1a",
+    "hygiene": {
+      "judge_model": "gpt-5.4-2026-03-05",
+      "judge_family": "openai",
+      "generation_families": "google"
+    }
+  },
+  "generation": {
+    "router": {
+      "model": "gemini-3.1-flash-lite",
+      "prompt_version": "semantic-router-ko-v10"
+    },
+    "general": {
+      "model": "gemini-3.1-flash-lite",
+      "prompt_version": "general-answer-ko-v6"
+    }
+  },
+  "adapters": "fallback-only",
+  "real_capabilities": [
+    "general"
+  ],
+  "anchor_record": {
+    "file": "anchor_check_dev_profile-fitness-diff-ko-v2.1a_gpt-5.4-2026-03-05.json",
+    "passed_count": 8,
+    "anchor_count": 8,
+    "checked_at": "2026-09-09T05:34:19+00:00"
+  },
+  "rates": {
+    "N_noise": {
+      "point": NaN,
+      "low": NaN,
+      "high": NaN,
+      "n": 0,
+      "k": 0
+    },
+    "S_invariant": {
+      "point": 0.0,
+      "low": 0.0,
+      "high": 0.6576,
+      "n": 2,
+      "k": 0
+    },
+    "P_ablation": {
+      "point": 1.0,
+      "low": 0.2065,
+      "high": 1.0,
+      "n": 1,
+      "k": 1
+    },
+    "reactive_contrast": {
+      "point": 1.0,
+      "low": 0.6097,
+      "high": 1.0,
+      "n": 6,
+      "k": 6
+    },
+    "probe_fabricated": {
+      "point": NaN,
+      "low": NaN,
+      "high": NaN,
+      "n": 0,
+      "k": 0
+    }
+  },
+  "inequality": {
+    "N": NaN,
+    "S": 0.0,
+    "P": 1.0,
+    "holds_N_lt_S": null,
+    "holds_S_lt_P": true,
+    "holds": null,
+    "P_minus_N": null,
+    "P_minus_N_ci_excludes_zero": null,
+    "paired_questions": 0
+  },
+  "items": {
+    "responsiveness": 1.857,
+    "no_fabrication": 1.0,
+    "invariance": 1.0
+  },
+  "items_detail": {
+    "responsiveness": {
+      "mean": 1.857,
+      "max": 2,
+      "n": 7,
+      "distribution": {
+        "2": 6,
+        "1": 1
+      }
+    },
+    "no_fabrication": {
+      "mean": 1.0,
+      "max": 1,
+      "n": 9,
+      "distribution": {
+        "1": 9
+      }
+    },
+    "invariance": {
+      "mean": 1.0,
+      "max": 1,
+      "n": 2,
+      "distribution": {
+        "1": 2
+      }
+    }
+  },
+  "items_by_tier": {
+    "coarse": {
+      "responsiveness": {
+        "mean": 2.0,
+        "max": 2,
+        "n": 6,
+        "distribution": {
+          "2": 6
+        }
+      },
+      "no_fabrication": {
+        "mean": 1.0,
+        "max": 1,
+        "n": 8,
+        "distribution": {
+          "1": 8
+        }
+      },
+      "invariance": {
+        "mean": 1.0,
+        "max": 1,
+        "n": 2,
+        "distribution": {
+          "1": 2
+        }
+      }
+    },
+    "fine": {
+      "responsiveness": {
+        "mean": 1.0,
+        "max": 2,
+        "n": 1,
+        "distribution": {
+          "1": 1
+        }
+      },
+      "no_fabrication": {
+        "mean": 1.0,
+        "max": 1,
+        "n": 1,
+        "distribution": {
+          "1": 1
+        }
+      }
+    }
+  },
+  "items_by_kind": {
+    "reactive": {
+      "responsiveness": {
+        "mean": 1.857,
+        "max": 2,
+        "n": 7,
+        "distribution": {
+          "2": 6,
+          "1": 1
+        }
+      },
+      "no_fabrication": {
+        "mean": 1.0,
+        "max": 1,
+        "n": 7,
+        "distribution": {
+          "1": 7
+        }
+      }
+    },
+    "invariant": {
+      "invariance": {
+        "mean": 1.0,
+        "max": 1,
+        "n": 2,
+        "distribution": {
+          "1": 2
+        }
+      },
+      "no_fabrication": {
+        "mean": 1.0,
+        "max": 1,
+        "n": 2,
+        "distribution": {
+          "1": 2
+        }
+      }
+    }
+  },
+  "failures": {
+    "scored_pairs": 9,
+    "ignored": 0,
+    "fabricated": 0,
+    "stereotype": 0,
+    "over_personalized": 0
+  },
+  "unmeasured": {},
+  "coverage": {
+    "total_pairs": 22,
+    "judged": 9,
+    "skipped_before_judging": {
+      "not_answered": 13
+    },
+    "not_planned": {
+      "noise": 12
+    },
+    "position_dependent": 0,
+    "position_checked": 0,
+    "position_flip_rate": null,
+    "abstained": 0,
+    "unmeasured_rate": 0.591
+  },
+  "paraphrase": {
+    "pairs": 0,
+    "agreement": null
+  },
+  "cost": {
+    "input_tokens": 17855,
+    "output_tokens": 2360,
+    "pairs": 9,
+    "tokens_per_1000_pairs": 2246111
+  },
+  "calibration": null,
+  "provisional": true,
+  "generated_at": "2026-09-11T08:54:19+00:00",
+  "gate": {
+    "responsiveness": {
+      "passed": false,
+      "reason": "not_calibrated"
+    },
+    "invariance": {
+      "passed": false,
+      "reason": "not_calibrated"
+    },
+    "no_fabrication": {
+      "passed": false,
+      "reason": "not_calibrated"
+    }
+  },
+  "note": "시험 ② 오늘 기록 바꿔치기 (benchmark_pf_carelog_v1.yaml). 판정 v2.1a 한 방향"
+}

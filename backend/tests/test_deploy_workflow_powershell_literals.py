@@ -3,7 +3,7 @@
 The self-hosted Windows runner hands the inline `run:` body to Windows PowerShell 5.1 as a temp
 .ps1; a Korean single-quoted literal in the executable part of the "Compose 서비스 기동" step
 (`throw '배포 변경 파일을 …'`) arrived byte-mangled, the quote never closed, and the whole step
-— including `docker compose restart backend` — never executed (fix/deploy-powershell-parser).
+— including the Compose service update — never executed (fix/deploy-powershell-parser).
 Comments are fine (the parser drops them); executable single-quoted literals must stay ASCII.
 No YAML library: the block is located by its step name and its comment lines are ignored.
 """
@@ -41,6 +41,10 @@ def test_compose_step_executable_single_quoted_literals_are_ascii() -> None:
     assert offenders == [], offenders
 
 
-def test_compose_step_keeps_the_explicit_backend_restart_after_up() -> None:
+def test_compose_step_recreates_backend_and_vision_worker_after_up() -> None:
     body = [line for line in _compose_step_body() if line and not line.startswith("#")]
-    assert body.index("docker compose up -d") < body.index("docker compose restart backend")
+    recreate = (
+        "docker compose up -d --no-deps --force-recreate --wait "
+        "--wait-timeout 240 backend territory-vision-worker"
+    )
+    assert body.index("docker compose up -d") < body.index(recreate)

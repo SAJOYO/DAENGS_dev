@@ -1,25 +1,20 @@
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import AliasChoices, Field, SecretStr, ValidationError, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import (
+    AliasChoices,
+    Field,
+    SecretStr,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 from sqlalchemy import URL
 
 # backend/.env 를 가리킵니다. config.py 기준으로 잡아 두면
 # 어느 디렉터리에서 실행하든 같은 파일을 읽습니다.
 ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
-
-# `/assistant/query` 를 어느 오케스트레이터가 답하는가.
-#
-# **이 별칭이 config 에 있는 것은 자리를 잘못 잡아서가 아니라 순환 때문입니다.**
-# 임자는 `orchestration/runtime.py` 인데, 거기 두고 config 가 import 하면
-# config → runtime → service → semantic → config 로 한 바퀴 돕니다
-# (`semantic.py` 가 `settings` 를 모듈 최상단에서 읽습니다). 값의 권위가 환경
-# 변수(`DAENGS_ORCHESTRATOR`)에 있으니 정의를 이쪽에 두고, `runtime.py` 가
-# 다시 export 합니다 — 쓰는 쪽은 `orchestration.runtime` 에서 가져오면 됩니다.
-#
-# Literal 인 이유: 오타가 **기동 때** 걸립니다. `str` 이면 첫 요청에서야 터집니다.
-OrchestratorKind = Literal["langgraph", "agent"]
 
 
 class Settings(BaseSettings):
@@ -129,6 +124,15 @@ class Settings(BaseSettings):
     walk_photo_metadata_enabled: bool = False
     # Opt-in diary bundle; enable only with a client that explicitly requests the new format.
     walk_diary_enabled: bool = False
+    # Experimental endpoint must be enabled independently of published diaries.
+    walk_diary_slots_preview_enabled: bool = False
+    # Public normalization is independent of the legacy entry-context job schema.
+    walk_diary_space_enabled: bool = True
+    walk_diary_route_patterns_enabled: bool = False
+    walk_diary_space_radius_m: int = Field(default=1000, ge=1, le=3000)
+    walk_land_cover_layer: str = Field(
+        default="EGIS:lv3_2025y", pattern=r"^EGIS:lv3_[a-zA-Z0-9_-]+$"
+    )
 
     # ── DB ────────────────────────────────────────────────────────────
     # URL 한 줄이 아니라 조각으로 받습니다 (D-013). 개발 PC 와 서버가 다른 것은
@@ -158,31 +162,12 @@ class Settings(BaseSettings):
     # 기본값은 기존 앱 access token을 요구한다.
     training_rag_allow_anonymous_demo: bool = False
 
-    # ── 오케스트레이터 구현 선택 ──────────────────────────────────────
-    # LangGraph 는 정해진 워크플로우에 최적화돼 있어, 자유도가 필요한 질의에
-    # LangChain 에이전트가 더 나은지 재 보려고 두 구현을 병존시킵니다.
-    # `orchestration/runtime.py` 의 `build_orchestrator()` 가 이 값을 읽습니다.
-    #
-    # **이건 배포 스위치입니다 — 비교 스위치가 아닙니다.** 두 구현을 나란히 재는
-    # 벤치마크는 이 값을 건드리지 않고 `build_orchestrator(kind)` 로 객체를 둘
-    # 만듭니다. 환경 변수를 토글해 가며 재면 한 프로세스에서 비교가 안 됩니다.
-    #
-    # 기본값이 `langgraph` 라 **서버 `.env` 를 안 고쳐도 지금과 똑같이 돕니다.**
-    orchestrator: OrchestratorKind = "langgraph"
-
-    # 에이전트 한 턴의 예산. **답이 아니라 안전장치입니다** — 에이전트가 루프를 돌아
-    # 비싼 것 자체는 카드 ③이 재야 할 발견이라, 여기서 깎아 결과를 미리 만들지
-    # 않습니다. 무한 루프만 막습니다. LangGraph 경로는 이 값을 안 읽습니다.
-    agent_turn_timeout_ms: int = Field(default=60_000, gt=0)
-    agent_recursion_limit: int = Field(default=25, gt=0)
-
     # ── 일반 답변 폴백 (#279) ─────────────────────────────────────────
     # 라우터가 전문 능력을 하나도 못 골랐을 때 거절(FAILED) 대신 Gemini 생성 답변
     # (`adapters/general.py`)을 붙일지. **기본값 false 라 켜기 전까지 운영은 지금과
     # 같습니다** — #277 의 판정 결과를 보고 서버 `backend/.env` 한 줄로 켭니다.
     #
-    # 폴백은 라우터의 목적지가 아니라 `planner.assemble_route_plan` 의 결정론 규칙이고,
-    # 두 오케스트레이터 구현(langgraph · agent)이 같은 규칙을 같은 값으로 지납니다.
+    # 폴백은 라우터의 목적지가 아니라 `planner.assemble_route_plan` 의 결정론 규칙입니다.
     # 명시 신호 `requested_capability` 와 골드 회귀 러너는 이 값을 읽지 않습니다.
     general_fallback: bool = Field(
         default=False, validation_alias=AliasChoices("DAENGS_GENERAL_FALLBACK")
@@ -198,9 +183,7 @@ class Settings(BaseSettings):
     # 켜져 있으면(기본) 애매한 발화마다 시맨틱 라우터보다 앞서 Gemini 왕복이 하나 더
     # 붙습니다. 끄면 `service._plan_and_execute` 가 리졸버를 아예 안 부르고 `resolved
     # = None` 으로 오늘처럼 진행합니다 — 이력 이어짐이 없어질 뿐 답은 그대로 나갑니다.
-    turn_resolver: bool = Field(
-        default=True, validation_alias=AliasChoices("DAENGS_TURN_RESOLVER")
-    )
+    turn_resolver: bool = Field(default=True, validation_alias=AliasChoices("DAENGS_TURN_RESOLVER"))
 
     # ── 의미 라우터 (D-041) ───────────────────────────────────────────
     # backend/.env 에 이미 있는 GEMINI_API_KEY / GEMINI_TIMEOUT_MS 를 접두사 없이
@@ -217,6 +200,49 @@ class Settings(BaseSettings):
     gemini_timeout_ms: int = Field(
         default=30_000, validation_alias=AliasChoices("GEMINI_TIMEOUT_MS")
     )
+
+    # ── 도감 카드 생성 (#496, docs/cardimage/) ─────────────────────────
+    # 채팅용 gemini_api_key 와 **다른 GCP 프로젝트** 키입니다 (지출 상한·사용량이 프로젝트
+    # 단위라 이미지 생성이 채팅 예산을 먹지 않게). 비면 GEMINI_API_KEY 로 떨어지지 **않고**
+    # /admin/cardimage·/app/ai-cards 가 503 입니다 — 앱은 뜹니다.
+    cardimage_gemini_api_key: SecretStr = Field(
+        default=SecretStr(""), validation_alias=AliasChoices("DAENGS_CARDIMAGE_GEMINI_API_KEY")
+    )
+    # Nano Banana 2. 실험 16장 「됨」(worklog 09-14). 세대가 바뀌면 이 한 줄.
+    cardimage_model: str = Field(default="gemini-3.1-flash-image", validation_alias=AliasChoices("DAENGS_CARDIMAGE_MODEL"))
+    # 2K 여야 카드(994×1582)에 확대 없이 맞습니다. 1K 는 1.25배 확대.
+    cardimage_size: str = Field(default="2K", validation_alias=AliasChoices("DAENGS_CARDIMAGE_SIZE"))
+    cardimage_timeout_ms: int = Field(default=120_000, validation_alias=AliasChoices("DAENGS_CARDIMAGE_TIMEOUT_MS"))
+    # 틀 12장·글꼴이 있는 폴더. 기본값을 상대 경로("cardimage")로 두면 CWD 에 따라 갈려서
+    # `uv run dev` 를 backend/ 에서 돌리면 못 찾는다(#496 리뷰에서 실측). 그래서 이 파일
+    # 위치에서 절대 경로로 계산한다 — 개발 PC 는 `backend/src/daengs_backend/config.py` 라
+    # parents[3] 가 저장소 루트라 `<repo>/cardimage`, 컨테이너는 `/app/src/daengs_backend/
+    # config.py` 라 parents[3] 가 `/` 라서 `/cardimage`(compose 마운트와 같은 자리). 둘 다
+    # 맞아떨어지므로 `DAENGS_CARDIMAGE_DIR` 환경 변수는 이제 belt-and-braces 다.
+    cardimage_dir: Path = Field(
+        default=Path(__file__).resolve().parents[3] / "cardimage",
+        validation_alias=AliasChoices("DAENGS_CARDIMAGE_DIR"),
+    )
+    # 허용된 달. 틀은 12장 다 있지만 이 카드(#496)는 4월만 엽니다. "4,9" 처럼 CSV.
+    #
+    # ⚠ pydantic-settings 는 env 값을 우리 before-validator 가 보기 전에 먼저 JSON 으로
+    #   디코드하려 합니다 — frozenset[int] 는 "복합 타입"이라 CSV 문자열("4, 9,12")을
+    #   JSON 으로 못 읽어 여기까지 오기 전에 실패합니다. `NoDecode` 로 그 선(先)디코드를
+    #   끄고, 아래 before-validator 가 원문 문자열을 그대로 받아 직접 나눕니다.
+    cardimage_months: Annotated[frozenset[int], NoDecode] = Field(
+        default=frozenset({4, 9}), validation_alias=AliasChoices("DAENGS_CARDIMAGE_MONTHS")
+    )
+    # 유사도 검수. 텍스트 모델이라 채팅과 같은 계열이어도 됩니다 — 여기서는 "같은 개인가"만 묻습니다.
+    cardimage_judge_model: str = Field(default="gemini-3.1-flash-lite", validation_alias=AliasChoices("DAENGS_CARDIMAGE_JUDGE_MODEL"))
+    # 1~5 중 이 값 미만이면 한 번 다시 만듭니다. 실험에서 정면 사진은 6장 중 1장이 어긋났습니다.
+    cardimage_judge_min: int = Field(default=3, ge=1, le=5, validation_alias=AliasChoices("DAENGS_CARDIMAGE_JUDGE_MIN"))
+
+    @field_validator("cardimage_months", mode="before")
+    @classmethod
+    def _parse_months(cls, v):
+        if isinstance(v, str):
+            return frozenset(int(x) for x in v.split(",") if x.strip())
+        return v
 
     # ── LLM judge (RAG-007 · D15 · D-060) ────────────────────────────
     # **세 값의 원본은 `daengs_life.rag.core.config` 입니다** (#305). 여기 있는 것은
@@ -343,18 +369,21 @@ class Settings(BaseSettings):
     )
 
     # ── 보행 분석 엔진 (#304 · D-063) ──────────────────────────────────
-    # "legacy" = `daengs_gait.pipeline`(ultralytics best.pt, 워커 프로세스 안에서).
-    # "v4"     = `daengs_gait.inference`(walk_demo v4: ssdlite + RTMPose AP-10K). 5B 부터
-    #            코드도 의존성(`gait` 그룹 하나)도 legacy 와 같은 venv 이고, 워커가 자기
-    #            인터프리터(`sys.executable`)로 서브프로세스를 띄웁니다 — 옛 `GAIT_V4_DIR` ·
-    #            `GAIT_V4_PYTHON` · 별도 venv 는 없어졌습니다. 가중치는 legacy 와 같은
-    #            `GAIT_RELEASE_DIR` 폴더입니다(`ssdlite.pt` · `rtmpose-m_ap10k/end2end.onnx`).
-    #            라이선스(ssdlite.pt academic/non-commercial) 결정 전이라 **기본은 legacy**
-    #            입니다. 운영에서 바꾸지 마세요.
+    # **지금 값은 `v4` 하나입니다** — `daengs_gait.inference`(ssdlite + RTMPose AP-10K).
+    # 워커가 자기 인터프리터(`sys.executable`)로 서브프로세스를 띄우고, 가중치는
+    # `GAIT_RELEASE_DIR` 폴더입니다(`ssdlite.pt` · `rtmpose-m_ap10k/end2end.onnx`).
     #
-    # 두 엔진의 기록은 `gait_records.pose_model` 로 구분되고, 비교는 서버 설정이 아니라
-    # 두 기록의 그 값으로 함수를 고릅니다 (`services/gait._run_compare`).
-    gait_engine: str = Field(default="legacy", validation_alias=AliasChoices("GAIT_ENGINE"))
+    # 옛 `"legacy"` 는 6단계에서 추론 runtime 과 함께 없앴습니다. 그 값을 넣으면
+    # `get_engine` 이 **조용히 넘어가지 않고 예외**를 냅니다 — 잘못 적힌 설정으로 분석이
+    # 도는 것보다 FAILED 사유와 함께 멈추는 편이 낫습니다.
+    #
+    # ⚠️ **기본값이 곧 배포 기본입니다.** env 를 안 주는 환경(새 서버·CI)이 이 값으로
+    #    돌므로 없어진 엔진 이름을 기본값에 두면 분석이 전부 실패합니다.
+    #
+    # 기록의 `gait_records.pose_model` 은 이 설정과 별개입니다 — 옛 legacy 기록은 그대로
+    # 남고, 비교는 서버 설정이 아니라 **두 기록의 그 값**으로 함수를 고릅니다
+    # (`services/gait._run_compare` — legacy↔legacy 비교는 계속 됩니다).
+    gait_engine: str = Field(default="v4", validation_alias=AliasChoices("GAIT_ENGINE"))
 
     # ── 내부 서비스 주소 (#180 상태 페이지) ────────────────────────────
     # 상태 페이지가 "이 서비스가 살아 있나"를 물어보는 곳입니다. backend 와

@@ -1,0 +1,49 @@
+{
+  "observation_rows": 8,
+  "case_count": 7,
+  "replayed_code_checks": {
+    "fail": 5,
+    "pass": 80,
+    "review_required": 8
+  },
+  "rendered_answers_matching": 8,
+  "proposal_contract_failures": [
+    {
+      "case_id": "FJ-D01",
+      "turn": 1,
+      "errors": [
+        {
+          "type": "value_error",
+          "loc": [],
+          "msg": "Value error, filter state is read-only"
+        }
+      ]
+    },
+    {
+      "case_id": "FJ-D02",
+      "turn": 1,
+      "errors": [
+        {
+          "type": "value_error",
+          "loc": [],
+          "msg": "Value error, filter state is read-only"
+        }
+      ]
+    },
+    {
+      "case_id": "FJ-D07",
+      "turn": 2,
+      "errors": [
+        {
+          "type": "value_error",
+          "loc": [],
+          "msg": "Value error, filter state is read-only"
+        }
+      ]
+    }
+  ],
+  "judge_axes_verified": 24,
+  "source_and_review_hashes_verified": true,
+  "human_review_file_created": false,
+  "method": "Replay saved checks, render and proposal validation without any model or DB calls; validate Judge evidence and source hashes."
+}

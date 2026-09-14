@@ -8,10 +8,12 @@
 
 | 폴더 | 읽고 쓰는 패키지 | 안에 있는 것 |
 | --- | --- | --- |
+| [diary_route_scenario/](diary_route_scenario/README.md) | tools/run_diary_route_scenario.py · tools/run_diary_public_scenario.py · tools/run_diary_final_titles.py | 실제 양재 경로 위의 가상 산책 8장면, 공공자료 5종의 실제 수집·선정·모델 입력·인용 비교, 장면 제목 갱신과 지도 뷰어 |
+| `diary_slots/` | `tools/run_diary_slots.py` · `daengs_evals.diary_slots_demo` | 파트 슬롯 미리보기·서비스 writer의 합성 입력 기반 Gemini 실제 문장·근거·정책 버전, 실제 기온 수집 시도와 알려진 한계 |
 | [place_conversation/](place_conversation/README.md) | `daengs_evals.place_conversation` | 시설 검색 대화 23개 명세·실제 출력·구조 비교·검토 기록 |
 | `walk_diary_stamps/` | `tools/preview_diary_stamps.py` | 사용자 기록 중심 스탬프의 합성 입력·선택 사유·읽기용 결과. LLM 호출 없음 |
 | `answer_quality/` | `daengs_evals.answer_quality` | `/life/ask` 답변 품질용 질문·답변(jsonl)·판정(jsonl)·리포트(md) |
-| `orchestration_router/` | `daengs_evals.router_benchmark` · `daengs_evals.orchestrator_comparison` | 시맨틱 라우터 골드 세트·벤치마크 yaml·실행 결과·요약·리포트. 상세는 `orchestration_router/README.md` |
+| `orchestration_router/` | `daengs_evals.router_benchmark` | 시맨틱 라우터 골드 세트·벤치마크 yaml·실행 결과·요약·리포트. `daengs_evals.orchestrator_comparison` 은 LangChain 에이전트를 지우며(D-072) 같이 지웠지만, 그 비교 리포트·결과 파일은 이 결정의 근거라 그대로 남아 있습니다. 상세는 `orchestration_router/README.md` |
 | `training_quality/` | `daengs_evals.training_quality` | 훈련 RAG judge 의 질문·답변·판정 출력 |
 | `conversation_quality/` | `daengs_evals.conversation_quality` | 동결 멀티턴 케이스(`cases_v1.jsonl`)·랩·판정·전후 비교 리포트. `#277`과 달리 질문·답변 한 쌍이 아니라 대화 여러 턴을 본다. 상세는 `conversation_quality/README.md`, 축 정의와 후속 설계는 `docs/orchestration/conversation-quality.md` |
 

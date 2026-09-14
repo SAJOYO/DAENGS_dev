@@ -14,8 +14,9 @@ rkbuhtig 작성 PR에서 다룬 9개 기능의 검증 범위를 정리한다. Ge
 
 - 모든 명령의 작업 디렉터리는 `backend/`다. 해당 변경에 연결된 명령만 선택한다.
 - Python 3.12와 프로젝트 의존성이 필요하다. 최초 준비 또는 lock 변경 시
-  `uv sync --frozen --extra place --extra agent`로 공통 API/Place/agent 의존성을 준비한다.
-  문서 정리만 할 때는 설치나 테스트가 필요하지 않다.
+  `uv sync --frozen --extra place`로 공통 API/Place 의존성을 준비한다. `agent` extra 는
+  D-072 로 LangChain 에이전트와 함께 지워졌다. 문서 정리만 할 때는 설치나 테스트가
+  필요하지 않다.
 - 아래 기본 묶음은 실제 DB 통합 묶음과 구분했다. HTTP 계약 테스트의 fake/override 성공은
   배포 서버의 API 등록, 실제 인증, 외부 공급자 가용성까지 확인한 결과가 아니다.
 - 현재 pytest에 실행용으로 선언된 marker는 `slow`이고 기본값은 `-m 'not slow'`다.
@@ -87,6 +88,17 @@ uv run pytest -q tests/journey
 
 ### 5. 산책 측정·분석
 
+- 동선 검증 후보 조회(#475): `walk/api/test_trajectory_calculation.py`는 32개 기준 기록을
+  실제 라우터로 직렬화해 소유권·원본 시각·구간·경계·거리·무결성을 확인한다.
+  `test_motion_calculation.py`의 완료/손상/정밀 백업 경계는 두 계산 endpoint에 공통 적용한다.
+  [조회 계약과 실행 범위](../../docs/walk/trajectory-api.md). API는 검증 후보이며 활성 결과를 갱신하지 않는다.
+
+- GPS 고정 정책 재생·계산 조회(#456): `walk/measurement/test_motion_replay.py`는 실제 앱 엔진의
+  기준값과 판정을 대조한다. `walk/api/test_motion_calculation.py`는 인증 후 소유권·완료·손상
+  경계를 검증한다. 공유 백업 완료 검증을 바꾸면 `walk/api/test_walk_motion_contract.py`와
+  명시적 임시 DB 도구 `tools/check_walk_motion_backup.py`까지 확인한다.
+  [실행 명령과 정밀도 범위](../../docs/walk/gps-motion-calculation.md).
+
 - 근거: PR #124, #125, #138–#140, #159, #302.
   경계: `daengs_walk` measurement/evidence/cellophane/capsule와 backend 업로드·finalize·분석 저장.
 - 기본: 측정·격자·분석 직렬화 및 finalize 계약. 저장소 테스트에도 가짜 세션/SQL 구성 검사가
@@ -98,6 +110,17 @@ uv run pytest -q tests/journey
 uv run pytest -q tests/walk/measurement/test_walk_measurement.py tests/walk/measurement/test_cellophane.py tests/walk/measurement/test_hex_grid.py tests/walk/measurement/test_walk_capsule.py tests/walk/measurement/test_walk_facts.py tests/walk/measurement/test_finalize_contract.py tests/walk/measurement/test_walk_analysis_storage.py tests/walk/api/test_walk_repository.py tests/walk/api/test_walks.py tests/walk/test_package_boundary.py
 uv run pytest -q tests/walk/api/test_walk_api.py tests/walk/api/test_walk_auth.py tests/walk/api/test_walk_chunk.py tests/walk/measurement/test_walk_style.py
 ```
+
+#### GPS 측정 자료 백업 — PR #449
+
+- `uv run pytest -q -rs tests/walk/api/test_walk_motion_contract.py`: 고정 지문, Long/Float 원본,
+  epoch·정책 거부 조건, 실제 앱 라우터의 인증 경계를 검사한다. DB 설정 없이 실행한다.
+- 저장·트랜잭션·SQL 변경 시 `tools/check_walk_motion_backup.py --dsn ...`를 명시적으로 실행한다.
+  실제 HTTP 재전송·복원·소유권·삭제와 이 마이그레이션의 변조 검사를 묶는다.
+  기본 pytest에 DB 요구나 skip을 추가하지 않는다. 임시 DB 생성·종료 명령과 계약은
+  [GPS 측정 백업 문서](../../docs/walk/gps-motion-backup.md)에 있다.
+- 기존 raw/recording/finalize를 바꾸면 `api/test_walk_recording.py`, `api/test_walk_chunk.py`,
+  `api/test_walk_repository.py`, `measurement/test_finalize_contract.py`도 영향 범위에 포함한다.
 
 ### 6. 산책 환경 정보
 

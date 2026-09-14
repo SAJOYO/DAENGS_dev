@@ -148,7 +148,13 @@ async def test_storage_success_then_db_commit_failure_keeps_retry_safe(
 async def test_storage_failure_does_not_reach_walk_or_pet_deletion(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    pet = type("Pet", (), {"id": uuid.uuid4()})()
+    # `identity_id`·`app_user_id` 도 들고 있어야 합니다 — 삭제 경로가 **그룹 주보호자**
+    # 인지 먼저 보기 때문입니다 (MVP 결정 §6). 여기서는 연결 안 된 아이라 `identity_id`
+    # 가 None 이고, 그때 그룹 주보호자는 곧 행 대표라 이 가드가 지나갑니다.
+    owner = uuid.uuid4()
+    pet = type(
+        "Pet", (), {"id": uuid.uuid4(), "identity_id": None, "app_user_id": owner}
+    )()
     session = TxSession()
     destructive_calls: list[str] = []
 
@@ -171,7 +177,7 @@ async def test_storage_failure_does_not_reach_walk_or_pet_deletion(
     monkeypatch.setattr(pet_service.pet_repo, "delete", destructive)
 
     with pytest.raises(RuntimeError, match="storage unavailable"):
-        await pet_service.delete_pet(session, uuid.uuid4(), pet.id)
+        await pet_service.delete_pet(session, owner, pet.id)
 
     assert destructive_calls == []
     assert session.commits == 0
@@ -183,8 +189,19 @@ async def test_single_pet_deletion_uses_common_gait_cleanup_before_delete(
 ) -> None:
     # 사진 칸도 들고 있어야 합니다 — 삭제 경로가 보행 객체와 **프로필 사진**을
     # 둘 다 훑기 때문입니다 (D-052). 여기서는 사진이 없는 아이라 전부 None 입니다.
+    # `identity_id`·`app_user_id` 는 그룹 주보호자 가드가 봅니다 (MVP 결정 §6) —
+    # 연결 안 된 아이라 None 이고, 그때 그룹 주보호자는 곧 행 대표입니다.
+    owner = uuid.uuid4()
     pet = type(
-        "Pet", (), {"id": uuid.uuid4(), "photo_storage_key": None, "photo_pending_key": None}
+        "Pet",
+        (),
+        {
+            "id": uuid.uuid4(),
+            "photo_storage_key": None,
+            "photo_pending_key": None,
+            "identity_id": None,
+            "app_user_id": owner,
+        },
     )()
     session = TxSession()
     events: list[str] = []
@@ -219,7 +236,7 @@ async def test_single_pet_deletion_uses_common_gait_cleanup_before_delete(
     monkeypatch.setattr(pet_service.member_repo, "list_members", no_carers)
     monkeypatch.setattr(pet_service.pet_repo, "delete", delete_pet_row)
 
-    await pet_service.delete_pet(session, uuid.uuid4(), pet.id)
+    await pet_service.delete_pet(session, owner, pet.id)
 
     assert events == ["gait", "walks", "pet"]
     assert session.commits == 1
@@ -274,34 +291,43 @@ async def test_processing_completion_cannot_upload_after_cleanup_deleted_row(
     assert storage.uploaded == []
 
 
-def test_worker_requests_nonpersistent_pipeline_and_returns_overlay_bytes(
+def test_worker_keeps_artifacts_in_a_temp_dir_and_returns_overlay_bytes(
     monkeypatch: pytest.MonkeyPatch, tmp_path
 ) -> None:
-    import sys
-    import types
+    """워커는 엔진 산출물을 **자기 임시 디렉터리 안에서만** 만들고, overlay 는 바이트로
+    들고 나온 뒤 그 디렉터리를 지웁니다 — 볼륨에 사본이 남으면 안 됩니다.
 
+    엔진은 대역입니다. 여기서 보는 것은 엔진이 아니라 **워커의 파일 수명**이고,
+    `get_engine` 을 가로채므로 어떤 엔진이 붙든 같은 것을 봅니다 (D-063 6단계 전에는
+    legacy 의 `process_video(persist=False)` 를 대역으로 썼습니다)."""
     source = tmp_path / "source.bin"
     source.write_bytes(b"video")
     artifact_dirs = []
+    asked = []
 
     class LocalStorage:
         def local_path(self, key):
             return source
 
-    def process_video(path, *, persist):
-        assert persist is False
-        artifact_dirs.append(path.parent)
-        overlay = path.parent / "input_overlay.mp4"
-        overlay.write_bytes(b"overlay")
-        return {
-            "record_id": None,
-            "quality": {"status": "ok", "quality_tier": "good"},
-            "overlay_video": str(overlay),
-        }
+    class FakeEngine:
+        name = "fake"
 
-    fake_pipeline = types.ModuleType("daengs_gait.pipeline")
-    fake_pipeline.process_video = process_video
-    monkeypatch.setitem(sys.modules, "daengs_gait.pipeline", fake_pipeline)
+        def analyze(self, path):
+            artifact_dirs.append(path.parent)
+            overlay = path.parent / "input_overlay.mp4"
+            overlay.write_bytes(b"overlay")
+            return {
+                "record_id": None,
+                "quality": {"status": "ok", "quality_tier": "good"},
+                "overlay_video": str(overlay),
+            }
+
+    def fake_get_engine(name, **kw):
+        asked.append(name)
+        return FakeEngine()
+
+    monkeypatch.setattr("daengs_gait.engines.get_engine", fake_get_engine)
+    from daengs_backend.config import settings
     from daengs_backend.core import storage as storage_module
 
     monkeypatch.setattr(storage_module, "get_storage", lambda: LocalStorage())
@@ -310,5 +336,6 @@ def test_worker_requests_nonpersistent_pipeline_and_returns_overlay_bytes(
 
     result = gait_service._analyze_from_storage("original")
 
+    assert asked == [settings.gait_engine]
     assert result["_overlay_bytes"] == b"overlay"
     assert artifact_dirs and not artifact_dirs[0].exists()

@@ -1,0 +1,140 @@
+"""Stored readers and fixed pre-refactor wire contracts must survive writer extraction."""
+
+import gzip
+import json
+import subprocess
+import sys
+from copy import deepcopy
+
+import pytest
+
+from daengs_walk.diary.contracts.input import digest
+from tests.walk.support.paths import REPO
+from tests.walk.support.writing_boundary import fingerprints, fixed_cases
+
+
+@pytest.fixture
+async def cases(monkeypatch):
+    return await fixed_cases(monkeypatch)
+
+
+@pytest.fixture
+def historical_cases():
+    # Captured with fixed fake providers on 081aa0ba and checked against the unchanged
+    # #507 golden before copying here. New activity policy intentionally changes output.
+    path = REPO / "backend/evals/walk-diary/writing-boundary-records-v1.json.gz"
+    return json.loads(gzip.decompress(path.read_bytes()))
+
+
+def test_fixed_public_storage_schema_and_hashes_match_before_refactor(historical_cases):
+    cases = historical_cases
+    golden = json.loads(
+        (REPO / "backend/evals/walk-diary/writing-boundary-v1.json").read_text(encoding="utf-8")
+    )
+    expected = {key: golden[key] for key in ("policy", "schemas", "cases")}
+    actual = fingerprints(cases)
+    # #511 adds optional diagnostics for degraded collection only. Compare every old
+    # schema field and all six complete serialized records against the unchanged golden.
+    for name, schema in cases["schemas"].items():
+        old = deepcopy(schema)
+        for model in [old, *old.get("$defs", {}).values()]:
+            properties = model.get("properties", {})
+            if "collection_receipt" in properties:
+                assert "collection_receipt" not in model.get("required", [])
+                assert properties["collection_receipt"]["default"] is None
+                properties.pop("collection_receipt")
+        old.get("$defs", {}).pop("CollectionReceipt", None)
+        actual["schemas"][name] = digest(old)
+    assert actual == expected
+
+
+@pytest.mark.parametrize("generation", ["historical", "current"])
+def test_stored_board_reader_is_independent_of_writer_runtime(cases, historical_cases, generation):
+    cases = historical_cases if generation == "historical" else cases
+    # A fresh interpreter cannot hide a dependency behind already imported test modules.
+    script = """
+import importlib.abc
+import json
+import sys
+from types import SimpleNamespace
+
+class NoWriterRuntime(importlib.abc.MetaPathFinder):
+    def find_spec(self, fullname, path=None, target=None):
+        forbidden = (
+            "daengs_backend.services.walk_diary.runtime",
+            "daengs_backend.services.walk_diary.writing.provider",
+            "daengs_backend.services.walk_diary.writing.jobs",
+            "daengs_backend.services.walk_diary.writing.assembly",
+            "daengs_backend.services.walk_diary.writing.policy",
+            "daengs_backend.services.walk_diary.storage.provenance",
+            "daengs_backend.services.walk_diary.legacy.board_slots",
+            "daengs_backend.services.walk_diary.legacy.slots",
+            "daengs_backend.orchestration", "daengs_backend.config",
+            "google.genai", "openai", "langgraph",
+        )
+        if any(fullname == p or fullname.startswith(p + ".") for p in forbidden):
+            raise AssertionError("stored reader imported writer runtime: " + fullname)
+
+sys.meta_path.insert(0, NoWriterRuntime())
+from daengs_backend.services.walk_diary.storage.board import load_board, read_board
+from daengs_walk.diary.contracts.input import DiaryInput
+
+data = json.load(sys.stdin)
+prepared = SimpleNamespace(input=SimpleNamespace(source=DiaryInput.model_validate(data["source"])))
+for case in data["cases"].values():
+    raw = case["stored"]
+    assert load_board(raw).model_dump(mode="json") == raw
+    row = SimpleNamespace(bundle=raw, input_revision=raw["generation_revision"])
+    assert read_board(prepared, row, "future-revision").model_dump(mode="json") == raw
+    damaged = json.loads(json.dumps(raw))
+    damaged["bundle"]["scenes"][0]["title"] = "tampered title"
+    try:
+        load_board(damaged)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("stored reader accepted changed content")
+print("validated 6 stored variants without writer runtime")
+"""
+    child = subprocess.run(
+        [sys.executable, "-c", script],
+        input=json.dumps(cases),
+        text=True,
+        capture_output=True,
+        timeout=30,
+        check=False,
+    )
+    assert child.returncode == 0, child.stderr
+
+
+def test_graph_does_not_import_writer_entry_or_provider():
+    script = """
+import importlib.abc
+import sys
+
+class NoEntry(importlib.abc.MetaPathFinder):
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname in {
+            "daengs_backend.services.walk_diary.runtime",
+            "daengs_backend.services.walk_diary.writing.provider",
+            "google.genai",
+        }:
+            raise AssertionError("graph imported entry/provider: " + fullname)
+
+sys.meta_path.insert(0, NoEntry())
+from daengs_backend.orchestration.diary import DiaryOrchestrationService
+assert callable(DiaryOrchestrationService.run)
+"""
+    child = subprocess.run(
+        [sys.executable, "-c", script], text=True, capture_output=True, timeout=30, check=False
+    )
+    assert child.returncode == 0, child.stderr
+
+
+def test_graph_and_receipt_share_canonical_contract_objects():
+    from daengs_backend.orchestration import diary
+    from daengs_backend.services.walk_diary import contracts
+    from daengs_backend.services.walk_diary.storage.card_receipt import StoredCardWriting
+
+    assert diary.contracts is contracts
+    assert StoredCardWriting.model_fields["result"].annotation is contracts.CardWritingResult

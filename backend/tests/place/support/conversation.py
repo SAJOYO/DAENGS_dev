@@ -11,8 +11,8 @@ from daengs_place.place.filters.evaluation import evaluate
 from daengs_place.place.filters.service import FilterGroup, FilterResponse, explain_hit
 
 
-def place(ref, kind="shopping", distance=100, parking=True):
-    source = {"source": "test:facility", "ref": ref}
+def place(ref, kind="shopping", distance=100, parking=True, source="test:facility"):
+    source = {"source": source, "ref": ref}
     return PlaceResult.model_validate(
         {
             "key": source,
@@ -74,6 +74,25 @@ class Planner:
     async def plan(self, request):
         self.requests.append(request)
         return self.next
+
+
+def scoped_wire(plan, query):
+    """Adapt existing semantic fixtures to today's provider wire, never production output."""
+    if "decision" in plan or "kind" in plan:
+        return plan
+    plan = dict(plan)
+    if plan.get("familiarity"):
+        plan["goal"] = "show"
+    goal = plan.get("goal")
+    return {
+        **plan,
+        "kind": "facility_state"
+        if goal == "explain"
+        else "needs_input"
+        if goal == "clarify"
+        else "facility_action",
+        "request_quote": query,
+    }
 
 
 def manual(previous=None, **changes):

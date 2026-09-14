@@ -1,0 +1,1085 @@
+{
+  "format": "diary-card-writing-v1",
+  "input_revision": "da7a7b3890e6b5eb66848e500ecbb60fefe361908432daa0e3f3a7614b7993a6",
+  "plan_revision": "fcd743d5d8f2f716f9bb9a18eba1e6cf65bb4b172c40d2b0b0b64d7dd71a4e79",
+  "slot_revision": "6e7cef41daaddf1f5d7d74a74d880686fb444a94578625e094866a9ae97d726b",
+  "writer_version": "4e15f6a83842852ab855cdec9e1c5f03e85e6eebb4e11e9629d324ff199757e5",
+  "bundle": {
+    "format": "walk-diary-board-v1",
+    "client_session_id": "scenario-session",
+    "input_revision": "da7a7b3890e6b5eb66848e500ecbb60fefe361908432daa0e3f3a7614b7993a6",
+    "plan_revision": "fcd743d5d8f2f716f9bb9a18eba1e6cf65bb4b172c40d2b0b0b64d7dd71a4e79",
+    "title": "2026.09.14 산책",
+    "model_status": "accepted",
+    "failure_code": null,
+    "scenes": [
+      {
+        "id": "stamp:9e82be6f4ff6d65eb3d67647139cc351eff5446e36212071ff81b71a98d824bc",
+        "order": 1,
+        "core": {
+          "identity": "boundary:17d3324c4619032bd2d1cafa294c1ebdcc380677559f5598be3265f1fa769156",
+          "version": "560695b15d9074977f337a4e4b46e6d2e44805c0ae82ed6b82227d82f79d026d"
+        },
+        "kind": "session_boundary",
+        "anchor": {
+          "event_at": "2026-09-13T23:45:15Z",
+          "time_basis": "route_observation",
+          "point": {
+            "lat": 37.470589119054424,
+            "lng": 127.03785721894909
+          },
+          "location_at": "2026-09-13T23:45:15Z",
+          "accuracy_m": 5.0,
+          "position_state": "resolved",
+          "method": "observed",
+          "source_fixes": [
+            {
+              "client_seq": 0,
+              "chain_index": 0,
+              "at": "2026-09-13T23:45:15Z"
+            }
+          ]
+        },
+        "title": "산책 중 기록된 장소",
+        "body": "산책 중 기록한 장소다.",
+        "user_record": null,
+        "observation": null,
+        "checkpoint": null,
+        "boundary": "start",
+        "place_reference": [],
+        "writing": {
+          "format": "diary-card-narrative-v1",
+          "content_revision": "95f20077d98e829b8de62691671af69126cece0b00f82a6ba571b967c40f4823",
+          "space": {
+            "text": "산책 중 기록한 장소다.",
+            "origin": "fallback",
+            "action_id": null,
+            "actor_id": null
+          },
+          "actions": [],
+          "original_text": null,
+          "title_origin": "generated",
+          "title_based_on_content_revision": "95f20077d98e829b8de62691671af69126cece0b00f82a6ba571b967c40f4823"
+        }
+      },
+      {
+        "id": "stamp:0a1a08f3801cbe9ef7550551e07ad2227b1f304c053601501653c9fb1c7b08bc",
+        "order": 2,
+        "core": {
+          "identity": "walk_entry:scenario-record-1",
+          "version": "1b9fff97be12aa467c6881089f17d3c7ad9abc6f2ec1fc355117986a087ddc83"
+        },
+        "kind": "user_record",
+        "anchor": {
+          "event_at": "2026-09-13T23:50:55Z",
+          "time_basis": "recorded_at",
+          "point": {
+            "lat": 37.47333149207589,
+            "lng": 127.03729634665666
+          },
+          "location_at": "2026-09-13T23:50:55Z",
+          "accuracy_m": 5.0,
+          "position_state": "resolved",
+          "method": "observed",
+          "source_fixes": [
+            {
+              "client_seq": 34,
+              "chain_index": 0,
+              "at": "2026-09-13T23:50:55Z"
+            }
+          ]
+        },
+        "title": "산책 중 보리가 냄새를 맡은 장소",
+        "body": "산책 중 기록한 장소다.\n보리가 냄새를 맡았다.",
+        "user_record": {
+          "kind": "behavior",
+          "code": "sniffing",
+          "pet_id": "scenario-pet"
+        },
+        "observation": null,
+        "checkpoint": null,
+        "boundary": null,
+        "place_reference": [],
+        "writing": {
+          "format": "diary-card-narrative-v1",
+          "content_revision": "af74630acaf4b5627a2c9c1b7b8d38927d37d7eafdf4954b5e515869a94b8759",
+          "space": {
+            "text": "산책 중 기록한 장소다.",
+            "origin": "fallback",
+            "action_id": null,
+            "actor_id": null
+          },
+          "actions": [
+            {
+              "text": "보리가 냄새를 맡았다.",
+              "origin": "generated",
+              "action_id": "action:3a11ace1596ae458084f665a2d0e2d857739a734cbf8408b82d708b403a2b027",
+              "actor_id": "scenario-pet"
+            }
+          ],
+          "original_text": null,
+          "title_origin": "generated",
+          "title_based_on_content_revision": "af74630acaf4b5627a2c9c1b7b8d38927d37d7eafdf4954b5e515869a94b8759"
+        }
+      },
+      {
+        "id": "stamp:4b889492f8900baa26875834a98658b383c3c1c9f330f7ef52e2409c0262eee5",
+        "order": 3,
+        "core": {
+          "identity": "checkpoint:540a0bd5d8209fd349f6ec3e1b1a745801aff5cacf12ba8fb4b9908f4a44f505",
+          "version": "8eac446c9ee486de69cfea26494b2cf6837c82f7bdbfffd4334857075d0cfd93"
+        },
+        "kind": "route_checkpoint",
+        "anchor": {
+          "event_at": "2026-09-13T23:56:45Z",
+          "time_basis": "route_observation",
+          "point": {
+            "lat": 37.47385678898773,
+            "lng": 127.03468728149925
+          },
+          "location_at": "2026-09-13T23:56:45Z",
+          "accuracy_m": 5.0,
+          "position_state": "resolved",
+          "method": "observed",
+          "source_fixes": [
+            {
+              "client_seq": 69,
+              "chain_index": 0,
+              "at": "2026-09-13T23:56:45Z"
+            }
+          ]
+        },
+        "title": "산책 중 기록된 장소",
+        "body": "산책 중 기록한 장소다.",
+        "user_record": null,
+        "observation": null,
+        "checkpoint": {
+          "analysis_id": "simulated-tmap-route",
+          "block": 0,
+          "route_m": 644.5826381817194
+        },
+        "boundary": null,
+        "place_reference": [],
+        "writing": {
+          "format": "diary-card-narrative-v1",
+          "content_revision": "954de5399bbdb959973ff226a73f9b477cf8380388c14173b68a627d39b9ea4b",
+          "space": {
+            "text": "산책 중 기록한 장소다.",
+            "origin": "fallback",
+            "action_id": null,
+            "actor_id": null
+          },
+          "actions": [],
+          "original_text": null,
+          "title_origin": "generated",
+          "title_based_on_content_revision": "954de5399bbdb959973ff226a73f9b477cf8380388c14173b68a627d39b9ea4b"
+        }
+      },
+      {
+        "id": "stamp:69e5333261f2e0ff7378511bd67f798a75ba6f7a40827c72b0fb2d3f065f9a22",
+        "order": 4,
+        "core": {
+          "identity": "walk_entry:scenario-record-2",
+          "version": "f4398198daeb0436bc9e32c208655ea8e6d790a8563fd6b9d7fc971f7fb4d0be"
+        },
+        "kind": "user_record",
+        "anchor": {
+          "event_at": "2026-09-14T00:01:55Z",
+          "time_basis": "recorded_at",
+          "point": {
+            "lat": 37.47500470463684,
+            "lng": 127.03294776700642
+          },
+          "location_at": "2026-09-14T00:01:55Z",
+          "accuracy_m": 5.0,
+          "position_state": "resolved",
+          "method": "observed",
+          "source_fixes": [
+            {
+              "client_seq": 100,
+              "chain_index": 0,
+              "at": "2026-09-14T00:01:55Z"
+            }
+          ]
+        },
+        "title": "산책 중 기록된 장소",
+        "body": "산책 중 기록한 장소다.\n여기서 물을 마시고, 왔던 길로 돌아가기로 했다.",
+        "user_record": {
+          "kind": "note",
+          "text": "여기서 물을 마시고, 왔던 길로 돌아가기로 했다."
+        },
+        "observation": null,
+        "checkpoint": null,
+        "boundary": null,
+        "place_reference": [],
+        "writing": {
+          "format": "diary-card-narrative-v1",
+          "content_revision": "dc1abbe8625c6e43204af1d4333f75737a81e094f5cfaadb9f5e937724191c7e",
+          "space": {
+            "text": "산책 중 기록한 장소다.",
+            "origin": "fallback",
+            "action_id": null,
+            "actor_id": null
+          },
+          "actions": [],
+          "original_text": "여기서 물을 마시고, 왔던 길로 돌아가기로 했다.",
+          "title_origin": "generated",
+          "title_based_on_content_revision": "dc1abbe8625c6e43204af1d4333f75737a81e094f5cfaadb9f5e937724191c7e"
+        }
+      },
+      {
+        "id": "stamp:e5cbce094664789342ac1a8c1fad1bcd68eafa10383e1929139dac8a7b531321",
+        "order": 5,
+        "core": {
+          "identity": "checkpoint:c9fec66c130508848a1dd56ef634cd0e3b55526d580ff6484a1b69aeeb32edd1",
+          "version": "5c2a4a3cf9dd5ae43cff9f09ea9358e1a48a7ea2e9d7cf41086e908b2b30ad0e"
+        },
+        "kind": "route_checkpoint",
+        "anchor": {
+          "event_at": "2026-09-14T00:05:45Z",
+          "time_basis": "route_observation",
+          "point": {
+            "lat": 37.47408511016569,
+            "lng": 127.03306961024494
+          },
+          "location_at": "2026-09-14T00:05:45Z",
+          "accuracy_m": 5.0,
+          "position_state": "resolved",
+          "method": "observed",
+          "source_fixes": [
+            {
+              "client_seq": 123,
+              "chain_index": 0,
+              "at": "2026-09-14T00:05:45Z"
+            }
+          ]
+        },
+        "title": "산책 중 기록된 장소",
+        "body": "산책 중 기록한 장소다.",
+        "user_record": null,
+        "observation": null,
+        "checkpoint": {
+          "analysis_id": "simulated-tmap-route",
+          "block": 0,
+          "route_m": 1159.1760992865957
+        },
+        "boundary": null,
+        "place_reference": [],
+        "writing": {
+          "format": "diary-card-narrative-v1",
+          "content_revision": "b4a84bdef15a1fa09e619309482d01e150c849d43e0be635a592593315f8f7a9",
+          "space": {
+            "text": "산책 중 기록한 장소다.",
+            "origin": "fallback",
+            "action_id": null,
+            "actor_id": null
+          },
+          "actions": [],
+          "original_text": null,
+          "title_origin": "generated",
+          "title_based_on_content_revision": "b4a84bdef15a1fa09e619309482d01e150c849d43e0be635a592593315f8f7a9"
+        }
+      },
+      {
+        "id": "stamp:4455d8022213a9d87473d9e235fd58f1a365a81845d16efde0361103bae0b89a",
+        "order": 6,
+        "core": {
+          "identity": "checkpoint:33e23347c486bd6c8cae16678cd51a30f8e157ff464ef6eddb06649d179665d5",
+          "version": "77a44f07a7db009bb4bdf58f0f87d657b6b7f3f017412296a4f93ab52bb6d5d5"
+        },
+        "kind": "route_checkpoint",
+        "anchor": {
+          "event_at": "2026-09-14T00:08:15Z",
+          "time_basis": "route_observation",
+          "point": {
+            "lat": 37.47391663162882,
+            "lng": 127.03502658573123
+          },
+          "location_at": "2026-09-14T00:08:15Z",
+          "accuracy_m": 5.0,
+          "position_state": "resolved",
+          "method": "observed",
+          "source_fixes": [
+            {
+              "client_seq": 138,
+              "chain_index": 0,
+              "at": "2026-09-14T00:08:15Z"
+            }
+          ]
+        },
+        "title": "산책 중 기록된 장소",
+        "body": "산책 중 기록한 장소다.",
+        "user_record": null,
+        "observation": null,
+        "checkpoint": {
+          "analysis_id": "simulated-tmap-route",
+          "block": 0,
+          "route_m": 1341.193345468448
+        },
+        "boundary": null,
+        "place_reference": [],
+        "writing": {
+          "format": "diary-card-narrative-v1",
+          "content_revision": "a89dd95f34a90e07fbab23726e794f42fa1a76cf6a772de17051093551bbaa05",
+          "space": {
+            "text": "산책 중 기록한 장소다.",
+            "origin": "fallback",
+            "action_id": null,
+            "actor_id": null
+          },
+          "actions": [],
+          "original_text": null,
+          "title_origin": "generated",
+          "title_based_on_content_revision": "a89dd95f34a90e07fbab23726e794f42fa1a76cf6a772de17051093551bbaa05"
+        }
+      },
+      {
+        "id": "stamp:42f42c051b214a48aeb32861326f96bea3e458603fced6431dbe36cb1c777e2a",
+        "order": 7,
+        "core": {
+          "identity": "walk_entry:scenario-record-3",
+          "version": "d8f4028fa30982b03e43ed401932b78c139efebd015d07e5db3e7a4ef6f0db92"
+        },
+        "kind": "user_record",
+        "anchor": {
+          "event_at": "2026-09-14T00:12:55Z",
+          "time_basis": "recorded_at",
+          "point": {
+            "lat": 37.47279100978833,
+            "lng": 127.03741709514955
+          },
+          "location_at": "2026-09-14T00:12:55Z",
+          "accuracy_m": 5.0,
+          "position_state": "resolved",
+          "method": "observed",
+          "source_fixes": [
+            {
+              "client_seq": 166,
+              "chain_index": 0,
+              "at": "2026-09-14T00:12:55Z"
+            }
+          ]
+        },
+        "title": "산책 중 기록된 장소",
+        "body": "산책 중 기록한 장소다.\n돌아오는 길에 사진 대신 짧게 기록을 남겼다.",
+        "user_record": {
+          "kind": "note",
+          "text": "돌아오는 길에 사진 대신 짧게 기록을 남겼다."
+        },
+        "observation": null,
+        "checkpoint": null,
+        "boundary": null,
+        "place_reference": [],
+        "writing": {
+          "format": "diary-card-narrative-v1",
+          "content_revision": "2861b565b961d5892d47a9f23eb6bfbb518e801a468794c4e18a7b5c4c2e4f8d",
+          "space": {
+            "text": "산책 중 기록한 장소다.",
+            "origin": "fallback",
+            "action_id": null,
+            "actor_id": null
+          },
+          "actions": [],
+          "original_text": "돌아오는 길에 사진 대신 짧게 기록을 남겼다.",
+          "title_origin": "generated",
+          "title_based_on_content_revision": "2861b565b961d5892d47a9f23eb6bfbb518e801a468794c4e18a7b5c4c2e4f8d"
+        }
+      },
+      {
+        "id": "stamp:2f9390dce5d99aeb89b76c1b24e94196de1ba28dc260c723fdcfa3788e3e742a",
+        "order": 8,
+        "core": {
+          "identity": "boundary:f4ee34e2979f59b7669ec4038b7255d0dee564438797ecefa726066dc73bf1ee",
+          "version": "b51124f9609ddcbe835cc9477c99385821ab81a2085a64e36c4443f9e88c97f8"
+        },
+        "kind": "session_boundary",
+        "anchor": {
+          "event_at": "2026-09-14T00:16:45Z",
+          "time_basis": "route_observation",
+          "point": {
+            "lat": 37.470589119054424,
+            "lng": 127.03785721894909
+          },
+          "location_at": "2026-09-14T00:16:45Z",
+          "accuracy_m": 5.0,
+          "position_state": "resolved",
+          "method": "observed",
+          "source_fixes": [
+            {
+              "client_seq": 189,
+              "chain_index": 0,
+              "at": "2026-09-14T00:16:45Z"
+            }
+          ]
+        },
+        "title": "산책 중 기록된 장소",
+        "body": "산책 중 기록한 장소다.",
+        "user_record": null,
+        "observation": null,
+        "checkpoint": null,
+        "boundary": "end",
+        "place_reference": [],
+        "writing": {
+          "format": "diary-card-narrative-v1",
+          "content_revision": "e792473226e7ad5cb691ece169e6eaffb6b1a26aee4d24b53dda6a9bb84df608",
+          "space": {
+            "text": "산책 중 기록한 장소다.",
+            "origin": "fallback",
+            "action_id": null,
+            "actor_id": null
+          },
+          "actions": [],
+          "original_text": null,
+          "title_origin": "generated",
+          "title_based_on_content_revision": "e792473226e7ad5cb691ece169e6eaffb6b1a26aee4d24b53dda6a9bb84df608"
+        }
+      }
+    ]
+  },
+  "jobs": [
+    {
+      "stage": "space",
+      "request_revision": "1ce0fc05c17a58af05d820c33e03d04fea7d6bdf30533d20dc64d92b3860b9d1",
+      "request": {
+        "card_id": "stamp:9e82be6f4ff6d65eb3d67647139cc351eff5446e36212071ff81b71a98d824bc",
+        "walk_context": {
+          "record_kind": "guardian_walk_diary",
+          "companions": [
+            {
+              "id": "scenario-pet",
+              "name": "보리"
+            }
+          ]
+        },
+        "anchor": {
+          "event_at": "2026-09-13T23:45:15Z",
+          "time_basis": "route_observation",
+          "point": {
+            "lat": 37.470589119054424,
+            "lng": 127.03785721894909
+          },
+          "location_at": "2026-09-13T23:45:15Z",
+          "accuracy_m": 5.0,
+          "position_state": "resolved",
+          "method": "observed",
+          "source_fixes": [
+            {
+              "client_seq": 0,
+              "chain_index": 0,
+              "at": "2026-09-13T23:45:15Z"
+            }
+          ]
+        },
+        "sources": {
+          "sgis": "unavailable",
+          "egis": "unavailable",
+          "environment": "unavailable"
+        },
+        "materials": [],
+        "scene_structure": {
+          "current_ground": [],
+          "administrative_location": [],
+          "local_details": []
+        },
+        "request_revision": "1ce0fc05c17a58af05d820c33e03d04fea7d6bdf30533d20dc64d92b3860b9d1"
+      },
+      "evidence": {},
+      "accepted": {
+        "card_id": "stamp:9e82be6f4ff6d65eb3d67647139cc351eff5446e36212071ff81b71a98d824bc",
+        "request_revision": "1ce0fc05c17a58af05d820c33e03d04fea7d6bdf30533d20dc64d92b3860b9d1",
+        "text": "",
+        "evidence_ids": []
+      },
+      "failure_code": null
+    },
+    {
+      "stage": "space",
+      "request_revision": "927c6cae5a466104ab2b35e3f825a95b656ae9cfb099b41efff2126c1cf1ed4c",
+      "request": {
+        "card_id": "stamp:0a1a08f3801cbe9ef7550551e07ad2227b1f304c053601501653c9fb1c7b08bc",
+        "walk_context": {
+          "record_kind": "guardian_walk_diary",
+          "companions": [
+            {
+              "id": "scenario-pet",
+              "name": "보리"
+            }
+          ]
+        },
+        "anchor": {
+          "event_at": "2026-09-13T23:50:55Z",
+          "time_basis": "recorded_at",
+          "point": {
+            "lat": 37.47333149207589,
+            "lng": 127.03729634665666
+          },
+          "location_at": "2026-09-13T23:50:55Z",
+          "accuracy_m": 5.0,
+          "position_state": "resolved",
+          "method": "observed",
+          "source_fixes": [
+            {
+              "client_seq": 34,
+              "chain_index": 0,
+              "at": "2026-09-13T23:50:55Z"
+            }
+          ]
+        },
+        "sources": {
+          "sgis": "unavailable",
+          "egis": "unavailable",
+          "environment": "unavailable"
+        },
+        "materials": [],
+        "scene_structure": {
+          "current_ground": [],
+          "administrative_location": [],
+          "local_details": []
+        },
+        "request_revision": "927c6cae5a466104ab2b35e3f825a95b656ae9cfb099b41efff2126c1cf1ed4c"
+      },
+      "evidence": {},
+      "accepted": {
+        "card_id": "stamp:0a1a08f3801cbe9ef7550551e07ad2227b1f304c053601501653c9fb1c7b08bc",
+        "request_revision": "927c6cae5a466104ab2b35e3f825a95b656ae9cfb099b41efff2126c1cf1ed4c",
+        "text": "",
+        "evidence_ids": []
+      },
+      "failure_code": null
+    },
+    {
+      "stage": "space",
+      "request_revision": "d5196a6a68b376305bb6fe86ae617da7f24782cc0bb2eb1bb3c660373786d225",
+      "request": {
+        "card_id": "stamp:4b889492f8900baa26875834a98658b383c3c1c9f330f7ef52e2409c0262eee5",
+        "walk_context": {
+          "record_kind": "guardian_walk_diary",
+          "companions": [
+            {
+              "id": "scenario-pet",
+              "name": "보리"
+            }
+          ]
+        },
+        "anchor": {
+          "event_at": "2026-09-13T23:56:45Z",
+          "time_basis": "route_observation",
+          "point": {
+            "lat": 37.47385678898773,
+            "lng": 127.03468728149925
+          },
+          "location_at": "2026-09-13T23:56:45Z",
+          "accuracy_m": 5.0,
+          "position_state": "resolved",
+          "method": "observed",
+          "source_fixes": [
+            {
+              "client_seq": 69,
+              "chain_index": 0,
+              "at": "2026-09-13T23:56:45Z"
+            }
+          ]
+        },
+        "sources": {
+          "sgis": "unavailable",
+          "egis": "unavailable",
+          "environment": "unavailable"
+        },
+        "materials": [],
+        "scene_structure": {
+          "current_ground": [],
+          "administrative_location": [],
+          "local_details": []
+        },
+        "request_revision": "d5196a6a68b376305bb6fe86ae617da7f24782cc0bb2eb1bb3c660373786d225"
+      },
+      "evidence": {},
+      "accepted": {
+        "card_id": "stamp:4b889492f8900baa26875834a98658b383c3c1c9f330f7ef52e2409c0262eee5",
+        "request_revision": "d5196a6a68b376305bb6fe86ae617da7f24782cc0bb2eb1bb3c660373786d225",
+        "text": "",
+        "evidence_ids": []
+      },
+      "failure_code": null
+    },
+    {
+      "stage": "space",
+      "request_revision": "e059c071cde03bdb799a4f46f204fe47b56511ea70e8667534863691b8646d35",
+      "request": {
+        "card_id": "stamp:69e5333261f2e0ff7378511bd67f798a75ba6f7a40827c72b0fb2d3f065f9a22",
+        "walk_context": {
+          "record_kind": "guardian_walk_diary",
+          "companions": [
+            {
+              "id": "scenario-pet",
+              "name": "보리"
+            }
+          ]
+        },
+        "anchor": {
+          "event_at": "2026-09-14T00:01:55Z",
+          "time_basis": "recorded_at",
+          "point": {
+            "lat": 37.47500470463684,
+            "lng": 127.03294776700642
+          },
+          "location_at": "2026-09-14T00:01:55Z",
+          "accuracy_m": 5.0,
+          "position_state": "resolved",
+          "method": "observed",
+          "source_fixes": [
+            {
+              "client_seq": 100,
+              "chain_index": 0,
+              "at": "2026-09-14T00:01:55Z"
+            }
+          ]
+        },
+        "sources": {
+          "sgis": "unavailable",
+          "egis": "unavailable",
+          "environment": "unavailable"
+        },
+        "materials": [],
+        "scene_structure": {
+          "current_ground": [],
+          "administrative_location": [],
+          "local_details": []
+        },
+        "request_revision": "e059c071cde03bdb799a4f46f204fe47b56511ea70e8667534863691b8646d35"
+      },
+      "evidence": {},
+      "accepted": {
+        "card_id": "stamp:69e5333261f2e0ff7378511bd67f798a75ba6f7a40827c72b0fb2d3f065f9a22",
+        "request_revision": "e059c071cde03bdb799a4f46f204fe47b56511ea70e8667534863691b8646d35",
+        "text": "",
+        "evidence_ids": []
+      },
+      "failure_code": null
+    },
+    {
+      "stage": "space",
+      "request_revision": "a387ced7438b2983ed68281dff13be2d0f594075c65ee413dc71bb38f068c7a5",
+      "request": {
+        "card_id": "stamp:e5cbce094664789342ac1a8c1fad1bcd68eafa10383e1929139dac8a7b531321",
+        "walk_context": {
+          "record_kind": "guardian_walk_diary",
+          "companions": [
+            {
+              "id": "scenario-pet",
+              "name": "보리"
+            }
+          ]
+        },
+        "anchor": {
+          "event_at": "2026-09-14T00:05:45Z",
+          "time_basis": "route_observation",
+          "point": {
+            "lat": 37.47408511016569,
+            "lng": 127.03306961024494
+          },
+          "location_at": "2026-09-14T00:05:45Z",
+          "accuracy_m": 5.0,
+          "position_state": "resolved",
+          "method": "observed",
+          "source_fixes": [
+            {
+              "client_seq": 123,
+              "chain_index": 0,
+              "at": "2026-09-14T00:05:45Z"
+            }
+          ]
+        },
+        "sources": {
+          "sgis": "unavailable",
+          "egis": "unavailable",
+          "environment": "unavailable"
+        },
+        "materials": [],
+        "scene_structure": {
+          "current_ground": [],
+          "administrative_location": [],
+          "local_details": []
+        },
+        "request_revision": "a387ced7438b2983ed68281dff13be2d0f594075c65ee413dc71bb38f068c7a5"
+      },
+      "evidence": {},
+      "accepted": {
+        "card_id": "stamp:e5cbce094664789342ac1a8c1fad1bcd68eafa10383e1929139dac8a7b531321",
+        "request_revision": "a387ced7438b2983ed68281dff13be2d0f594075c65ee413dc71bb38f068c7a5",
+        "text": "",
+        "evidence_ids": []
+      },
+      "failure_code": null
+    },
+    {
+      "stage": "space",
+      "request_revision": "fd51d4e0b59a122cf5157a07c1cb8993ee96b4330a02385ab2d465ee4c3a08ee",
+      "request": {
+        "card_id": "stamp:4455d8022213a9d87473d9e235fd58f1a365a81845d16efde0361103bae0b89a",
+        "walk_context": {
+          "record_kind": "guardian_walk_diary",
+          "companions": [
+            {
+              "id": "scenario-pet",
+              "name": "보리"
+            }
+          ]
+        },
+        "anchor": {
+          "event_at": "2026-09-14T00:08:15Z",
+          "time_basis": "route_observation",
+          "point": {
+            "lat": 37.47391663162882,
+            "lng": 127.03502658573123
+          },
+          "location_at": "2026-09-14T00:08:15Z",
+          "accuracy_m": 5.0,
+          "position_state": "resolved",
+          "method": "observed",
+          "source_fixes": [
+            {
+              "client_seq": 138,
+              "chain_index": 0,
+              "at": "2026-09-14T00:08:15Z"
+            }
+          ]
+        },
+        "sources": {
+          "sgis": "unavailable",
+          "egis": "unavailable",
+          "environment": "unavailable"
+        },
+        "materials": [],
+        "scene_structure": {
+          "current_ground": [],
+          "administrative_location": [],
+          "local_details": []
+        },
+        "request_revision": "fd51d4e0b59a122cf5157a07c1cb8993ee96b4330a02385ab2d465ee4c3a08ee"
+      },
+      "evidence": {},
+      "accepted": {
+        "card_id": "stamp:4455d8022213a9d87473d9e235fd58f1a365a81845d16efde0361103bae0b89a",
+        "request_revision": "fd51d4e0b59a122cf5157a07c1cb8993ee96b4330a02385ab2d465ee4c3a08ee",
+        "text": "",
+        "evidence_ids": []
+      },
+      "failure_code": null
+    },
+    {
+      "stage": "space",
+      "request_revision": "577c6a66d5dcae0bb974f54f66bf8ea4679a6f8608e183335ec316749376f7aa",
+      "request": {
+        "card_id": "stamp:42f42c051b214a48aeb32861326f96bea3e458603fced6431dbe36cb1c777e2a",
+        "walk_context": {
+          "record_kind": "guardian_walk_diary",
+          "companions": [
+            {
+              "id": "scenario-pet",
+              "name": "보리"
+            }
+          ]
+        },
+        "anchor": {
+          "event_at": "2026-09-14T00:12:55Z",
+          "time_basis": "recorded_at",
+          "point": {
+            "lat": 37.47279100978833,
+            "lng": 127.03741709514955
+          },
+          "location_at": "2026-09-14T00:12:55Z",
+          "accuracy_m": 5.0,
+          "position_state": "resolved",
+          "method": "observed",
+          "source_fixes": [
+            {
+              "client_seq": 166,
+              "chain_index": 0,
+              "at": "2026-09-14T00:12:55Z"
+            }
+          ]
+        },
+        "sources": {
+          "sgis": "unavailable",
+          "egis": "unavailable",
+          "environment": "unavailable"
+        },
+        "materials": [],
+        "scene_structure": {
+          "current_ground": [],
+          "administrative_location": [],
+          "local_details": []
+        },
+        "request_revision": "577c6a66d5dcae0bb974f54f66bf8ea4679a6f8608e183335ec316749376f7aa"
+      },
+      "evidence": {},
+      "accepted": {
+        "card_id": "stamp:42f42c051b214a48aeb32861326f96bea3e458603fced6431dbe36cb1c777e2a",
+        "request_revision": "577c6a66d5dcae0bb974f54f66bf8ea4679a6f8608e183335ec316749376f7aa",
+        "text": "",
+        "evidence_ids": []
+      },
+      "failure_code": null
+    },
+    {
+      "stage": "space",
+      "request_revision": "897c7b0b527264bd8c75e85f0e2a800f5831fbf84d5c1875ca04a4498ef0854c",
+      "request": {
+        "card_id": "stamp:2f9390dce5d99aeb89b76c1b24e94196de1ba28dc260c723fdcfa3788e3e742a",
+        "walk_context": {
+          "record_kind": "guardian_walk_diary",
+          "companions": [
+            {
+              "id": "scenario-pet",
+              "name": "보리"
+            }
+          ]
+        },
+        "anchor": {
+          "event_at": "2026-09-14T00:16:45Z",
+          "time_basis": "route_observation",
+          "point": {
+            "lat": 37.470589119054424,
+            "lng": 127.03785721894909
+          },
+          "location_at": "2026-09-14T00:16:45Z",
+          "accuracy_m": 5.0,
+          "position_state": "resolved",
+          "method": "observed",
+          "source_fixes": [
+            {
+              "client_seq": 189,
+              "chain_index": 0,
+              "at": "2026-09-14T00:16:45Z"
+            }
+          ]
+        },
+        "sources": {
+          "sgis": "unavailable",
+          "egis": "unavailable",
+          "environment": "unavailable"
+        },
+        "materials": [],
+        "scene_structure": {
+          "current_ground": [],
+          "administrative_location": [],
+          "local_details": []
+        },
+        "request_revision": "897c7b0b527264bd8c75e85f0e2a800f5831fbf84d5c1875ca04a4498ef0854c"
+      },
+      "evidence": {},
+      "accepted": {
+        "card_id": "stamp:2f9390dce5d99aeb89b76c1b24e94196de1ba28dc260c723fdcfa3788e3e742a",
+        "request_revision": "897c7b0b527264bd8c75e85f0e2a800f5831fbf84d5c1875ca04a4498ef0854c",
+        "text": "",
+        "evidence_ids": []
+      },
+      "failure_code": null
+    },
+    {
+      "stage": "action",
+      "request_revision": "17f3985b6c8fcd9d7aa76ce6922c21e670fce049f89f7a3a62ca8e93d06c28ba",
+      "request": {
+        "card_id": "stamp:0a1a08f3801cbe9ef7550551e07ad2227b1f304c053601501653c9fb1c7b08bc",
+        "event_at": "2026-09-13T23:50:55+00:00",
+        "walk_context": {
+          "record_kind": "guardian_walk_diary",
+          "companions": [
+            {
+              "id": "scenario-pet",
+              "name": "보리"
+            }
+          ]
+        },
+        "action": {
+          "id": "action:3a11ace1596ae458084f665a2d0e2d857739a734cbf8408b82d708b403a2b027",
+          "kind": "sniffing",
+          "material": {
+            "무엇을": "냄새 맡기"
+          },
+          "actor": {
+            "id": "scenario-pet",
+            "name": "보리"
+          }
+        },
+        "request_revision": "17f3985b6c8fcd9d7aa76ce6922c21e670fce049f89f7a3a62ca8e93d06c28ba"
+      },
+      "evidence": {},
+      "accepted": {
+        "card_id": "stamp:0a1a08f3801cbe9ef7550551e07ad2227b1f304c053601501653c9fb1c7b08bc",
+        "request_revision": "17f3985b6c8fcd9d7aa76ce6922c21e670fce049f89f7a3a62ca8e93d06c28ba",
+        "text": "보리가 냄새를 맡았다.",
+        "action_id": "action:3a11ace1596ae458084f665a2d0e2d857739a734cbf8408b82d708b403a2b027"
+      },
+      "failure_code": null
+    },
+    {
+      "stage": "title",
+      "request_revision": "670c3dc6b0fc1465ade70e1083030d98ca519ebcef4279ad221d5a47309cdcea",
+      "request": {
+        "cards": [
+          {
+            "card_id": "stamp:9e82be6f4ff6d65eb3d67647139cc351eff5446e36212071ff81b71a98d824bc",
+            "content_revision": "95f20077d98e829b8de62691671af69126cece0b00f82a6ba571b967c40f4823",
+            "space": {
+              "text": "산책 중 기록한 장소다.",
+              "origin": "fallback",
+              "action_id": null,
+              "actor_id": null
+            },
+            "actions": [],
+            "place_reference": [],
+            "event_at": "2026-09-13T23:45:15+00:00"
+          },
+          {
+            "card_id": "stamp:0a1a08f3801cbe9ef7550551e07ad2227b1f304c053601501653c9fb1c7b08bc",
+            "content_revision": "af74630acaf4b5627a2c9c1b7b8d38927d37d7eafdf4954b5e515869a94b8759",
+            "space": {
+              "text": "산책 중 기록한 장소다.",
+              "origin": "fallback",
+              "action_id": null,
+              "actor_id": null
+            },
+            "actions": [
+              {
+                "text": "보리가 냄새를 맡았다.",
+                "origin": "generated",
+                "action_id": "action:3a11ace1596ae458084f665a2d0e2d857739a734cbf8408b82d708b403a2b027",
+                "actor_id": "scenario-pet"
+              }
+            ],
+            "place_reference": [],
+            "event_at": "2026-09-13T23:50:55+00:00"
+          },
+          {
+            "card_id": "stamp:4b889492f8900baa26875834a98658b383c3c1c9f330f7ef52e2409c0262eee5",
+            "content_revision": "954de5399bbdb959973ff226a73f9b477cf8380388c14173b68a627d39b9ea4b",
+            "space": {
+              "text": "산책 중 기록한 장소다.",
+              "origin": "fallback",
+              "action_id": null,
+              "actor_id": null
+            },
+            "actions": [],
+            "place_reference": [],
+            "event_at": "2026-09-13T23:56:45+00:00"
+          },
+          {
+            "card_id": "stamp:69e5333261f2e0ff7378511bd67f798a75ba6f7a40827c72b0fb2d3f065f9a22",
+            "content_revision": "dc1abbe8625c6e43204af1d4333f75737a81e094f5cfaadb9f5e937724191c7e",
+            "space": {
+              "text": "산책 중 기록한 장소다.",
+              "origin": "fallback",
+              "action_id": null,
+              "actor_id": null
+            },
+            "actions": [],
+            "place_reference": [],
+            "event_at": "2026-09-14T00:01:55+00:00"
+          },
+          {
+            "card_id": "stamp:e5cbce094664789342ac1a8c1fad1bcd68eafa10383e1929139dac8a7b531321",
+            "content_revision": "b4a84bdef15a1fa09e619309482d01e150c849d43e0be635a592593315f8f7a9",
+            "space": {
+              "text": "산책 중 기록한 장소다.",
+              "origin": "fallback",
+              "action_id": null,
+              "actor_id": null
+            },
+            "actions": [],
+            "place_reference": [],
+            "event_at": "2026-09-14T00:05:45+00:00"
+          },
+          {
+            "card_id": "stamp:4455d8022213a9d87473d9e235fd58f1a365a81845d16efde0361103bae0b89a",
+            "content_revision": "a89dd95f34a90e07fbab23726e794f42fa1a76cf6a772de17051093551bbaa05",
+            "space": {
+              "text": "산책 중 기록한 장소다.",
+              "origin": "fallback",
+              "action_id": null,
+              "actor_id": null
+            },
+            "actions": [],
+            "place_reference": [],
+            "event_at": "2026-09-14T00:08:15+00:00"
+          },
+          {
+            "card_id": "stamp:42f42c051b214a48aeb32861326f96bea3e458603fced6431dbe36cb1c777e2a",
+            "content_revision": "2861b565b961d5892d47a9f23eb6bfbb518e801a468794c4e18a7b5c4c2e4f8d",
+            "space": {
+              "text": "산책 중 기록한 장소다.",
+              "origin": "fallback",
+              "action_id": null,
+              "actor_id": null
+            },
+            "actions": [],
+            "place_reference": [],
+            "event_at": "2026-09-14T00:12:55+00:00"
+          },
+          {
+            "card_id": "stamp:2f9390dce5d99aeb89b76c1b24e94196de1ba28dc260c723fdcfa3788e3e742a",
+            "content_revision": "e792473226e7ad5cb691ece169e6eaffb6b1a26aee4d24b53dda6a9bb84df608",
+            "space": {
+              "text": "산책 중 기록한 장소다.",
+              "origin": "fallback",
+              "action_id": null,
+              "actor_id": null
+            },
+            "actions": [],
+            "place_reference": [],
+            "event_at": "2026-09-14T00:16:45+00:00"
+          }
+        ],
+        "request_revision": "670c3dc6b0fc1465ade70e1083030d98ca519ebcef4279ad221d5a47309cdcea"
+      },
+      "evidence": {},
+      "accepted": {
+        "titles": [
+          {
+            "card_id": "stamp:9e82be6f4ff6d65eb3d67647139cc351eff5446e36212071ff81b71a98d824bc",
+            "content_revision": "95f20077d98e829b8de62691671af69126cece0b00f82a6ba571b967c40f4823",
+            "text": "산책 중 기록된 장소"
+          },
+          {
+            "card_id": "stamp:0a1a08f3801cbe9ef7550551e07ad2227b1f304c053601501653c9fb1c7b08bc",
+            "content_revision": "af74630acaf4b5627a2c9c1b7b8d38927d37d7eafdf4954b5e515869a94b8759",
+            "text": "산책 중 보리가 냄새를 맡은 장소"
+          },
+          {
+            "card_id": "stamp:4b889492f8900baa26875834a98658b383c3c1c9f330f7ef52e2409c0262eee5",
+            "content_revision": "954de5399bbdb959973ff226a73f9b477cf8380388c14173b68a627d39b9ea4b",
+            "text": "산책 중 기록된 장소"
+          },
+          {
+            "card_id": "stamp:69e5333261f2e0ff7378511bd67f798a75ba6f7a40827c72b0fb2d3f065f9a22",
+            "content_revision": "dc1abbe8625c6e43204af1d4333f75737a81e094f5cfaadb9f5e937724191c7e",
+            "text": "산책 중 기록된 장소"
+          },
+          {
+            "card_id": "stamp:e5cbce094664789342ac1a8c1fad1bcd68eafa10383e1929139dac8a7b531321",
+            "content_revision": "b4a84bdef15a1fa09e619309482d01e150c849d43e0be635a592593315f8f7a9",
+            "text": "산책 중 기록된 장소"
+          },
+          {
+            "card_id": "stamp:4455d8022213a9d87473d9e235fd58f1a365a81845d16efde0361103bae0b89a",
+            "content_revision": "a89dd95f34a90e07fbab23726e794f42fa1a76cf6a772de17051093551bbaa05",
+            "text": "산책 중 기록된 장소"
+          },
+          {
+            "card_id": "stamp:42f42c051b214a48aeb32861326f96bea3e458603fced6431dbe36cb1c777e2a",
+            "content_revision": "2861b565b961d5892d47a9f23eb6bfbb518e801a468794c4e18a7b5c4c2e4f8d",
+            "text": "산책 중 기록된 장소"
+          },
+          {
+            "card_id": "stamp:2f9390dce5d99aeb89b76c1b24e94196de1ba28dc260c723fdcfa3788e3e742a",
+            "content_revision": "e792473226e7ad5cb691ece169e6eaffb6b1a26aee4d24b53dda6a9bb84df608",
+            "text": "산책 중 기록된 장소"
+          }
+        ]
+      },
+      "failure_code": null
+    }
+  ],
+  "scene_backgrounds": null
+}

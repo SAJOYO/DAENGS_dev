@@ -34,6 +34,15 @@ def _training_ok() -> CapabilityResult:
     )
 
 
+def _training_error() -> CapabilityResult:
+    return CapabilityResult(
+        capability=CapabilityName.TRAINING,
+        status=CapabilityStatus.ERROR,
+        error=ErrorDetail(kind="RuntimeError", detail="기능 실행 중 예기치 않은 오류가 발생했습니다."),
+        elapsed_ms=1,
+    )
+
+
 def test_순수_gait_핸드오프는_구조는_보존하고_문구만_바꾼다() -> None:
     handoff = Handoff(target="gait", reason="video_upload_required")
     response = aggregate_results(request_id="r1", route_plan=_plan(handoffs=[handoff]), results=[])
@@ -74,6 +83,34 @@ def test_training_실행_결과에_gait_핸드오프_안내가_이어붙는다()
     assert "보행 영상" in response.message
     for code in _LEAKED_CODES:
         assert code not in response.message
+
+
+def test_실행이_실패해도_핸드오프는_남는다() -> None:
+    """`test_orchestrator_failure_contract.py` 가 지키던 자리다 (D-072 로 지워졌다).
+
+    핸드오프가 붙는 나머지 시험은 전부 결과가 OK 라, 실행이 **실패한** 턴에서 핸드오프가
+    떨어져도 스위트가 초록이었다. 그러면 사용자는 하필 그 턴에 "영상을 올려 주세요" 를
+    못 받는다 — 능력이 답을 못 냈으니 핸드오프가 유일하게 남은 길인 턴이다.
+
+    진리표는 그대로다: ERROR 뿐이면 FAILED, OK 가 섞이면 PARTIAL. 둘 중 어느 쪽이든
+    `route_plan.handoffs` 는 응답에 실리고 안내 문구가 이어 붙는다.
+    """
+    for results, expected in (
+        ([_training_error()], AssistantStatus.FAILED),
+        ([_training_ok(), _life_failed()], AssistantStatus.PARTIAL),
+    ):
+        handoff = Handoff(target="gait", reason="video_upload_required")
+        response = aggregate_results(
+            request_id="hf1",
+            route_plan=_plan(handoffs=[handoff]),
+            results=results,
+        )
+
+        assert response.status == expected, results
+        assert response.handoffs == [handoff], results
+        assert "보행 영상" in response.message, results
+        for code in _LEAKED_CODES:
+            assert code not in response.message
 
 
 def test_모르는_핸드오프_대상은_일반_안내문으로_떨어진다() -> None:

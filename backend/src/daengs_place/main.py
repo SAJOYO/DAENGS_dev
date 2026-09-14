@@ -19,6 +19,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from daengs_place.api import (
+    bookmarks_internal,
     conversation_internal,
     discovery_internal,
     facility_internal,
@@ -33,6 +34,7 @@ app.include_router(territory_sites.router)
 app.include_router(discovery_internal.router)
 app.include_router(facility_internal.router)
 app.include_router(conversation_internal.router)
+app.include_router(bookmarks_internal.router)
 
 
 @app.get("/health")

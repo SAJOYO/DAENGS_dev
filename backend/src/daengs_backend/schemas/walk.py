@@ -13,7 +13,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, field_validator, model_validator
 
 
 class WalkPointUpload(BaseModel):
@@ -30,6 +30,8 @@ class WalkPointUpload(BaseModel):
     lng: Decimal = Field(ge=-180, le=180)
     accuracy_m: float | None = Field(default=None, ge=0, allow_inf_nan=False)
     is_mock: bool = False
+    # None is historical missing metadata, never a synthesized acceptance decision.
+    recording_eligible: StrictBool | None = None
 
     @field_validator("at")
     @classmethod
@@ -176,6 +178,7 @@ class WalkPointResponse(BaseModel):
     lng: Decimal
     accuracy_m: float | None
     is_mock: bool
+    recording_eligible: bool | None = None
 
 
 class WalkResponse(BaseModel):
@@ -201,6 +204,34 @@ class WalkDetailResponse(WalkResponse):
     """한 건 + 좌표. `client_seq` 순서로 옵니다."""
 
     points: list[WalkPointResponse]
+    recording_receipt: "WalkRecordingReceipt | None" = None
+
+
+class WalkRecordingReceipt(BaseModel):
+    contract_version: Literal["gps-recording-v1"] = "gps-recording-v1"
+    policy_version: Literal["gps-recording-eligibility-v1"] = "gps-recording-eligibility-v1"
+    raw_input_fingerprint: str
+    evidence_fingerprint: str
+    point_count: int
+    known_point_count: int
+
+
+class WalkRecordingRepair(BaseModel):
+    """Fill missing recording metadata only, against the immutable original stream."""
+
+    model_config = ConfigDict(extra="forbid")
+    contract_version: Literal["gps-recording-v1"]
+    policy_version: Literal["gps-recording-eligibility-v1"]
+    raw_input_fingerprint: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    points: list[WalkPointUpload] = Field(min_length=1, max_length=2000)
+
+    @model_validator(mode="after")
+    def _known_unique_points(self) -> Self:
+        if any(p.recording_eligible is None for p in self.points):
+            raise ValueError("보완에는 기기에 실제 남은 GPS 구분이 필요합니다.")
+        if len({p.client_seq for p in self.points}) != len(self.points):
+            raise ValueError("client_seq 가 겹칩니다.")
+        return self
 
 
 class WalkListResponse(BaseModel):

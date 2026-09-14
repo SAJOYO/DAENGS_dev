@@ -66,9 +66,11 @@ def test_gait_group_carries_the_golden_pins_exactly():
     assert _gait_group_pins() == V4_PINS
 
 
-def test_gait_group_still_has_legacy_ultralytics():
+def test_gait_group_no_longer_carries_ultralytics():
+    """6단계에서 legacy 추론 runtime 과 함께 빠졌습니다 (D-063). 되살아나면 워커 이미지에
+    GUI opencv 를 다시 끌고 오는 자리이므로(위 override 주석) 여기서 잡습니다."""
     names = {spec.split("==")[0].split(">=")[0].strip() for spec in _pyproject()["dependency-groups"]["gait"]}
-    assert "ultralytics" in names, "legacy 엔진(ultralytics)이 gait 그룹에서 빠졌습니다"
+    assert "ultralytics" not in names, "없앤 ultralytics 가 gait 그룹에 되살아났습니다"
 
 
 def test_gait_v4_group_is_gone():

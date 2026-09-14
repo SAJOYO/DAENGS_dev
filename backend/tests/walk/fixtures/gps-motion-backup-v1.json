@@ -1,0 +1,115 @@
+{
+  "manifest": {
+    "version": "gps-motion-backup-v1",
+    "client_session_id": "11111111-1111-1111-1111-111111111111",
+    "raw_input_fingerprint": "sha256:8dabb3ad0f4361c030069ed95ed8c26880c6ec84ea869406f29327a527d33ad0",
+    "point_count": 3,
+    "policy": {
+      "version": "motion-v1",
+      "observation_schema_version": 15,
+      "measurement_version": "motion-measurement-v1",
+      "config_json": "{\"windowSize\":8,\"windowSeconds\":15.0,\"minCoordinateSeconds\":2.0,\"maxPositionAccuracyM\":50.0,\"maxSpeedAccuracyMps\":2.0,\"speedAgreementMps\":1.5,\"maxWalkingSpeedMps\":7.0,\"stationarySpeedMps\":0.25,\"minDistanceM\":3.0,\"noiseRadiusFactor\":0.5,\"maxJumpM\":200.0,\"maxGapSeconds\":20.0,\"reentrySamples\":2,\"reentrySeconds\":1.5}",
+      "config_hash": "9218bfdac416f81709b39effe5ea52e6bfce28cb10ba9e27c1970a90d0a267de"
+    },
+    "epochs": [
+      {
+        "source_epoch": "epoch-a",
+        "clock_epoch_id": "clock-a",
+        "chain_index": 0,
+        "started_at_millis": 1789084800000,
+        "started_elapsed_nanos": 9007199254740993,
+        "first_ingress_seq": 0,
+        "ended_at_millis": 1789084805000,
+        "ended_elapsed_nanos": 9007204254740993,
+        "target_ingress_seq": 2,
+        "persisted_count": 3,
+        "end_kind": "STOP",
+        "drained": true,
+        "failure_reason": null,
+        "first_failed_seq": null
+      }
+    ]
+  },
+  "points": [
+    {
+      "client_seq": 0,
+      "source_epoch": "epoch-a",
+      "clock_epoch_id": "clock-a",
+      "chain_index": 0,
+      "elapsed_realtime_nanos": 9007200254740993,
+      "received_elapsed_nanos": 9007200254740993,
+      "received_at_millis": 1789084801000,
+      "speed_mps_bits": "80000000",
+      "speed_accuracy_mps_bits": "3e4ccccd",
+      "bearing_degrees_bits": null,
+      "bearing_accuracy_degrees_bits": null,
+      "provider": "fused",
+      "recording_eligible": true
+    },
+    {
+      "client_seq": 1,
+      "source_epoch": "epoch-a",
+      "clock_epoch_id": "clock-a",
+      "chain_index": 0,
+      "elapsed_realtime_nanos": 9007203254740993,
+      "received_elapsed_nanos": 9007203254740993,
+      "received_at_millis": 1789084804000,
+      "speed_mps_bits": "7fc00001",
+      "speed_accuracy_mps_bits": "3e4ccccd",
+      "bearing_degrees_bits": null,
+      "bearing_accuracy_degrees_bits": null,
+      "provider": "fused",
+      "recording_eligible": true
+    },
+    {
+      "client_seq": 2,
+      "source_epoch": "epoch-a",
+      "clock_epoch_id": "clock-a",
+      "chain_index": 0,
+      "elapsed_realtime_nanos": 9007204254740993,
+      "received_elapsed_nanos": 9007204254740993,
+      "received_at_millis": 1789084805000,
+      "speed_mps_bits": null,
+      "speed_accuracy_mps_bits": "3e4ccccd",
+      "bearing_degrees_bits": null,
+      "bearing_accuracy_degrees_bits": null,
+      "provider": "fused",
+      "recording_eligible": true
+    }
+  ],
+  "raw_points": [
+    {
+      "client_seq": 0,
+      "chain_index": 0,
+      "at": "2026-09-11T00:00:01+00:00",
+      "lat": "37.5",
+      "lng": "127.0",
+      "accuracy_m": 3.0,
+      "is_mock": false,
+      "recording_eligible": true
+    },
+    {
+      "client_seq": 1,
+      "chain_index": 0,
+      "at": "2026-09-11T00:00:04+00:00",
+      "lat": "37.5",
+      "lng": "127.00005",
+      "accuracy_m": 3.0,
+      "is_mock": false,
+      "recording_eligible": true
+    },
+    {
+      "client_seq": 2,
+      "chain_index": 0,
+      "at": "2026-09-11T00:00:05+00:00",
+      "lat": "37.5",
+      "lng": "127.0001",
+      "accuracy_m": 3.0,
+      "is_mock": false,
+      "recording_eligible": true
+    }
+  ],
+  "manifest_fingerprint": "sha256:2aaab9ac9f0d3f77925d3168e4312da0d9b2298f74f548d03cfa300e80753cae",
+  "chunk_fingerprint": "sha256:74d35c8dc189d5dc0169be600fa1a1e301de55f9934d7b768af0349c54a7d613",
+  "evidence_fingerprint": "sha256:4ea832c639a111650057fd79cb8b968df107752f5e1ff4d5a9d407a33bb09800"
+}

@@ -10,7 +10,10 @@ from daengs_backend.models.walk import Walk
 from daengs_backend.models.walk_entry_context import WalkEntryContextEnvelope
 from daengs_backend.repositories import walk_entry as entries
 from daengs_backend.repositories import walk_entry_context as repo
+from daengs_backend.repositories import walk_entry_v2 as pins
 from daengs_backend.services.walk_entry_context_source import collect, digest
+from daengs_backend.services.walk_entry_errors import EntryNotFound
+from daengs_backend.services.walk_entry_policy import guard_v1, require_enabled
 
 
 async def reserve(session, row):
@@ -26,22 +29,15 @@ async def reserve_pin(session, row, sidecar):
 
 
 async def read(session, owner, walk_id, entry_id, *, v2=False):
-    from daengs_backend.services.walk_entry import EntryNotFound
-
     if await entries.owned_walk(session, owner, walk_id) is None:
         raise EntryNotFound
     row = await entries.get_entry(session, walk_id, entry_id)
     if row is None or row.payload is None:
         raise EntryNotFound
-    from daengs_backend.services.walk_entry_v2 import guard_v1
-
     policy = repo.POLICY
     if not v2:
         await guard_v1(session, [walk_id], entry_id=entry_id)
     else:
-        from daengs_backend.repositories import walk_entry_v2 as pins
-        from daengs_backend.services.walk_entry_v2 import require_enabled
-
         require_enabled()
         if await pins.pin(session, walk_id, entry_id) is not None:
             policy = repo.PIN_POLICY
@@ -89,8 +85,6 @@ async def take(factory):
             "content": dict(row.payload) if valid else None,
         }
         if valid and job.policy_version == repo.PIN_POLICY:
-            from daengs_backend.repositories import walk_entry_v2 as pins
-
             sidecar = await pins.pin(session, job.walk_id, job.entry_id)
             if sidecar is None or (sidecar.payload and sidecar.payload["state"] == "provisional"):
                 job.state, job.lease_token, job.lease_until = "cancelled", None, None
@@ -145,7 +139,8 @@ async def finish(factory, ticket, result):
                 "operation": result.operation
                 or ("/v2/places/search" if job.tag == "space.facility" else None),
                 "retrieved_at": result.retrieved_at,
-                "temporal_basis": "lookup_snapshot" if result.retrieved_at else "unknown",
+                "temporal_basis": result.temporal_basis
+                or ("lookup_snapshot" if result.retrieved_at else "unknown"),
                 "policy_version": job.policy_version,
             },
             "payload": result.payload,

@@ -1,0 +1,210 @@
+{
+  "label": "tr_v1",
+  "n": 33,
+  "accuracy": {
+    "point": 0.7576,
+    "low": 0.5898,
+    "high": 0.8717,
+    "n": 33
+  },
+  "strata": {
+    "new_unrelated": {
+      "n": 6,
+      "correct": 5,
+      "rate": {
+        "point": 0.8333,
+        "low": 0.4365,
+        "high": 0.9699,
+        "n": 6
+      }
+    },
+    "followup_marker": {
+      "n": 6,
+      "correct": 5,
+      "rate": {
+        "point": 0.8333,
+        "low": 0.4365,
+        "high": 0.9699,
+        "n": 6
+      }
+    },
+    "followup_no_marker": {
+      "n": 5,
+      "correct": 0,
+      "rate": {
+        "point": 0.0,
+        "low": 0.0,
+        "high": 0.4345,
+        "n": 5
+      }
+    },
+    "correction": {
+      "n": 5,
+      "correct": 5,
+      "rate": {
+        "point": 1.0,
+        "low": 0.5655,
+        "high": 1.0,
+        "n": 5
+      }
+    },
+    "repeat": {
+      "n": 4,
+      "correct": 3,
+      "rate": {
+        "point": 0.75,
+        "low": 0.3006,
+        "high": 0.9544,
+        "n": 4
+      }
+    },
+    "meta": {
+      "n": 3,
+      "correct": 3,
+      "rate": {
+        "point": 1.0,
+        "low": 0.4385,
+        "high": 1.0,
+        "n": 3
+      }
+    },
+    "pending_answer": {
+      "n": 4,
+      "correct": 4,
+      "rate": {
+        "point": 1.0,
+        "low": 0.5101,
+        "high": 1.0,
+        "n": 4
+      }
+    }
+  },
+  "confusion": {
+    "NEW": {
+      "FAST_NEW": 3,
+      "NEW": 3,
+      "FOLLOW_UP": 1
+    },
+    "FOLLOW_UP": {
+      "FOLLOW_UP": 8,
+      "REPEAT": 1,
+      "FAST_NEW": 5
+    },
+    "CORRECTION": {
+      "CORRECTION": 5
+    },
+    "REPEAT": {
+      "REPEAT": 3,
+      "FOLLOW_UP": 1
+    },
+    "META": {
+      "META": 3
+    }
+  },
+  "misses": [
+    {
+      "script_id": "tr_new_06",
+      "stratum": "new_unrelated",
+      "current": "말고 다른 건 없어요? 산책 코스 추천 같은 거",
+      "expect": "NEW",
+      "got": "FOLLOW_UP",
+      "confidence": 1.0,
+      "standalone_query": "우리 애를 위한 산책 코스 추천 같은 다른 기능은 없나요?",
+      "error": null,
+      "status": "CLARIFY"
+    },
+    {
+      "script_id": "tr_fu_02",
+      "stratum": "followup_marker",
+      "current": "아까 말한 거 다시 설명해줘",
+      "expect": "FOLLOW_UP",
+      "got": "REPEAT",
+      "confidence": 1.0,
+      "standalone_query": "사료 보관 방법을 다시 설명해줘",
+      "error": null,
+      "status": "ANSWERED"
+    },
+    {
+      "script_id": "tr_fun_01",
+      "stratum": "followup_no_marker",
+      "current": "빗은 어떤 걸 써요?",
+      "expect": "FOLLOW_UP",
+      "got": "FAST_NEW",
+      "confidence": 1.0,
+      "standalone_query": null,
+      "error": null,
+      "status": "ANSWERED"
+    },
+    {
+      "script_id": "tr_fun_02",
+      "stratum": "followup_no_marker",
+      "current": "비 오는 날은요?",
+      "expect": "FOLLOW_UP",
+      "got": "FAST_NEW",
+      "confidence": 1.0,
+      "standalone_query": null,
+      "error": null,
+      "status": "CLARIFY"
+    },
+    {
+      "script_id": "tr_fun_03",
+      "stratum": "followup_no_marker",
+      "current": "한 번에 양은요?",
+      "expect": "FOLLOW_UP",
+      "got": "FAST_NEW",
+      "confidence": 1.0,
+      "standalone_query": null,
+      "error": null,
+      "status": "ANSWERED"
+    },
+    {
+      "script_id": "tr_fun_04",
+      "stratum": "followup_no_marker",
+      "current": "비용은 보통 얼마나 들어요?",
+      "expect": "FOLLOW_UP",
+      "got": "FAST_NEW",
+      "confidence": 1.0,
+      "standalone_query": null,
+      "error": null,
+      "status": "ANSWERED"
+    },
+    {
+      "script_id": "tr_fun_05",
+      "stratum": "followup_no_marker",
+      "current": "효과 보려면 얼마나 걸려요?",
+      "expect": "FOLLOW_UP",
+      "got": "FAST_NEW",
+      "confidence": 1.0,
+      "standalone_query": null,
+      "error": null,
+      "status": "ANSWERED"
+    },
+    {
+      "script_id": "tr_rep_03",
+      "stratum": "repeat",
+      "current": "발을 전다고 했잖아 뭘 봐야 하는지 알려줘",
+      "expect": "REPEAT",
+      "got": "FOLLOW_UP",
+      "confidence": 0.95,
+      "standalone_query": "발을 저는 증상과 관련하여 동물병원에서 진료받을 때 무엇을 확인해야 하는지 알려줘",
+      "error": null,
+      "status": "CLARIFY"
+    }
+  ],
+  "model_called": 25,
+  "wiring_mismatch": 0,
+  "tokens": {
+    "resolver_in": 22496,
+    "resolver_out": 1574,
+    "router_in": 55236,
+    "router_out": 976,
+    "general_in": 42648,
+    "general_out": 2173
+  },
+  "resolver": {
+    "model": "gemini-3.1-flash-lite",
+    "prompt_version": "turn-resolver-ko-v1",
+    "confidence_floor": 0.6
+  },
+  "generated_at": "2026-09-11T08:19:38+00:00"
+}

@@ -1,6 +1,8 @@
 """Render only server-owned scope, source facts and recorded selection provenance."""
 
 from daengs_place.place.conversation.contract import AnswerFact
+from daengs_place.place.conversation.presentation import user_text
+from daengs_place.place.conversation.scope import PROCESSING_FAILED
 
 KINDS = {
     "hospital": "동물병원",
@@ -109,79 +111,146 @@ def fact_sentence(fact):
         return f"{label} 정보는 없어서 확인이 필요해요."
     if fact.attribute == "parking":
         return (
-            "원천 정보에는 주차 가능으로 나와요."
+            "등록된 정보에는 주차할 수 있다고 나와요."
             if fact.value
-            else "원천 정보에는 주차 불가로 나와요."
+            else "등록된 정보에는 주차할 수 없다고 나와요."
         )
     if fact.attribute == "exclusive":
         return (
-            "원천 정보에는 반려동물 전용으로 나와요."
+            "등록된 정보에는 반려동물 전용으로 나와요."
             if fact.value
-            else "원천 정보에는 반려동물 전용이 아닌 것으로 나와요."
+            else "등록된 정보에는 반려동물 전용이 아니라고 나와요."
         )
     if fact.attribute == "pet_allowed":
         return (
-            "원천 정보에는 반려동물 동반 가능으로 나와요."
+            "등록된 정보에는 반려동물과 함께 갈 수 있다고 나와요."
             if fact.value
-            else "원천 정보에는 반려동물 동반 불가로 나와요."
+            else "등록된 정보에는 반려동물과 함께 갈 수 없다고 나와요."
         )
     if fact.attribute == "distance":
         return f"검색 중심에서 {fact.value}m 거리예요."
     return f"주소는 {fact.value}예요."
 
 
-def render_answer(receipt):
+def render_answer(receipt, filters=None):
+    text = _render_result(receipt, filters)
+    fallback = _plain_result(receipt)
+    if receipt.feedback == "information_dispute" and "현장과 다를" not in text:
+        # A correction does not prove closure or relocation. Keep this fact alongside the action.
+        if receipt.execution == "failed":
+            return "정보가 현장과 다를 수 있어요. 검색을 완료하지 못해 목록은 그대로예요."
+        text = "정보가 현장과 다를 수 있어요. " + text
+        fallback = "정보가 현장과 다를 수 있어요. " + fallback
+    return user_text(text, fallback, limit=300 if receipt.pending_id else 160)
+
+
+def _plain_result(receipt):
+    if receipt.code == "facility_filters":
+        return "지금 적용된 조건은 조건 칩에서 볼 수 있어요."
     if receipt.execution == "failed":
-        return "검색을 완료하지 못했어요. 기존 조건과 결과를 유지했어요."
+        return "다시 찾지 못했어요. 보던 목록은 그대로예요."
+    if receipt.code == "invalid_plan":
+        return PROCESSING_FAILED
+    if receipt.bookmark_command is not None:
+        return "찜 처리 결과를 확인하고 있어요."
     if receipt.question:
-        return receipt.question
-    if receipt.browse != "current" or receipt.excluded_places or receipt.restored_places:
-        parts = []
-        if receipt.excluded_places:
-            names = "·".join(p.name for p in receipt.excluded_places[:2])
-            suffix = (
-                f" 등 {len(receipt.excluded_places)}곳" if len(receipt.excluded_places) > 2 else ""
-            )
-            parts.append(f"이번 탐색에서 제외했어요: {names}{suffix}.")
-        if receipt.restored_places:
-            parts.append(f"{len(receipt.restored_places)}곳의 제외를 해제했어요.")
-        if receipt.browse == "restart":
-            parts.append("제시 기록과 제외를 초기화하고 현재 조건으로 다시 찾았어요.")
-        if receipt.browse == "next":
-            if receipt.new_places:
-                scope = "바뀐 조건으로" if receipt.filters_changed else "조건은 그대로 두고"
-                parts.append(f"{scope}, 아직 제시하지 않은 {len(receipt.new_places)}곳을 찾았어요.")
-            else:
-                parts.append("이번 조회에서는 현재 조건의 미제시 후보를 더 찾지 못했어요.")
-        elif receipt.returned_count:
-            parts.append(f"현재 조건의 후보 {receipt.returned_count}곳을 표시했어요.")
-        else:
-            parts.append("이번 조회에서는 현재 조건과 제외를 반영한 후보를 찾지 못했어요.")
-        return " ".join(parts)
+        return "원하는 조건을 짧게 나눠서 알려주세요."
     if receipt.goal == "edit_only":
         return (
-            "조건을 변경했어요. 검색 결과는 다시 찾기 전 목록이에요."
+            "조건을 바꿨고 목록은 그대로예요."
+            if receipt.filters_changed
+            else "이미 적용된 조건이에요."
+        )
+    if receipt.goal == "pick_one" and receipt.selected:
+        return "한 곳 골라뒀어요!"
+    if receipt.goal == "explain":
+        return "장소 정보는 카드에서 확인해 주세요."
+    if receipt.execution == "not_run":
+        return "보던 목록은 그대로예요."
+    return (
+        f"조건에 맞는 {receipt.returned_count}곳 보여드릴게요."
+        if receipt.returned_count
+        else "조건에 맞는 곳을 찾지 못했어요."
+    )
+
+
+def _render_result(receipt, filters):
+    if receipt.bookmark_command is not None:
+        return "찜 처리 결과를 확인해 주세요."
+    if receipt.execution == "failed":
+        if receipt.known_places:
+            return "이미 아는 곳으로 반영했어요. 다시 찾지 못해 목록은 그대로예요."
+        return "검색을 완료하지 못했어요. 보던 목록은 그대로예요."
+    if receipt.code == "invalid_plan":
+        # Replayed/older receipts can still contain an incorrect clarification question.
+        return PROCESSING_FAILED
+    if receipt.question:
+        return receipt.question
+    if receipt.known_places:
+        if receipt.execution == "not_run":
+            return "이미 아는 곳으로 반영했고, 목록은 그대로예요."
+        if receipt.returned_count:
+            return f"이미 아는 곳을 반영해 새 후보 {receipt.returned_count}곳 찾아뒀어요!"
+        return "이미 아는 곳으로 반영했지만, 새 후보는 더 찾지 못했어요."
+    if receipt.browse != "current" or receipt.excluded_places or receipt.restored_places:
+        prefix = ""
+        if receipt.excluded_places:
+            prefix = f"{len(receipt.excluded_places)}곳을 제외하고 "
+        elif receipt.restored_places:
+            prefix = f"{len(receipt.restored_places)}곳을 다시 포함해 "
+        elif receipt.browse == "restart":
+            prefix = "처음부터 다시 살펴보고 "
+        if receipt.browse == "next":
+            if receipt.new_places:
+                return prefix + f"다른 후보 {len(receipt.new_places)}곳 찾아뒀어요!"
+            return prefix + "다른 후보는 더 찾지 못했어요."
+        if receipt.returned_count:
+            return prefix + f"조건에 맞는 {receipt.returned_count}곳 찾아뒀어요!"
+        return prefix + "조건에 맞는 곳은 찾지 못했어요."
+    if receipt.goal == "edit_only":
+        return (
+            "조건을 바꿨어요. 목록은 아직 그대로예요."
             if receipt.filters_changed
             else "이미 적용된 조건이에요."
         )
     if receipt.selected and "place" in receipt.evidence:
-        parts = [f"{receipt.evidence['place']}에 대해 알려드릴게요."]
+        name = receipt.evidence["place"]
         if receipt.goal == "pick_one":
-            parts = [f"{receipt.evidence['place']}을 살펴보세요."]
-        parts.extend(fact_sentence(f) for f in receipt.facts)
-        if receipt.goal == "pick_one" or "selection_reason" in receipt.asked_attributes:
-            basis = receipt.selection_basis
-            parts.append(
-                {
-                    "visible_order": "보고 있는 목록의 첫 번째 후보를 골랐어요.",
-                    "distance": "현재 검색 후보를 검색 중심과 가까운 순서로 보고 골랐어요.",
-                    "parking_then_distance": "현재 검색 후보에서 주차 가능을 우선하고 거리를 기준으로 골랐어요.",
-                    "user_reference": "사용자가 지정한 목록 위치의 장소예요.",
-                }.get(
-                    basis.method if basis else None, "이 장소를 선택한 이유는 기록되어 있지 않아요."
-                )
-            )
-        return " ".join(parts)
+            return f"{name} 골라뒀어요!"
+        statements = _explanation(receipt)
+        return " ".join(statements[:2]) if statements else f"{name}의 정보를 카드에 담아뒀어요."
     if receipt.returned_count == 0:
-        return "현재 조건으로 찾은 장소가 없어요. 필수 조건은 그대로 유지했어요."
-    return "현재 조건의 장소를 표시했어요."
+        return "지금 조건에 맞는 곳은 더 찾지 못했어요."
+    if receipt.search_pool in {"unbookmarked", "new_candidates"}:
+        label = "찜하지 않은 곳" if receipt.search_pool == "unbookmarked" else "새 후보"
+    else:
+        kinds = filters.candidate_kinds if filters is not None else ()
+        label = KINDS.get(kinds[0], "장소") if len(kinds) == 1 else "장소"
+    verb = "찾아뒀어요!" if receipt.execution == "searched" else "보여드릴게요."
+    return f"조건에 맞는 {label} {receipt.returned_count}곳 {verb}"
+
+
+def _explanation(receipt):
+    statements = [fact_sentence(f) for f in receipt.facts if f.status == "known"]
+    for status in ("unknown", "unsupported"):
+        labels = [
+            ATTRIBUTES.get(f.attribute, "요청한 정보") for f in receipt.facts if f.status == status
+        ]
+        if labels:
+            text = "·".join(labels)
+            statements.append(
+                f"{text} 정보는 없어서 확인이 필요해요."
+                if status == "unknown"
+                else f"{text}는 지금 자료로 확인할 수 없어요."
+            )
+    if "selection_reason" in receipt.asked_attributes:
+        basis = receipt.selection_basis
+        reason = {
+            "visible_order": "보고 있는 목록의 첫 번째 후보를 골랐어요.",
+            "distance": "검색 중심에서 가까운 후보를 골랐어요.",
+            "parking_then_distance": "주차 가능한 곳을 우선해 가까운 후보를 골랐어요.",
+            "user_reference": "말씀하신 순서의 장소를 골랐어요.",
+        }.get(basis.method if basis else None, "선택 이유는 기록되어 있지 않아요.")
+        # An explicitly asked selection reason must survive the two-sentence display budget.
+        statements = statements[:1] + [reason]
+    return statements

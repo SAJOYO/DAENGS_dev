@@ -315,7 +315,7 @@ status 여섯 값의 구분이 이 계약의 핵심이고, 그중에서도 **ABS
 | Place 정상 응답이지만 후보 없음·추가 선택 필요·미지원 의미 | ABSTAINED — 공개 projection과 refinement는 `data`에 함께 보존 |
 | Place 내부 HTTP/provider 실패 | ERROR 또는 TIMEOUT — provider 본문·원출력은 노출하지 않음 |
 | General `kind=answer` (PR #279) | OK — `data.answer` 뿐. 근거 없는 생성이라 인용이 없다 |
-| General `kind=refuse` — 진단 · 약/용량 · 응급 · 제도/수치 · 도메인 밖 | **REFUSED** — `refusal.code` 는 사유 범주, `refusal.message` 는 코드가 쓴 고정 안내("수의사에게" / "제도 정보 기능에") |
+| General `kind=refuse` — 진단 · 약 이름/용량/시작 여부/부작용 · 응급 · 제도/수치 · 도메인 밖 | **REFUSED** — `refusal.code` 는 사유 범주, `refusal.message` 는 코드가 쓴 고정 안내("수의사에게" / "제도 정보 기능에") |
 | General 프로바이더 실패 · 출력 스키마 불일치 | ERROR 또는 TIMEOUT — 라우터 실패 문구가 아니라 능력 하나의 실패로 보인다 |
 
 - **refusal 은 상류 분류를 보존합니다.** Training 의 SAFETY_REFUSAL / MEDICAL_REFUSAL

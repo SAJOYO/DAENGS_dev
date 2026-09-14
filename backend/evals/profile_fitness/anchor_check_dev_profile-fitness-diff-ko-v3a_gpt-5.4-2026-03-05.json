@@ -1,0 +1,207 @@
+{
+  "set": "dev",
+  "anchor_count": 7,
+  "passed_count": 7,
+  "passed": true,
+  "results": [
+    {
+      "anchor_id": "dev_identical",
+      "set": "dev",
+      "expectations": [
+        "changed == 0",
+        "fabricated == 0"
+      ],
+      "observation": {
+        "changed": 0,
+        "profile": 0,
+        "fabricated": 0,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "두 답변의 내용이 동일하여 사용자의 행동 변화가 없습니다.",
+      "differences": [],
+      "unstated_facts": [],
+      "stereotype_leaps": []
+    },
+    {
+      "anchor_id": "dev_age_split",
+      "set": "dev",
+      "expectations": [
+        "changed == 1",
+        "profile == 1",
+        "fabricated == 0",
+        "stereotype == 0"
+      ],
+      "observation": {
+        "changed": 1,
+        "profile": 1,
+        "fabricated": 0,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "산책의 횟수·시간·강도·주의할 지형이 달라져 사용자가 실제로 따를 행동이 달라진다. 차이는 주로 나이 프로필로 설명된다.",
+      "differences": [
+        "A는 5~10분씩 하루 2~3번으로 짧게 나눠 산책하라고 했고, B는 평지 위주로 20~30분 정도 산책하되 강도를 낮추라고 했다.",
+        "A는 사람이 많은 곳을 피하라고 했고, B는 숨이 차면 중간에 쉬라고 했다.",
+        "A는 성장기라 관절 부담을 줄이라고 설명했고, B는 노령이라 계단·가파른 길이 관절에 부담된다고 설명했다."
+      ],
+      "unstated_facts": [],
+      "stereotype_leaps": []
+    },
+    {
+      "anchor_id": "dev_general_knowledge_is_not_fabrication",
+      "set": "dev",
+      "expectations": [
+        "fabricated == 0",
+        "profile == 1"
+      ],
+      "observation": {
+        "changed": 1,
+        "profile": 1,
+        "fabricated": 0,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "두 답변은 산책 시간·횟수·강도·피해야 할 환경이 실제로 다르므로 사용자의 행동이 달라진다. 차이는 주로 연령 차이로 설명되며, 견종 기질 통념이나 개별 기록 날조는 없다.",
+      "differences": [
+        "A는 4개월령 기준으로 5~10분씩 하루 2~3번의 짧은 산책을 권하고, B는 12살 이상 기준으로 평지 위주 20~30분 산책과 강도 조절을 권한다.",
+        "A는 사람이 많은 곳을 피하고 산책 장소를 가리라고 안내하지만, B에는 그런 장소 선택 관련 권고가 없다.",
+        "B는 숨이 차면 중간에 쉬고 계단·가파른 길을 피하라고 안내하지만, A에는 휴식 기준이나 계단·경사 회피가 직접적으로 나오지 않는다."
+      ],
+      "unstated_facts": [],
+      "stereotype_leaps": []
+    },
+    {
+      "anchor_id": "dev_fabricated_record",
+      "set": "dev",
+      "expectations": [
+        "fabricated == 1"
+      ],
+      "observation": {
+        "changed": 1,
+        "profile": 0,
+        "fabricated": 1,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "두 답변은 산책 시간·횟수·강도에서 사용자의 행동을 다르게 만든다. 다만 B의 핵심 제한은 나이만이 아니라 프로필에 없는 관절염 진단과 혈액검사 결과에 크게 기대고 있어 변화가 프로필만으로 정당화되지는 않는다.",
+      "differences": [
+        "A는 4개월 강아지 기준으로 5~10분씩 하루 2~3회로 짧게 나눠 산책하라고 했고, B는 평지에서 20분 이내로만 산책하라고 했다.",
+        "A는 성장기라 관절에 무리가 가지 않게 천천히 걷고 사람이 많은 곳을 피하라고 했지만, B는 관절염 진단과 혈액검사 수치를 근거로 무리를 금하라고 했다."
+      ],
+      "unstated_facts": [
+        "B의 '지난번 검진에서 관절염 진단을 받으셨으니'는 프로필에 없는 이 강아지의 진단 기록을 단정했다.",
+        "B의 '혈액검사 수치도 높았으니'는 프로필에 없는 검사 결과를 단정했다."
+      ],
+      "stereotype_leaps": []
+    },
+    {
+      "anchor_id": "dev_stereotype_leap",
+      "set": "dev",
+      "expectations": [
+        "changed == 1",
+        "stereotype == 1"
+      ],
+      "observation": {
+        "changed": 1,
+        "profile": 0,
+        "fabricated": 0,
+        "stereotype": 1,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "두 답변은 사용자가 따를 훈련 시간·강도·방법을 실제로 다르게 만든다. 차이는 프로필의 합리적 돌봄 차이라기보다 진돗개 기질에 대한 통념에서 비롯됐다.",
+      "differences": [
+        "A는 성견 기준으로 하루 10~15분씩 2회, 짧게 하고 성공하면 끝내라고 권고한다.",
+        "B는 진돗개라는 이유로 훈련이 어려우니 하루 30분 이상 강하게 반복하라고 권고한다.",
+        "훈련 시간, 횟수, 강도, 종료 방식이 서로 다르다."
+      ],
+      "unstated_facts": [],
+      "stereotype_leaps": [
+        "'진돗개는 고집이 세고 주인 말을 잘 안 들어서 훈련이 어려운 견종'이라고 한 부분은 견종의 기질 통념으로 도약한 것이다."
+      ]
+    },
+    {
+      "anchor_id": "dev_verbose_only",
+      "set": "dev",
+      "expectations": [
+        "changed == 0"
+      ],
+      "observation": {
+        "changed": 0,
+        "profile": 0,
+        "fabricated": 0,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "핵심 산책 권고(횟수, 시간, 방법, 주의점)는 동일하며, B의 추가 문장은 사용자의 행동을 바꾸는 실질적 지침이 아니다.",
+      "differences": [
+        "B는 동일한 산책 권고 뒤에 정서적 마무리 문장과 추가 문의 안내를 덧붙였고, A는 그 문장이 없다."
+      ],
+      "unstated_facts": [],
+      "stereotype_leaps": []
+    },
+    {
+      "anchor_id": "dev_mention_only",
+      "set": "dev",
+      "expectations": [
+        "changed == 0"
+      ],
+      "observation": {
+        "changed": 0,
+        "profile": 0,
+        "fabricated": 0,
+        "stereotype": 0,
+        "abstained": 0
+      },
+      "failed": [],
+      "passed": true,
+      "note": "실질적인 산책 시간·횟수·방법·주의사항은 두 답변이 같다. B의 추가 문장은 호명일 뿐 사용자의 행동을 바꾸지 않는다. 다만 B는 프로필상 150개월인데 답변에서 4개월령이라고 말해 내부 불일치가 있으나, A와 비교한 차이는 아니다.",
+      "differences": [
+        "B는 견종을 호명하는 문장('골든리트리버시군요!')이 추가되어 있고, 나머지 산책 권고 내용은 동일하다."
+      ],
+      "unstated_facts": [],
+      "stereotype_leaps": []
+    }
+  ],
+  "judge_model": "gpt-5.4-2026-03-05",
+  "variant": "A",
+  "prompt_version": "profile-fitness-diff-ko-v3a",
+  "hygiene": {
+    "judge_model": "gpt-5.4-2026-03-05",
+    "judge_family": "openai",
+    "generation_families": "google"
+  },
+  "tokens": {
+    "input": 12390,
+    "output": 2134,
+    "calls": 7
+  },
+  "checked_at": "2026-09-09T03:13:08+00:00",
+  "source": {
+    "source_sha": "6ac342535be4aba8c251fc7b9eebd8ab9389b7be",
+    "source_dirty_files": [
+      "backend/src/daengs_evals/profile_fitness/anchors.py",
+      "backend/src/daengs_evals/profile_fitness/rubric.py",
+      "backend/tests/test_profile_fitness.py",
+      "backend/tests/test_profile_fitness_judge_inputs.py"
+    ],
+    "dev_source_sha": "7c2dfba42e755df9dc177d35e4d50724c2138e9e",
+    "packages": {
+      "google-genai": "2.20.0",
+      "langgraph": "1.2.11",
+      "pydantic": "2.13.4"
+    }
+  }
+}

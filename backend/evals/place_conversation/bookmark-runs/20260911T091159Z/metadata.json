@@ -1,0 +1,61 @@
+{
+  "model": "gemini-3.1-flash-lite",
+  "repeat": 1,
+  "setup": {
+    "candidate_kinds": [
+      "cafe"
+    ],
+    "origin": {
+      "lat": 37.5,
+      "lng": 127.0
+    },
+    "radius_m": 3000,
+    "name_query": "",
+    "dogs": [],
+    "parking": "none",
+    "selected": "A",
+    "snapshot_age_seconds": 0
+  },
+  "fixtures": {
+    "defaults": {
+      "source": "kcisa",
+      "address": "평가용 가상 주소"
+    },
+    "standard": [
+      {
+        "ref": "A",
+        "name": "평가 카페 A",
+        "kind": "cafe",
+        "parking": true
+      },
+      {
+        "ref": "B",
+        "name": "평가 카페 B",
+        "kind": "cafe",
+        "parking": true
+      },
+      {
+        "ref": "C",
+        "name": "평가 카페 C",
+        "kind": "cafe",
+        "parking": true
+      }
+    ]
+  },
+  "boundary": "real Gemini + production policy; synthetic pool, no member writes",
+  "source_sha256": {
+    "answer.py": "c0c64ba5f55d3e0070f7692c76140656607e914b5adc860b209d22f90107759d",
+    "bookmarks.py": "62c2869aea8d6e53e25574fd4bf8f3d716d5378e7c908ce0abcc78600898e13c",
+    "compiler.py": "33c36020637c94b8a0bbe8caf5938470dab9335bdfca1f35ebfcce95ccd124e2",
+    "context.py": "56ac502bbf3fddabb1adb529f54519c67c634cb628b08fad4578654ab50178fd",
+    "contract.py": "fb9d170ec4fec723215b860ee814a1204f176a1b374e91e34c6e0d8eaa458398",
+    "grounding.py": "2d223f728b8e95bb439b092351e1842f9b1c769fc7353933cd8d06cf1567f19d",
+    "intent.py": "d90630646297269b03383001b189f0c79cdfa05a440d0a610664ba0a749bb704",
+    "policy.py": "ee3ea10cbb854e79234196147e552b56c88df07accdb3ccbaf0bbadc7aacfac7",
+    "render.py": "768b7ab5bc3a1229065c3dae6d44e99c749eca489bc415cbe37235140fea63a3",
+    "saved_search.py": "246e3b25c24c50d172792733581a829e01fa1dec81db56bad3b7ff84cd0a4219",
+    "service.py": "57b1affbaae140cac9f071b20596d2dc0b723a714f787285ed364e4ec4752b0b",
+    "static_tools.py": "457d8f0225e8f09ff714d37027cc49db61fd95cbc3f37a65ae067c99499a40ba",
+    "__init__.py": "dab334034043d922b3f68599c938da0f6631bdb76df308ecdc4d5a3b2068b108"
+  }
+}

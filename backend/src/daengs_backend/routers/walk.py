@@ -9,9 +9,9 @@ services/walk.py 가 정합니다.
 """
 
 import uuid
-from typing import Annotated
+from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from daengs_backend.core.database import get_session
@@ -28,13 +28,22 @@ from daengs_backend.schemas.walk import (
     WalkListResponse,
     WalkPointResponse,
     WalkPointsAppend,
+    WalkRecordingReceipt,
+    WalkRecordingRepair,
     WalkResponse,
     WalkUpload,
 )
 from daengs_backend.schemas.walk_style import WalkStylePolicy
+from daengs_backend.schemas.walk_upload_receipt import WalkUploadReceipt
 from daengs_backend.services import walk as walk_service
+from daengs_backend.services import walk_upload_receipt as receipt_service
 from daengs_backend.services.walk_chunk import decode_chunk
 from daengs_backend.services.walk_finalize import FinalizeInputError
+from daengs_backend.services.walk_recording import (
+    RecordingConflict,
+    recording_receipt,
+    repair_recording,
+)
 from daengs_backend.services.walk_style import walk_style_policy
 
 router = APIRouter(prefix="/app/walks", tags=["walks"])
@@ -60,6 +69,10 @@ def _to_response(walk: Walk) -> WalkResponse:
 
 
 def _to_detail(walk: Walk) -> WalkDetailResponse:
+    points = sorted(
+        [point for chunk in walk.points for point in decode_chunk(chunk.payload)],
+        key=lambda p: p.client_seq,
+    )
     return WalkDetailResponse(
         **_to_response(walk).model_dump(),
         # **응답 계약은 그대로다.** 저장을 묶음으로 바꿨어도 앱이 받는 모양은
@@ -73,10 +86,11 @@ def _to_detail(walk: Walk) -> WalkDetailResponse:
                 lng=point.lng,
                 accuracy_m=point.accuracy_m,
                 is_mock=point.is_mock,
+                recording_eligible=point.recording_eligible,
             )
-            for chunk in walk.points
-            for point in decode_chunk(chunk.payload)
+            for point in points
         ],
+        recording_receipt=recording_receipt(points),
     )
 
 
@@ -125,23 +139,32 @@ async def list_walks(
     return WalkListResponse(walks=[_to_response(w) for w in walks])
 
 
-@router.post("", response_model=WalkDetailResponse)
+@router.post("", response_model=WalkDetailResponse | WalkUploadReceipt)
 async def upload_walk(
     body: WalkUpload,
     response: Response,
     user: CurrentAppUser,
     session: Annotated[AsyncSession, Depends(get_session)],
-) -> WalkDetailResponse:
+    response_mode: Annotated[Literal["detail", "receipt-v1"], Query(alias="response")] = "detail",
+) -> WalkDetailResponse | WalkUploadReceipt:
     """산책 한 건을 올립니다.
 
     **같은 것을 다시 올려도 안전합니다.** 새로 만들었으면 201, 이미 있던 것이면
     200 과 함께 있던 것을 돌려줍니다 — 앱은 둘 다 "올라갔다"로 봅니다.
     실패했을 때만 다시 시도하면 되도록 이렇게 둡니다.
+
+    ``response=receipt-v1``은 전체 경로 대신 이번 요청의 수신 확인을 반환합니다.
+    재요청의 시각·날씨·청크가 저장된 내용과 다르면 409입니다.
     """
+    if response_mode == "receipt-v1":
+        try:
+            receipt, created = await receipt_service.upload_walk(session, user.app_user_id, body)
+        except walk_service.WalkStateConflictError as exc:
+            raise _conflict(exc) from None
+        response.status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
+        return receipt
     walk, created = await walk_service.upload_walk(session, user.app_user_id, body)
-    response.status_code = (
-        status.HTTP_201_CREATED if created else status.HTTP_200_OK
-    )
+    response.status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
     return _to_detail(walk)
 
 
@@ -159,26 +182,30 @@ async def get_walk(
     return _to_detail(walk)
 
 
-@router.post("/{walk_id}/points", response_model=WalkDetailResponse)
+@router.post("/{walk_id}/points", response_model=WalkDetailResponse | WalkUploadReceipt)
 async def append_points(
     walk_id: uuid.UUID,
     body: WalkPointsAppend,
     user: CurrentAppUser,
     session: Annotated[AsyncSession, Depends(get_session)],
-) -> WalkDetailResponse:
+    response_mode: Annotated[Literal["detail", "receipt-v1"], Query(alias="response")] = "detail",
+) -> WalkDetailResponse | WalkUploadReceipt:
     """좌표를 이어 붙입니다. **긴 산책을 나눠 올릴 때** 씁니다.
 
     두 시간 산책이 좌표 5천 점(약 650KB)이고 촘촘히 잡히면 1MB 를 넘습니다. 한 번에
     보내면 nginx 바디 한도에 걸려 그 산책이 영영 안 올라갑니다.
 
     같은 묶음을 다시 보내도 안전합니다 — 이미 있는 순번은 넘어갑니다.
+
+    ``response=receipt-v1``은 해당 청크의 저장 내용까지 대조한 수신 확인만 반환합니다.
+    다른 내용·겹치는 묶음은 409이며 전체 입력 검증은 finalize가 수행합니다.
     """
     try:
+        if response_mode == "receipt-v1":
+            return await receipt_service.append_points(session, user.app_user_id, walk_id, body)
         walk = await walk_service.append_points(session, user.app_user_id, walk_id, body)
     except walk_service.WalkNotFoundError:
-        raise HTTPException(
-            status.HTTP_404_NOT_FOUND, "산책 기록을 찾을 수 없습니다."
-        ) from None
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "산책 기록을 찾을 수 없습니다.") from None
     except walk_service.WalkStateConflictError as exc:
         raise _conflict(exc) from None
     return _to_detail(walk)
@@ -207,11 +234,26 @@ async def finalize_walk(
             weather_lookup,
         )
     except walk_service.WalkNotFoundError:
-        raise HTTPException(
-            status.HTTP_404_NOT_FOUND, "산책 기록을 찾을 수 없습니다."
-        ) from None
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "산책 기록을 찾을 수 없습니다.") from None
     except (FinalizeInputError, walk_service.WalkStateConflictError) as exc:
         raise _conflict(exc) from None
 
     response.status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
     return _to_finalize_response(analysis)
+
+
+@router.put("/{walk_id}/recording-evidence", response_model=WalkRecordingReceipt)
+async def put_recording_evidence(
+    walk_id: uuid.UUID,
+    body: WalkRecordingRepair,
+    user: CurrentAppUser,
+    session: Annotated[AsyncSession, Depends(get_session)],
+) -> WalkRecordingReceipt:
+    try:
+        return await repair_recording(session, user.app_user_id, walk_id, body)
+    except walk_service.WalkNotFoundError:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "산책 기록을 찾을 수 없습니다.") from None
+    except RecordingConflict as exc:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, detail={"code": exc.code, "message": exc.detail}
+        ) from None

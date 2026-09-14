@@ -4,10 +4,19 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 from uuid import uuid4
 
-from daengs_place.place.conversation.compiler import compile_changes, fingerprint
+from daengs_place.place.conversation.candidates import (
+    POOL_LABELS,
+    explicit_search,
+    grounded_feedback,
+)
+from daengs_place.place.conversation.compiler import fingerprint
 from daengs_place.place.conversation.contract import PendingChange, TurnPlan
 from daengs_place.place.conversation.intent import Interpretation
-from daengs_place.place.conversation.render import ATTRIBUTES, confirmation
+from daengs_place.place.conversation.presentation import user_text_allowed
+from daengs_place.place.conversation.render import ATTRIBUTES, confirmation, describe_filters
+from daengs_place.place.conversation.scope import OUT_OF_SCOPE, OutsideFacilityScope, validate_scope
+from daengs_place.place.conversation.search_compilation import compile_search
+from daengs_place.place.conversation.search_policy import resolve_search
 from daengs_place.place.filters.contract import FilterState, guard_filter_state
 
 PENDING_SECONDS = 300
@@ -60,6 +69,7 @@ def plain_consent(query):
 @dataclass(frozen=True)
 class Decision:
     action: str
+    pool: str = "all_places"
     plan: TurnPlan = field(default_factory=lambda: TurnPlan(goal="show"))
     candidate: FilterState | None = None
     pending: PendingChange | None = None
@@ -86,12 +96,21 @@ async def decide(planner, request, now):
             question="지금은 적용을 기다리는 제안이 없어요. 원하는 조건을 알려주세요.",
         )
     if pending:
+        if not user_text_allowed(pending.question, limit=300):
+            return Decision(
+                "clarify",
+                code="presentation_requires_rephrase",
+                question="조건을 짧게 나눠서 알려주세요.",
+            )
         valid = (
             pending.revision == base_revision(request)
             and pending.base_fingerprint == fingerprint(old.filters)
+            and pending.base_pool == old.search_pool
             and now < pending.expires_at
         )
         decision = await planner.decide_pending(request)
+        if decision.decision == "out_of_scope":
+            return Decision("clarify", code="facility_out_of_scope", question=OUT_OF_SCOPE)
         if not valid and decision.decision not in {"new_request", "reject"}:
             # Do not interpret a bare consent as a fresh instruction after expiry.
             return Decision(
@@ -103,6 +122,7 @@ async def decide(planner, request, now):
             return Decision(
                 "execute",
                 candidate=guard_filter_state(pending.candidate),
+                pool=pending.pool,
                 plan=TurnPlan(goal=pending.goal, refresh=pending.refresh),
                 pending=pending,
             )
@@ -125,25 +145,81 @@ async def decide(planner, request, now):
     if revise:
         # Revision reinterprets only the user's correction against the saved candidate.
         context = request.model_copy(
-            update={"previous": old.model_copy(update={"filters": pending.candidate})}
+            update={
+                "previous": old.model_copy(
+                    update={"filters": pending.candidate, "search_pool": pending.pool}
+                )
+            }
         )
     intent = await planner.plan(context)
     if not isinstance(intent, Interpretation):
         raise TypeError("expected semantic interpretation")
-    if intent.region_query:
+    try:
+        validate_scope(intent, request.query, request.previous)
+    except OutsideFacilityScope:
+        return Decision("clarify", code="facility_out_of_scope", question=OUT_OF_SCOPE)
+    if intent.kind == "out_of_scope":
+        return Decision("clarify", code="facility_out_of_scope", question=OUT_OF_SCOPE)
+    if intent.kind == "facility_state" and intent.state_subject == "filters":
         return Decision(
-            "unsupported",
-            intent=intent,
-            code="region_change_unsupported",
-            question="검색 지역 이동은 지도에서 할 수 있어요. 지도를 원하는 지역으로 옮긴 뒤 다시 검색해 주세요.",
+            "explain",
+            code="facility_filters",
+            question=f"지금은 {POOL_LABELS[old.search_pool]}에서 {describe_filters(old.filters)} 조건으로 보고 있어요.",
         )
-    if intent.unresolved != "none" or intent.goal == "clarify":
+    intent = grounded_feedback(intent, request.query)
+    directive = resolve_search(
+        intent, context.previous.search_pool, request.query, candidate_pools=request.candidate_pools
+    )
+    if directive.question:
+        return Decision(
+            "unsupported" if directive.code == "region_change_unsupported" else "clarify",
+            code=directive.code,
+            question=directive.question,
+            intent=intent,
+        )
+    if intent.familiarity and request.candidate_pools != "v1":
         return Decision(
             "clarify",
-            intent=intent,
-            code="clarification_required",
-            question=CLARIFICATIONS.get(intent.unresolved, CLARIFICATIONS["ambiguous"]),
+            code="candidate_client_required",
+            question="이미 아는 장소 정정을 반영하려면 앱을 업데이트해 주세요.",
         )
+    if (
+        intent.feedback == "familiarity"
+        and intent.familiarity is None
+        and request.candidate_pools == "v1"
+    ):
+        return Decision(
+            "clarify",
+            code="knowledge_target_required",
+            question="어느 장소를 이미 알고 계세요? 장소를 선택하거나 이름·목록 번호를 알려주세요.",
+        )
+    if directive.navigation:
+        return Decision(
+            "clarify", code="search_already_visible", question="현재 일반 검색 화면이에요."
+        )
+    if (
+        intent.feedback != "none"
+        and not explicit_search(intent, request.query)
+        and not (
+            intent.feedback == "familiarity"
+            and intent.familiarity
+            and request.candidate_pools == "v1"
+        )
+    ):
+        return Decision(
+            "explain",
+            code="feedback_no_mutation",
+            question={
+                "evaluation": "말씀은 들었어요. 조건과 목록은 그대로 둘게요.",
+                "familiarity": "어느 곳을 이미 알고 계세요?",
+                "information_dispute": "정보가 현장과 다를 수 있어요. 이전이나 폐업 여부는 아직 확인할 수 없어요.",
+            }[intent.feedback],
+            intent=intent,
+        )
+    if directive.pool == "bookmarks":
+        return Decision("saved_search", intent=intent)
+    if intent.bookmark is not None:
+        return Decision("bookmark", intent=intent)
     if (intent.browse != "current" or intent.place_edit) and (intent.unsupported or revise):
         return Decision(
             "clarify",
@@ -151,12 +227,17 @@ async def decide(planner, request, now):
             question="장소 제외·다음 후보 요청과 확인 대기 조건을 한꺼번에 적용할 수 없어요. 먼저 적용할 요청을 알려주세요.",
             intent=intent,
         )
-    plan = TurnPlan(
-        goal=intent.goal, refresh=intent.refresh, reference_index=intent.reference_index
-    )
-    if intent.goal == "explain":
+    goal = intent.goal
+    if intent.feedback != "none" and explicit_search(intent, request.query):
+        goal = "show"
+    elif intent.feedback == "familiarity" and intent.familiarity:
+        goal = "show" if directive.pool == "new_candidates" else "edit_only"
+    plan = TurnPlan(goal=goal, refresh=intent.refresh, reference_index=intent.reference_index)
+    if goal == "explain":
         # Explanation has no filter mutation authority, even if the model emits changes.
-        return Decision("explain", plan=plan, candidate=old.filters, intent=intent)
+        return Decision(
+            "explain", plan=plan, candidate=old.filters, intent=intent, pool=old.search_pool
+        )
     if unverified_accept:
         # A misclassified place question can still be explained. Other unverified
         # acceptances never execute or regenerate the saved proposal's conditions.
@@ -164,16 +245,20 @@ async def decide(planner, request, now):
             "await_confirmation",
             pending=pending,
             code="confirmation_required",
-            question=pending.question + " 적용하려면 ‘적용해줘’라고 말씀해 주세요.",
+            question=pending.question.rstrip("?") + " — 적용하려면 ‘적용해줘’라고 말씀해 주세요.",
         )
-    candidate = compile_changes(context.previous.filters, intent.changes)
+    candidate = compile_search(context.previous.filters, intent, "all_places")
     unsupported = (
         tuple(dict.fromkeys((*pending.unsupported, *intent.unsupported)))
         if revise
         else intent.unsupported
     )
     if unsupported:
-        if candidate == old.filters and intent.changes.model_dump(exclude_defaults=True) == {}:
+        if (
+            candidate == old.filters
+            and directive.pool == old.search_pool
+            and intent.changes.model_dump(exclude_defaults=True) == {}
+        ):
             labels = "·".join(ATTRIBUTES[a] for a in unsupported)
             return Decision(
                 "unsupported",
@@ -189,6 +274,16 @@ async def decide(planner, request, now):
                 question="조건을 바꾸면 목록 순서가 달라져요. 먼저 검색 조건을 정해 주세요.",
             )
         question = confirmation(candidate, unsupported, plan.goal)
+        if directive.pool != old.search_pool:
+            question = question.replace(". ", f". {POOL_LABELS[directive.pool]} 중에서 ", 1)
+        if not user_text_allowed(question, limit=300):
+            # Never hide a proposal's scope and still allow a bare yes to apply it.
+            return Decision(
+                "clarify",
+                code="presentation_requires_rephrase",
+                question="조건을 짧게 나눠서 알려주세요.",
+                intent=intent,
+            )
         proposal = PendingChange(
             id=uuid4(),
             revision=base_revision(request) + 1,
@@ -196,6 +291,8 @@ async def decide(planner, request, now):
             original_query=pending.original_query if revise else request.query,
             question=question,
             candidate=candidate,
+            pool=directive.pool,
+            base_pool=old.search_pool,
             goal=plan.goal,
             refresh=plan.refresh,
             unsupported=unsupported,
@@ -210,4 +307,4 @@ async def decide(planner, request, now):
             code="confirmation_required",
             intent=intent,
         )
-    return Decision("execute", plan=plan, candidate=candidate, intent=intent)
+    return Decision("execute", plan=plan, candidate=candidate, intent=intent, pool=directive.pool)

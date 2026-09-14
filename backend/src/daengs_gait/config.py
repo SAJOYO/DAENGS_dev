@@ -10,7 +10,7 @@ production 코드가 import 하고 있었고, 동시에 module 최상단에서 `
 ⚠️ **아래 임계값은 전부 walk_demo 에서 실측으로 정해진 값입니다.** 결과를 보기 전에
    고정하고 사후 조정하지 않는다는 원칙으로 잡힌 것이라, 여기서 임의로 바꾸면 그 검증이
    통째로 무의미해집니다. 바꿔야 한다면 `GAIT_FILTER_VERSION` 을 함께 올리세요 —
-   그 값이 다르면 같은 영상이라도 비교 결과가 달라집니다 (`pipeline.compare_records`
+   그 값이 다르면 같은 영상이라도 비교 결과가 달라집니다 (`compare.compare_loaded_records`
    가 이 값으로 경고를 붙입니다).
 """
 
@@ -21,11 +21,10 @@ from pathlib import Path
 
 # backend/ 프로젝트 루트. `backend/src/daengs_gait/config.py` 에서 세 단계 위입니다.
 #
-# ⚠️ **로컬 개발에서만 쓰는 기본값의 기준점입니다.** 컨테이너에서는 아래 두 경로를
-#    `GAIT_RELEASE_DIR` · `GAIT_DATA_DIR` 이 덮어쓰므로 이 값이 쓰이지 않습니다
-#    (compose 가 `/models/release` · `/data` 를 넘깁니다).
-#    폴더 깊이를 바꾸면 여기도 같이 고쳐야 합니다 — 안 고치면 예외 없이 엉뚱한 곳에
-#    `_models/` 와 `_data/` 가 생깁니다.
+# ⚠️ **로컬 개발에서만 쓰는 기본값의 기준점입니다.** 컨테이너에서는 `GAIT_RELEASE_DIR`
+#    이 아래 경로를 덮어쓰므로 이 값이 쓰이지 않습니다 (compose 가 `/models/release` 를
+#    넘깁니다). 폴더 깊이를 바꾸면 여기도 같이 고쳐야 합니다 — 안 고치면 예외 없이
+#    엉뚱한 곳에 `_models/` 가 생깁니다.
 ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -36,30 +35,17 @@ ROOT = Path(__file__).resolve().parents[2]
 #    `git clone` 만으로는 안 따라옵니다 — 파일을 따로 서버에 가져다 두어야 합니다.
 #    피부 병변 스크리닝의 `SCREENING_RELEASE_DIR`(D-022 · D-024)과 같은 방식입니다.
 #
-# 원본 walk_demo 는 이 경로를 `Path(__file__)` 기준 상대경로로 **하드코딩**하고 있었고
-# (`keypoint_extractor.DEFAULT_KEYPOINT_WEIGHTS`, `crop_assist.GENERAL_MODEL_PATH`),
+# 원본 walk_demo 는 이 경로를 `Path(__file__)` 기준 상대경로로 **하드코딩**하고 있었고,
 # 그 경로에는 한글 폴더명과 원본 데이터셋 구조가 그대로 박혀 있었습니다. 서비스에서는
 # 배포 폴더 바깥의 아무 위치나 가리킬 수 있어야 하므로 환경변수로 뺐습니다.
+#
+# **6단계부터 이 폴더가 가리키는 것은 v4 가중치입니다** — `ssdlite.pt` 와
+# `rtmpose-m_ap10k/end2end.onnx` (`inference/model.py`). legacy 추론이 쓰던
+# `best.pt`·`yolov8n.pt` 경로 상수는 그 runtime 과 함께 없앴습니다 (D-063 6단계).
 # ──────────────────────────────────────────────────────────────────
 RELEASE_DIR = Path(os.environ.get("GAIT_RELEASE_DIR") or (ROOT / "_models" / "release"))
 
-# 반려견 전용 12-keypoint pose 모델 (YOLOv8m-pose, nc=1, kpt_shape=[12,3]).
-# walk_demo 원본 경로: data/2.AI학습모델파일/키포인트/best-pth/weights/best.pt (약 50.7MB)
-POSE_WEIGHTS = Path(os.environ.get("GAIT_POSE_WEIGHTS") or (RELEASE_DIR / "best.pt"))
 
-# crop-assist 용 범용 검출기 (YOLOv8n, COCO 80-class 원본 — 파인튜닝하지 않았습니다).
-# walk_demo 원본 경로: models/pretrained/yolov8n.pt (약 6.2MB)
-DETECTOR_WEIGHTS = Path(
-    os.environ.get("GAIT_DETECTOR_WEIGHTS") or (RELEASE_DIR / "yolov8n.pt")
-)
-
-
-# ──────────────────────────────────────────────────────────────────
-# 데이터 경로 (분석 기록 · overlay 영상 · 업로드 원본)
-#
-# 기록은 아직 JSON 파일입니다 — walk_demo 의 동작을 그대로 옮긴 것입니다.
-# DAENGS 의 PostgreSQL 로 옮길지는 아직 정하지 않았습니다 (README 의 TBD 참고).
-# ──────────────────────────────────────────────────────────────────
 # ──────────────────────────────────────────────────────────────────
 # 앱이 보는 경로 접두사
 #
@@ -74,12 +60,6 @@ DETECTOR_WEIGHTS = Path(
 #    (앱이 404 나는 URL 을 받는데 서버 로그에는 아무 문제도 안 보입니다).
 # ──────────────────────────────────────────────────────────────────
 PUBLIC_PREFIX = os.environ.get("GAIT_PUBLIC_PREFIX", "/gait").rstrip("/")
-
-
-DATA_DIR = Path(os.environ.get("GAIT_DATA_DIR") or (ROOT / "_data"))
-RECORDS_DIR = DATA_DIR / "records"
-OVERLAYS_DIR = DATA_DIR / "overlays"
-UPLOADS_DIR = DATA_DIR / "uploads"
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -178,23 +158,8 @@ FAR_BBOX_FRAC_THRESH = 0.08      # MIN_BBOX_FRAC(0.03)보다 느슨한 참고용
 # 같은 영상이라도 이 버전이 다르면 어떤 프레임을 유효로 볼지 기준 자체가 달라져
 # 관절 이동범위가 달라 보입니다 (실측 확인 — 같은 영상을 구/신 버전으로 분석했더니
 # 5개 관절 중 4개에서 "세로 차이 관찰됨"이 떴는데 실제로는 같은 영상이었습니다).
-# `pipeline.compare_records` 가 두 기록의 이 값을 대조해 경고를 붙입니다.
+# `compare.compare_loaded_records` 가 두 기록의 이 값을 대조해 경고를 붙입니다.
 GAIT_FILTER_VERSION = "v5-stationary-speed-based-20260826"
-
-
-# ──────────────────────────────────────────────────────────────────
-# crop-assist (원본: gait_demo/crop_assist)
-#
-# 전용 12kp 모델이 전체 프레임에서 개를 못 찾거나 관절을 충분히 못 잡을 때만 도는
-# 2단계 보정입니다. 범용 모델로 위치를 먼저 잡고 그 주변을 확대해 전용 모델을 재적용합니다.
-# ──────────────────────────────────────────────────────────────────
-COCO_DOG_CLASS_ID = 16
-# 전용 모델보다 낮게 잡습니다 — "대략 어디 있는지"만 필요하고 정밀 keypoint 는 2단계에서 냅니다.
-GENERAL_CONF_THRESH = 0.15
-# bbox 각 방향으로 (너비/높이) * 0.4 만큼 여유. 다리·꼬리가 잘리는 것을 막습니다.
-MARGIN_RATIO = 0.4
-# crop 을 이 크기로 업스케일합니다 (비율 유지, 이미 크면 확대하지 않음).
-TARGET_LONG_SIDE = 640
 
 
 # ──────────────────────────────────────────────────────────────────
@@ -246,14 +211,3 @@ SKELETON_CHAIN = [
 P90P10_MIN_FRAMES = 5
 
 COMPARE_DIFF_THRESHOLD = 0.30
-
-
-# ──────────────────────────────────────────────────────────────────
-# 이 엔진의 pose model ID (D-063)
-#
-# 기록에 "어떤 관절 정의로 만들어졌나"를 남기는 메타데이터입니다. v4 는 자기 record 에
-# `pose_model`(= daengs_gait.inference.model.MODEL_ID) 을 이미 넣는데, 이 엔진은 ID 가 없어서 여기서
-# 정합니다. 값의 정본과 관절 집합은 `daengs_gait.contract` 에 있습니다 — 바꾸려면 거기와
-# 백필 SQL 을 같이 바꿔야 하고, 테스트가 셋을 대조합니다.
-# ──────────────────────────────────────────────────────────────────
-POSE_MODEL_ID = "yolov8_12kp_best"

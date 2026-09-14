@@ -42,7 +42,7 @@ HTTP 429/5xx/전송 오류는 30초, 60초 간격으로 최대 세 번 시도한
 | `space.facility` | 기존 Place `/v2/places/search`, 250m, leisure/cafe/restaurant 각 10개 상한 |
 | `space.park` | `not_requested / provider_not_connected` |
 | `space.river` | `not_requested / provider_not_connected` |
-| `environment.weather` | `not_requested / provider_not_connected` |
+| `environment.weather` | 기존 Life 과거 조회의 격자 기온 저장 (아래 현재 연결 참고) |
 
 Place의 여가 범주에 공원이 있어도 공원 전용 수집 성공으로 바꾸지 않는다.
 전체 주변 시설을 빠짐없이 수집한 결과가 아니라 선택한 세 범주의 제한된 결과다.
@@ -85,7 +85,8 @@ uv run celery -A daengs_backend.tasks.walk_entry_context:app worker --pool=solo 
 uv run celery -A daengs_backend.tasks.walk_entry_context:app beat --schedule walk-entry-context-beat --loglevel=INFO
 ```
 
-한 태스크는 최대 12개 작업을 순차 처리하고 Beat 주기는 30초다. HTTP 연결/읽기 제한은 3초다.
+한 태스크는 최대 12개 작업을 순차 처리하고 Beat 주기는 30초다. Place HTTP 연결/읽기 제한은
+3초다. 기온 수집은 기존 Life 전송·캐시 예산 위에 15초 상한을 적용한다.
 워커·Beat를 운영 프로세스 관리자에 등록하는 배포는 수행하지 않았다.
 중단하려면 웹/워커 flag를 false로 바꾸고 전용 worker/Beat를 정지한다.
 진행 중 응답은 DB의 버전/삭제 검사 대상이고, 재시작 시 남은 예약과 만료 lease를 다시 처리한다.
@@ -110,10 +111,16 @@ DB 통합 테스트는 `WALK_CONTEXT_TEST_DATABASE_URL`로 지정한 localhost�
 
 ## 이어받을 곳
 
+**2026-09-11 현재 기온 연결:** `environment.weather`는 기존 Life 어댑터를 통해 기록 시각 이하의
+기상청 격자 기온을 저장한다. 봉투의 `temporal_basis`는 `source_observation`이며 `payload`의
+관측 시각·격자·출처를 보존한다. 새로운 행동/글 revision의 기존 큐를 사용하고, 미연결로 이미
+완료된 과거 job을 자동 재실행하지 않는다. 키·격자 조건·시간 정책·검증 범위는
+[파트 슬롯 서비스 연결 4단계](diary-part-slots.md)를 따른다. 기온 외 항목은 후속이다.
+
 - 5단위: 소유자·공간 범위·기간·개수 제한이 있는 근접 기록 조회. 현재 API는 원본 하나 단위다.
 - 6단위: App 후보 캐시/카드와 서버 원본 연동.
 - **사진:** 현재 Dev에는 산책 사진 원본 동기화가 없다. App 로컬 사진과 Geo의 합성 photo
   참조를 서버 원본이라고 가정하지 않는다. 이미지 업로드/메타데이터/버전/삭제 계약을 먼저
   연결한 뒤 이와 같은 예약·fencing 구조를 적용한다. 이번 PR의 실제 자동 수집 대상은 행동·글이다.
-- 공원 전용 자료·하천 형상·과거 날씨 어댑터와 정책별 재수집/캐시 공유는 후속.
+- 공원·하천은 [공공 배경 공급](public-context.md), 기온은 위 현재 연결을 따른다.
 - 7단위: 필요한 봉투를 LLM에 공급하는 선택/변환. 현재는 원문을 재서술하지 않는다.

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from contextlib import asynccontextmanager
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -11,10 +12,10 @@ from daengs_backend.core.storage import StorageObjectChangedError
 from daengs_backend.services import territory_vision
 from daengs_backend.services.territory_vision import (
     GeminiTerritoryVision,
-    TerritoryVisionPermanentError,
     TerritoryVisionResult,
     TerritoryVisionTransientError,
 )
+from daengs_backend.services.territory_vision_jobs import VisionLease
 from daengs_backend.tasks import territory as territory_task
 
 
@@ -56,7 +57,11 @@ async def test_invalid_provider_output_is_retryable_without_leaking_raw_output()
 
 async def test_worker_reads_only_frozen_generation_and_records_result(monkeypatch):
     attempt_id = uuid.uuid4()
-    evidence = territory_vision._FrozenEvidence(
+    evidence = VisionLease(
+        token=uuid.uuid4(),
+        attempt_number=1,
+        exhausted=False,
+        retry_reason=None,
         storage_key="territory/user/attempt/capture.jpg",
         generation="42",
         content_type="image/jpeg",
@@ -107,13 +112,19 @@ async def test_worker_reads_only_frozen_generation_and_records_result(monkeypatc
                 "model": "fake-vlm",
                 "model_version": "fake-vlm:contract-v1",
                 "reason": "dog_visible",
+                "lease_token": evidence.token,
+                "generation": evidence.generation,
             },
         )
     ]
 
 
 async def test_worker_rejects_storage_generation_change_before_model_call(monkeypatch):
-    evidence = territory_vision._FrozenEvidence(
+    evidence = VisionLease(
+        token=uuid.uuid4(),
+        attempt_number=1,
+        exhausted=False,
+        retry_reason=None,
         storage_key="territory/user/attempt/capture.jpg",
         generation="42",
         content_type="image/jpeg",
@@ -129,27 +140,27 @@ async def test_worker_rejects_storage_generation_change_before_model_call(monkey
 
     monkeypatch.setattr(territory_vision, "_load_attempt_evidence", load)
     monkeypatch.setattr(territory_vision, "get_storage", lambda: ChangedStorage())
-    with pytest.raises(TerritoryVisionPermanentError) as caught:
-        await territory_vision.process_attempt(uuid.uuid4())
-    assert caught.value.reason_code == "photo_generation_changed"
+    complete = AsyncMock(return_value=True)
+    classify = AsyncMock()
+    monkeypatch.setattr(territory_vision, "_complete", complete)
+    monkeypatch.setattr(GeminiTerritoryVision, "classify", classify)
+    assert await territory_vision.process_attempt(uuid.uuid4()) is None
+    assert complete.call_args.kwargs == {"decision": "failed", "reason": "photo_generation_changed"}
+    classify.assert_not_awaited()
 
 
-def test_task_retries_transient_failure_once_then_records_failed(monkeypatch):
+def test_task_accelerates_durable_retry_without_unfenced_failure_write(monkeypatch):
     attempt_id = str(uuid.uuid4())
-    failed = []
+    processed = []
 
     def transient(_attempt_id):
+        processed.append(_attempt_id)
         raise TerritoryVisionTransientError("vision_provider_unavailable")
 
     class RetryRaised(Exception):
         pass
 
     monkeypatch.setattr(territory_vision, "process_attempt_sync", transient)
-    monkeypatch.setattr(
-        territory_vision,
-        "record_failed_attempt_sync",
-        lambda value, *, reason: failed.append((value, reason)),
-    )
     monkeypatch.setattr(
         territory_task.verify_photo,
         "retry",
@@ -158,14 +169,14 @@ def test_task_retries_transient_failure_once_then_records_failed(monkeypatch):
 
     with pytest.raises(RetryRaised):
         territory_task.verify_photo.run(attempt_id)
-    assert failed == []
+    assert processed == [attempt_id]
 
     territory_task.verify_photo.push_request(retries=territory_task.MAX_RETRIES)
     try:
         territory_task.verify_photo.run(attempt_id)
     finally:
         territory_task.verify_photo.pop_request()
-    assert failed == [(attempt_id, "vision_provider_unavailable")]
+    assert processed == [attempt_id, attempt_id]
 
 
 def test_worker_queue_is_late_acknowledged_and_isolated():
@@ -173,3 +184,13 @@ def test_worker_queue_is_late_acknowledged_and_isolated():
     assert territory_task.app.conf.task_acks_late is True
     assert territory_task.app.conf.task_reject_on_worker_lost is True
     assert territory_task.app.conf.worker_prefetch_multiplier == 1
+
+
+def test_existing_beat_routes_recovery_to_registered_photo_worker():
+    from daengs_life.tasks.celery_app import app as beat
+
+    schedule = beat.conf.beat_schedule["recover-territory-photos"]
+    assert schedule["task"] in territory_task.app.tasks
+    assert schedule["task"] == territory_task.recover_photos.name
+    assert schedule["options"]["queue"] == territory_task.QUEUE_NAME
+    assert schedule["options"]["expires"] < schedule["schedule"] == 30

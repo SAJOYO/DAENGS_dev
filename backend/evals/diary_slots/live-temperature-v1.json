@@ -1,0 +1,104 @@
+{
+  "run_at": "2026-09-11T14:12:49.146543+00:00",
+  "input_kind": "synthetic records, space and route; attempted live KMA historical temperature lookup",
+  "collection": [
+    {
+      "scene": 1,
+      "status": "unavailable",
+      "reason": "weather_lookup_failed",
+      "observation": null,
+      "requested_at": "2026-09-11T08:01:20+00:00",
+      "query_point": {
+        "lat": 37.50107918521516,
+        "lng": 127.0
+      }
+    },
+    {
+      "scene": 2,
+      "status": "unavailable",
+      "reason": "weather_lookup_failed",
+      "observation": null,
+      "requested_at": "2026-09-11T08:03:00+00:00",
+      "query_point": {
+        "lat": 37.502347227842975,
+        "lng": 127.0
+      }
+    },
+    {
+      "scene": 3,
+      "status": "unavailable",
+      "reason": "weather_lookup_failed",
+      "observation": null,
+      "requested_at": "2026-09-11T08:04:40+00:00",
+      "query_point": {
+        "lat": 37.504685462475834,
+        "lng": 127.0
+      }
+    }
+  ],
+  "slot_policy": {
+    "version": "diary-part-slots-v3",
+    "space_slots": 3,
+    "environment_slots": 1,
+    "motion_slots": 1,
+    "total_slots": 8,
+    "space_radius_m": 250.0,
+    "motion_gap_s": 30.0,
+    "route_tolerance_m": 30.0,
+    "location_age_s": 30.0,
+    "weather_max_age_s": 7200.0,
+    "include_location_reference": true
+  },
+  "verification": {
+    "live_temperature_obtained": false,
+    "gemini_called": false,
+    "database_used": false,
+    "diagnostic_http_status": 403,
+    "diagnostic_code": "SERVICE_KEY_IS_NOT_REGISTERED_ERROR",
+    "note": "Three record lookups returned unavailable; a separate diagnostic lookup confirmed the provider authorization error. Unit/DB tests use controlled provider and writer responses."
+  },
+  "environment_decisions": [
+    {
+      "scene_id": "stamp:23f582dc3942ca4cbe25c5381a03445a261b64bcd4973b629821a1da3e09469d",
+      "decisions": [
+        {
+          "source_id": "environment-1",
+          "evidence_id": null,
+          "part": "environment",
+          "eligibility": "unknown",
+          "admission": "excluded",
+          "reason": "weather_lookup_failed",
+          "details": {}
+        }
+      ]
+    },
+    {
+      "scene_id": "stamp:c69d8c7fab1c7a31473e41bddc0e72ecead1f624ffd74d7b383ce76ba7ff8d9f",
+      "decisions": [
+        {
+          "source_id": "environment-2",
+          "evidence_id": null,
+          "part": "environment",
+          "eligibility": "unknown",
+          "admission": "excluded",
+          "reason": "weather_lookup_failed",
+          "details": {}
+        }
+      ]
+    },
+    {
+      "scene_id": "stamp:c2908b6ddbc92a212bafd12168c4dc80a4a752471fc17232b130a70083746148",
+      "decisions": [
+        {
+          "source_id": "environment-3",
+          "evidence_id": null,
+          "part": "environment",
+          "eligibility": "unknown",
+          "admission": "excluded",
+          "reason": "weather_lookup_failed",
+          "details": {}
+        }
+      ]
+    }
+  ]
+}

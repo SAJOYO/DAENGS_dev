@@ -1,10 +1,20 @@
 """care_events 조회·저장. 쿼리만 있고 판단은 없습니다 (#332).
 
+조회 셋이 `pet_id` 하나가 아니라 **`pet_ids` 묶음**을 받습니다 (MVP 결정 §7). 같은 실제
+강아지를 두 사람이 각자 등록해 연결하면 기록이 두 `pet_id` 에 갈려 쌓이는데, 화면에서는
+한 마리이므로 읽을 때 합쳐야 합니다. **묶음을 만드는 것은 서비스**이고
+(`services/pet_identity.py::group_pet_ids_of`), 앱이 보낸 id 목록을 그대로 받는 자리는
+어디에도 없습니다 — 그래야 IDOR 이 안 생깁니다.
+
+연결이 없으면 묶음이 한 마리라 쿼리 모양만 `IN` 으로 바뀝니다.
+`idx_care_events_pet_occurred (pet_id, occurred_at DESC)` 를 그대로 탑니다.
+
 "기간이 너무 넓은가"·"이 강아지에 닿을 수 있는가" 는 services 가 정합니다. commit 도 하지
 않습니다 — 트랜잭션 경계는 services 가 잡습니다.
 """
 
 import uuid
+from collections.abc import Sequence
 from datetime import datetime
 
 from sqlalchemy import func, or_, select
@@ -68,7 +78,7 @@ async def get_by_client_event(
 async def list_between(
     session: AsyncSession,
     _app_user_id: uuid.UUID,
-    pet_id: uuid.UUID,
+    pet_ids: Sequence[uuid.UUID],
     start: datetime,
     end: datetime,
 ) -> list[CareEvent]:
@@ -82,7 +92,7 @@ async def list_between(
     stmt = (
         select(CareEvent)
         .where(
-            CareEvent.pet_id == pet_id,
+            CareEvent.pet_id.in_(set(pet_ids)),
             CareEvent.occurred_at >= start,
             CareEvent.occurred_at < end,
         )
@@ -93,7 +103,7 @@ async def list_between(
 
 async def list_kind_between(
     session: AsyncSession,
-    pet_id: uuid.UUID,
+    pet_ids: Sequence[uuid.UUID],
     kind: str,
     start: datetime,
     end: datetime,
@@ -106,7 +116,7 @@ async def list_kind_between(
     stmt = (
         select(CareEvent)
         .where(
-            CareEvent.pet_id == pet_id,
+            CareEvent.pet_id.in_(set(pet_ids)),
             CareEvent.kind == kind,
             CareEvent.occurred_at >= start,
             CareEvent.occurred_at <= end,
@@ -119,7 +129,7 @@ async def list_kind_between(
 async def count_by_kind(
     session: AsyncSession,
     _app_user_id: uuid.UUID,
-    pet_id: uuid.UUID,
+    pet_ids: Sequence[uuid.UUID],
     start: datetime,
     end: datetime,
 ) -> dict[str, int]:
@@ -131,7 +141,7 @@ async def count_by_kind(
     stmt = (
         select(CareEvent.kind, func.count())
         .where(
-            CareEvent.pet_id == pet_id,
+            CareEvent.pet_id.in_(set(pet_ids)),
             CareEvent.occurred_at >= start,
             CareEvent.occurred_at < end,
         )

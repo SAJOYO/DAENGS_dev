@@ -64,7 +64,9 @@ from daengs_backend.models.pet import (
     PET_SEXES,
     Pet,
 )
+from daengs_backend.models.pet_identity import PetIdentity
 from daengs_backend.models.pet_invite import PetInvite
+from daengs_backend.models.pet_invite_pet import PetInvitePet
 from daengs_backend.models.pet_member import PetMember
 from daengs_backend.models.refresh_token import RefreshToken
 from daengs_backend.models.request_metrics import (
@@ -83,6 +85,7 @@ from daengs_backend.models.territory import (
     VerifiedVisit,
 )
 from daengs_backend.models.territory_bookmark import TerritoryBookmark
+from daengs_backend.models.place_bookmark import PlaceBookmark  # noqa: F401
 from daengs_backend.models.territory_claim import (
     TerritoryClaim,
     TerritoryClaimPhoto,
@@ -168,7 +171,9 @@ __all__ = [
     "DogCard",
     "GaitRecord",
     "Pet",
+    "PetIdentity",
     "PetInvite",
+    "PetInvitePet",
     "PetMember",
     "RefreshToken",
     "RequestMetric",

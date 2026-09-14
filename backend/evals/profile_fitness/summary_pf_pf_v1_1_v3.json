@@ -1,0 +1,216 @@
+{
+  "label": "pf_v1_1",
+  "judge": {
+    "model": "gpt-5.4-2026-03-05",
+    "variant": "A",
+    "prompt_version": "profile-fitness-diff-ko-v3a",
+    "hygiene": {
+      "judge_model": "gpt-5.4-2026-03-05",
+      "judge_family": "openai",
+      "generation_families": "google"
+    }
+  },
+  "generation": {
+    "router": {
+      "model": "gemini-3.1-flash-lite",
+      "prompt_version": "semantic-router-ko-v10"
+    },
+    "general": {
+      "model": "gemini-3.1-flash-lite",
+      "prompt_version": "general-answer-ko-v3"
+    }
+  },
+  "anchor_record": {
+    "file": "anchor_check_dev_profile-fitness-diff-ko-v3a_gpt-5.4-2026-03-05.json",
+    "passed_count": 7,
+    "anchor_count": 7,
+    "checked_at": "2026-09-09T03:13:08+00:00"
+  },
+  "rates": {
+    "N_noise": {
+      "point": 0.0,
+      "low": 0.0,
+      "high": 0.2775,
+      "n": 10,
+      "k": 0
+    },
+    "S_invariant": {
+      "point": NaN,
+      "low": NaN,
+      "high": NaN,
+      "n": 0,
+      "k": 0
+    },
+    "P_ablation": {
+      "point": 0.5714,
+      "low": 0.2505,
+      "high": 0.8418,
+      "n": 7,
+      "k": 4
+    },
+    "reactive_contrast": {
+      "point": 0.5,
+      "low": 0.2152,
+      "high": 0.7848,
+      "n": 8,
+      "k": 4
+    },
+    "probe_fabricated": {
+      "point": NaN,
+      "low": NaN,
+      "high": NaN,
+      "n": 0,
+      "k": 0
+    }
+  },
+  "inequality": {
+    "N": 0.0,
+    "S": NaN,
+    "P": 0.5714,
+    "holds_N_lt_S": null,
+    "holds_S_lt_P": null,
+    "holds": null,
+    "P_minus_N": {
+      "point": 0.6667,
+      "low": 0.3333,
+      "high": 1.0,
+      "n": 6
+    },
+    "P_minus_N_ci_excludes_zero": true,
+    "paired_questions": 6
+  },
+  "items": {
+    "responsiveness": 0.933,
+    "no_fabrication": 1.0
+  },
+  "items_detail": {
+    "responsiveness": {
+      "mean": 0.933,
+      "max": 2,
+      "n": 15,
+      "distribution": {
+        "2": 6,
+        "0": 7,
+        "1": 2
+      }
+    },
+    "no_fabrication": {
+      "mean": 1.0,
+      "max": 1,
+      "n": 15,
+      "distribution": {
+        "1": 15
+      }
+    }
+  },
+  "items_by_tier": {
+    "coarse": {
+      "responsiveness": {
+        "mean": 0.909,
+        "max": 2,
+        "n": 11,
+        "distribution": {
+          "2": 4,
+          "0": 5,
+          "1": 2
+        }
+      },
+      "no_fabrication": {
+        "mean": 1.0,
+        "max": 1,
+        "n": 11,
+        "distribution": {
+          "1": 11
+        }
+      }
+    },
+    "fine": {
+      "responsiveness": {
+        "mean": 1.0,
+        "max": 2,
+        "n": 4,
+        "distribution": {
+          "2": 2,
+          "0": 2
+        }
+      },
+      "no_fabrication": {
+        "mean": 1.0,
+        "max": 1,
+        "n": 4,
+        "distribution": {
+          "1": 4
+        }
+      }
+    }
+  },
+  "items_by_kind": {
+    "reactive": {
+      "responsiveness": {
+        "mean": 0.933,
+        "max": 2,
+        "n": 15,
+        "distribution": {
+          "2": 6,
+          "0": 7,
+          "1": 2
+        }
+      },
+      "no_fabrication": {
+        "mean": 1.0,
+        "max": 1,
+        "n": 15,
+        "distribution": {
+          "1": 15
+        }
+      }
+    }
+  },
+  "failures": {
+    "scored_pairs": 15,
+    "ignored": 7,
+    "fabricated": 0,
+    "stereotype": 1,
+    "over_personalized": 0
+  },
+  "unmeasured": {},
+  "coverage": {
+    "total_pairs": 55,
+    "judged": 32,
+    "skipped_before_judging": {
+      "out_of_scope": 15,
+      "not_answered": 8
+    },
+    "position_dependent": 6,
+    "abstained": 1,
+    "unmeasured_rate": 0.545
+  },
+  "paraphrase": {
+    "pairs": 0,
+    "agreement": null
+  },
+  "cost": {
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "pairs": 32,
+    "tokens_per_1000_pairs": 0
+  },
+  "calibration": null,
+  "provisional": true,
+  "generated_at": "2026-09-09T03:22:10+00:00",
+  "gate": {
+    "responsiveness": {
+      "passed": false,
+      "reason": "not_calibrated"
+    },
+    "invariance": {
+      "passed": false,
+      "reason": "not_calibrated"
+    },
+    "no_fabrication": {
+      "passed": false,
+      "reason": "not_calibrated"
+    }
+  },
+  "note": "v1.1 질문 × 판정 v3 (대칭 관찰 · 기권)"
+}

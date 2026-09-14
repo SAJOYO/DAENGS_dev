@@ -140,6 +140,11 @@ API 경합은 모델의 임의 지연에 기대지 않고 제어 가능한 대�
 
 ## 실행 기록
 
+새 후보·정정 후속은 [candidate-pool-cases.json](candidate-pool-cases.json)과
+`candidate-pool-runs/`에 보존한다. 실행·평가기 수정·남은 실패는
+[2단계 평가](../../../docs/place/candidate-pool-evaluation.md)를 따른다.
+`uv run --no-sync python -m daengs_evals.place_conversation.candidates --key-file '<기존 키 파일>' --interval 8`로 실행한다.
+
 run_id, UTC 시각, 코드 SHA와 dirty 여부, 모델 식별자, 프롬프트/케이스/fixture SHA256,
 실행 경계(model/engine/answer/api), seed 또는 제공자 설정, 반복 번호를 metadata에 기록한다.
 각 케이스/variant/반복/turn마다 다음을 observations.jsonl에 저장한다.

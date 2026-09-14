@@ -5,9 +5,13 @@
 행이 **PROCESSING 으로 영원히** 남았습니다(47.mp4, 두 번 연속). CHECK 는 D-043 때 엔진
 코드가 아니라 짐작으로 적혔고, verify 도 같은 짐작을 베껴 "검증됨" 처럼 보였습니다.
 
-그래서 이 파일은 **사람이 눈으로 맞추던 계약을 기계가 읽어 대조**합니다 — 두 엔진의
+그래서 이 파일은 **사람이 눈으로 맞추던 계약을 기계가 읽어 대조**합니다 — 엔진의
 실제 소스, 실제 SQL, ORM 상수, 서비스 상수를 전부 읽습니다. 누가 어느 한쪽에 등급을
 더하거나 빼면 여기서 빨간 줄이 납니다.
+
+⚠️ **어휘는 옛 legacy 기록에도 그대로 적용됩니다.** 6단계에서 legacy 추론 runtime 이
+빠졌지만 DB 에 남은 옛 행의 `quality_tier` 는 이 CHECK 안에서 계속 읽힙니다 — 등급을
+줄이면 조회가 깨집니다.
 """
 
 from __future__ import annotations
@@ -25,13 +29,14 @@ from daengs_backend.services import gait as gait_service
 REPO = Path(__file__).resolve().parents[2]
 INIT_SQL = REPO / "db" / "init" / "07_gait_records.sql"
 MIGRATION_SQL = REPO / "db" / "migrations" / "2026-09-09_gait_quality_tier_ok.sql"
-# 5B 부터 두 엔진 다 `daengs_gait.quality_gate.check_quality` 하나를 씁니다 (5C 공통 계산).
-# 그래서 tier 어휘의 정본은 파일 하나이고, 아래 `test_both_engines_call_the_shared_quality_gate`
-# 가 "두 엔진의 분석 경로가 실제로 그 함수를 부른다" 는 사실을 소스에서 잽니다.
+# 5B 부터 분석 경로는 `daengs_gait.quality_gate.check_quality` 하나를 씁니다 (5C 공통 계산).
+# 6단계에서 legacy 추론 runtime(`pipeline.py`)이 빠져 지금 분석 경로는 v4 하나지만, tier
+# 어휘의 정본이 파일 하나라는 사실은 그대로입니다 — 아래
+# `test_analyze_paths_call_the_shared_quality_gate` 가 "분석 경로가 실제로 그 함수를
+# 부른다" 는 사실을 소스에서 잽니다.
 QUALITY_GATE = REPO / "backend" / "src" / "daengs_gait" / "quality_gate.py"
 ENGINE_SOURCES = {"shared": QUALITY_GATE}
 ENGINE_ANALYZE_SOURCES = {
-    "legacy": REPO / "backend" / "src" / "daengs_gait" / "pipeline.py",
     "v4": REPO / "backend" / "src" / "daengs_gait" / "inference" / "analyze.py",
 }
 
@@ -72,9 +77,9 @@ def test_shared_quality_gate_emits_exactly_the_three_tiers() -> None:
 
 
 @pytest.mark.parametrize("engine", sorted(ENGINE_ANALYZE_SOURCES))
-def test_both_engines_call_the_shared_quality_gate(engine: str) -> None:
-    """legacy 와 v4 가 같은 어휘를 쓰는 이유는 같은 함수를 부르기 때문입니다 (5B). 한쪽이
-    자기 판정을 다시 만들면 여기서 잡힙니다."""
+def test_analyze_paths_call_the_shared_quality_gate(engine: str) -> None:
+    """분석 경로가 자기 판정을 따로 만들지 않고 공용 quality_gate 를 부릅니다 (5B).
+    거기서 tier 를 직접 정하기 시작하면 여기서 잡힙니다."""
     text = ENGINE_ANALYZE_SOURCES[engine].read_text(encoding="utf-8")
     assert re.search(r"from daengs_gait\.quality_gate import .*\bcheck_quality\b", text), (
         f"{engine} 분석 경로가 daengs_gait.quality_gate.check_quality 를 import 하지 않음"

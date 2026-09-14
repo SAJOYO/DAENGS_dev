@@ -1,0 +1,17 @@
+{
+  "reviewed_at": "2026-09-11",
+  "overrides": [
+    {
+      "id": "N01",
+      "pool": "new_candidates",
+      "effect": "pass",
+      "reason": "Required parking was represented in hard.any. The old oracle checked only hard.all. The OR branch restricts cafes to parking=true; this is a valid execution."
+    }
+  ],
+  "corrected_effect_counts": {
+    "pass": 18,
+    "fail": 1,
+    "incomplete": 2
+  },
+  "decision": "Keep original observations; fix truth-value oracle and record fixture changes for subsequent runs. No causal A/B percentage comparison."
+}

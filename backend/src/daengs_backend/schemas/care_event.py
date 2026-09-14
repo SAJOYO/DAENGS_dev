@@ -90,6 +90,19 @@ class CareEventResponse(BaseModel):
     actor: ActorOut | None = None
 
 
+class DayWalkOut(BaseModel):
+    """그날 그 아이가 나간 산책 한 건 (MVP 결정 §7).
+
+    **`actor` 는 케어 로그와 같은 규칙입니다** — 지금도 그 아이의 구성원일 때만 닉네임이
+    옵니다. 산책은 `walks.app_user_id` 가 `NOT NULL` 이라 `app_user_id` 는 언제나 있고,
+    비어 있을 수 있는 것은 닉네임뿐입니다 (케어의 `actor` 는 두 칸 다 비어 있을 수 있습니다).
+    """
+
+    walk_id: uuid.UUID
+    started_at: datetime
+    actor: ActorOut
+
+
 class CareEventQuery(BaseModel):
     """기간 조회의 창. 라우터가 쿼리 문자열에서 만들고 서비스가 상한을 봅니다.
 
@@ -135,6 +148,17 @@ class CareDaySummaryResponse(BaseModel):
     #: 그날의 기록 전부(최근 먼저). 화면이 요약 아래에 목록을 그릴 때 두 번 안 부르게.
     events: list[CareEventResponse]
 
+    #: 그날의 산책 한 건씩과 **누가 다녀왔는지** (MVP 결정 §7). `walk` 는 이 목록의 길이라
+    #: 둘이 어긋날 수 없습니다.
+    #:
+    #: 논리 연결된 아이는 두 보호자의 산책이 여기 **섞여** 옵니다 — 그것이 공동 돌봄에서
+    #: "퇴근 후 앱을 열면 오늘 일어난 일이 빠짐없이 보인다" 는 뜻입니다. 목록
+    #: `GET /app/walks` 는 그대로 **자기 산책만** 보여 줍니다(산책의 소유는 사람 것).
+    #:
+    #: 기본값이 있는 것은 이 필드가 생기기 전의 호출부·테스트가 계속 돌게 하려는 것입니다
+    #: (`CareEventResponse.actor` 와 같은 이유).
+    walk_rows: list[DayWalkOut] = Field(default_factory=list)
+
 
 __all__ = [
     "FUTURE_GRACE",
@@ -145,4 +169,5 @@ __all__ = [
     "CareEventListResponse",
     "CareEventQuery",
     "CareEventResponse",
+    "DayWalkOut",
 ]

@@ -1,4 +1,7 @@
-"""보행 엔진 출력 계약 — 두 엔진(legacy · v4)이 실제로 내는 모양을 **적어 둔 것**입니다.
+"""보행 엔진 출력 계약 — 엔진이 실제로 내는 모양을 **적어 둔 것**입니다.
+
+지금 분석을 만드는 엔진은 v4 하나지만(6단계), 레지스트리는 **옛 legacy 기록까지** 다룹니다 —
+그 기록을 읽고 비교하는 일은 추론 runtime 이 있느냐와 무관합니다.
 
 새 추상화가 아닙니다. `daengs_backend.services.gait._run_analysis` 가 읽는 키와
 `gait_records` 컬럼으로 가는 값을 그대로 이름 붙였습니다 (D-063). 여기에 없는 키는
@@ -23,7 +26,7 @@ from typing import TypedDict
 
 # ── pose model 레지스트리 ─────────────────────────────────────────────────────
 #
-# 관절 목록의 원본은 각 엔진의 config 입니다 — legacy `daengs_gait.config.KEYPOINT_NAMES`,
+# 관절 목록의 원본은 config 입니다 — legacy(옛 기록용) `daengs_gait.config.KEYPOINT_NAMES`,
 # v4 `daengs_gait/inference/model.py AP10K_NAMES`. tests/test_gait_pose_model.py 가 둘을
 # 읽어 여기와 대조하고, `db/migrations/2026-09-09_gait_records_pose_model.sql` 과
 # 그 verify 의 IN 목록도 같은 테스트가 대조합니다. **한 곳만 고치면 테스트가 빨간 줄을 냅니다.**
@@ -183,11 +186,12 @@ def classify_joint_keys(keys) -> str | None:
 
 # ── 프레임 레코드 ───────────────────────────────────────────────────────────
 class FrameRecord(TypedDict, total=False):
-    """5fps 로 샘플한 프레임 하나. legacy `keypoint_infer._base_frame_record` ·
-    v4 `pose._base_frame_record` 가 만들고 `gait_filter.apply_gait_filter` 가 뒤 둘을 채웁니다.
+    """5fps 로 샘플한 프레임 하나. `inference.pose._base_frame_record` 가 만들고
+    `gait_filter.apply_gait_filter` 가 뒤 둘을 채웁니다.
 
-    `det_box` · `bbox_wh` 는 v4 만 냅니다. `crop_*` · `general_detector_conf` 는 legacy 의
-    crop-assist 자리인데 v4 도 같은 키를 (None 으로) 냅니다.
+    `crop_*` · `general_detector_conf` 는 옛 legacy crop-assist 자리입니다 — 그 runtime 은
+    6단계에서 없앴지만 v4 가 같은 키를 (None 으로) 내고 **옛 기록에도 남아 있어** 계약에
+    그대로 둡니다.
     """
 
     frame_idx: int

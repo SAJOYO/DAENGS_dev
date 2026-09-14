@@ -1,0 +1,28 @@
+{
+  "identity": {
+    "schema_version": 1,
+    "judge_model": "gemini-3.1-flash-lite",
+    "provider": "gemini; shared orchestration client",
+    "family_independent_from_subject": false,
+    "prompt_version": "facility-judge-ko-v2",
+    "prompts_sha256": "d036bee9f9429506ee0aa556afa86f91f6085bc8035d0e3c4856b066d932d1ce",
+    "verdict_schema_sha256": "7a4723f0caa36b39043454a9b3228f3a19dd2203e18c620f721be319be5982cf",
+    "implementation_sha256": "3243c37e574c5f7a9d7dbdcae292fa70bffe7b56c8ab4c261313c9a6bd9c2442",
+    "source_hashes": {
+      "metadata.json": "5cb75bb9f58d6aadc9c7e48ef724eb3aa4f29f79f6200cbf84d9072b0348debc",
+      "cases.json": "e19a378d7a1a9728f5a536a727eb232a03c52c7fd8d906e36327e600022dd795",
+      "observations.jsonl": "40167d4584aee6a59256f46f0cff938b88ce2e094fff3836200933ebedc22c95"
+    },
+    "anchors_sha256": "a26639731400130a360abfa2141e4f91491a1ff9e418f3ce2d6fdf7547fb089f",
+    "generation": {
+      "temperature": 0,
+      "max_output_tokens": 4096,
+      "sdk_attempts": 1
+    },
+    "boundary": "server prepare/answer; synthetic search; no APP/member write evidence",
+    "purpose": "review assistance, not calibrated quality or release approval"
+  },
+  "created_at": "2026-09-12T14:23:57.659519+00:00",
+  "inputs_sha256": "ef50853d5b60f0a10b2f90e0a84a1fd61ec51a1aa26c7000742586beca5109e2",
+  "source": "llm_judge; not independent human review"
+}

@@ -12,7 +12,13 @@ class ConversationRequest(InputModel):
     client_request_id: UUID
     session_id: UUID | None = None
     expected_revision: int = Field(default=0, ge=0)
-    mode: Literal["manual", "chat", "restore", "filters"]
+    mode: Literal["manual", "chat", "restore", "filters", "bootstrap"]
+    bookmark_commands: Literal["v1"] | None = None
+    saved_search: Literal["v1"] | None = None
+    candidate_pools: Literal["v1"] | None = None
+    restore_pool: Literal["all_places", "unbookmarked", "new_candidates"] = "all_places"
+    source_session_id: UUID | None = None
+    source_revision: int | None = Field(None, ge=1)
     query: str = Field(default="", max_length=1000)
     manual: dict[str, Any] | None = None
     restore_filters: dict[str, Any] | None = None
@@ -22,6 +28,18 @@ class ConversationRequest(InputModel):
 
     @model_validator(mode="after")
     def required_context(self) -> Self:
+        if self.mode == "bootstrap" and (
+            self.session_id is not None or self.query or self.manual is None
+        ):
+            raise ValueError("bootstrap creates empty search context from manual defaults")
+        if (self.source_session_id is None) != (self.source_revision is None):
+            raise ValueError("restore source requires session and revision")
+        if self.mode != "restore" and (self.source_session_id or self.restore_pool != "all_places"):
+            raise ValueError("only restore accepts a source or pool")
+        if (
+            self.restore_pool != "all_places" or self.source_session_id
+        ) and self.candidate_pools != "v1":
+            raise ValueError("candidate pool capability required")
         if self.mode == "filters":
             if (
                 self.session_id is None
@@ -69,6 +87,8 @@ class ConversationResponse(InputModel):
     session_id: UUID
     revision: int
     client_request_id: UUID
+    search_pool: Literal["all_places", "unbookmarked", "new_candidates"] = "all_places"
+    excluded_keys: list[dict[str, str]] = Field(default_factory=list, max_length=120)
     filters: dict[str, Any]
     search: dict[str, Any] | None
     selected: dict[str, str] | None

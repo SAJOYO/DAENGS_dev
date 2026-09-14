@@ -3,6 +3,8 @@
 import importlib.util
 import json
 import uuid
+from copy import deepcopy
+from dataclasses import replace
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -14,7 +16,60 @@ from daengs_backend.schemas.walk import WalkFinalizeRequest, WalkUpload
 from daengs_backend.schemas.walk_entry_v2 import EntryWriteV2
 from daengs_backend.services import walk_entry_pin
 from daengs_backend.services.walk_chunk import encode_chunk
+from daengs_backend.services.walk_diary.lifecycle.snapshot import result as publication_result
+from daengs_backend.services.walk_diary.preparation.board import assemble_saved_base_board
+from daengs_backend.services.walk_diary.preparation.diary import PreparedWalkDiary
+from daengs_backend.services.walk_diary.runtime import write_cards
+from daengs_backend.services.walk_diary.storage.board import store_board
+from daengs_walk.diary.contracts.input import DiaryInput, digest
+from tests.walk.diary.test_diary_card_writing import prepared, prose
+from tests.walk.support.base_board import policy
 from tests.walk.support.paths import REPO
+
+
+async def test_card_probe_reads_current_receipt_through_packaged_storage(monkeypatch):
+    spec = importlib.util.spec_from_file_location(
+        "walk_card_smoke_test", REPO / "tools/walk_runtime_smoke.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    base = prepared()
+    source = base.input.source.model_dump(mode="json")
+    source["client_session_id"] = str(uuid.uuid4())
+    note = deepcopy(source["records"][0])
+    note["ref"]["id"] = "probe-note"
+    note["content"] = {"kind": "note", "text": "  점검용 원문\n"}
+    source["records"].append(note)
+    base = assemble_saved_base_board(
+        replace(base.input, source=DiaryInput.model_validate(source)), policy(3)
+    )
+    output = await write_cards(base.input.source, base, generate=prose)
+    assert any(
+        a.action_id is None and a.movement_ids
+        for scene in output.bundle.scenes
+        for a in scene.writing.actions
+    )
+    value = PreparedWalkDiary(base.input, base.plan.intermediate, base)
+    revision = digest("probe-generation")
+    stored = store_board(value, output.bundle, revision, writing=output)
+    row = SimpleNamespace(
+        bundle=stored, input_revision=revision, status="ready", generation=1, error_code=None
+    )
+    response = publication_result(value, row, revision).model_dump(mode="json")
+    connection = AsyncMock()
+    connection.scalar.return_value = stored
+    context = AsyncMock()
+    context.__aenter__.return_value = connection
+    monkeypatch.setattr(module, "engine", SimpleNamespace(connect=lambda: context))
+    request = AsyncMock(return_value=response)
+    notes = [note["content"]["text"]]
+    owner, walk = uuid.uuid4(), uuid.uuid4()
+    result = await module.card_publication(request, owner, walk, [], notes)
+    assert result["receipt_valid"] and result["original_action_preserved"]
+    assert result["original_notes_preserved"] and result["model_status"] == "accepted"
+    assert result["synthetic_response"] == response
+    assert [call.args[0] for call in request.await_args_list] == ["POST", "GET", "POST"]
+    assert connection.scalar.await_args.args[1] == {"walk": walk, "owner": owner}
 
 
 @pytest.mark.parametrize("failure", [None, "cycle", "insert"])

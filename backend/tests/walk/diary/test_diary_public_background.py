@@ -5,11 +5,11 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from daengs_backend.services.walk_diary_writing import write_diary
-from daengs_walk.diary_background import project_background
-from daengs_walk.diary_input import SavedBackground, digest, material_ref
-from daengs_walk.diary_stamps import StampPolicy, prepare_stamps
-from daengs_walk.diary_writing import prepare_writing
+from daengs_backend.services.walk_diary.legacy.bundle import write_diary
+from daengs_walk.diary.contracts.input import SavedBackground, digest, material_ref
+from daengs_walk.diary.legacy.writing import prepare_writing
+from daengs_walk.diary.selection.stamps import StampPolicy, prepare_stamps
+from daengs_walk.diary.space.projection import project_background
 from tests.walk.support.diary import record, with_backgrounds
 
 

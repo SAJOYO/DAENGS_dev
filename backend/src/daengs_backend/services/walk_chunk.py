@@ -39,6 +39,8 @@ __all__ = ["CHUNK_COLUMNS", "CHUNK_VERSION", "decode_chunk", "encode_chunk"]
 #: 형식 번호. 칸이 바뀌면 올리고, 읽는 쪽은 모르는 번호를 거부합니다 —
 #: 옛 서버가 새 묶음을 아무 말 없이 잘못 읽으면 안 됩니다.
 CHUNK_VERSION = 1
+RECORDING_CHUNK_VERSION = 2
+RECORDING_POLICY = "gps-recording-eligibility-v1"
 
 #: 위치 배열의 칸 순서. `at` 은 epoch 밀리초, `mock` 은 0/1 입니다.
 CHUNK_COLUMNS = ("seq", "chain", "at", "lat", "lng", "acc", "mock")
@@ -56,11 +58,18 @@ def encode_chunk(points: list[WalkPointUpload]) -> dict[str, Any]:
     if not points:
         # 빈 묶음은 `point_count > 0` 제약에 걸립니다. 담기 전에 막습니다.
         raise ValueError("빈 좌표 묶음은 담지 않습니다.")
-    return {
-        "v": CHUNK_VERSION,
-        "cols": list(CHUNK_COLUMNS),
-        "pts": [_row(p) for p in sorted(points, key=lambda p: p.client_seq)],
+    enriched = any(p.recording_eligible is not None for p in points)
+    payload = {
+        "v": RECORDING_CHUNK_VERSION if enriched else CHUNK_VERSION,
+        "cols": [*CHUNK_COLUMNS, "eligible"] if enriched else list(CHUNK_COLUMNS),
+        "pts": [
+            [*_row(p), p.recording_eligible] if enriched else _row(p)
+            for p in sorted(points, key=lambda p: p.client_seq)
+        ],
     }
+    if enriched:
+        payload["recording_policy"] = RECORDING_POLICY
+    return payload
 
 
 def decode_chunk(payload: dict[str, Any]) -> list[WalkPointUpload]:
@@ -69,16 +78,22 @@ def decode_chunk(payload: dict[str, Any]) -> list[WalkPointUpload]:
     `cols` 를 보고 칸을 찾으므로 **순서가 바뀌어도 읽힙니다.**
     """
     version = payload.get("v")
-    if version != CHUNK_VERSION:
+    if version not in (CHUNK_VERSION, RECORDING_CHUNK_VERSION):
         raise ValueError(f"모르는 좌표 묶음 형식입니다: v={version!r}")
+    if version == RECORDING_CHUNK_VERSION and payload.get("recording_policy") != RECORDING_POLICY:
+        raise ValueError("모르는 GPS 기록 구분 정책입니다.")
     columns = payload.get("cols")
     if not isinstance(columns, list):
-        raise ValueError("좌표 묶음에 cols 가 없습니다.")
+        raise ValueError("좌표 묶음에 cols 가 없습니다.")  # noqa: TRY004 -- stored contract error
     index = {name: i for i, name in enumerate(columns)}
-    missing = set(CHUNK_COLUMNS) - index.keys()
+    required = set(CHUNK_COLUMNS) | ({"eligible"} if version == RECORDING_CHUNK_VERSION else set())
+    missing = required - index.keys()
     if missing:
         raise ValueError(f"좌표 묶음에 없는 칸이 있습니다: {sorted(missing)}")
-    return [_point(row, index) for row in payload.get("pts", [])]
+    return [
+        _point(row, index, enriched=version == RECORDING_CHUNK_VERSION)
+        for row in payload.get("pts", [])
+    ]
 
 
 def _row(point: WalkPointUpload) -> list[Any]:
@@ -101,7 +116,7 @@ def _row(point: WalkPointUpload) -> list[Any]:
     ]
 
 
-def _point(row: list[Any], index: dict[str, int]) -> WalkPointUpload:
+def _point(row: list[Any], index: dict[str, int], *, enriched: bool = False) -> WalkPointUpload:
     accuracy = row[index["acc"]]
     return WalkPointUpload(
         client_seq=int(row[index["seq"]]),
@@ -111,4 +126,5 @@ def _point(row: list[Any], index: dict[str, int]) -> WalkPointUpload:
         lng=Decimal(str(row[index["lng"]])),
         accuracy_m=None if accuracy is None else float(accuracy),
         is_mock=bool(row[index["mock"]]),
+        recording_eligible=row[index["eligible"]] if enriched else None,
     )

@@ -3,9 +3,9 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from daengs_walk.diary_board_output import BOARD_FORMAT, BOARD_RESPONSE, PublishedBoard
-from daengs_walk.diary_input import PhotoManifestRef
-from daengs_walk.diary_output import DiaryBundle
+from daengs_walk.diary.board.output import BOARD_FORMAT, BOARD_RESPONSE, PublishedBoard
+from daengs_walk.diary.contracts.input import PhotoManifestRef
+from daengs_walk.diary.contracts.output import DiaryBundle
 from daengs_walk.storyboard import (
     StoryboardBundle,
     StoryboardBundleV2,
@@ -24,6 +24,8 @@ BundleFormat = Literal[
     "walk-diary-board-v1",
 ]
 
+MAX_PREPARATION_BUDGET_MS = 20_000
+
 
 class StoryboardRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -32,7 +34,7 @@ class StoryboardRequest(BaseModel):
     bundle_format: BundleFormat = "walk-storyboard-candidates-v1"
     target_scene_count: int | None = Field(default=None, ge=1, le=50)
     expected_photo_manifest: PhotoManifestRef | None = None
-    preparation_budget_ms: int | None = Field(default=None, ge=0, le=10_000)
+    preparation_budget_ms: int | None = Field(default=None, ge=0, le=MAX_PREPARATION_BUDGET_MS)
 
     @model_validator(mode="after")
     def diary_options(self):

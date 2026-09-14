@@ -20,7 +20,7 @@ compose 의 `gait-worker`(Celery, `daengs_backend.tasks.gait`)에서만 실행�
    `daengs_gait.compare`·`contract` 를 비교할 때 부릅니다. backend 설정값은 인자로 넘어옵니다.
    최상단 import 는 여전히 금지이고, 이 접점을 늘려야 할 것 같으면 D-063 을 먼저 보세요.
 
-⚠️ 무거운 의존성(torch·ultralytics·opencv)은 `gait` 그룹에만 있습니다.
+⚠️ 무거운 의존성(torch·rtmlib·onnxruntime·opencv)은 `gait` 그룹에만 있습니다.
    **이 패키지의 모듈을 `daengs_backend` 쪽에서 최상단 import 하면** 기본 설치
    (`uv sync`, gait 그룹 없음)의 backend 가 ImportError 로 죽습니다.
 

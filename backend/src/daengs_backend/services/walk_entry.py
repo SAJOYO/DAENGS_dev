@@ -1,9 +1,5 @@
 """현재 기록 CRUD와 해석 정책 없는 산책 기록 프로필."""
 
-import hashlib
-import json
-from datetime import UTC, datetime
-
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from daengs_backend.models.walk_entry import WalkEntry
@@ -15,18 +11,9 @@ from daengs_backend.schemas.walk_entry import (
     RecordProfileQuery,
 )
 from daengs_backend.services.walk_entry_context import reserve
-
-
-class EntryNotFound(Exception):
-    pass
-
-
-class EntryConflict(Exception):
-    pass
-
-
-class EntryInvalid(Exception):
-    pass
+from daengs_backend.services.walk_entry_errors import EntryConflict, EntryInvalid, EntryNotFound
+from daengs_backend.services.walk_entry_policy import guard_v1
+from daengs_backend.services.walk_entry_profile import build_profile
 
 
 def response(row: WalkEntry) -> EntryResponse:
@@ -41,8 +28,6 @@ def response(row: WalkEntry) -> EntryResponse:
 async def list_entries(session, owner, walk_id):
     if await repo.owned_walk(session, owner, walk_id) is None:
         raise EntryNotFound
-    from daengs_backend.services.walk_entry_v2 import guard_v1
-
     await guard_v1(session, [walk_id])
     return [response(row) for row in await repo.entries(session, [walk_id])]
 
@@ -71,8 +56,6 @@ async def write(session: AsyncSession, owner, walk_id, entry_id, body: EntryWrit
     walk = await repo.owned_walk(session, owner, walk_id, lock=True)
     if walk is None:
         raise EntryNotFound
-    from daengs_backend.services.walk_entry_v2 import guard_v1
-
     await guard_v1(session, [walk_id], entry_id=entry_id)
     content = body.content
     if not walk.started_at <= content.recorded_at <= walk.ended_at:
@@ -104,8 +87,6 @@ async def write(session: AsyncSession, owner, walk_id, entry_id, body: EntryWrit
 async def remove(session, owner, walk_id, entry_id, expected, mutation_id):
     if await repo.owned_walk(session, owner, walk_id, lock=True) is None:
         raise EntryNotFound
-    from daengs_backend.services.walk_entry_v2 import guard_v1
-
     await guard_v1(session, [walk_id], entry_id=entry_id)
     row = apply_change(
         await repo.get_entry(session, walk_id, entry_id),
@@ -120,70 +101,18 @@ async def remove(session, owner, walk_id, entry_id, expected, mutation_id):
     return response(row)
 
 
-def build_profile(spec, walks, rows, *, content_type=EntryContent):
-    behaviors = {
-        code: {"entry_count": 0, "walks_with_entries": 0}
-        for code in ("sniffing", "excretion", "barking")
-    }
-    distinct = {code: set() for code in behaviors}
-    evidence = []
-    unassigned = 0
-    for row in rows:
-        if not row.payload:
-            continue
-        content = content_type.model_validate(row.payload)
-        if content.kind != "behavior":
-            continue
-        if content.pet_id is None:
-            unassigned += 1
-            continue
-        if content.pet_id != spec.pet_id:
-            continue
-        code = content.behavior_code
-        behaviors[code]["entry_count"] += 1
-        distinct[code].add(row.walk_id)
-        evidence.append(
-            {
-                "entry_id": str(row.id),
-                "entry_revision": row.revision,
-                "walk_id": str(row.walk_id),
-                **content.model_dump(mode="json"),
-                "context_status": "not_requested",
-                "context_refs": [],
-            }
-        )
-    for code, values in behaviors.items():
-        values["walks_with_entries"] = len(distinct[code])
-    revision = hashlib.sha256(
-        json.dumps(
-            {
-                "spec": spec.model_dump(mode="json"),
-                "walks": sorted(str(w.id) for w in walks),
-                "entries": sorted((str(r.walk_id), str(r.id), r.revision) for r in rows),
-            },
-            sort_keys=True,
-        ).encode()
-    ).hexdigest()
-    return {
-        "profile_version": "walk-record-profile-v0",
-        "vocabulary_version": "walk-behavior-v1",
-        "pet_id": str(spec.pet_id),
-        "period": {"since": spec.since, "until": spec.until},
-        "generated_at": datetime.now(UTC),
-        "source_revision": revision,
-        "walk_count": len(walks),
-        "unassigned_entry_count": unassigned,
-        "behaviors": behaviors,
-        "evidence": evidence,
-    }
-
-
 async def profile(session, owner, spec: RecordProfileQuery):
+    """그 아이의 기록 프로필.
+
+    **논리 연결된 그룹 전체의 산책**을 읽습니다 (MVP 결정 §7). 프로필은 **강아지의 행동
+    요약**이지 사람의 성과가 아니므로(docs/co-care.md §2 결정 ①), 같은 실제 강아지의
+    산책이 두 `pet_id` 에 갈려 있으면 합쳐서 봐야 합니다. 연결이 없으면 그 아이 하나라
+    지금까지와 같습니다.
+    """
     if not await repo.pet_is_accessible(session, owner, spec.pet_id):
         raise EntryNotFound
-    walks = await repo.profile_walks(session, owner, spec)
-    from daengs_backend.services.walk_entry_v2 import guard_v1
-
+    group_ids = await repo.pet_group_ids(session, spec.pet_id)
+    walks = await repo.profile_walks(session, owner, spec, group_ids)
     await guard_v1(session, [w.id for w in walks])
     rows = await repo.entries(session, [w.id for w in walks])
-    return build_profile(spec, walks, rows)
+    return build_profile(spec, walks, rows, pet_ids=group_ids)

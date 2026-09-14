@@ -164,7 +164,7 @@ async def test_tool_cannot_finish_with_only_location_even_when_it_is_seen():
     assert result.failure_code == "invalid_response" and send.await_count == 1
 
 
-def test_new_projection_keeps_materials_and_existing_action_title_strategy():
+def test_new_projection_keeps_materials_and_title_strategy_with_updated_body_prompts():
     base = public_base()
     context = get_space_context(base, base.board.scenes[0].id)
     request = deepcopy(context.request)
@@ -178,7 +178,8 @@ def test_new_projection_keeps_materials_and_existing_action_title_strategy():
     root = REPO / "backend/evals/diary_route_scenario/narration-gemini-01"
     previous = read(root / "input.json")["writer"]["prompts"]
     current = policy.writing_version()["prompts"]
-    assert previous["action"] == current["action"] and previous["title"] == current["title"]
+    assert previous["action"] != current["action"]  # Authored examples were removed.
+    assert previous["title"] == current["title"]
     assert previous["space"] != current["space"]
     for index in (1, 2, 3):
         saved = read(root / f"case-{index}-space.json")["job"]

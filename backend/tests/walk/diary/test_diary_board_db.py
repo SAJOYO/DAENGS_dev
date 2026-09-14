@@ -4,6 +4,7 @@ import asyncio
 import uuid
 from copy import deepcopy
 from datetime import UTC, datetime, timedelta
+from unittest.mock import AsyncMock
 
 import pytest
 from sqlalchemy import delete, text
@@ -43,6 +44,46 @@ def spec(**updates):
     return StoryboardRequest.model_validate(
         {"bundle_format": BOARD_FORMAT, "expected_entries": {}, "target_scene_count": 3, **updates}
     )
+
+
+@pytest.mark.parametrize("cancelled", [False, True])
+async def test_legacy_collection_rechecks_concurrent_reservation(
+    board_database, monkeypatch, cancelled
+):
+    factory = board_database
+    monkeypatch.setattr(settings, "walk_diary_space_enabled", True)
+    outer_writer = AsyncMock(side_effect=AssertionError("another request already reserved"))
+    other_writer = AsyncMock(
+        side_effect=asyncio.CancelledError() if cancelled else RuntimeError("provider unavailable")
+    )
+    async with factory() as db:
+
+        async def collect(_board):
+            assert not db.in_transaction()
+            # A second connection must be able to acquire the Walk lock and reserve
+            # while legacy acquisition is in flight, before the outer writer starts.
+            async with factory() as other:
+                if cancelled:
+                    with pytest.raises(asyncio.CancelledError):
+                        await generate_diary(other, OWNER, WALK, spec(), writer=other_writer)
+                else:
+                    completed = await generate_diary(
+                        other, OWNER, WALK, spec(), writer=other_writer
+                    )
+                    assert completed.status == "ready"
+
+        collected = AsyncMock(side_effect=collect)
+        response = await generate_diary(
+            db, OWNER, WALK, spec(), writer=outer_writer, legacy_collector=collected
+        )
+        assert not db.in_transaction()
+    assert response.status == ("running" if cancelled else "ready")
+    assert response.generation == 1
+    outer_writer.assert_not_awaited()
+    other_writer.assert_awaited_once()
+    collected.assert_awaited_once()
+    async with factory() as db:
+        assert await get_diary(db, OWNER, WALK, 3, BOARD_FORMAT) == response
 
 
 async def test_receipt_survives_connection_policy_change_and_owner_deletion(

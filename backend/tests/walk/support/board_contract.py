@@ -6,8 +6,8 @@ from uuid import UUID
 
 from daengs_backend.services.walk_diary_base_board import assemble_saved_base_board
 from daengs_backend.services.walk_diary_board_writing import complete_board
-from daengs_backend.services.walk_diary_generation import result
 from daengs_backend.services.walk_diary_prepare import PreparedWalkDiary
+from daengs_backend.services.walk_diary_snapshot import result
 from daengs_walk.diary_input import Behavior, DiaryInput, digest
 from daengs_walk.diary_writing import accept_writing, prepare_writing
 from tests.walk.support.base_board import policy, saved_case

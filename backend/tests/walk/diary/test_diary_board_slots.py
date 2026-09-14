@@ -6,7 +6,7 @@ from unittest.mock import Mock
 import pytest
 
 from daengs_backend.services import walk_diary_base_board as service
-from daengs_backend.services import walk_diary_generation as generation
+from daengs_backend.services import walk_diary_snapshot as snapshots
 from daengs_backend.services.walk_diary_input import InputAssembly
 from daengs_backend.services.walk_diary_observations import ObservationSource
 from daengs_evals.diary_slots_demo import demo_input
@@ -87,9 +87,9 @@ def test_unlocated_board_still_has_empty_stamps_for_every_scene():
 @pytest.mark.parametrize("bundle_format", [BOARD_FORMAT, FORMAT])
 async def test_only_board_generation_revision_tracks_slot_policy(api, monkeypatch, bundle_format):
     _, state, db = api
-    _, first, first_revision = await generation.snapshot(db, OWNER, WALK, 3, bundle_format)
+    _, first, first_revision = await snapshots.snapshot(db, OWNER, WALK, 3, bundle_format)
     monkeypatch.setattr(service, "SlotPolicy", lambda: SlotPolicy(total_slots=0))
-    _, second, second_revision = await generation.snapshot(db, OWNER, WALK, 3, bundle_format)
+    _, second, second_revision = await snapshots.snapshot(db, OWNER, WALK, 3, bundle_format)
     assert first.input.source == second.input.source
     assert first.prepared == second.prepared
     if bundle_format == BOARD_FORMAT:
@@ -104,7 +104,7 @@ async def test_only_board_generation_revision_tracks_slot_policy(api, monkeypatc
             {
                 "format": FORMAT,
                 "plan": first.prepared.plan.revision(),
-                "writer": generation.writing_version(),
+                "writer": snapshots.writing_version(),
             }
         )
     state.writer.assert_not_awaited()

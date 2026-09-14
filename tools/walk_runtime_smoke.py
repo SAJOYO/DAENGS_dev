@@ -5,6 +5,7 @@ import asyncio
 import json
 import logging
 import uuid
+from collections import Counter
 from datetime import UTC, datetime, timedelta
 
 import httpx
@@ -147,6 +148,11 @@ async def card_publication(request, owner, walk_id, entries, notes):
     if stored.bundle != parsed.bundle or not hasattr(stored.writing_receipt, "result"):
         raise SmokeFailure("card receipt is missing or differs from publication")
     receipt = stored.writing_receipt
+    background_counts = (
+        Counter((b.provider, b.status, b.reason) for b in stored.scene_backgrounds.backgrounds)
+        if stored.scene_backgrounds is not None
+        else Counter()
+    )
     return {
         "card_graph": True,
         "model": receipt.writer["model"],
@@ -158,6 +164,12 @@ async def card_publication(request, owner, walk_id, entries, notes):
         "original_notes_preserved": True,
         "original_action_preserved": True,
         "receipt_valid": True,
+        "space_origins": dict(Counter(s.writing.space.origin for s in scenes if s.writing)),
+        "scene_backgrounds_saved": stored.scene_backgrounds is not None,
+        "background_statuses": [
+            {"provider": provider, "status": status, "reason": reason, "count": count}
+            for (provider, status, reason), count in background_counts.items()
+        ],
         "jobs": [
             {
                 "stage": j.stage,

@@ -4,11 +4,12 @@ import copy
 
 import pytest
 
-from daengs_walk.diary_board_assembly import assemble_base_board
-from daengs_walk.diary_board_output import publish_board
-from daengs_walk.diary_board_selection import prepare_base_board
-from daengs_walk.diary_input import digest
-from daengs_walk.diary_slots import SlotPolicy, prepare_board_slots
+from daengs_walk.diary.board.assembly import assemble_base_board
+from daengs_walk.diary.board.output import publish_board
+from daengs_walk.diary.contracts.input import digest
+from daengs_walk.diary.contracts.slots import SlotPolicy
+from daengs_walk.diary.selection.board import prepare_base_board
+from daengs_walk.diary.slots.service import prepare_board_slots
 from tests.walk.support.base_board import policy, saved_case
 from tools.compare_diary_scenes import bind_snapshot, replay, slot_payload
 

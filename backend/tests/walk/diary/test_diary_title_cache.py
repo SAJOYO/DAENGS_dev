@@ -13,7 +13,7 @@ from daengs_backend.services.walk_diary.preparation.board import assemble_saved_
 from daengs_backend.services.walk_diary.preparation.diary import PreparedWalkDiary
 from daengs_backend.services.walk_diary.storage.board import load_board, store_board
 from daengs_backend.services.walk_diary.writing import policy
-from daengs_walk.diary_input import DiaryInput, UserRecord, digest, material_ref
+from daengs_walk.diary.contracts.input import DiaryInput, UserRecord, digest, material_ref
 from tests.walk.diary.test_diary_board_slot_writing import prepared_case
 from tests.walk.diary.test_diary_card_writing import prose
 from tests.walk.support.base_board import policy as board_policy

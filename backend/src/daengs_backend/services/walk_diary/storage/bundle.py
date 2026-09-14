@@ -9,8 +9,8 @@ from typing import Literal
 
 from pydantic import model_validator
 
-from daengs_walk.diary_input import DiaryContract, Digest, digest
-from daengs_walk.diary_output import DiaryBundle
+from daengs_walk.diary.contracts.input import DiaryContract, Digest, digest
+from daengs_walk.diary.contracts.output import DiaryBundle
 
 
 class StoredDiary(DiaryContract):

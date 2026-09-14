@@ -27,8 +27,8 @@ from daengs_backend.services.walk_diary.storage.board import (
 from daengs_backend.services.walk_diary.storage.card_receipt import StoredCardWriting
 from daengs_backend.services.walk_diary.writing import policy as diary_policy
 from daengs_backend.services.walk_sgis import SgisSource
-from daengs_walk.diary_board_output import BOARD_FORMAT, publish_board
-from daengs_walk.diary_input import digest
+from daengs_walk.diary.board.output import BOARD_FORMAT, publish_board
+from daengs_walk.diary.contracts.input import digest
 from tests.walk.diary.test_diary_board_slot_writing import prepared_case
 from tests.walk.diary.test_diary_board_slot_writing import prose as slot_prose
 from tests.walk.diary.test_diary_card_writing import collect_with_sgis, prose

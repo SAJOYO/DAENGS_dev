@@ -23,8 +23,8 @@ from daengs_backend.services.walk_diary.storage.card_receipt import StoredCardWr
 from daengs_backend.services.walk_diary.writing import assembly as diary_assembly
 from daengs_backend.services.walk_diary.writing import jobs as diary_jobs
 from daengs_backend.services.walk_diary.writing import policy as diary_policy
-from daengs_walk.diary_board_output import PublishedBoard
-from daengs_walk.diary_input import DiaryInput, digest
+from daengs_walk.diary.board.output import PublishedBoard
+from daengs_walk.diary.contracts.input import DiaryInput, digest
 from tests.walk.diary.test_diary_card_writing import collect_with_sgis, prose
 from tests.walk.support.base_board import policy
 from tests.walk.support.diary import observation, source

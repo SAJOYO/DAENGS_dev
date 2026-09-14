@@ -7,8 +7,8 @@ from daengs_backend.services.walk_analysis import decode_analysis_model
 from daengs_backend.services.walk_finalize import prepare_finalized_walk
 from daengs_walk import analyze_walk
 from daengs_walk.contracts import WALK_CALCULATION_VERSION, EvidenceOrigin
-from daengs_walk.diary_input import RouteVersion
-from daengs_walk.diary_observations import ObservationPool, build_observation_pool
+from daengs_walk.diary.contracts.input import RouteVersion
+from daengs_walk.diary.route.observations import ObservationPool, build_observation_pool
 from daengs_walk.evidence import WalkEvidenceBundle
 
 

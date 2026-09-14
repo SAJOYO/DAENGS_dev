@@ -15,9 +15,9 @@ from daengs_backend.services.walk_diary.guard import (
 )
 from daengs_backend.services.walk_diary.preparation import diary as service
 from daengs_backend.services.walk_diary.preparation.input import InputAssembly, assemble_input
-from daengs_walk.diary_input import DiaryInput, digest
-from daengs_walk.diary_output import assemble_diary
-from daengs_walk.diary_stamps import StampPolicy, prepare_stamps
+from daengs_walk.diary.contracts.input import DiaryInput, digest
+from daengs_walk.diary.contracts.output import assemble_diary
+from daengs_walk.diary.selection.stamps import StampPolicy, prepare_stamps
 from tests.walk.support.diary import (
     nearby,
     observation,

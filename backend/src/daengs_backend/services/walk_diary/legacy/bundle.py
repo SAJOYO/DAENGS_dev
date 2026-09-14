@@ -4,9 +4,9 @@ import asyncio
 import json
 
 from daengs_backend.config import settings
-from daengs_walk.diary_input import digest
-from daengs_walk.diary_output import assemble_diary
-from daengs_walk.diary_writing import (
+from daengs_walk.diary.contracts.input import digest
+from daengs_walk.diary.contracts.output import assemble_diary
+from daengs_walk.diary.legacy.writing import (
     POLICY_VERSION,
     PROMPT,
     accept_writing,

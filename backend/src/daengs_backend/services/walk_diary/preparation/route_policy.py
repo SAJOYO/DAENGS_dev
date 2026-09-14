@@ -1,7 +1,7 @@
 """Configured default for new preparation; explicit/stored policies keep their shape."""
 
 from daengs_backend.config import settings
-from daengs_walk.diary_route_patterns import RoutePatternBindingPolicy
+from daengs_walk.diary.route.patterns import RoutePatternBindingPolicy
 
 
 def configured_route_patterns(policy):

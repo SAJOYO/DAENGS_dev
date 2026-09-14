@@ -21,9 +21,9 @@ from daengs_backend.services.walk_diary.preparation.diary import PreparedWalkDia
 from daengs_backend.services.walk_diary.preparation.input import InputAssembly
 from daengs_backend.services.walk_diary.preparation.observations import ObservationSource
 from daengs_evals.diary_slots_demo import demo_input
-from daengs_walk.diary_board_output import BOARD_FORMAT
-from daengs_walk.diary_scene_input import scene_materials
-from daengs_walk.diary_slots import SlotPolicy
+from daengs_walk.diary.board.output import BOARD_FORMAT
+from daengs_walk.diary.board.scene_input import scene_materials
+from daengs_walk.diary.contracts.slots import SlotPolicy
 from tests.walk.support.base_board import policy
 from tests.walk.support.diary_generation import PATH, body
 from tests.walk.support.photo_input import OWNER, WALK

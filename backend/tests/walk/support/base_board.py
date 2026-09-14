@@ -2,8 +2,8 @@
 
 from daengs_backend.services.walk_diary.preparation.input import assemble_input
 from daengs_backend.services.walk_diary.preparation.observations import prepare_observation_source
-from daengs_walk.diary_board import BaseBoardPolicy, VerifiedBoardRoute
-from daengs_walk.diary_stamps import StampPolicy
+from daengs_walk.diary.board.models import BaseBoardPolicy, VerifiedBoardRoute
+from daengs_walk.diary.selection.stamps import StampPolicy
 from tests.walk.support.observations import stored, uploaded
 
 

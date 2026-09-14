@@ -5,7 +5,7 @@ from daengs_backend.services.walk_diary.legacy.slots import (
     generate_slot_prose,
     write_slot_stamps,
 )
-from daengs_walk.diary_board_output import publish_board
+from daengs_walk.diary.board.output import publish_board
 
 
 async def write_legacy_slot_board(source, base, generate=generate_slot_prose):

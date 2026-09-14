@@ -37,8 +37,8 @@ from daengs_backend.services.walk_storyboard_state import (
     reserve,
     reusable,
 )
-from daengs_walk.diary_board_output import BOARD_FORMAT
-from daengs_walk.diary_scene_backgrounds import SceneBackgroundSnapshot
+from daengs_walk.diary.board.backgrounds import SceneBackgroundSnapshot
+from daengs_walk.diary.board.output import BOARD_FORMAT
 
 FIRST_BOARD_CONTEXT_GRACE = timedelta(minutes=10)
 

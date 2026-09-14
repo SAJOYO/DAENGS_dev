@@ -2,10 +2,14 @@
 
 from daengs_backend.services.walk_diary.legacy.board_slots import complete_slot_board
 from daengs_backend.services.walk_diary.legacy.slots import SlotWritingResult, writing_version
-from daengs_walk.diary_board_output import publish_board
-from daengs_walk.diary_board_receipt import CitedEvidence, StoredSceneWriting, StoredSlotWriting
-from daengs_walk.diary_input import digest
-from daengs_walk.diary_scene_input import preserve_original
+from daengs_walk.diary.board.output import publish_board
+from daengs_walk.diary.board.scene_input import preserve_original
+from daengs_walk.diary.contracts.input import digest
+from daengs_walk.diary.contracts.slot_receipt import (
+    CitedEvidence,
+    StoredSceneWriting,
+    StoredSlotWriting,
+)
 
 
 def writing_receipt(prepared, bundle, revision, output=None):

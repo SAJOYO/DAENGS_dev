@@ -3,7 +3,7 @@
 from pydantic import Field
 
 from daengs_backend.orchestration.contracts import PrincipalContext
-from daengs_walk.diary_input import DiaryContract, DiaryInput, Digest, Identifier
+from daengs_walk.diary.contracts.input import DiaryContract, DiaryInput, Digest, Identifier
 
 
 class GenerationTicket(DiaryContract):

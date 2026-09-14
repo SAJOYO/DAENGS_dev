@@ -5,9 +5,10 @@ from daengs_backend.services.walk_diary.collection.service import configured_col
 from daengs_backend.services.walk_diary.legacy.slots import write_slot_preview
 from daengs_backend.services.walk_diary.preparation.input import read_input
 from daengs_backend.services.walk_diary.preparation.route_policy import configured_route_patterns
-from daengs_walk.diary_board import BaseBoardPolicy, VerifiedBoardRoute
-from daengs_walk.diary_slots import prepare_board_slots, prepare_slot_preview
-from daengs_walk.diary_stamps import StampPolicy
+from daengs_walk.diary.board.models import BaseBoardPolicy, VerifiedBoardRoute
+from daengs_walk.diary.board.preview import prepare_slot_preview
+from daengs_walk.diary.selection.stamps import StampPolicy
+from daengs_walk.diary.slots.service import prepare_board_slots
 
 
 async def preview_saved_slots(

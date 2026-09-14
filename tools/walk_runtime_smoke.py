@@ -110,7 +110,7 @@ async def verify_backfill(owner, walk_id, saved):
 async def card_publication(request, owner, walk_id, entries, notes):
     """Exercise the running card graph; export only this probe's synthetic public response."""
     from daengs_backend.schemas.walk_storyboard import DiaryStoryboardResponse
-    from daengs_backend.services.walk_diary_board_storage import load_board
+    from daengs_backend.services.walk_diary.storage.board import load_board
 
     path = f"/app/walks/{walk_id}/storyboard"
     body = {

@@ -14,8 +14,8 @@ from daengs_backend.services.walk_analysis import build_analysis_models
 from daengs_backend.services.walk_chunk import encode_chunk
 from daengs_backend.services.walk_finalize import prepare_finalized_walk
 from daengs_walk import analyze_walk, build_cellophane
-from daengs_walk.diary_board import BaseBoardPolicy
-from daengs_walk.diary_stamps import StampPolicy
+from daengs_walk.diary.board.models import BaseBoardPolicy
+from daengs_walk.diary.selection.stamps import StampPolicy
 
 START = datetime(2026, 9, 9, tzinfo=UTC)
 

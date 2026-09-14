@@ -25,7 +25,7 @@ from daengs_backend.services.walk_diary.runtime import write_board
 from daengs_backend.services.walk_diary.storage.board import store_board
 from daengs_backend.services.walk_diary.storage.bundle import store_diary
 from daengs_backend.services.walk_diary.writing.assembly import complete_cards
-from daengs_walk.diary_board_output import publish_board
+from daengs_walk.diary.board.output import publish_board
 
 
 async def get_diary(session, owner, walk_id, target, bundle_format="walk-diary-bundle-v1"):

@@ -9,7 +9,7 @@ from daengs_backend.services.walk_diary.storage.board import (
     store_board,
 )
 from daengs_backend.services.walk_storyboard_state import complete
-from daengs_walk.diary_board_output import BOARD_FORMAT, publish_board
+from daengs_walk.diary.board.output import BOARD_FORMAT, publish_board
 
 FORMAT = "walk-diary-preparation-v1"
 _discarded_tasks = set()

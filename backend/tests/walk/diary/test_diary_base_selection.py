@@ -8,11 +8,11 @@ import pytest
 from daengs_backend.services.walk_diary.preparation.board import assemble_saved_base_board
 from daengs_backend.services.walk_diary.preparation.input import assemble_input
 from daengs_backend.services.walk_diary.preparation.observations import prepare_observation_source
-from daengs_walk.diary_board import PreparedBaseBoard, RecordCore, VerifiedBoardRoute
-from daengs_walk.diary_board_assembly import assemble_base_board
-from daengs_walk.diary_board_selection import prepare_base_board
-from daengs_walk.diary_input import DiaryInput, material_ref
-from daengs_walk.diary_stamps import prepare_stamps
+from daengs_walk.diary.board.assembly import assemble_base_board
+from daengs_walk.diary.board.models import PreparedBaseBoard, RecordCore, VerifiedBoardRoute
+from daengs_walk.diary.contracts.input import DiaryInput, material_ref
+from daengs_walk.diary.selection.board import prepare_base_board
+from daengs_walk.diary.selection.stamps import prepare_stamps
 from tests.walk.support.base_board import policy, saved_case
 from tests.walk.support.diary import record, source
 from tests.walk.support.observations import varied_route

@@ -5,12 +5,12 @@ from datetime import UTC, datetime
 
 import httpx
 
-from daengs_walk.diary_input import SavedBackground, digest
-from daengs_walk.diary_scene_backgrounds import (
+from daengs_walk.diary.board.backgrounds import (
     SceneBackgroundSnapshot,
     board_background_revision,
     scene_background_targets,
 )
+from daengs_walk.diary.contracts.input import SavedBackground, digest
 
 
 async def collect_scene_backgrounds(board, *, place_api, kakao_key="", transport=None):

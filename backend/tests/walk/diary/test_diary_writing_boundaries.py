@@ -7,7 +7,7 @@ from copy import deepcopy
 
 import pytest
 
-from daengs_walk.diary_input import digest
+from daengs_walk.diary.contracts.input import digest
 from tests.walk.support.paths import REPO
 from tests.walk.support.writing_boundary import fingerprints, fixed_cases
 
@@ -65,7 +65,7 @@ class NoWriterRuntime(importlib.abc.MetaPathFinder):
 
 sys.meta_path.insert(0, NoWriterRuntime())
 from daengs_backend.services.walk_diary.storage.board import load_board, read_board
-from daengs_walk.diary_input import DiaryInput
+from daengs_walk.diary.contracts.input import DiaryInput
 
 data = json.load(sys.stdin)
 prepared = SimpleNamespace(input=SimpleNamespace(source=DiaryInput.model_validate(data["source"])))

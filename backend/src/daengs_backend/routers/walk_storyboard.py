@@ -19,7 +19,7 @@ from daengs_backend.schemas.walk_storyboard import (
 from daengs_backend.services import walk_storyboard as service
 from daengs_backend.services.walk_storyboard_context import lookup_contexts
 from daengs_backend.services.walk_storyboard_titles import title_storyboard
-from daengs_walk.diary_board_output import BOARD_FORMAT
+from daengs_walk.diary.board.output import BOARD_FORMAT
 
 router = APIRouter(prefix="/app/walks", tags=["walk-storyboard"])
 

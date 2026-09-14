@@ -12,9 +12,9 @@ from daengs_backend.orchestration.contracts import PrincipalContext
 from daengs_backend.services.walk_diary.preparation import input as reader
 from daengs_backend.services.walk_diary.preparation.diary import prepare_saved_diary
 from daengs_backend.services.walk_diary.preparation.observations import prepare_observation_source
-from daengs_walk.diary_observations import MAX_OBSERVATIONS
-from daengs_walk.diary_output import assemble_diary
-from daengs_walk.diary_stamps import StampPolicy, prepare_stamps
+from daengs_walk.diary.contracts.output import assemble_diary
+from daengs_walk.diary.route.observations import MAX_OBSERVATIONS
+from daengs_walk.diary.selection.stamps import StampPolicy, prepare_stamps
 from tests.walk.support.observations import stored, uploaded, varied_route
 from tests.walk.support.photo_input import AT, OWNER, WALK, entry
 from tests.walk.support.photo_input import row as photo_manifest

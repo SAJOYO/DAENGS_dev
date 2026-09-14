@@ -13,7 +13,7 @@ from daengs_backend.models.walk_storyboard import WalkStoryboard
 from daengs_backend.schemas.walk_storyboard import StoryboardRequest
 from daengs_backend.services.walk_diary.legacy.bundle import write_diary
 from daengs_backend.services.walk_diary.lifecycle.generation import generate_diary, get_diary
-from daengs_walk.diary_input import digest
+from daengs_walk.diary.contracts.input import digest
 from tests.walk.support.diary import place_payload, prose
 from tests.walk.support.entry_v2 import AT, ENTRY, OWNER, WALK
 from tests.walk.support.paths import REPO

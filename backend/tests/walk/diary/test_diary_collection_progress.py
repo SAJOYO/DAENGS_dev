@@ -17,7 +17,7 @@ from daengs_backend.services.walk_diary.deadline import publication_deadline
 from daengs_backend.services.walk_diary.preparation.board import with_scene_backgrounds
 from daengs_backend.services.walk_diary.preparation.diary import PreparedWalkDiary
 from daengs_backend.services.walk_diary.storage.board import load_board, store_board
-from daengs_walk.diary_input import digest
+from daengs_walk.diary.contracts.input import digest
 from tests.walk.diary.test_diary_card_writing import collect_with_sgis, prepared, prose
 from tests.walk.diary.test_diary_space_integration import public_response
 

@@ -5,7 +5,7 @@
 공간 경계의 이탈·재진입 빈도를 장면의 가치나 생성 조건으로 사용하지 않는다.
 
 [정규화](space-normalization.md) 다음 단계인 DEV #492의 실험 정책과 재생기다.
-`daengs_walk.diary_space_policy`와 `diary_space_memory`에서 실행한다.
+`daengs_walk.diary.space.policy`와 `daengs_walk.diary.slots.memory`에서 실행한다.
 운영 미리보기·발행의 `SlotPolicy`를 자동 교체하는 변경은 포함하지 않는다.
 
 ## 재료별 정책 딕셔너리

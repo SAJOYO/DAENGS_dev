@@ -6,10 +6,10 @@ from typing import Literal
 
 from pydantic import Field, model_validator
 
-from daengs_walk.diary_board import BoardScene
-from daengs_walk.diary_input import DiaryContract, Digest, Identifier, digest
-from daengs_walk.diary_scene_input import preserve_original, scene_input, scene_materials
-from daengs_walk.diary_slots import BoardSlotSnapshot
+from daengs_walk.diary.board.models import BoardScene
+from daengs_walk.diary.board.scene_input import preserve_original, scene_input, scene_materials
+from daengs_walk.diary.contracts.input import DiaryContract, Digest, Identifier, digest
+from daengs_walk.diary.contracts.slots import BoardSlotSnapshot
 
 MODEL = "gemini-3.1-flash-lite"
 TIMEOUT_SECONDS = 15

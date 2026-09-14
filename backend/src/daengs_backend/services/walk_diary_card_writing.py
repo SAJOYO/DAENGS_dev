@@ -10,6 +10,7 @@ from typing import Literal
 from pydantic import Field, JsonValue
 
 from daengs_backend.services.walk_diary_card_prompts import PROMPTS
+from daengs_backend.services.walk_diary_llm import VERSION as INPUT_VERSION
 from daengs_walk.diary_board_output import PublishedBoard, publish_board
 from daengs_walk.diary_card_narrative import (
     OBSERVATION_TEXT,
@@ -46,10 +47,11 @@ LAND_WORDS = {
 
 def writing_version():
     return {
-        "policy": "shared-orchestration-card-writing-v3",
+        "policy": "shared-orchestration-card-writing-v4",
+        "input_policy": INPUT_VERSION,
         "observation_text": OBSERVATION_TEXT,
         "model": MODEL,
-        "prompts": {key: digest(value) for key, value in PROMPTS.items()},
+        "prompts": {key: digest([value, INPUT_VERSION]) for key, value in PROMPTS.items()},
         "timeout_s": TIMEOUT_SECONDS,
         "title_reserve_s": TITLE_RESERVE_SECONDS,
         "card_limit": MAX_CARDS,
@@ -87,6 +89,8 @@ class WritingJob(DiaryContract):
     stage: Literal["space", "action", "title"]
     request_revision: Digest
     request: dict[str, JsonValue]
+    # Exact model contents, distinct from the internal cache/publication dependencies.
+    llm_request: dict[str, JsonValue] | None = Field(default=None, exclude_if=lambda v: v is None)
     evidence: dict[str, JsonValue] = Field(default_factory=dict)
     # Only accepted output is retained; failures never persist raw provider errors.
     accepted: dict[str, JsonValue] | None = None
@@ -107,7 +111,9 @@ class CardWritingResult(DiaryContract):
 
 def job(stage, payload):
     # Only this strategy's actual dependencies belong in its revision, never the whole board.
-    revision = digest({"strategy": digest(PROMPTS[stage]), "model": MODEL, "input": payload})
+    revision = digest(
+        {"strategy": writing_version()["prompts"][stage], "model": MODEL, "input": payload}
+    )
     return WritingJob(
         stage=stage, request_revision=revision, request={**payload, "request_revision": revision}
     )

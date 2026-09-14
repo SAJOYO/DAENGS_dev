@@ -75,14 +75,15 @@ const displayTitle=(card,i)=>revisedTitles.get(card.id)??(d.whole_title?'장면 
 if(d.whole_title){document.querySelector('h1').textContent=d.whole_title.accepted.title;document.title=d.whole_title.accepted.title;document.querySelector('.eyebrow').textContent='DAENGS · WALK DIARY LAB / WHOLE TITLE';}
 if(d.whole_title){document.querySelector('header > p').textContent='기존 장면 8개의 본문과 보호자 메모를 시간순으로 모두 읽고, 마지막에 산책 제목 하나를 생성했다. 본문은 이전 실험 그대로다.';document.getElementById('footer-note').textContent='가상 산책 실험이다. 본문을 다시 쓰지 않고 전체 제목만 Gemini로 한 번 추가 생성했다. 위 제목은 이 실험의 실제 응답이다.';}
 if(d.scene_titles){document.querySelector('h1').textContent='양재 산책, 장면 제목을 다시 읽다';document.title='양재 산책 · 장면 제목 갱신';document.querySelector('.eyebrow').textContent='DAENGS · WALK DIARY LAB / FINAL SCENE TITLES';document.querySelector('header > p').textContent='완성된 모든 장면의 본문과 보호자 메모를 시간순으로 읽고, 마지막에 각 장면의 제목을 갱신했다. 본문은 이전 실험 그대로다.';document.getElementById('footer-note').textContent='가상 산책 실험이다. Gemini 추가 호출 한 번으로 장면별 제목을 갱신했다. 카드 제목은 실제 응답이며 페이지 위의 큰 제목은 뷰어 안내용이다.';}
-if(d.run.public_sources){document.querySelector('h1').textContent='공공데이터로 다시 읽는 양재 산책';document.title='양재 산책 · 실제 공공데이터';document.querySelector('.eyebrow').textContent='DAENGS · WALK DIARY LAB / PUBLIC SOURCES';document.querySelector('header > p').textContent='공원·상권·토지피복·주소·기온의 실제 조회 결과를 장면 재료와 서술에 연결했다. GPS·행동·메모는 가상 입력이다.'+(d.scene_titles?' 완성된 모든 본문을 읽은 뒤 각 장면의 제목을 갱신했다.':'');document.querySelector('.badge').textContent='공공데이터 실제 조회';}
+const publicSources=!!(d.run.public_sources||d.source_replay);
+if(publicSources){document.querySelector('h1').textContent='공공데이터로 다시 읽는 양재 산책';document.title='양재 산책 · 실제 공공데이터';document.querySelector('.eyebrow').textContent='DAENGS · WALK DIARY LAB / PUBLIC SOURCES';document.querySelector('header > p').textContent=(d.source_replay?'이전에 실제 조회한 공원·상권·토지피복·주소·기온 자료를 그대로 사용해, 정규화한 입력으로 새로 작성했다.':'공원·상권·토지피복·주소·기온의 실제 조회 결과를 장면 재료와 서술에 연결했다.')+' GPS·행동·메모는 가상 입력이다.'+(d.scene_titles?' 완성된 모든 본문을 읽은 뒤 각 장면의 제목을 갱신했다.':'');document.querySelector('.badge').textContent=d.source_replay?'실제 공공자료 재사용':'공공데이터 실제 조회';}
 const el=(tag,text,parent,cls)=>{const e=document.createElement(tag);if(text!==null)e.textContent=text;if(cls)e.className=cls;if(parent)parent.append(e);return e};
-if(d.run.public_sources){const nav=document.querySelector('.run-links');nav.querySelectorAll('a').forEach(a=>a.remove());for(const [path,label] of [['public-01','4초 수집 결과'],['public-02','20초 수집 결과'],['public-02-titles','장면 제목 갱신 결과']]){const a=el('a',label,null);a.href='../'+path+'/preview.html';nav.insertBefore(a,document.getElementById('run-label'))}}
+if(publicSources){const nav=document.querySelector('.run-links');nav.querySelectorAll('a').forEach(a=>a.remove());for(const [path,label] of [['public-01','4초 수집 결과'],['public-02','20초 수집 결과'],['public-02-titles','기존 제목 갱신'],['public-03-normalized-titles','입력 정규화 결과']]){const a=el('a',label,null);a.href='../'+path+'/preview.html';nav.insertBefore(a,document.getElementById('run-label'))}}
 const formatTime=t=>new Date(t).toLocaleTimeString('ko-KR',{timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit',hour12:false});
 const start=new Date(d.input.source.started_at),end=new Date(d.input.source.ended_at);
 document.getElementById('run-label').textContent=d.whole_title?'현재: 전체 본문을 읽고 산책 제목 하나 생성':d.run.prepared_input?'현재: 자료·슬롯을 먼저 준비한 실행':'현재: 수집 자료가 작성 입력에 채택되지 않은 실행';
 if(d.scene_titles)document.getElementById('run-label').textContent='현재: 전체 본문을 읽고 각 장면 제목 갱신';
-if(d.run.public_sources)document.getElementById('run-label').textContent='공간 수집 제한 '+d.run.collection_timeout_s+'초 · '+(d.scene_titles?'장면 제목 갱신':'기존 작성기 결과');
+if(publicSources)document.getElementById('run-label').textContent=d.source_replay?'공공자료 스냅샷 재사용 · LLM 입력 정규화':'공간 수집 제한 '+d.run.collection_timeout_s+'초 · '+(d.scene_titles?'장면 제목 갱신':'기존 작성기 결과');
 document.getElementById('date').textContent=start.toLocaleDateString('ko-KR',{timeZone:'Asia/Seoul',month:'long',day:'numeric'})+' · '+formatTime(start)+'–'+formatTime(end);
 for(const [n,label] of [[(d.input.one_way_geometry_m*2/1000).toFixed(2)+' km','가상 이동'],[Math.round((end-start)/60000)+'분','산책 시간'],[cards.length+'개','서브일기']]){
 const x=el('div',null,document.getElementById('stats'));el('strong',n,x);el('span',label,x)}
@@ -120,9 +121,12 @@ const current=new Set(stamp?.evidence.map(e=>e.entity_key+':'+e.role)||[]);
 el('p','이전 장면과 공통 '+[...current].filter(k=>keys.has(k)).length+' · 현재에만 '+[...current].filter(k=>!keys.has(k)).length+' · 이전에만 '+[...keys].filter(k=>!current.has(k)).length,debug);
 el('p','장면별 계산 결과의 비교다. 영속 슬롯의 교체 이력을 뜻하지 않는다.',debug);
 el('h3','근거 · 적용 조건 · 탈락 사유',debug);el('p','긴 형상 좌표 배열은 항목 수와 해시로 축약했다. 원본은 JSON/GZIP 보관 파일에 있다.',debug);el('pre',JSON.stringify(stamp,null,2),debug);
-el('h3','해당 카드의 LLM 요청과 채택 결과',debug);
+el('h3','실제 LLM 전송 입력',debug);
 const jobs=d.result.jobs.filter(j=>j.request.card_id===card.id||j.request.cards?.some(c=>c.card_id===card.id));
-el('pre',JSON.stringify(jobs.map(j=>j.stage!=='title'?j:{...j,request:{...j.request,cards:j.request.cards.filter(c=>c.card_id===card.id)},accepted:j.accepted?{titles:j.accepted.titles.filter(c=>c.card_id===card.id)}:null}),null,2),debug);
+el('p','아래 JSON이 작성 지침·응답 형식과 함께 전달된다. 제목은 이 카드가 포함된 전체 호출 입력을 표시한다. 마지막 제목 갱신 실험은 아래 별도 영역에 있다.',debug);
+jobs.forEach(j=>{el('h4',j.stage+(j.reused?' · 저장 결과 재사용':''),debug);el('pre',JSON.stringify(j.llm_request??(j.reused||d.run.writer?.input_policy?{message:'이번 호출 없음'}:j.request),null,2),debug)});
+const internals=el('details','',debug);el('summary','내부 추적 기록 · 서버에서 연결한 채택 결과 (전체 묶음은 전송하지 않음)',internals);
+el('pre',JSON.stringify(jobs.map(({llm_request,...j})=>j),null,2),internals);
 });
 const svg=document.getElementById('map'), ns='http://www.w3.org/2000/svg';
 function shape(tag,attrs,parent=svg){const e=document.createElementNS(ns,tag);for(const [k,v] of Object.entries(attrs))e.setAttribute(k,v);parent.append(e);return e}
@@ -157,8 +161,7 @@ el('p','OSM 지도와 TMAP 경로의 장소 이름은 작성 재료에 넣지 �
 const sourceCounts={};for(const b of d.backgrounds.backgrounds){const k=b.provider+' / '+b.status;sourceCounts[k]=(sourceCounts[k]||0)+1}
 el('pre',JSON.stringify(sourceCounts,null,2),run);
 el('pre',JSON.stringify(d.run,null,2),run);
-if(d.whole_title){el('h3','전체 제목 생성 요청과 응답',run);el('pre',JSON.stringify(d.whole_title,null,2),run)}
-if(d.scene_titles){el('h3','장면 제목 갱신 요청과 응답',run);el('pre',JSON.stringify(d.scene_titles,null,2),run)}
+for(const [name,packet] of [['전체 제목 생성',d.whole_title],['마지막 장면 제목 갱신',d.scene_titles]]){if(!packet)continue;el('h3',name+' · 실제 LLM 전송 입력',run);el('pre',JSON.stringify(packet.llm_request??packet.request,null,2),run);const details=el('details','',run);el('summary','내부 연결 정보 · 채택 결과 (LLM 입력 아님)',details);el('pre',JSON.stringify(packet,null,2),details)}
 select(0,false);
 </script>
 </body>

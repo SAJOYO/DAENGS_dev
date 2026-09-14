@@ -71,9 +71,9 @@ async def test_confirmed_observation_survives_space_success_or_failure(kind, exp
             assert "observation" not in payload
             assert expected not in str(payload)
         if stage == "title":
-            sent = next(c for c in payload["cards"] if c["card_id"] == card.id)
+            sent = payload["cards"][list(result.bundle.scenes).index(card)]
             assert sent["observation"]["text"] == expected
-            assert sent["content_revision"] == card.writing.content_revision
+            assert "content_revision" not in sent and "core" not in sent["observation"]
     assert not any(call.args[0] == "action" for call in provider.call_args_list)
     for other in result.bundle.scenes:
         if other.id != card.id:
@@ -104,7 +104,7 @@ async def test_observation_change_reuses_space_and_rewrites_only_its_title(chang
     assert old_card.id == new_card.id
     assert old_card.writing.content_revision != new_card.writing.content_revision
     assert [call.args[0] for call in provider.call_args_list] == ["title"]
-    assert [c["card_id"] for c in provider.call_args.args[1]["cards"]] == [new_card.id]
+    assert [c["id"] for c in provider.call_args.args[1]["cards"]] == ["c1"]
     assert new_card.writing.observation.kind == raw["observations"][0]["kind"]
 
 
@@ -181,15 +181,18 @@ def test_http_observation_meaning_is_published_once_and_exports_app_contract(api
     async def generate(stage, payload, schema):
         output = await prose(stage, payload, schema)
         if stage == "title":
-            cards = {c["card_id"]: c for c in payload["cards"]}
+            cards = {c["id"]: c for c in payload["cards"]}
             for title in output["titles"]:
-                observed = cards[title["card_id"]].get("observation")
+                observed = cards[title["id"]].get("observation")
                 if observed:
-                    title["text"] = {
+                    labels = {
                         "observed_dwell": "동선이 모인 구간",
                         "observed_slow": "천천히 이어진 구간",
                         "observed_fast": "빠르게 이어진 구간",
-                    }[observed["kind"]]
+                    }
+                    title["text"] = {writing.OBSERVATION_TEXT[k]: v for k, v in labels.items()}[
+                        observed["text"]
+                    ]
         return output
 
     provider = AsyncMock(side_effect=generate)

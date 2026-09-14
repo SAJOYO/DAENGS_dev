@@ -5,6 +5,7 @@ from typing import Literal
 from pydantic import JsonValue, model_validator
 
 from daengs_backend.services.walk_diary_card_writing import CardWritingResult
+from daengs_backend.services.walk_diary_llm import VERSION, normalize
 from daengs_walk.diary_input import DiaryContract, Digest, digest
 
 
@@ -34,6 +35,12 @@ class StoredCardWriting(DiaryContract):
                 raise ValueError("stored job request changed")
             if item.accepted and item.failure_code:
                 raise ValueError("failed job cannot carry accepted output")
+            if (
+                self.writer.get("input_policy") == VERSION
+                and item.llm_request is not None
+                and item.llm_request != normalize(item.stage, item.request).payload
+            ):
+                raise ValueError("stored model input changed")
         return self
 
     def require_bundle(self, bundle, generation_revision):

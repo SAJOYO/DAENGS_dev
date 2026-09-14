@@ -1,0 +1,209 @@
+"""Assert the actual provider boundary and invocation-local citation restoration."""
+
+import gzip
+import json
+from copy import deepcopy
+from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
+
+import pytest
+from pydantic import SecretStr
+
+from daengs_backend.services import walk_diary_card_writing as writing
+from daengs_backend.services.walk_diary_card_receipt import StoredCardWriting
+from daengs_backend.services.walk_diary_llm import normalize
+from daengs_backend.services.walk_diary_llm_materials import material
+from tests.walk.diary.test_diary_card_writing import collect_with_sgis, prepared, prose
+
+
+def public_result():
+    path = (
+        Path(__file__).resolve().parents[3] / "evals/diary_route_scenario/public-02/result.json.gz"
+    )
+    with gzip.open(path, "rt", encoding="utf-8") as stream:
+        return json.load(stream)
+
+
+def test_real_public_materials_keep_meaning_and_drop_all_provenance():
+    job = next(j for j in public_result()["jobs"] if j["stage"] == "space")
+    before = deepcopy(job)
+    model = normalize("space", job["request"])
+    values = model.payload["materials"]
+    assert len(values) == 5
+    assert [m["id"] for m in values] == ["m1", "m2", "m3", "m4", "m5"]
+    text = json.dumps(model.payload, ensure_ascii=False)
+    for key in (
+        "anchor",
+        "source_ref",
+        "source_version",
+        "grid",
+        "provider",
+        "request_revision",
+        "scene_structure",
+        "rank",
+        "schema_version",
+        "client_seq",
+        "coordinates",
+    ):
+        assert key not in text
+    assert "24.2" in text and "격자" in text and "토지피복" in text and "등록 지점" in text
+    for source, sent in zip(job["request"]["materials"], values, strict=True):
+        if "material" in source["facts"]:
+            assert sent["material"] == source["facts"]["material"]
+    assert job == before
+    assert len(text.encode()) < len(json.dumps(job["request"], ensure_ascii=False).encode()) / 2
+
+
+def test_future_metadata_is_not_implicitly_promoted_to_prose():
+    job = next(j for j in public_result()["jobs"] if j["stage"] == "space")
+    clean = normalize("space", job["request"]).payload
+    dirty = deepcopy(job["request"])
+    dirty["private_metadata"] = "must stay internal"
+    for item in dirty["materials"]:
+        item["facts"]["private_metadata"] = {"secret": "must stay internal"}
+        for key in ("material", "relation"):
+            if isinstance(item["facts"].get(key), dict):
+                item["facts"][key]["private_metadata"] = "must stay internal"
+    assert normalize("space", dirty).payload == clean
+
+
+@pytest.mark.parametrize("refs", [["m999"], ["m1", "m1"], ["material:foreign"]])
+def test_unknown_or_duplicate_model_citations_are_rejected(refs):
+    job = next(j for j in public_result()["jobs"] if j["stage"] == "space")
+    with pytest.raises(ValueError):
+        normalize("space", job["request"]).restore(
+            {"text": "근처에 공원이 있다.", "evidence_ids": refs}
+        )
+
+
+def test_short_references_are_local_to_each_invocation():
+    jobs = [j for j in public_result()["jobs"] if j["stage"] == "space"][:2]
+    for job in jobs:
+        restored = normalize("space", job["request"]).restore(
+            {"text": "주변 기록", "evidence_ids": ["m1"]}
+        )
+        assert restored["card_id"] == job["request"]["card_id"]
+        assert restored["request_revision"] == job["request_revision"]
+        assert restored["evidence_ids"] == [job["request"]["materials"][0]["id"]]
+
+
+@pytest.mark.parametrize(
+    ("role", "facts", "meaning"),
+    [
+        ("scene_registered_point_distance", {"name": "공원", "distance_m": 42}, "등록 지점"),
+        ("scene_geometry_distance", {"name": "하천", "distance_m": 42}, "지도 형상"),
+        (
+            "scene_area_context",
+            {
+                "radius_m": 1000,
+                "registered_count": 3,
+                "categories": [{"name": "음식점", "count": 3, "code": "private"}],
+            },
+            "조회 원",
+        ),
+        (
+            "regional_observation",
+            {"temperature_c": 21, "precipitation_mm": 2, "area_center": {"lat": 37, "lng": 127}},
+            "지역 관측",
+        ),
+    ],
+)
+def test_legacy_relations_are_kept_without_provider_objects(role, facts, meaning):
+    sent = material({"role": role, "facts": facts})
+    assert meaning in sent["relation"]
+    assert "area_center" not in sent
+    assert "private" not in json.dumps(sent)
+    if "precipitation_mm" in sent:
+        assert "누적 구간 미확정" in sent["precipitation_meaning"]
+
+
+async def test_sdk_gets_the_recorded_normalized_request(monkeypatch):
+    from google import genai
+
+    from daengs_backend.config import settings
+
+    sent = []
+
+    async def generate_content(*, model, contents, config):
+        payload = json.loads(contents)
+        stage = "title" if "cards" in payload else "action" if "actor" in payload else "space"
+        sent.append(payload)
+        assert not {"card_id", "request_revision", "anchor", "evidence"} & payload.keys()
+        assert "request_revision" not in json.dumps(config.response_json_schema)
+        return SimpleNamespace(text=json.dumps(await prose(stage, payload, {})))
+
+    class Client:
+        def __init__(self, **_):
+            self.aio = self
+            self.models = SimpleNamespace(generate_content=generate_content)
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_):
+            pass
+
+    monkeypatch.setattr(genai, "Client", Client)
+    monkeypatch.setattr(settings, "gemini_api_key", SecretStr("unit-test-only"))
+    base = prepared()
+    result = await writing.write_cards(base.input.source, base, collector=collect_with_sgis)
+    assert all(j.failure_code is None for j in result.jobs)
+    assert sorted(map(str, sent)) == sorted(str(j.llm_request) for j in result.jobs)
+    for job in result.jobs:
+        if job.stage == "space" and job.accepted["evidence_ids"]:
+            assert all(key in job.evidence for key in job.accepted["evidence_ids"])
+
+
+def test_historical_receipt_remains_readable():
+    result = public_result()
+    path = Path(__file__).resolve().parents[3] / "evals/diary_route_scenario/public-02/run.json"
+    writer = json.loads(path.read_text(encoding="utf-8"))["writer"]
+    receipt = StoredCardWriting(generation_revision="a" * 64, writer=writer, result=result)
+    assert receipt.result.model_dump(mode="json") == result
+
+
+async def test_model_request_receipt_is_bound_to_internal_dependencies():
+    base = prepared()
+    result = await writing.write_cards(
+        base.input.source, base, generate=AsyncMock(side_effect=prose)
+    )
+    receipt = StoredCardWriting(
+        generation_revision="a" * 64, writer=writing.writing_version(), result=result
+    )
+    raw = receipt.model_dump(mode="json")
+    raw["result"]["jobs"][0]["llm_request"]["extra"] = "not actually sent"
+    with pytest.raises(ValueError, match="stored model input changed"):
+        StoredCardWriting.model_validate(raw)
+
+
+def test_final_titles_send_all_bodies_with_short_ids_and_restore_versions_locally():
+    request = {
+        "input_revision": "a" * 64,
+        "scenes": [
+            {
+                "id": "stamp:long-original-id",
+                "order": 1,
+                "event_at": "2026-09-14T01:00:00Z",
+                "body": "보리와 산책을 시작했다.",
+                "boundary": "start",
+            },
+            {
+                "id": "stamp:other-original-id",
+                "order": 2,
+                "event_at": "2026-09-14T01:30:00Z",
+                "body": "물을 마시고 산책을 마쳤다.",
+                "boundary": "end",
+            },
+        ],
+    }
+    model = normalize("scene_titles", request)
+    assert "input_revision" not in model.payload
+    assert [s["id"] for s in model.payload["scenes"]] == ["c1", "c2"]
+    answer = model.restore(
+        {"titles": [{"id": "c1", "text": "산책 시작"}, {"id": "c2", "text": "마무리"}]}
+    )
+    assert answer["input_revision"] == request["input_revision"]
+    assert [t["scene_id"] for t in answer["titles"]] == [s["id"] for s in request["scenes"]]
+    with pytest.raises(ValueError):
+        model.restore({"titles": [{"id": "c1", "text": "빠진 장면"}]})

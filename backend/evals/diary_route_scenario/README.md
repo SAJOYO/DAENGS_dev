@@ -1,6 +1,7 @@
 # 양재 왕복 산책: 카드 8개를 이어 읽는 실험
 
-2026-09-14, DEV 기준 **154cc610**, PR #508. 운영 코드·프롬프트·슬롯 정책은 변경하지 않았다.
+2026-09-14, DEV 기준 **154cc610**, PR #508. 초기 실험은 운영 코드·프롬프트·슬롯 정책을 변경하지 않았다.
+후속 [LLM 입력 정규화](LLM_INPUT.md)는 현재 카드 작성 경로·프롬프트를 변경한다. 슬롯 선정 정책은 유지한다.
 초기 비교에서는 실제 지리 자료 위에 가상 산책을 얹고 현재 카드 오케스트레이션으로 두 번 생성했다.
 각 실행은 공간 8개·행동 1개·제목 묶음 1개, 총 10개 Gemini 작성 작업이다.
 후속 scene-titles-01은 두 번째 실행의 모든 본문을 함께 읽고 장면별 제목 8개를 한 번에 갱신했다.
@@ -9,6 +10,7 @@
 
 ## 바로 보기
 
+- **[LLM 전용 입력 정규화](LLM_INPUT.md)** · [새 입력으로 생성한 일기](public-03-normalized-titles/preview.html) · [실제 입력과 크기 비교](public-03-normalized/input-comparison.json)
 - **[실제 공공자료 5종을 연결한 후속 실험](PUBLIC_DATA.md)** · [갱신한 일기](public-02-titles/preview.html)
 - [전체 본문을 읽고 각 장면 제목 갱신](scene-titles-01/preview.html) · [문장 원문](scene-titles-01/diary.md)
 - [자료와 슬롯을 먼저 준비한 결과](yangjae-02/preview.html) · [문장 원문](yangjae-02/diary.md)

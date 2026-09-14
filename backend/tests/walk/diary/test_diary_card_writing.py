@@ -51,18 +51,16 @@ async def prose(stage, payload, schema):
         return {
             "titles": [
                 {
-                    "card_id": c["card_id"],
-                    "content_revision": c["content_revision"],
+                    "id": c["id"],
                     "text": "산책길에서 남긴 기록",
                 }
                 for c in reversed(payload["cards"])
             ]
         }
-    result = {"card_id": payload["card_id"], "request_revision": payload["request_revision"]}
     if stage == "action":
-        return {**result, "action_id": payload["action"]["id"], "text": "보리가 냄새를 맡았다."}
+        return {"text": "보리가 냄새를 맡았다."}
     refs = [m["id"] for m in payload["materials"]]
-    return {**result, "text": "이 부근에 길이 있다." if refs else "", "evidence_ids": refs[:1]}
+    return {"text": "이 부근에 길이 있다." if refs else "", "evidence_ids": refs[:1]}
 
 
 @pytest.mark.parametrize("has_pin", [False, True])
@@ -78,17 +76,16 @@ async def test_real_jobs_are_conditional_and_titles_see_only_frozen_bodies(has_p
         stage, payload, _ = call.args
         if stage == "space":
             assert "action" not in payload and "original_text" not in payload
-            assert set(payload["sources"]) == {"sgis", "egis", "environment"}
-            assert all(m["role"] != "scene_route_pattern" for m in payload["materials"])
+            assert set(payload) == {"materials"}
         if stage == "action":
-            assert payload["action"]["actor"] == {"id": "pet-bori", "name": "보리"}
+            assert payload == {"actor": "보리", "action": "냄새 맡기"}
             assert not {"materials", "anchor", "place_reference", "space"} & payload.keys()
     assert all("보리" not in c.writing.space.text for c in result.bundle.scenes)
     assert sum(bool(c.writing.actions) for c in result.bundle.scenes) == int(has_pin)
     titles = calls[-1].args[1]["cards"]
     for card, sent in zip(result.bundle.scenes, titles, strict=True):
-        assert sent["space"] == card.writing.space.model_dump(mode="json")
-        assert sent["content_revision"] == card.writing.content_revision
+        assert sent["space"] == card.writing.space.text
+        assert "content_revision" not in sent
         assert "original_text" not in sent
 
 
@@ -143,7 +140,7 @@ async def test_action_edit_does_not_change_space_request():
     await writing.write_cards(cached.input.source, cached, generate=provider)
     assert [c.args[0] for c in provider.call_args_list] == ["action", "title"]
     # The title request includes only the changed card, not the unchanged siblings.
-    assert [c["card_id"] for c in provider.call_args_list[-1].args[1]["cards"]] == [target.id]
+    assert [c["id"] for c in provider.call_args_list[-1].args[1]["cards"]] == ["c1"]
 
 
 async def test_note_edit_reuses_bodies_and_titles_but_preserves_latest_note():
@@ -273,13 +270,13 @@ async def test_more_than_twelve_cards_still_run_and_titles_are_batched():
     assert peak == 4 and active == 0
 
 
-async def test_wrong_title_revision_keeps_adopted_action():
+async def test_unknown_title_alias_keeps_adopted_action():
     base = prepared()
 
     async def generate(stage, payload, schema):
         value = await prose(stage, payload, schema)
         if stage == "title":
-            value["titles"][0]["content_revision"] = digest("wrong-body")
+            value["titles"][0]["id"] = "c999"
         return value
 
     result = await writing.write_cards(base.input.source, base, generate=generate)

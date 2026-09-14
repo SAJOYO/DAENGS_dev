@@ -325,6 +325,8 @@ def render(directory, *, destination=None, whole_title=None, scene_titles=None):
         data["scene_titles"] = scene_titles
     if (directory / "source-lineage.json").exists():
         data["source_lineage"] = read(directory / "source-lineage.json")
+    if (directory / "source-replay.json").exists():
+        data["source_replay"] = read(directory / "source-replay.json")
 
     # Huge source geometry belongs in the lossless JSON archive, not a browser
     # disclosure. Summaries are view-only and cannot feed the writer or verifier.

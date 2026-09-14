@@ -16,6 +16,7 @@ from daengs_backend.orchestration.execution import JobExecutor
 from daengs_backend.services import walk_diary_card_writing as writing
 from daengs_backend.services.walk_diary_base_board import with_scene_backgrounds
 from daengs_backend.services.walk_diary_deadline import publication_deadline
+from daengs_backend.services.walk_diary_llm import normalize
 from daengs_walk.diary_board_output import PublishedBoard, publish_board
 from daengs_walk.diary_input import digest
 
@@ -98,17 +99,25 @@ class _DiaryRun:
     async def execute(self, item, deadline):
         previous = self.cache.get(item.request_revision)
         if previous and previous.stage == item.stage and previous.request == item.request:
-            return item.model_copy(update={"accepted": previous.accepted, "reused": True})
-        if len(json.dumps(item.request, ensure_ascii=False).encode()) > writing.MAX_INPUT_BYTES:
+            return item.model_copy(
+                update={
+                    "accepted": previous.accepted,
+                    "reused": True,
+                    "llm_request": previous.llm_request,
+                }
+            )
+        model = normalize(item.stage, item.request)
+        if len(json.dumps(model.payload, ensure_ascii=False).encode()) > writing.MAX_INPUT_BYTES:
             return item.model_copy(update={"failure_code": "budget_exceeded"})
-        schema = {
-            "space": writing.SpaceProse,
-            "action": writing.ActionProse,
-            "title": writing.CardTitles,
-        }[item.stage]
+
+        async def invoke():
+            nonlocal item
+            item = item.model_copy(update={"llm_request": model.payload})
+            return await self.generate(item.stage, model.payload, model.schema)
+
         outcome = await self.executor.run(
             f"{item.stage}:{item.request_revision}",
-            lambda: self.generate(item.stage, item.request, schema.model_json_schema()),
+            invoke,
             deadline=deadline,
         )
         if outcome.status != "ok":
@@ -119,7 +128,11 @@ class _DiaryRun:
                     )
                 }
             )
-        return writing.validate_output(item, outcome.value)
+        try:
+            restored = model.restore(outcome.value)
+        except (ValueError, TypeError, KeyError):
+            return item.model_copy(update={"failure_code": "invalid_response"})
+        return writing.validate_output(item, restored)
 
     async def actions(self, state):
         base = state["base"]

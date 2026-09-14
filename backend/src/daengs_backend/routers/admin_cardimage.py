@@ -14,6 +14,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
 from daengs_backend.core.deps import Perm, Principal, require
+from daengs_backend.routers.raw_body import read_limited_body
 from daengs_backend.schemas.cardimage import CardImageResponse, JudgeOut
 from daengs_backend.services import ai_card_engine
 from daengs_backend.services.ai_card_engine import default_engine, default_judge
@@ -28,39 +29,6 @@ router = APIRouter(prefix="/admin/cardimage", tags=["admin-cardimage"])
 _INSPECT = require(Perm.SEARCH_INSPECT)
 
 
-def _too_large() -> HTTPException:
-    return HTTPException(
-        status.HTTP_413_CONTENT_TOO_LARGE, detail={"code": "too_large", "message": "사진이 너무 큽니다"}
-    )
-
-
-async def _read_body(request: Request) -> bytes:
-    """사진 바이트를 스트리밍으로 받는다 (`routers/gait.py::_bridge_upload` 와 같은 방식).
-
-    `Content-Length` 를 먼저 보고 넘으면 즉시 끊는다 — 다만 그 헤더는 클라이언트가 주는
-    값이라 **믿지 않고**, 청크마다 누적 크기를 다시 검사해 본문을 끝까지 받기 전에도
-    413 으로 끊는다. `await request.body()` 로 통째로 받았다가 검사하면 큰 업로드가
-    메모리를 다 채운 뒤에야 거절된다.
-    """
-    declared = request.headers.get("content-length")
-    if declared is not None:
-        try:
-            declared_size = int(declared)
-        except ValueError:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST, detail={"code": "bad_length", "message": "Content-Length가 올바르지 않습니다"}
-            ) from None
-        if declared_size > MAX_PHOTO_BYTES:
-            raise _too_large()
-
-    body = bytearray()
-    async for chunk in request.stream():
-        body.extend(chunk)
-        if len(body) > MAX_PHOTO_BYTES:
-            raise _too_large()
-    return bytes(body)
-
-
 @router.post("/generate", response_model=CardImageResponse)
 async def generate(
     request: Request,
@@ -72,7 +40,7 @@ async def generate(
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST, detail={"code": "bad_name", "message": "강아지 이름이 비어 있습니다"}
         )
-    body = await _read_body(request)
+    body = await read_limited_body(request, MAX_PHOTO_BYTES)
     # 헤더가 없으면 빈 문자열을 그대로 넘긴다 — `prepare_photo` 가 허용 MIME 밖으로 보고
     # `PhotoError("bad_mime")` 를 내면 아래에서 400 으로 바뀐다. `ALLOWED_MIME` 이 소문자
     # 집합이라(`image/jpeg` 등) `.lower()` 없이는 `Image/JPEG` 같은 값이 그냥 걸러진다.

@@ -230,38 +230,57 @@ async def extract_draft(
     return _to_draft_response(result, reason_opts)
 
 
-@router.post("/{draft_id}/confirm", response_model=VetVisitResponse)
+@router.post("/{draft_id}/confirm", response_model=VetVisitResponse | list[VetVisitResponse])
 async def confirm_draft(
     draft_id: uuid.UUID,
     body: VetVisitConfirmRequest,
     user: CurrentAppUser,
     session: Session,
-) -> VetVisitResponse:
+) -> VetVisitResponse | list[VetVisitResponse]:
     """유저가 [확인] 을 누른 순간. **`vet_visits` 에 행이 생기는 유일한 자리다.**
 
     항목(`raw_ocr_items`)은 이 본문에 없다 — 초안에서만 읽는다(docs §3). 내 초안이
     아니면 404 다. **미래 날짜는 422 다** — 목록의 `end` 는 늘 오늘이라, 미래로
     확정된 기록은 저장은 되는데 어떤 창으로도 안 잡힌다 (`VetVisitDateError`).
+
+    영수증 한 장에 아이가 여럿이면 **행이 여럿 생긴다** — `splits` 마다 하나씩이고,
+    아이별 금액의 합이 영수증 총액과 다르면 422 다 (`VetSplitSumError`). 응답은
+    요청 모양을 따라간다: 구 모양(평평한 본문)이면 단일 객체, `splits` 면 배열.
+    그 분기는 한시적이다 — `schemas.VetVisitConfirmRequest` 머리말 참고.
     """
     req = vet_service.ConfirmDraftRequest(
-        client_event_id=body.client_event_id,
-        reason_code=body.reason_code,
         visited_on=body.visited_on,
         total_krw=body.total_krw,
-        reason_detail=body.reason_detail,
         hospital_name=body.hospital_name,
         hospital_address=body.hospital_address,
         hospital_phone=body.hospital_phone,
-        is_emergency=body.is_emergency,
-        is_oncology=body.is_oncology,
+        splits=tuple(
+            vet_service.ConfirmSplit(
+                client_event_id=split.client_event_id,
+                pet_id=split.pet_id,
+                reason_code=split.reason_code,
+                reason_detail=split.reason_detail,
+                total_krw=split.total_krw,
+                is_emergency=split.is_emergency,
+                is_oncology=split.is_oncology,
+                patient_index=split.patient_index,
+            )
+            for split in body.splits
+        ),
     )
     try:
-        visit = await vet_service.confirm_draft(session, user.app_user_id, draft_id, req)
+        visits = await vet_service.confirm_draft(session, user.app_user_id, draft_id, req)
     except vet_service.VetVisitNotFoundError:
         raise HTTPException(status.HTTP_404_NOT_FOUND, _VISIT_NOT_FOUND) from None
-    except vet_service.VetVisitDateError as exc:
+    except (vet_service.VetVisitDateError, vet_service.VetSplitSumError) as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from None
-    return _to_response(visit)
+    # ⚠️ **한시적 분기다.** 구 모양으로 보낸 앱은 단일 객체를 기대한다 — 배열을 주면
+    #    그 자리에서 깨진다. 앱이 새 버전으로 깔리면 이 두 줄과 `schemas` 의
+    #    `_fold_legacy_shape` · `_LEGACY_SPLIT_FIELDS` 가 **한꺼번에** 지워지고,
+    #    그때부터 이 엔드포인트는 언제나 리스트를 낸다.
+    if body._from_legacy_shape:
+        return _to_response(visits[0])
+    return [_to_response(visit) for visit in visits]
 
 
 @router.delete("/{visit_id}", status_code=status.HTTP_204_NO_CONTENT)

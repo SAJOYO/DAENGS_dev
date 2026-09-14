@@ -8,6 +8,7 @@ import uuid
 from datetime import date, datetime
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from daengs_backend.models import VetVisit, VetVisitDraft
@@ -15,6 +16,7 @@ from daengs_backend.models import VetVisit, VetVisitDraft
 __all__ = [
     "add",
     "count_before",
+    "count_by_image_key",
     "delete",
     "delete_draft",
     "expired_drafts",
@@ -24,7 +26,9 @@ __all__ = [
     "get_draft_by_client_event",
     "get_draft_by_sha",
     "get_draft_owned",
+    "get_many_by_client_events",
     "get_owned",
+    "is_client_event_conflict",
     "list_between",
     "sum_by_reason",
 ]
@@ -58,6 +62,60 @@ async def get_by_client_event(
             VetVisit.app_user_id == app_user_id,
             VetVisit.client_event_id == client_event_id,
         )
+    )
+
+
+async def get_many_by_client_events(
+    session: AsyncSession, app_user_id: uuid.UUID, client_event_ids: list[uuid.UUID]
+) -> dict[uuid.UUID, VetVisit]:
+    """멱등키 여러 개를 한 번에. **키별로** 찾은 것만 담아 돌려줍니다 — 없는 키는
+    키 자체가 없습니다. 한 영수증이 아이별로 여러 행이 되면서 필요해졌습니다.
+    """
+    if not client_event_ids:
+        return {}
+    rows = await session.scalars(
+        select(VetVisit).where(
+            VetVisit.app_user_id == app_user_id,
+            VetVisit.client_event_id.in_(client_event_ids),
+        )
+    )
+    return {row.client_event_id: row for row in rows}
+
+
+def is_client_event_conflict(error: IntegrityError) -> bool:
+    """asyncpg 가 보고한 **이 멱등키의** 유니크 충돌만 식별합니다.
+
+    `walk.is_client_session_conflict` 와 같은 모양입니다 — SQLAlchemy 가 원래 asyncpg
+    예외를 cause 로 보존하므로, 메시지 문자열이 아니라 SQLSTATE 와 실제 제약 이름을
+    **둘 다** 봅니다 (`docs/walk/upload-idempotency.md`).
+
+    **좁게 보는 것이 요점입니다.** 예전에는 `except IntegrityError` 로 전부 잡아
+    재조회했는데, 확정이 `pet_id` 를 클라이언트에서 받기 시작하면서 외래키 위반이
+    도달 가능해졌습니다(소유권 검사와 INSERT 사이에 강아지가 지워지는 경쟁).
+    그것까지 멱등 복구로 넘기면 원인이 로그에서 사라집니다 — 다른 UNIQUE·CHECK·
+    외래키 오류는 성공으로 바꾸지 않고 그대로 전달합니다.
+    """
+    driver_error = error.orig.__cause__
+    return (
+        getattr(driver_error, "sqlstate", None) == "23505"
+        and getattr(driver_error, "constraint_name", None) == "vet_visits_client_event_unique"
+    )
+
+
+async def count_by_image_key(session: AsyncSession, storage_key: str) -> int:
+    """같은 영수증 사진을 물고 있는 **확정된** 기록 수.
+
+    한 장에 여러 아이가 찍힌 영수증은 행 N개가 **같은 키를 공유**합니다
+    (`receipt_image_key` 에 UNIQUE 가 없습니다). `delete_visit` 이 사진 객체를 지우기
+    전에 이 값을 봐야 합니다 — 안 보면 아이 하나를 지울 때 나머지의 사진까지 지웁니다.
+    """
+    return int(
+        await session.scalar(
+            select(func.count())
+            .select_from(VetVisit)
+            .where(VetVisit.receipt_image_key == storage_key)
+        )
+        or 0
     )
 
 

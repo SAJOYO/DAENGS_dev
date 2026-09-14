@@ -6,6 +6,7 @@
 | 파일 | 내용 |
 | --- | --- |
 | [walk/session-package.md](walk/session-package.md) | 8단계 원본·업로드·봉인 패키징, 공통 오류·백업 독립 경계와 검증 |
+| [walk/remaining-packages.md](walk/remaining-packages.md) | 측정·공간 조회·과거 지원의 잔여 패키징, 최종 소유권과 완료 범위 |
 | [walk/records-package.md](walk/records-package.md) | 7단계 기록·사진 패키징과 outbox 트랜잭션 소유권 |
 | [walk/background-package.md](walk/background-package.md) | 6단계 배경 공급·계약·카탈로그 패키징 |
 | [walk/stored-measurements.md](walk/stored-measurements.md) | 불변 측정 저장·경로 청크와 일반 APP 상세 소비 계약 |

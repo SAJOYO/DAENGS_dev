@@ -12,8 +12,8 @@ from pathlib import Path
 
 import pytest
 
-from daengs_backend.services import walk_analysis
 from daengs_backend.services.walk_artifacts import api, capsule, cellophane
+from daengs_backend.services.walk_metrics import analysis as walk_analysis
 from tests.walk.measurement.test_walk_analysis_storage import calculation
 from tests.walk.measurement.test_walk_capsule import capsule as make_capsule
 
@@ -80,7 +80,7 @@ def test_assembler_rejects_sheet_from_another_analysis(change):
 
 def test_historical_exports_are_identical_objects():
     import daengs_walk
-    from daengs_backend.services import walk_capsule
+    from daengs_backend.services import walk_analysis, walk_capsule
 
     assert set(daengs_walk.__all__) == set(EXPORTS)
     namespace = {}
@@ -121,7 +121,7 @@ def test_historical_exports_are_identical_objects():
             ["daengs_walk.cellophane", "daengs_walk.capsule", "daengs_walk.spatial_diary"],
         ),
         (
-            "from daengs_backend.services.walk_analysis import decode_analysis_model, build_analysis_model",
+            "from daengs_backend.services.walk_metrics.analysis import decode_analysis_model, build_analysis_model",
             [
                 "daengs_walk.cellophane",
                 "daengs_walk.capsule",
@@ -132,7 +132,7 @@ def test_historical_exports_are_identical_objects():
         (
             "from daengs_backend.services.walk_artifacts.cellophane import decode_stored_cellophane",
             [
-                "daengs_backend.services.walk_analysis",
+                "daengs_backend.services.walk_metrics.analysis",
                 "daengs_walk.capsule",
                 "daengs_walk.spatial_diary",
             ],
@@ -165,7 +165,7 @@ def test_production_callers_use_owner_modules_and_not_compatibility_facades():
                 continue
             if node.module == "daengs_walk":
                 assert not (set(EXPORTS) & {n.name for n in node.names}), path
-            if node.module == "daengs_backend.services.walk_analysis":
+            if node.module == "daengs_backend.services.walk_metrics.analysis":
                 assert not (
                     {
                         "build_analysis_models",

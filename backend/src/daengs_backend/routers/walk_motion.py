@@ -26,7 +26,7 @@ from daengs_backend.schemas.walk_motion import (
     MotionManifest,
 )
 from daengs_backend.schemas.walk_precision import VERSION as PRECISION_VERSION
-from daengs_backend.services.walk_motion_calculation import calculate
+from daengs_backend.services.walk_metrics.motion_calculation import calculate
 from daengs_backend.services.walk_session import motion as service
 from daengs_backend.services.walk_session.errors import WalkNotFoundError
 from daengs_backend.services.walk_session.motion_contract import MotionConflict

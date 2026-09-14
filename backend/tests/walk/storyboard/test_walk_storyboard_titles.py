@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from daengs_backend.services import walk_storyboard_titles as service
+from daengs_backend.services.walk_legacy import titles as service
 from daengs_walk.storyboard import StoryboardBundleV2, compatible_bundle
 from tests.walk.support.paths import WALK_FIXTURES
 from tests.walk.support.storyboard import headings

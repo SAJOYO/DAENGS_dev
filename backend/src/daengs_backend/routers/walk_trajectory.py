@@ -23,8 +23,8 @@ from daengs_backend.schemas.walk_trajectory import (
     TrajectoryCalculation,
     TrajectoryVersion,
 )
-from daengs_backend.services import walk_measurement as measurements
-from daengs_backend.services import walk_trajectory as service
+from daengs_backend.services.walk_metrics import measurement as measurements
+from daengs_backend.services.walk_metrics import trajectory as service
 from daengs_backend.services.walk_session.errors import WalkNotFoundError
 from daengs_backend.services.walk_session.motion import MotionUnavailable
 from daengs_backend.services.walk_session.motion_contract import MotionConflict

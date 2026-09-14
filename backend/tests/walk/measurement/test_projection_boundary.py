@@ -17,9 +17,9 @@ from daengs_backend.schemas.walk_measurement import MeasurementSummary, RoutePag
 from daengs_backend.schemas.walk_motion import MotionManifest, MotionObservation
 from daengs_backend.schemas.walk_precision import PrecisionPoint
 from daengs_backend.schemas.walk_trajectory import TrajectoryCalculation
-from daengs_backend.services import walk_measurement as storage
-from daengs_backend.services import walk_measurement_projection as projection
-from daengs_backend.services import walk_trajectory as query
+from daengs_backend.services.walk_metrics import measurement as storage
+from daengs_backend.services.walk_metrics import measurement_projection as projection
+from daengs_backend.services.walk_metrics import trajectory as query
 from daengs_backend.services.walk_session.motion_contract import MotionConflict
 from daengs_backend.services.walk_session.precision_contract import refine_points
 from tests.walk.measurement.test_stored_measurement import FIXTURES, OWNER, WALK
@@ -87,17 +87,17 @@ def test_projection_and_storage_have_no_query_service_or_schema_imports():
         tree = ast.parse(Path(module.__file__).read_text())
         imports = [n.module for n in ast.walk(tree) if isinstance(n, ast.ImportFrom)]
         assert "daengs_backend.schemas.walk_trajectory" not in imports
-        assert "daengs_backend.services.walk_trajectory" not in imports
+        assert "daengs_backend.services.walk_metrics.trajectory" not in imports
     # A fresh interpreter also catches indirect imports, not just spelling in two files.
     program = """
 import sys
 import tests.conftest
 class BlockQuery:
     def find_spec(self, fullname, path=None, target=None):
-        if fullname in {"daengs_backend.services.walk_trajectory", "daengs_backend.schemas.walk_trajectory"}:
+        if fullname in {"daengs_backend.services.walk_metrics.trajectory", "daengs_backend.schemas.walk_trajectory"}:
             raise AssertionError(fullname)
 sys.meta_path.insert(0, BlockQuery())
-from daengs_backend.services import walk_measurement, walk_measurement_projection
+from daengs_backend.services.walk_metrics import measurement, measurement_projection
 """
     subprocess.run([sys.executable, "-c", program], check=True, capture_output=True, text=True)
 

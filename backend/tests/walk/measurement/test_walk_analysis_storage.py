@@ -16,16 +16,16 @@ from daengs_backend.models.walk import (
     WalkCellophaneSheet,
 )
 from daengs_backend.repositories import walk as walk_repo
-from daengs_backend.services.walk_analysis import (
+from daengs_backend.services.walk_artifacts.api import build_analysis_models
+from daengs_backend.services.walk_artifacts.cellophane import (
     CELLOPHANE_CELL_COLUMNS,
     CELLOPHANE_SHEET_SCHEMA_VERSION,
-    build_analysis_models,
     cellophane_sheet_fingerprint,
-    decode_analysis_model,
     decode_cellophane,
     decode_stored_cellophane,
     encode_cellophane,
 )
+from daengs_backend.services.walk_metrics.analysis import decode_analysis_model
 from daengs_backend.services.walk_session.finalize import PreparedWalkEvidence
 from daengs_walk import WalkEvidencePoint, analyze_walk, build_cellophane
 from tests.walk.support.paths import REPO as REPO_ROOT

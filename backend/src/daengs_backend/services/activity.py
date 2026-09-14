@@ -27,7 +27,7 @@ from daengs_backend.services.activity_core.walk import (
     summarize_walks,
 )
 from daengs_backend.services.activity_walk_projection import cached_contribution, contribution_for
-from daengs_backend.services.walk_analysis import decode_analysis_model
+from daengs_backend.services.walk_metrics.analysis import decode_analysis_model
 from daengs_walk.capsule import CAPSULE_VERSION
 from daengs_walk.contracts import (
     MEASUREMENT_RECEIPT_VERSION,

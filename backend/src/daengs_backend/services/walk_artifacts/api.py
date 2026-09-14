@@ -1,8 +1,8 @@
 """Compose one analysis and its sealed sheet without owning locks or commits."""
 
 from daengs_backend.models.walk import WalkAnalysis
-from daengs_backend.services.walk_analysis import build_analysis_model
 from daengs_backend.services.walk_artifacts.cellophane import build_cellophane_model
+from daengs_backend.services.walk_metrics.analysis import build_analysis_model
 from daengs_backend.services.walk_session.finalize import PreparedWalkEvidence
 from daengs_walk.cellophane import Cellophane
 from daengs_walk.evidence import WalkEvidenceBundle

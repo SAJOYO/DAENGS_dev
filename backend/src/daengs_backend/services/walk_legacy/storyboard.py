@@ -17,12 +17,12 @@ from daengs_backend.services.walk_generation.state import (
     reserve,
     reusable,
 )
+from daengs_backend.services.walk_legacy.context import unavailable_contexts
+from daengs_backend.services.walk_legacy.titles import title_storyboard
 from daengs_backend.services.walk_records.errors import EntryUpgradeRequired
 from daengs_backend.services.walk_records.policy import guard_v1
 from daengs_backend.services.walk_records.v1 import response as entry_response
 from daengs_backend.services.walk_session.finalize import prepare_finalized_walk
-from daengs_backend.services.walk_storyboard_context import unavailable_contexts
-from daengs_backend.services.walk_storyboard_titles import title_storyboard
 from daengs_walk.evidence import analyze_walk
 from daengs_walk.storyboard import build_storyboard, compatible_bundle, fingerprint
 from daengs_walk.storyboard_input import scene_inputs

@@ -368,6 +368,18 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("GAIT_MAX_UPLOAD_BYTES"),
     )
 
+    # 공동 돌봄 초대 웹 안내(`/invite`)가 여는 `/.well-known/assetlinks.json` 의
+    # 서명 지문. **Android App Links 검증에 쓰는 값이지 업로드 키가 아닙니다** — Play
+    # App Signing 을 쓰는 앱은 우리가 올리는 키(`daengs.uploadKeyStore`)와 실제 서명
+    # 키가 다릅니다. Play Console → 릴리스 → 설정 → 앱 서명에서만 진짜 값을 볼 수
+    # 있고, 레포·로컬 키스토어에서는 못 뽑습니다.
+    #
+    # ⚠️ **비어 있으면 App Links 검증이 그냥 실패합니다** — 일부러 그렇게 둡니다.
+    #    가짜 지문을 넣느니 검증이 안 되는 채로(=링크가 웹 안내로 떨어지는 채로) 배포하는
+    #    편이 낫습니다. 담당자가 Play Console 에서 실제 지문을 확인하면 채웁니다.
+    #    값은 JSON 배열입니다: DAENGS_PLAY_SIGNING_SHA256_FINGERPRINTS=["AA:BB:…"]
+    play_signing_sha256_fingerprints: list[str] = Field(default_factory=list)
+
     # ── 보행 분석 엔진 (#304 · D-063) ──────────────────────────────────
     # **지금 값은 `v4` 하나입니다** — `daengs_gait.inference`(ssdlite + RTMPose AP-10K).
     # 워커가 자기 인터프리터(`sys.executable`)로 서브프로세스를 띄우고, 가중치는

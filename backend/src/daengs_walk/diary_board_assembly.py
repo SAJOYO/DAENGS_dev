@@ -12,6 +12,7 @@ from daengs_walk.diary_board import (
     core_anchor,
 )
 from daengs_walk.diary_board_selection import prepare_base_board
+from daengs_walk.diary_card_narrative import OBSERVATION_TEXT
 from daengs_walk.diary_input import DiaryInput
 from daengs_walk.diary_output import WritingReceipt
 
@@ -29,17 +30,13 @@ def _base_text(core):
     if isinstance(core, CheckpointCore):
         return "산책길에서", "산책길의 이 지점을 지났다."
     if isinstance(core, ObservationCore):
-        return {
-            "observed_dwell": ("잠시 머문 구간", "이 구간에서는 동선이 한곳에 모였다."),
-            "observed_slow": (
-                "천천히 이어진 구간",
-                "이 구간에서는 산책 중 다른 이동 구간보다 속도가 느려졌다.",
-            ),
-            "observed_fast": (
-                "빠르게 이어진 구간",
-                "이 구간에서는 산책 중 다른 이동 구간보다 속도가 빨라졌다.",
-            ),
-        }[core.observation.kind]
+        kind = core.observation.kind
+        title = {
+            "observed_dwell": "잠시 머문 구간",
+            "observed_slow": "천천히 이어진 구간",
+            "observed_fast": "빠르게 이어진 구간",
+        }[kind]
+        return title, OBSERVATION_TEXT[kind]
     content = core.record.content
     if content.kind == "note":
         return "남긴 이야기", content.text  # Includes the user's original whitespace/newlines.

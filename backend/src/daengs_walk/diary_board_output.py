@@ -11,7 +11,7 @@ from daengs_walk.diary_board import (
     ObservationCore,
     RecordCore,
 )
-from daengs_walk.diary_card_narrative import CardNarrative, content_revision
+from daengs_walk.diary_card_narrative import CardNarrative, content_revision, observation_content
 from daengs_walk.diary_input import (
     Anchor,
     DiaryContract,
@@ -61,6 +61,10 @@ class PublishedBoardScene(DiaryContract):
             raise ValueError("public scene must carry exactly its declared core")
         if self.writing:
             writing = self.writing
+            if writing.observation is not None and writing.observation != observation_content(
+                self.core, self.observation
+            ):
+                raise ValueError("card observation differs from its source core")
             if (
                 self.user_record
                 and self.user_record.kind == "note"
@@ -73,6 +77,7 @@ class PublishedBoardScene(DiaryContract):
                 [p.model_dump(mode="json") for p in self.place_reference],
                 writing.space.model_dump(mode="json"),
                 [a.model_dump(mode="json") for a in writing.actions],
+                writing.observation.model_dump(mode="json") if writing.observation else None,
             )
             # Previously saved v1 cards included notes in the title dependency hash.
             # Read them unchanged; new generations hash only the actual title inputs.
@@ -86,10 +91,10 @@ class PublishedBoardScene(DiaryContract):
                     writing.original_text,
                 ]
             )
-            if writing.body() != self.body or writing.content_revision not in {
-                revision,
-                legacy_revision,
-            }:
+            allowed = {revision}
+            if writing.observation is None:
+                allowed.add(legacy_revision)
+            if writing.body() != self.body or writing.content_revision not in allowed:
                 raise ValueError("card body differs from its adopted parts")
             behavior = self.user_record is not None and self.user_record.kind == "behavior"
             if bool(writing.actions) != behavior:

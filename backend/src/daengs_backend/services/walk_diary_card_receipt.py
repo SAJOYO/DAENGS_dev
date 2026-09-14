@@ -87,5 +87,7 @@ class StoredCardWriting(DiaryContract):
                 or supplied["actions"] != [a.model_dump(mode="json") for a in parts.actions]
                 or supplied["place_reference"]
                 != [p.model_dump(mode="json") for p in scene.place_reference]
+                or supplied.get("observation")
+                != (parts.observation.model_dump(mode="json") if parts.observation else None)
             ):
                 raise ValueError("title did not read the adopted card bodies")

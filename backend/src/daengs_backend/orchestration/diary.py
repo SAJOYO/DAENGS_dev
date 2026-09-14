@@ -175,6 +175,11 @@ class _DiaryRun:
                 "actions": [a.model_dump(mode="json") for a in card.writing.actions],
                 "place_reference": [p.model_dump(mode="json") for p in card.place_reference],
                 "event_at": card.anchor.event_at.isoformat(),
+                **(
+                    {"observation": card.writing.observation.model_dump(mode="json")}
+                    if card.writing.observation
+                    else {}
+                ),
             }
             item = writing.job("title", {"cards": [payload]})
             previous = self.title_cache.get(item.request_revision)

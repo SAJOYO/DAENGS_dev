@@ -18,7 +18,8 @@ action.actor에 연결된 행위자와 실제 기록된 행동만 한국어 한 
 JSON: {card_id,request_revision,action_id,text}.
 """
 
-TITLE_PROMPT = """각 카드에서 실제 채택된 공간·행동 본문과 확인된 위치를 요약하는 제목만 작성한다.
+TITLE_PROMPT = """각 카드에서 실제 채택된 관측 설명·공간·행동 본문과 확인된 위치를 요약하는 제목만 작성한다.
+observation은 기록 기기의 동선 관측이다. 강아지의 행동·정지·감각·동기로 바꾸지 않는다.
 본문은 변경하지 않는다. 다른 카드의 내용이나 새로운 사건·인과·장소 관계를 만들지 않는다.
 사용자 원문은 제공되지 않는다. 카드의 ID와 내용 버전을 그대로 반환한다.
 JSON: {titles:[{card_id,content_revision,text}]}. 각 제목은 80자 이내다.

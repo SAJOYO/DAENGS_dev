@@ -11,7 +11,13 @@ from pydantic import Field, JsonValue
 
 from daengs_backend.services.walk_diary_card_prompts import PROMPTS
 from daengs_walk.diary_board_output import PublishedBoard, publish_board
-from daengs_walk.diary_card_narrative import CardNarrative, CardPart, content_revision
+from daengs_walk.diary_card_narrative import (
+    OBSERVATION_TEXT,
+    CardNarrative,
+    CardPart,
+    content_revision,
+    observation_content,
+)
 from daengs_walk.diary_input import DiaryContract, Digest, Identifier, digest
 from daengs_walk.diary_output import BackgroundPiece
 from daengs_walk.diary_scene_backgrounds import SceneBackgroundSnapshot
@@ -40,7 +46,8 @@ LAND_WORDS = {
 
 def writing_version():
     return {
-        "policy": "shared-orchestration-card-writing-v2",
+        "policy": "shared-orchestration-card-writing-v3",
+        "observation_text": OBSERVATION_TEXT,
         "model": MODEL,
         "prompts": {key: digest(value) for key, value in PROMPTS.items()},
         "timeout_s": TIMEOUT_SECONDS,
@@ -312,6 +319,7 @@ def places_for(stamp, previous):
 
 
 def frozen_card(scene, stamp, space_result, action_result):
+    observation = observation_content(scene.core, scene.observation)
     places = places_for(stamp, scene.place_reference)
     dong = next((p.facts.get("dong") for p in places if p.facts.get("dong")), None)
     default = (
@@ -347,9 +355,11 @@ def frozen_card(scene, stamp, space_result, action_result):
         [p.model_dump(mode="json") for p in places],
         space.model_dump(mode="json"),
         [a.model_dump(mode="json") for a in actions],
+        observation.model_dump(mode="json") if observation else None,
     )
     narrative = CardNarrative(
         content_revision=revision,
+        observation=observation,
         space=space,
         actions=actions,
         original_text=original,
@@ -394,4 +404,6 @@ def complete_cards(prepared, output):
         )
         if new.writing is None or new.writing.original_text != expected_original:
             raise ValueError("writer changed original text")
+        if new.writing.observation != observation_content(old.core, old.observation):
+            raise ValueError("writer changed the confirmed observation")
     return value.bundle

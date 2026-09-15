@@ -157,6 +157,22 @@ def test_corrupted_saved_receipt_is_not_displayed(relational_api):
     assert result["status"] == "failed" and result["bundle"] is None
 
 
+def test_old_dong_only_publication_still_reads(relational_api):
+    from daengs_walk.value_contracts import digest
+
+    client, state, _ = relational_api
+    value = client.post(PATH, json=spec(state)).json()
+    assert value["status"] == "ready"
+    saved = state.row.bundle["payload"]
+    for card in saved["receipt"]["cards"]:
+        card["comparison"]["header"].pop("administrative_address", None)
+    for bundle in (saved["public"], value["bundle"]):
+        for card in bundle["cards"]:
+            card["header"].pop("administrative_address", None)
+    state.row.bundle["digest"] = digest(saved)
+    assert client.get(PATH + QUERY).json() == value
+
+
 async def test_newer_generation_wins_completion(relational_api):
     from daengs_backend.schemas.walk_generation import StoryboardRequest
 

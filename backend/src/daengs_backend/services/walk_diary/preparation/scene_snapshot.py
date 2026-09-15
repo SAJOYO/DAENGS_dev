@@ -107,6 +107,7 @@ def assemble_scene_snapshot(frame, *, backgrounds=(), road_snapshots=()):
     saved = {b["id"]: b for b in backgrounds}
     states, reasons = _collection(backgrounds)
     facts, dongs, weather = [], set(), []
+    addresses = []
     for evidence in frame["eligible_evidence"]:
         fact = project_scene_fact(scene_id, point, evidence, saved)
         if fact is not None:
@@ -118,7 +119,15 @@ def assemble_scene_snapshot(frame, *, backgrounds=(), road_snapshots=()):
         elif evidence["role"] == "scene_address_reference":
             projected = material({"role": evidence["role"], "facts": evidence["facts"]})
             if projected:
-                dongs.add(projected["material"]["dong"])
+                dong = projected["material"]["dong"]
+                dongs.add(dong)
+                values = evidence["facts"]
+                address = {"dong": dong}
+                for key in ("sido", "sigungu", "address_type"):
+                    value = values.get(key)
+                    address[key] = value.strip() or None if isinstance(value, str) else None
+                if address not in addresses:
+                    addresses.append(address)
         elif evidence["role"] in {"grid_temperature_observation", "regional_observation"}:
             weather.append(
                 {"source_id": evidence["source_id"], "facts": deepcopy(evidence["facts"])}
@@ -146,6 +155,7 @@ def assemble_scene_snapshot(frame, *, backgrounds=(), road_snapshots=()):
         scene_id=scene_id,
         dong=next(iter(dongs)) if len(dongs) == 1 else None,
         weather={"observations": weather} if weather else None,
+        administrative_address=addresses[0] if len(addresses) == 1 else None,
     )
     return snapshot, header
 
@@ -190,7 +200,9 @@ def validate_scene_snapshot_bindings(prepared_snapshot):
         )
         if rebuilt.model_dump(mode="json") != frame["scene_snapshot"]:
             raise ValueError("scene snapshot does not match eligible evidence and sources")
-        if header.model_dump(mode="json") != frame["card_header"]:
+        # Pre-address snapshots intentionally retain their original dong-only header.
+        excluded = {"administrative_address"} - frame["card_header"].keys()
+        if header.model_dump(mode="json", exclude=excluded) != frame["card_header"]:
             raise ValueError("card header does not match eligible evidence")
         if frame.get("planning_contract") == "scene-comparison-plan-v1":
             from daengs_walk.diary.relational.current_action import current_background

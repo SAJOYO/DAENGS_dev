@@ -227,9 +227,20 @@ class SpaceComparisonAnswer(ValueContract):
         return self
 
 
+class SceneAdministrativeAddress(ValueContract):
+    sido: str | None
+    sigungu: str | None
+    dong: str
+    address_type: str | None
+
+
 class SceneCardHeader(ValueContract):
     """Display-only values. Never nest this object in SpaceComparisonInput."""
 
     scene_id: str
     dong: str | None
     weather: dict[str, JsonValue] | None
+    # Omit when absent so old frozen publications retain their JSON representation.
+    administrative_address: SceneAdministrativeAddress | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )

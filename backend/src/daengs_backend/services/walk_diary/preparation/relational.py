@@ -125,10 +125,14 @@ def prepare_relational_diary(base, *, scene_ids=None, road_snapshots=(), writing
             movement_observations(frame, previous, catalog) if comparable else None
         )
         if writing_briefs:
-            from daengs_walk.diary.relational.brief_planning import BRIEF_PLAN, make_brief_plan
+            from daengs_walk.diary.relational.brief_contracts import SpaceWritingBrief
             from daengs_walk.diary.relational.comparison_writing import comparison_input
             from daengs_walk.diary.relational.current_action import build_action_brief
             from daengs_walk.diary.relational.narrative_space import build_space_context
+            from daengs_walk.diary.relational.scene_requests import (
+                BRIEF_PLAN,
+                assemble_scene_requests,
+            )
 
             context = build_space_context(comparison_input(frame, previous), positions)
             action_brief = build_action_brief(
@@ -140,7 +144,7 @@ def prepare_relational_diary(base, *, scene_ids=None, road_snapshots=(), writing
                 action_brief=action_brief.model_dump(mode="json") if action_brief else None,
                 behavior_record=record.model_dump(mode="json") if action_brief else None,
             )
-            plan = make_brief_plan(frame, previous)
+            plan = assemble_scene_requests(frame, SpaceWritingBrief(context=context), previous)
         else:
             plan = make_plan(frame, frames[-1] if frames else None, catalog, state)
         state = plan["state_after"]
@@ -159,7 +163,7 @@ def prepare_relational_diary(base, *, scene_ids=None, road_snapshots=(), writing
         "scene_backgrounds": scene_backgrounds,
     }
     if writing_briefs:
-        from daengs_walk.diary.relational.brief_planning import BRIEF_PREPARATION
+        from daengs_walk.diary.relational.scene_requests import BRIEF_PREPARATION
 
         result.update(
             writing_brief_version=BRIEF_PREPARATION,

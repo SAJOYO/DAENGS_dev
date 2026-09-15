@@ -6,13 +6,14 @@ Persistence/read compatibility is a separate adapter. This assembles the service
 from copy import deepcopy
 
 from daengs_walk.diary.relational.brief_binding import validate_brief_plans
-from daengs_walk.diary.relational.brief_contracts import BriefDeliveryState, DeliveredMeaning
+from daengs_walk.diary.relational.brief_contracts import (
+    BriefDeliveryState,
+    DeliveredMeaning,
+    SpaceWritingBrief,
+)
 from daengs_walk.diary.relational.brief_publication import BRIEF_PUBLICATION, validate_brief_result
 from daengs_walk.diary.relational.comparison_writing import comparison_input
-from daengs_walk.diary.relational.writing_brief import (
-    advance_brief_delivery,
-    build_space_brief,
-)
+from daengs_walk.diary.relational.writing_brief import advance_brief_delivery
 from daengs_walk.value_contracts import digest
 
 
@@ -37,7 +38,7 @@ def assemble_brief_receipt(prepared, written):
         before = memory if written.get("short_memory_enabled", True) else BriefDeliveryState()
         if plan["delivery_before"] != before.model_dump(mode="json"):
             raise ValueError("brief memory differs from accepted earlier results")
-        brief = build_space_brief(frame["narrative_context"], before)
+        brief = SpaceWritingBrief(context=frame["narrative_context"], delivery=before)
         parts, selected = {}, None
         for stage in ("space", "action"):
             task = plan[stage + "_task"]

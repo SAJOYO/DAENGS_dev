@@ -1,5 +1,6 @@
 """Authenticated HTTP -> real relational orchestration -> saved receipt -> GET."""
 
+import uuid
 from copy import deepcopy
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
@@ -105,6 +106,54 @@ def test_background_completion_does_not_invalidate_but_original_edit_does(relati
     state.entries[0].payload = {**state.entries[0].payload, "note": "새 원문"}
     stale = client.get(PATH + QUERY).json()
     assert stale["status"] == "stale" and stale["bundle"] is None
+
+
+@pytest.mark.parametrize("action_fails", [False, True])
+def test_each_behavior_keeps_its_original_reference_even_when_writing_fails(
+    relational_api,
+    monkeypatch,
+    action_fails,
+):
+    import sys
+
+    client, state, _ = relational_api
+    expected = {}
+    state.envelope = None  # The shared fixture's envelope belongs only to its original note.
+    # Identical time/location and repeated codes must still have distinct identities.
+    for code in ("sniffing", "sniffing", "barking", "excretion"):
+        entry = deepcopy(state.entries[0])
+        entry.id = uuid.uuid4()
+        entry.payload = {k: v for k, v in entry.payload.items() if k != "note"}
+        entry.payload.update(kind="behavior", behavior_code=code, pet_id=None)
+        state.entries.append(entry)
+        expected[str(entry.id)] = (str(entry.revision), code)
+    real_send = send
+
+    async def writer(stage, payload, schema):
+        assert "originals" not in payload
+        if action_fails and stage == "action":
+            raise ValueError("simulated writer failure")
+        return await real_send(stage, payload, schema)
+
+    monkeypatch.setattr(sys.modules[__name__], "send", writer)
+    response = client.post(PATH, json=spec(state))
+    assert response.status_code == 200, response.text
+    value = response.json()
+    assert value["status"] == "ready", (value, state.relational_failure)
+    found = {}
+    for card in value["bundle"]["cards"]:
+        for original in card["originals"]:
+            if original["content"]["kind"] != "behavior":
+                continue
+            ref = original["ref"]
+            assert ref["store"] == "walk_entry" and ref["version_kind"] == "revision"
+            assert original["anchor"] == card["anchor"]
+            assert original["content"]["pet_id"] is None
+            assert card["action"]["status"] == ("failed" if action_fails else "returned")
+            assert ref["id"] not in found
+            found[ref["id"]] = (ref["version"], original["content"]["code"])
+    assert found == expected
+    assert client.get(PATH + QUERY).json() == value
 
 
 def test_original_edit_during_generation_prevents_publication(relational_api):

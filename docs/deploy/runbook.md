@@ -128,7 +128,7 @@ docker cp daengs-place-db:/tmp/place.dump .
 | 항목 | GCP 값 |
 | --- | --- |
 | `DAENGS_CORS_ORIGINS` | `https://daengapp.weareithero.cloud` (프론트 도메인 — Phase 2 에서) |
-| `DAENGS_PLAY_SIGNING_SHA256_FINGERPRINTS` | 공동 돌봄 초대 링크의 Android App Links 검증(`/.well-known/assetlinks.json`)에 실리는 **앱 서명 인증서 SHA-256**. JSON 배열. 비밀이 아닙니다(그 파일로 공개됩니다). 2026-09-11 에 전달받은 값 `F3:1E:B4:EE:79:99:10:47:24:75:CC:E2:F4:75:B9:43:2E:7F:77:43:7D:AE:4D:DB:C8:BF:61:54:53:1E:8C:0B` 은 **앱 저장소의 업로드 키(`keystore/upload.jks`, alias `daengs-upload`)의 SHA-256 과 일치합니다**(`keytool -list -v` 로 대조). 앱은 Play App Signing 을 쓰므로(앱 README "출시용 업로드 키") 스토어 설치본은 「앱 서명 키 인증서」로 서명되는데, **그 인증서가 이 값과 같은지는 아직 확인하지 못했습니다** — 다르다고 단정하지 마세요. 넣기 전에 Play Console → 릴리스 → 설정 → 앱 서명의 「앱 서명 키 인증서」 SHA-256 을 보거나, 스토어에서 설치한 APK 를 `apksigner verify --print-certs` 로 확인합니다. 같으면 그 한 값, 다르면 `["<앱 서명 키 SHA-256>","F3:1E:…:8C:0B"]` 처럼 둘 다(업로드 키는 로컬 릴리스 빌드 검증용). **값이 틀려도(JSON·자료형·지문 모양) backend 는 정상으로 뜹니다** — 전부 무시하고(일부만 채택하지 않음) assetlinks.json 은 빈 배열, 부팅 로그에 ERROR 한 줄, 콘솔 `/admin/status` 의 `app_links` 항목이 `down` 입니다. 바꾼 뒤 `docker compose -f docker-compose.yml -f docker-compose.gcp.yml up -d --force-recreate backend`(env_file 은 컨테이너를 만들 때 굳습니다 — 리로드로는 안 바뀝니다), 기기 확인은 `adb shell pm get-app-links com.daengs.app` |
+| `DAENGS_PLAY_SIGNING_SHA256_FINGERPRINTS` | 공동 돌봄 초대 링크의 Android App Links 검증(`/.well-known/assetlinks.json`)에 실리는 **앱 서명 인증서 SHA-256**. JSON 배열. **실제 지문 값은 저장소에 적지 않고 VM 의 `backend/.env` 에만 둡니다.** 기준은 Play Console → 릴리스 → 설정 → 앱 서명의 **「앱 서명 키 인증서」 SHA-256** 입니다 — 앱은 Play App Signing 을 쓰므로(앱 README "출시용 업로드 키") 스토어 설치본은 이 키로 서명됩니다. 2026-09-11 에 전달받은 지문은 앱 저장소의 **업로드 키**(`keystore/upload.jks`)와 일치한 값이라, 앱 서명 키와 같은지 콘솔(또는 스토어 설치 APK 의 `apksigner verify --print-certs`)로 확인한 뒤 넣습니다. 같으면 `["<Play 앱 서명 키 SHA-256>"]`, 다르면 `["<Play 앱 서명 키 SHA-256>","<업로드 키 SHA-256>"]` 처럼 둘 다(업로드 키는 로컬 릴리스 빌드 검증용). 절차·확인은 §6 「App Links 운영 설정」. **값이 틀려도(JSON·자료형·지문 모양) backend 는 정상으로 뜹니다** — 전부 무시하고(일부만 채택하지 않음) assetlinks.json 은 빈 배열, 부팅 로그에 ERROR 한 줄, 콘솔 `/admin/status` 의 `app_links` 항목이 `down` 입니다. 바꾼 뒤 `docker compose -f docker-compose.yml -f docker-compose.gcp.yml up -d --force-recreate backend`(env_file 은 컨테이너를 만들 때 굳습니다 — 리로드로는 안 바뀝니다), 기기 확인은 `adb shell pm get-app-links com.daengs.app` |
 
 임베딩 모델(hf-cache 1.2GB)은 옮기지 않습니다 — 첫 기동 때 자동 다운로드.
 `EMBEDDING_MODEL_KEY` 는 바꾸지 마세요 (코퍼스와 어긋나면 차원이 같아 조용히 틀립니다).
@@ -379,6 +379,85 @@ curl -s https://daengapi.weareithero.cloud/screen/healthz
   위 발급 명령의 `certonly ...` 를 `renew` 로 바꿔 같은 순서(stop → renew → up)로
 - **스냅샷**: Phase 3 에서 1회 + 유지 시 주기화 (2차)
 - 종료(삭제/DNS 회귀)는 roadmap §8 체크리스트를 따릅니다 — **정지가 아니라 삭제까지**
+
+### App Links 운영 설정 (공동 돌봄 초대 링크)
+
+공동 돌봄 초대 링크(`https://daengapi.weareithero.cloud/invite#…`)를 앱이 바로 열게 하는
+설정입니다. 코드는 DEV #535 로 `dev` 에 들어갔고, **앱이 만드는 링크 호스트가 이 VM
+(`daengapi`)이라 운영 반영 전에는 `/invite` 도 `assetlinks.json` 도 404 입니다.**
+설정 규칙의 원본은 `backend/src/daengs_backend/app_links.py` 와 `backend/.env.example` 의
+같은 이름 항목이고, 여기서는 운영 인계에 필요한 것만 적습니다. §2 `backend/.env` 수정표에도
+같은 행이 있습니다.
+
+**역할**
+
+| 담당 | 범위 |
+| --- | --- |
+| 개발 담당 | DEV 변경을 `dev` 에 병합하고 이 인계 문서를 남기는 것까지 |
+| 운영 담당 | `dev → main`, GCP 운영 `backend/.env` 설정, 운영 반영 확인 |
+
+**설정**
+
+- 이름: `DAENGS_PLAY_SIGNING_SHA256_FINGERPRINTS`
+- 위치: GCP 운영 VM 의 `~/daengs/backend/.env` (최상단 `.env` 가 아닙니다 — backend 는 그
+  파일을 안 읽습니다). 개발 서버(`daengback`)의 `backend/.env` 와는 **따로**입니다(이 문서
+  머리말) — 아래 「확인 항목 구분」.
+- 값의 기준: Play Console → 릴리스 → 설정 → 앱 서명의 **「앱 서명 키 인증서」 SHA-256**.
+  스토어 설치본은 이 키로 서명됩니다.
+- 2026-09-11 에 전달받은 지문은 앱 저장소 **업로드 키**와 일치한 값입니다. Play App Signing 을
+  쓰면 앱 서명 키와 다를 수 있으니, 넣기 전에 콘솔의 「앱 서명 키 인증서」와 같은지 확인합니다.
+- 같으면 `["<Play 앱 서명 키 SHA-256>"]`, 두 지문이 다르면 **JSON 배열로 둘 다** 넣습니다 —
+  `["<Play 앱 서명 키 SHA-256>","<업로드 키 SHA-256>"]`.
+  각 원소는 콜론으로 구분한 16진수 32쌍입니다(소문자·앞뒤 공백은 서버가 맞춰 줍니다).
+- 실제 지문 값은 이 절에 다시 적지 않습니다 — 값은 운영 VM 의 `backend/.env` 에만 둡니다.
+  Secret 도 저장소 문서에 적지 않습니다.
+
+**값이 없거나 틀렸을 때**
+
+- **비어 있으면** backend 는 정상으로 뜨고 `/.well-known/assetlinks.json` 이 **빈 배열 `[]`** 을
+  돌려줍니다. App Links 검증만 실패하고, 초대 링크는 웹 안내(`/invite`)로 열립니다.
+- **형식이 틀리면**(JSON 이 아님 · 배열이 아님 · 원소 하나라도 지문 모양이 아님) 그 설정
+  **전체가 무시돼** 역시 빈 배열입니다. 부팅은 막지 않고, backend 로그에 ERROR 한 줄과 관리자
+  콘솔 `/admin/status` 의 `app_links` 항목(`down`)으로만 드러납니다.
+
+**반영 순서**
+
+1. 운영 담당이 `dev → main` 스냅샷 PR 을 병합합니다.
+2. 위 **§6 배포 절차(git push 배포)** 를 그대로 따릅니다 — GCP 는 `dev` 머지로 자동 배포되지
+   않습니다. **이 변경에는 DB 마이그레이션이 없습니다**(③ 해당 없음).
+3. `~/daengs/backend/.env` 에 값을 넣은 뒤 backend 컨테이너를 **재생성**합니다. `env_file` 은
+   컨테이너를 만들 때 굳어서 reload·restart 로는 안 바뀝니다. 명령은 §2 수정표의 그 행과
+   같습니다:
+
+   ```bash
+   docker compose -f docker-compose.yml -f docker-compose.gcp.yml up -d --force-recreate backend
+   ```
+
+   이 VM 은 `GEMINI_API_KEY` 를 루트 `.env` 에서 받으므로(§2 최상단 `.env` 수정표) 그 줄이
+   있는지 먼저 봅니다. 워커는 이 값을 읽지 않아 재시작할 필요가 없습니다.
+
+**운영 확인**
+
+```bash
+for p in /health /invite /.well-known/assetlinks.json; do
+  printf "%-32s %s\n" "$p" "$(curl -s -o /dev/null -w '%{http_code}' https://daengapi.weareithero.cloud$p)"
+done
+curl -s https://daengapi.weareithero.cloud/.well-known/assetlinks.json
+```
+
+| 확인 | 기대 | 아니면 |
+| --- | --- | --- |
+| `/health` | 200 | backend 기동 실패 — §5 |
+| `/invite` | 200 (HTML) | 404 면 DEV #535 가 아직 이 VM 에 없음(`main` 반영·④ 확인) |
+| `/.well-known/assetlinks.json` | 200, **빈 배열이 아닌** 앱 인증 정보(`package_name` `com.daengs.app` 과 `sha256_cert_fingerprints`) | `[]` 면 값이 없거나 형식이 틀림 → `/admin/status` 의 `app_links` · 재생성 여부 |
+
+**확인 항목 구분** — 서버마다 따로 반영됩니다.
+
+| 대상 | 채워지는 조건 |
+| --- | --- |
+| 개발 서버 `daengback` | 개발 서버의 `backend/.env` 에도 **별도로** 환경변수를 설정하고 backend 를 재생성한 경우에만 `assetlinks.json` 이 채워집니다. **GCP 운영 배포만으로 자동 반영되지 않습니다.** (개발 서버는 `dev` 머지 때 `deploy.yml` 이 backend 를 재생성하므로 그때도 반영됩니다) |
+| GCP 운영 `daengapi` | 운영 담당자가 **배포 전에** Play Console 의 「앱 서명 키 인증서」 SHA-256 을 확인해 GCP `backend/.env` 에 넣어야 합니다. 업로드 키와 다르면 두 값을 배열로 등록합니다. |
+| 앱 검증 | 운영 설정과 배포가 끝난 뒤 **스토어 서명 앱을 재설치**하고 `adb shell pm get-app-links com.daengs.app` 에서 `daengapi.weareithero.cloud` 가 `verified` 인지 확인합니다. App Links 검증은 설치할 때 이뤄지고, 디버그 빌드는 서명 키가 달라 검증되지 않습니다. |
 
 ### 코퍼스 파이프라인 (GCP)
 

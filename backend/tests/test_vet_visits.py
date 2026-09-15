@@ -1094,6 +1094,45 @@ async def test_split_confirm_is_idempotent_on_every_key(
     assert len(svc_store.visits) == 2
 
 
+# ── 확인 화면이 블록을 볼 수 있나 ────────────────────────────────────
+
+
+def test_extract_response_carries_the_blocks_to_the_app(
+    app_client, svc_store, svc_storage, monkeypatch
+):
+    """**앱이 아이별 분할을 제안할 유일한 재료다.** 추출이 블록을 읽어 `draft.extracted`
+    에 넣어도 응답이 안 나르면 확인 화면은 아무것도 못 한다 — 한 아이에게 전액이 붙고
+    화면은 정상으로 보인다. 그 상태로 한 번 배포됐다 (#536 이후 발견)."""
+    _consent(svc_store, at=datetime.now(UTC), version="v1")
+    extraction = _OK_EXTRACTION.model_copy(
+        update={
+            "patient_count": 2,
+            "total_krw": 191_300,
+            "items": [
+                ReceiptItem(name="*검사-귀-도말", amount_krw=20000, patient_index=0),
+                ReceiptItem(name="소염위생관리", amount_krw=15000, patient_index=1),
+            ],
+        }
+    )
+    _started, extracted = _extract(
+        app_client, svc_storage, monkeypatch, extraction=extraction
+    )
+    body = extracted.json()
+
+    assert body["patient_count"] == 2
+    assert [i["patient_index"] for i in body["items"]] == [0, 1]
+
+
+def test_extract_response_says_one_block_for_a_single_pet_receipt(
+    app_client, svc_storage, monkeypatch
+):
+    """한 마리면 `patient_count == 1` 이고 인덱스는 전부 `null` — 앱은 분할을 안 묻는다."""
+    _started, extracted = _extract(app_client, svc_storage, monkeypatch)
+    body = extracted.json()
+    assert body["patient_count"] == 1
+    assert all(i["patient_index"] is None for i in body["items"])
+
+
 # ── HTTP 경계의 구 모양 호환 ──────────────────────────────────────────
 
 
@@ -1312,7 +1351,11 @@ def test_extract_response_carries_extracted_fields_and_items(app_client, svc_sto
     assert body["visited_on"] == "2026-09-02"
     assert body["total_krw"] == 80000
     assert body["hospital_name"] == "○○동물병원"
-    assert body["items"] == [{"name": "초진료", "amount_krw": 80000}]
+    # `patient_index` 는 블록이 하나뿐이면 null 이다 — 앱이 분할을 안 묻는 근거.
+    assert body["items"] == [
+        {"name": "초진료", "amount_krw": 80000, "patient_index": None}
+    ]
+    assert body["patient_count"] == 1
     assert body["suggested_reason_code"] == "skin"
 
 

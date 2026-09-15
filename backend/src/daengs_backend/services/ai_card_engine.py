@@ -71,6 +71,7 @@ def ready_check(month: int) -> catalog.MonthCard:
     행을 만들기 전에 불러, 어차피 실패할 요청이 한도를 먹거나 백그라운드로 가지 않게 한다.
     """
     card = catalog.require_open(month, settings.cardimage_months)
+    # URL 이 있으면 생성엔 키가 필요 없지만 default_judge() 는 여전히 이 키를 쓴다 — 없으면 카드가 채점 없이 통과한다.
     if not settings.cardgen_url.strip() and not settings.cardimage_gemini_api_key.get_secret_value().strip():
         raise CardImageUnavailable("DAENGS_CARDIMAGE_GEMINI_API_KEY 가 비어 있습니다")
     for path in (

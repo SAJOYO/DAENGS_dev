@@ -20,7 +20,8 @@ def main(argv: list[str] | None = None) -> int:
     from huggingface_hub import snapshot_download
 
     for name in names:
-        path = snapshot_download(MODEL_REPOS[name])
+        # 파이프라인이 읽는 것은 model_index.json 과 하위 폴더(transformer/·vae/…)뿐 — 루트의 단일 파일 가중치·샘플 이미지는 받지 않는다.
+        path = snapshot_download(MODEL_REPOS[name], allow_patterns=["model_index.json", "*/*"])
         print(f"fetched {name} -> {path}", flush=True)
     return 0
 

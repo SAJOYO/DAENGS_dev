@@ -21,8 +21,8 @@
 - 헬스 경로는 **`/health`** 다. `/healthz` 는 Cloud Run 앞 구글 프런트엔드가 가로챈다(D-070 실측).
 - 생성 크기는 `GEN_SIZE = (1024, 1632)`(16의 배수), 받은 뒤 `CARD_SIZE = (994, 1582)` 로 줄인다.
 - 기본 추론값: klein `steps=4, guidance=1.0` · Qwen `steps=40, true_cfg_scale=4.0, negative_prompt=" "`, Qwen 양자화 기본 `CARDGEN_QWEN_QUANT=nf4`(transformer·text_encoder bitsandbytes 4bit).
-- Cloud Run: 리전 `asia-southeast1`, `--gpu=1 --gpu-type=nvidia-l4 --no-gpu-zonal-redundancy --cpu=8 --memory=32Gi --concurrency=1 --min-instances=0 --max-instances=1 --timeout=900 --no-allow-unauthenticated --no-cpu-throttling`. 서비스 이름 `daengs-cardgen-klein` · `daengs-cardgen-qwen`. 가중치 버킷 `gs://daengs-cardgen-weights`(asia-southeast1) 를 `/models` 로 마운트, `HF_HOME=/models`.
-- lock 의 torch 는 리눅스 CPU 인덱스 고정을 **풀지 않는다**. CUDA 판은 Dockerfile 에서 `torch==X+cu126` 로 덮어쓰고 빌드 때 `torch.version.cuda` 로 검증한다. `uv sync --frozen` 은 Dockerfile 에 한 번만.
+- Cloud Run: 리전 `asia-southeast1`, `--gpu=1 --gpu-type=nvidia-l4 --no-gpu-zonal-redundancy --cpu=8 --memory=32Gi --concurrency=1 --min-instances=0 --max-instances=1 --timeout=900 --no-allow-unauthenticated --no-cpu-throttling`. 서비스 이름 `daengs-cardgen-klein` · `daengs-cardgen-qwen`. 가중치 버킷 `gs://daengs-cardgen-weights`(asia-southeast1) 를 `/models` 로 마운트, `HF_HOME=/models`. 시작 프로브는 기본 TCP — 포트는 곧바로 열리고 모델은 백그라운드로 올라간다(프로브 상한 240초 안에 Qwen 이 못 올라온다).
+- lock 의 torch 는 리눅스 CPU 인덱스 고정을 **풀지 않는다**. CUDA 판은 Dockerfile 에서 `torch==X+cu126`·`torchvision==Y+cu126` 로 덮어쓰고 빌드 때 `torch.version.cuda` 로 검증한다. `uv sync --frozen` 은 Dockerfile 에 한 번만.
 - 백엔드 의존성은 `uv add --group cardgen …` 으로만. `pyproject.toml` 을 손으로 고치지 않는다(예외: `[tool.uv.build-backend] module-name` 목록 한 줄).
 - **돈이 나가는 명령(Cloud Build · 가중치 받기 · 서비스 배포 · 모델 호출 · Gemini 호출)은 실행 전에 사람에게 무엇을·몇 번·예상 비용을 설명하고 승인받는다.** 하위 에이전트는 이런 명령을 실행하지 않는다 — 해당 Task 는 컨트롤러가 사람과 함께 한다.
 - 합성 방식(그림만 잘라 붙이기·배지 합성)을 만들거나 제안하지 않는다. 글자는 지금처럼 Pillow(`title.draw_title`)가 얹는다.
@@ -1316,12 +1316,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends gcc libc6-dev \
 COPY backend/pyproject.toml backend/uv.lock backend/README.md ./
 RUN uv sync --frozen --only-group cardgen --no-install-project
 
+# torchvision 도 같이 덮어쓴다 — transformers 5.x 의 Qwen2VLProcessor 가 torchvision 을 요구한다.
 RUN set -eux; \
     V_TORCH="$(uv pip show --python /opt/venv/bin/python torch | awk '/^Version/ {print $2}' | cut -d+ -f1)"; \
-    uv pip install --python /opt/venv/bin/python --reinstall-package torch \
-        --index-url https://download.pytorch.org/whl/cu126 "torch==${V_TORCH}+cu126"
+    V_TV="$(uv pip show --python /opt/venv/bin/python torchvision | awk '/^Version/ {print $2}' | cut -d+ -f1)"; \
+    uv pip install --python /opt/venv/bin/python --reinstall-package torch --reinstall-package torchvision \
+        --index-url https://download.pytorch.org/whl/cu126 "torch==${V_TORCH}+cu126" "torchvision==${V_TV}+cu126"
 # 빌드 머신에는 GPU 가 없어 is_available() 은 못 쓴다 — "CUDA 빌드인지"만 본다.
-RUN /opt/venv/bin/python -c "import torch, sys; print('torch', torch.__version__, 'cuda', torch.version.cuda); sys.exit(0 if torch.version.cuda else 1)"
+RUN /opt/venv/bin/python -c "import torch, torchvision, sys; print('torch', torch.__version__, 'cuda', torch.version.cuda, 'torchvision', torchvision.__version__); sys.exit(0 if torch.version.cuda else 1)"
 
 COPY backend/src/daengs_cardgen ./src/daengs_cardgen
 
@@ -1416,6 +1418,7 @@ if [ "${STEP}" = all ] || [ "${STEP}" = weights ]; then
   gcloud run jobs deploy cardgen-weights --region="${GPU_REGION}" --image="${IMAGE}" \
     --service-account="${SA_EMAIL}" --cpu=4 --memory=16Gi --task-timeout=3h --max-retries=0 \
     --command=/opt/venv/bin/python --args=-m,daengs_cardgen.fetch,"${MODEL_NAME}" \
+    --set-env-vars=HF_XET_CACHE=/tmp/xet \
     --add-volume=name=weights,type=cloud-storage,bucket="${BUCKET}" \
     --add-volume-mount=volume=weights,mount-path=/models
   gcloud run jobs execute cardgen-weights --region="${GPU_REGION}" --wait \
@@ -1425,13 +1428,12 @@ fi
 if [ "${STEP}" = all ] || [ "${STEP}" = deploy ]; then
   echo "== 서비스 배포 (${SERVICE})"
   # min 0 · max 1: 요청이 없으면 0대(0원). GPU 서비스는 인스턴스 기반 과금이라 떠 있는 동안은 유휴도 과금된다.
-  # 기동 때 가중치를 다 올려야 포트가 열린다 — 시작 프로브를 길게 준다.
+  # 포트는 곧바로 열리고 모델은 백그라운드로 올라간다 — 시작 프로브는 기본 TCP 로 충분하다(상한 240초).
   gcloud run deploy "${SERVICE}" --region="${GPU_REGION}" --image="${IMAGE}" \
     --service-account="${SA_EMAIL}" --no-allow-unauthenticated \
     --gpu=1 --gpu-type=nvidia-l4 --no-gpu-zonal-redundancy \
     --cpu=8 --memory=32Gi --no-cpu-throttling \
     --concurrency=1 --min-instances=0 --max-instances=1 --timeout=900 \
-    --startup-probe=tcpSocket.port=8080,initialDelaySeconds=0,periodSeconds=10,failureThreshold=180,timeoutSeconds=5 \
     --add-volume=name=weights,type=cloud-storage,bucket="${BUCKET}",readonly=true \
     --add-volume-mount=volume=weights,mount-path=/models \
     --set-env-vars="CARDGEN_MODEL=${MODEL_NAME},HF_HUB_OFFLINE=1,CARDGEN_QWEN_QUANT=${CARDGEN_QWEN_QUANT:-nf4}"
@@ -1482,11 +1484,11 @@ echo "끝. 서비스 계정·Artifact Registry 저장소는 코퍼스 파이프�
 
 Run (PowerShell):
 ```powershell
-gcloud run deploy --help | Select-String -Pattern "startup-probe|no-gpu-zonal-redundancy|add-volume|no-cpu-throttling"
+gcloud run deploy --help | Select-String -Pattern "no-gpu-zonal-redundancy|add-volume|no-cpu-throttling"
 gcloud run services proxy --help | Select-Object -First 5
 gcloud meta list-files-for-upload | Select-String -Pattern "cardgen|\.env"
 ```
-Expected: 네 플래그가 도움말에 있고, `services proxy` 도움말이 나오고, 업로드 목록에 `docker/cardgen/…`·`backend/src/daengs_cardgen/…` 가 있고 `.env` 는 **없다**. 플래그가 없으면 `gcloud components update` 를 사람에게 요청하고 멈춘다. `--startup-probe` 문법이 다르면 도움말의 형식으로 그 줄만 고친다.
+Expected: 세 플래그가 도움말에 있고, `services proxy` 도움말이 나오고, 업로드 목록에 `docker/cardgen/…`·`backend/src/daengs_cardgen/…` 가 있고 `.env` 는 **없다**. 플래그가 없으면 `gcloud components update` 를 사람에게 요청하고 멈춘다.
 
 - [ ] **Step 4: README 에 절을 더한다**
 
@@ -1546,7 +1548,7 @@ Run: `MODEL=klein INVOKER=user:<계정> STEP=deploy bash infra/gcp/cardgen.sh`
 Measure-Command { curl.exe -s http://127.0.0.1:8091/health } | Select-Object TotalSeconds
 curl.exe -s http://127.0.0.1:8091/health
 ```
-Expected: 첫 호출이 콜드 스타트만큼 걸린 뒤 `{"model":"klein-4b","ready":true,"load_seconds":<초>}`. `TotalSeconds` 와 `load_seconds` 를 적는다. **실패하면** `gcloud run services logs read daengs-cardgen-klein --region=asia-southeast1 --limit=100` 을 보고 원인을 적은 뒤 사람에게 보고한다(추측으로 고쳐 재배포하지 않는다).
+Expected: 첫 `/health` 는 인스턴스가 뜨는 만큼만 걸리고 곧 `{"model":null,"ready":false,"load_seconds":null,"error":null}` 로 돌아온다(포트는 곧바로 열리고 모델은 백그라운드로 올라간다). `ready:true` 가 될 때까지 `/health` 를 몇 초 간격으로 다시 불러 `{"model":"klein-4b","ready":true,"load_seconds":<초>,"error":null}` 을 받고, 첫 `TotalSeconds` 와 `load_seconds` 를 적는다. **`error` 가 채워지면** 로그를 읽고 멈춘다(아래와 같이). **실패하면** `gcloud run services logs read daengs-cardgen-klein --region=asia-southeast1 --limit=100` 을 보고 원인을 적은 뒤 사람에게 보고한다(추측으로 고쳐 재배포하지 않는다).
 
 - [ ] **Step 4: 한 장 생성 (사람 승인 범위 안에서)**
 
@@ -1592,7 +1594,7 @@ proxy 를 8092 로 켜고 Task 6 Step 3·4 와 같은 방법으로 `/health` 와
 | 결과 | 다음 |
 | --- | --- |
 | 뜨고 한 장이 멀쩡하다 | Task 8 |
-| 로그에 `CUDA out of memory` · 컨테이너 메모리 초과(32GiB) · 시작 프로브 실패(30분) | **멈춘다.** 로그 발췌와 함께 사람에게 선택지를 올린다: ① RTX PRO 6000(96GB)로 `CARDGEN_QWEN_QUANT=none` 재배포(최소 20 CPU·80GiB, 비용 큼) ② Qwen 을 이번 비교에서 뺀다 |
+| 로그에 `CUDA out of memory` · 컨테이너 메모리 초과(32GiB) · `/health` 의 `error` 가 채워짐 | **멈춘다.** 로그 발췌와 함께 사람에게 선택지를 올린다: ① RTX PRO 6000(96GB)로 `CARDGEN_QWEN_QUANT=none` 재배포(최소 20 CPU·80GiB, 비용 큼) ② Qwen 을 이번 비교에서 뺀다 |
 | 뜨지만 결과가 깨진다(노이즈·검은 화면) | **멈춘다.** PNG 를 보여 주고 같은 선택지를 올린다 |
 
 - [ ] **Step 4: worklog 에 적고 커밋**

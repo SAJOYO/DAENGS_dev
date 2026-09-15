@@ -2,6 +2,8 @@
 
 import base64
 import io
+import threading
+import time
 
 from fastapi.testclient import TestClient
 from PIL import Image
@@ -45,7 +47,7 @@ def test_snap_rounds_to_multiple_of_16() -> None:
 
 def test_health_reports_injected_model() -> None:
     with TestClient(create_app(model=FakeModel())) as client:
-        assert client.get("/health").json() == {"model": "fake", "ready": True, "load_seconds": None}
+        assert client.get("/health").json() == {"model": "fake", "ready": True, "load_seconds": None, "error": None}
 
 
 def test_health_path_is_not_healthz() -> None:
@@ -79,3 +81,46 @@ def test_generate_validates_seed_and_image_count() -> None:
     with TestClient(create_app(model=FakeModel())) as client:
         assert client.post("/generate", json=_body(seed=-1)).status_code == 422
         assert client.post("/generate", json=_body(images_b64=[_b64()] * 5)).status_code == 422
+
+
+def test_load_failure_is_reported_by_health_and_generate(capsys) -> None:
+    def broken() -> FakeModel:
+        raise RuntimeError("가중치가 없다")
+
+    with TestClient(create_app(loader=broken, ready_timeout_s=5)) as client:
+        response = client.post("/generate", json=_body())
+        health = client.get("/health").json()
+    assert response.status_code == 503
+    assert response.json() == {"code": "load_failed", "message": "RuntimeError: 가중치가 없다"}
+    assert health["ready"] is False
+    assert health["error"] == "RuntimeError: 가중치가 없다"
+    assert "Traceback" in capsys.readouterr().err
+
+
+def test_generate_waits_for_loading_then_succeeds() -> None:
+    release = threading.Event()
+    fake = FakeModel()
+
+    def slow() -> FakeModel:
+        release.wait(10)
+        return fake
+
+    try:
+        with TestClient(create_app(loader=slow, ready_timeout_s=0.05)) as client:
+            started = time.monotonic()
+            response = client.post("/generate", json=_body())
+            assert response.status_code == 503
+            assert response.json()["code"] == "not_ready"
+            assert time.monotonic() - started < 5
+            assert client.get("/health").json() == {"model": None, "ready": False, "load_seconds": None, "error": None}
+
+            release.set()
+            deadline = time.monotonic() + 5
+            while not client.get("/health").json()["ready"] and time.monotonic() < deadline:
+                time.sleep(0.01)
+            assert client.post("/generate", json=_body()).status_code == 200
+            health = client.get("/health").json()
+            assert health["model"] == "fake"
+            assert health["load_seconds"] is not None
+    finally:
+        release.set()

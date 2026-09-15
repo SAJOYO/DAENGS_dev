@@ -62,9 +62,11 @@ if [ "${STEP}" = all ] || [ "${STEP}" = weights ]; then
   gcloud storage buckets add-iam-policy-binding "gs://${BUCKET}" \
     --member="serviceAccount:${SA_EMAIL}" --role=roles/storage.objectAdmin >/dev/null
   echo "== 가중치 받기 잡 (CPU, 한 번)"
+  # HF_XET_CACHE 를 /tmp 로 뺀다 — 안 그러면 hf_xet 의 청크 캐시가 HF_HOME(=FUSE 버킷)에 작은 객체를 잔뜩 쓴다.
   gcloud run jobs deploy cardgen-weights --region="${GPU_REGION}" --image="${IMAGE}" \
     --service-account="${SA_EMAIL}" --cpu=4 --memory=16Gi --task-timeout=3h --max-retries=0 \
     --command=/opt/venv/bin/python --args=-m,daengs_cardgen.fetch,"${MODEL_NAME}" \
+    --set-env-vars=HF_XET_CACHE=/tmp/xet \
     --add-volume=name=weights,type=cloud-storage,bucket="${BUCKET}" \
     --add-volume-mount=volume=weights,mount-path=/models
   gcloud run jobs execute cardgen-weights --region="${GPU_REGION}" --wait \
@@ -74,13 +76,14 @@ fi
 if [ "${STEP}" = all ] || [ "${STEP}" = deploy ]; then
   echo "== 서비스 배포 (${SERVICE})"
   # min 0 · max 1: 요청이 없으면 0대(0원). GPU 서비스는 인스턴스 기반 과금이라 떠 있는 동안은 유휴도 과금된다.
-  # 기동 때 가중치를 다 올려야 포트가 열린다 — 시작 프로브를 길게 준다.
+  # 포트는 곧바로 열리고 모델은 백그라운드로 올라간다(daengs_cardgen/app.py) — 시작 프로브는 기본 TCP 로 충분하다.
+  # Cloud Run 시작 프로브는 240초가 상한이라 "다 올린 뒤 포트를 연다" 는 Qwen 에서 못 맞춘다.
+  # 올리는 동안 온 요청은 앱이 최대 840초 기다린다(--timeout=900 안쪽). 진행은 /health 의 ready·error.
   gcloud run deploy "${SERVICE}" --region="${GPU_REGION}" --image="${IMAGE}" \
     --service-account="${SA_EMAIL}" --no-allow-unauthenticated \
     --gpu=1 --gpu-type=nvidia-l4 --no-gpu-zonal-redundancy \
     --cpu=8 --memory=32Gi --no-cpu-throttling \
     --concurrency=1 --min-instances=0 --max-instances=1 --timeout=900 \
-    --startup-probe=tcpSocket.port=8080,initialDelaySeconds=0,periodSeconds=10,failureThreshold=180,timeoutSeconds=5 \
     --add-volume=name=weights,type=cloud-storage,bucket="${BUCKET}",readonly=true \
     --add-volume-mount=volume=weights,mount-path=/models \
     --set-env-vars="CARDGEN_MODEL=${MODEL_NAME},HF_HUB_OFFLINE=1,CARDGEN_QWEN_QUANT=${CARDGEN_QWEN_QUANT:-nf4}"

@@ -7,7 +7,7 @@
 # 버킷을 /models 로 마운트하고 HF_HOME 이 그것을 본다(`python -m daengs_cardgen.fetch` 가 채운다).
 #
 # lock 의 torch 는 리눅스 CPU 판으로 잠겨 있다(backend/pyproject.toml [tool.uv.sources]). CUDA 판은
-# **설치가 끝난 뒤** torch 만 cu126 인덱스에서 덮어쓴다 — 방법과 함정은 docker/pipeline/Dockerfile 주석을
+# **설치가 끝난 뒤** torch·torchvision 만 cu126 인덱스에서 덮어쓴다 — 방법과 함정은 docker/pipeline/Dockerfile 주석을
 # 그대로 따른다: `torch==X` 는 `+cpu` 에 만족돼 조용히 건너뛰므로 `+cu126` 을 박고,
 # `uv sync --frozen` 은 이 파일에 한 번만 나온다(덮어쓰기 뒤에 부르면 CPU 판으로 되돌린다).
 ARG PYTHON_VERSION=3.12.13
@@ -33,12 +33,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends gcc libc6-dev \
 COPY backend/pyproject.toml backend/uv.lock backend/README.md ./
 RUN uv sync --frozen --only-group cardgen --no-install-project
 
+# torchvision 도 같이 덮어쓴다 — transformers 5.x 의 Qwen2VLProcessor 가 비디오 프로세서를 올리며
+# torchvision 을 요구한다(없으면 Qwen 파이프라인이 기동에서 죽는다). torch 만 cu126 으로 바꾸면
+# torchvision(+cpu)과 ABI 가 어긋나므로 둘을 한 명령으로 맞춘다.
 RUN set -eux; \
     V_TORCH="$(uv pip show --python /opt/venv/bin/python torch | awk '/^Version/ {print $2}' | cut -d+ -f1)"; \
-    uv pip install --python /opt/venv/bin/python --reinstall-package torch \
-        --index-url https://download.pytorch.org/whl/cu126 "torch==${V_TORCH}+cu126"
+    V_TV="$(uv pip show --python /opt/venv/bin/python torchvision | awk '/^Version/ {print $2}' | cut -d+ -f1)"; \
+    uv pip install --python /opt/venv/bin/python --reinstall-package torch --reinstall-package torchvision \
+        --index-url https://download.pytorch.org/whl/cu126 "torch==${V_TORCH}+cu126" "torchvision==${V_TV}+cu126"
 # 빌드 머신에는 GPU 가 없어 is_available() 은 못 쓴다 — "CUDA 빌드인지"만 본다.
-RUN /opt/venv/bin/python -c "import torch, sys; print('torch', torch.__version__, 'cuda', torch.version.cuda); sys.exit(0 if torch.version.cuda else 1)"
+RUN /opt/venv/bin/python -c "import torch, torchvision, sys; print('torch', torch.__version__, 'cuda', torch.version.cuda, 'torchvision', torchvision.__version__); sys.exit(0 if torch.version.cuda else 1)"
 
 COPY backend/src/daengs_cardgen ./src/daengs_cardgen
 

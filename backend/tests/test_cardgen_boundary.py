@@ -72,4 +72,4 @@ def test_cardgen_is_packaged_and_has_its_own_group() -> None:
         spec.split(";")[0].split(">=")[0].split("==")[0].split("<")[0].split("[")[0].strip()
         for spec in cfg["dependency-groups"]["cardgen"]
     }
-    assert {"fastapi", "pillow", "diffusers", "transformers", "accelerate", "bitsandbytes", "torch", "huggingface-hub"} <= names
+    assert {"fastapi", "pillow", "diffusers", "transformers", "accelerate", "bitsandbytes", "torch", "torchvision", "huggingface-hub"} <= names

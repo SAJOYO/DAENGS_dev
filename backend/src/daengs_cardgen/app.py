@@ -1,7 +1,10 @@
-"""GPU 서비스 HTTP 앱. 모델은 기동 때 한 번 올리고(lifespan), 요청은 한 번에 하나씩 처리한다.
+"""GPU 서비스 HTTP 앱. 모델은 기동 때 한 번 올리고, 요청은 한 번에 하나씩 처리한다.
 
-기동에서 가중치를 다 올린 뒤에야 포트가 열린다 — Cloud Run 은 그동안 들어온 요청을 붙잡아 두므로
-콜드 스타트 요청은 503 이 아니라 **느리게 성공**한다. 그 시간이 `/health` 의 `load_seconds` 다.
+**포트는 곧바로 열린다** — 모델은 lifespan 이 띄운 백그라운드 스레드가 올린다. Cloud Run 의 시작
+프로브는 240초가 상한인데 Qwen(약 58GB, GCS FUSE + nf4)은 그 안에 못 올라오기 때문이다.
+올리는 동안 들어온 `/generate` 는 `ready_timeout_s`(Cloud Run 요청 타임아웃 900초보다 짧게)까지
+기다렸다가 처리한다 — 그래서 콜드 스타트 요청은 여전히 503 이 아니라 **느리게 성공**한다.
+올린 시간은 `/health` 의 `load_seconds`, 올리다 실패하면 `error` 에 남고 `/generate` 는 503 `load_failed`.
 """
 
 from __future__ import annotations
@@ -12,7 +15,8 @@ import io
 import os
 import threading
 import time
-from collections.abc import AsyncIterator
+import traceback
+from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -41,21 +45,44 @@ def _decode(b64: str) -> Image.Image:
         raise ValueError(str(exc)) from exc
 
 
-def create_app(model: CardGenModel | None = None) -> FastAPI:
-    state: dict[str, Any] = {"model": model, "load_seconds": None}
+def _default_loader() -> CardGenModel:
+    from daengs_cardgen.diffusion import model_by_name
+
+    loaded = model_by_name(os.environ["CARDGEN_MODEL"])
+    loaded.load()
+    return loaded
+
+
+def create_app(
+    model: CardGenModel | None = None,
+    *,
+    loader: Callable[[], CardGenModel] | None = None,
+    ready_timeout_s: float = 840.0,
+) -> FastAPI:
+    state: dict[str, Any] = {"model": model, "load_seconds": None, "load_error": None}
+    ready = threading.Event()
     lock = threading.Lock()
+    if model is not None:
+        ready.set()
 
-    @asynccontextmanager
-    async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-        if state["model"] is None:
-            from daengs_cardgen.diffusion import model_by_name
-
-            started = time.monotonic()
-            loaded = model_by_name(os.environ["CARDGEN_MODEL"])
-            loaded.load()
+    def _load() -> None:
+        started = time.monotonic()
+        try:
+            loaded = (loader or _default_loader)()
+        except Exception as exc:  # noqa: BLE001 — 어떤 실패든 /health 와 /generate 로 드러낸다
+            state["load_error"] = f"{type(exc).__name__}: {exc}"
+            traceback.print_exc()
+        else:
             state["model"] = loaded
             state["load_seconds"] = round(time.monotonic() - started, 1)
             print(f"cardgen model={loaded.name} load_seconds={state['load_seconds']}", flush=True)
+        finally:
+            ready.set()
+
+    @asynccontextmanager
+    async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+        if not ready.is_set():
+            threading.Thread(target=_load, name="cardgen-load", daemon=True).start()
         yield
 
     app = FastAPI(lifespan=lifespan)
@@ -67,17 +94,20 @@ def create_app(model: CardGenModel | None = None) -> FastAPI:
             "model": getattr(current, "name", None),
             "ready": current is not None,
             "load_seconds": state["load_seconds"],
+            "error": state["load_error"],
         }
 
     @app.post("/generate")
     def generate(body: GenerateBody) -> Response:
-        current = state["model"]
-        if current is None:
-            return JSONResponse({"code": "not_ready", "message": "모델을 올리는 중입니다"}, status_code=503)
         try:
             images = [_decode(item) for item in body.images_b64]
         except ValueError as exc:
             return JSONResponse({"code": "bad_image", "message": f"이미지를 읽을 수 없습니다: {exc}"}, status_code=400)
+        if not ready.wait(ready_timeout_s):
+            return JSONResponse({"code": "not_ready", "message": "모델을 올리는 중입니다"}, status_code=503)
+        current = state["model"]
+        if current is None:
+            return JSONResponse({"code": "load_failed", "message": state["load_error"]}, status_code=503)
         req = EditRequest(
             images=images, prompt=body.prompt, seed=body.seed,
             width=snap(body.width), height=snap(body.height), steps=body.steps, guidance=body.guidance,

@@ -27,6 +27,52 @@ from tests.walk.diary.test_diary_space_integration import public_collector  # no
 from tests.walk.diary.test_diary_space_materials import page, park
 
 
+async def test_retrace_excluded_from_wire_schema_and_answer_but_source_is_preserved(collect_stable_target):
+    from daengs_walk.diary.relational.brief_response import brief_response_schema
+    from daengs_walk.diary.relational.writer_view import publication_writer_view
+
+    prepared = await collect_stable_target(activity()[0])
+    contexts = [f["narrative_context"] for f in prepared["snapshot"]["frames"]]
+    context = next(c for c in reversed(contexts) if any(
+        f["case"] == "route_retrace" for f in c["interval_relations"]["flows"]
+    ))
+    brief = SpaceWritingBrief(context=context)
+    before = brief.model_dump_json()
+    hidden = {f.id for f in brief.context.interval_relations.flows if f.case == "route_retrace"}
+    new = writer_view(brief)
+    schema = brief_response_schema(brief)
+    assert hidden.isdisjoint(new["citation_ids"] + new["relation_ids"])
+    assert all(i not in json.dumps([new, schema]) for i in hidden)
+    assert "retracing" not in json.dumps(new)
+    assert new["citation_ids"] == schema["properties"]["evidence_ids"]["items"]["enum"]
+    assert new["relation_ids"] == schema["properties"]["relation_ids"]["items"].get("enum", [])
+    old = publication_writer_view(brief, "single-writing-brief-v5")
+    assert hidden <= set(old["citation_ids"])
+    assert "retracing" in json.dumps(old)
+    answer = {"text": "왔던 길을 되짚었다.", "focus": "이동", "evidence_ids": [next(iter(hidden))], "relation_ids": []}
+    assert resolve_brief_answer(brief, answer, "single-writing-brief-v5")
+    with pytest.raises(ValueError, match="evidence"):
+        resolve_brief_answer(brief, answer)
+    answer["evidence_ids"] = [new["citation_ids"][0]]
+    answer["relation_ids"] = list(hidden)
+    with pytest.raises(ValueError, match="relation"):
+        resolve_brief_answer(brief, answer)
+    assert brief.model_dump_json() == before
+
+
+def test_previous_retrace_selection_is_not_reintroduced_by_memory_projection():
+    from daengs_walk.diary.relational.writer_material_policy import omit_retrace
+
+    request = {"delivery_memory": [{"selected_journey_relations": [
+        {"id": "old-retrace", "relationship": "retracing", "prior_path": {"x": 1}},
+        {"id": "distance", "relationship": "drawing_closer"},
+    ]}]}
+    projected = omit_retrace(request, set())
+    assert projected["delivery_memory"][0]["selected_journey_relations"] == [
+        {"id": "distance", "relationship": "drawing_closer"},
+    ]
+
+
 @pytest.fixture
 def collect_stable_target(public_collector, monkeypatch):  # noqa: F811
     async def collect(base, *, scene_ids=None):

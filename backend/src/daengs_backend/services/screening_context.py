@@ -10,9 +10,10 @@
 검증하지 않은 판정이 한 번 들어가면 지난 turn 에서 되돌릴 수 없습니다. 그래서 앱은
 `screening_record_id` 만 보내고 판정 내용은 서버가 DB 에서 읽습니다.
 
-**여기서 실행하는 것은 없습니다.** Skin 은 여전히 HANDOFF 전용이고
-(`docs/orchestration/routing.md` §5 인가 매트릭스), 이 파일이 읽는 것은 **이미 끝난
-판정의 기록**입니다. `CapabilityName` 에 `skin` 을 더하지 않습니다.
+**여기서 실행하는 것은 없습니다.** 이 파일이 읽는 것은 **이미 끝난 판정의 기록**이고,
+판정을 새로 내는 Skin 은 여전히 HANDOFF 입니다 (`docs/orchestration/routing.md` §5).
+이 기록을 **해설**하는 `skin` 능력(D-078, `orchestration/adapters/skin.py`)이 이 값을
+읽지만, 그쪽도 여기서 좁힌 두 사실 말고는 받지 않습니다.
 
 **이력도 같은 자리입니다** (#79 3번). "지난번보다 어때요" 에 답하려면 기록이 여러 건
 필요한데, 이력에는 앱이 보낼 참조가 없습니다 — 그래서 **`screening_record_id` 가 온

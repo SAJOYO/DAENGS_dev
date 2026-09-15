@@ -40,6 +40,7 @@ from daengs_backend.orchestration.planner import (
     resolve_care_log_write,
     resolve_deterministic_route,
     resolve_emergency_route,
+    resolve_skin_route,
 )
 from daengs_backend.orchestration.resolver import (
     RESOLUTION_CONFIDENCE_FLOOR,
@@ -190,6 +191,17 @@ class AssistantOrchestrationService:
             requested_capability=requested_capability,
             at_night=_is_night(now_kst),
         )
+        # ── 피부 판정 해설 (D-078). 응급 **뒤**, 명시 신호 **앞**.
+        # 같은 `skin` 신호를 `resolve_deterministic_route` 는 HANDOFF 로 읽는다 — 서버가 해소한
+        # 판정 기록이 붙은 요청만 여기서 먼저 가로챈다. 응급이 앞인 이유는 다른 게이트와 같다:
+        # "피부가 벌겋고 숨을 헐떡여요" 는 해설이 아니라 병원이다.
+        if route_plan is None:
+            route_plan = resolve_skin_route(
+                query=query,
+                context=structured_context,
+                requested_capability=requested_capability,
+                enabled=settings.skin_agent,
+            )
         if route_plan is None:
             route_plan = resolve_deterministic_route(
                 requested_capability=requested_capability,

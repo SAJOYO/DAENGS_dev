@@ -35,6 +35,13 @@ class CapabilityName(StrEnum):
     #: 이것은 **사용자가 앞 턴의 제안에 승낙했을 때만** 열린다 (`planner.resolve_care_log_write`).
     #: 라우터가 낼 수 있는 것은 같은 뜻의 HANDOFF 하나뿐이고, 그 HANDOFF 는 아무것도 안 쓴다.
     CARE_LOG = "care_log"
+    #: 피부 판정 해설 (D-078). **판정을 새로 내지 않는다** — 이미 끝난 스크리닝 기록 한 건을 받아
+    #: 무슨 뜻인지 풀고 다음 행동(다시 찍기 · 진료 · 지켜보기)을 고른다.
+    #:
+    #: `vet_contact` 와 같이 `semantic.ExecuteName` 에 없다. 들어오는 길은 명시 신호
+    #: `requested_capability="skin"` 에 **서버가 소유를 확인한 판정 기록이 붙었을 때** 하나뿐이고
+    #: (`planner.resolve_skin_route`), 기록이 없으면 같은 신호가 예전처럼 HANDOFF 다.
+    SKIN = "skin"
 
 
 class CapabilityStatus(StrEnum):
@@ -438,6 +445,22 @@ class VetContactPayload(ContractModel):
         return self
 
 
+class SkinPayload(ContractModel):
+    """피부 판정 해설의 입력: 사용자 원문 + #307 의 좁은 판정 둘 + 같은 아이의 이전 판정.
+
+    **병변 이름 · 확률 · 통제 문구의 칸이 없는 것이 이 타입의 전부다** (불변식 15, D-023).
+    `ScreeningContext` 를 그대로 품는 이유는 `ScreeningHistory` 와 같다 — "말해도 되는 판정"의
+    두 번째, 더 느슨한 정의가 생기지 않게. 모델이 모르는 것은 말할 수 없다.
+
+    `dog` 가 없는 것도 의도다. 견종·나이로 피부 이야기를 하기 시작하면 판정이 말하지 않은
+    것(이 견종에 흔한 병)을 모델이 채운다.
+    """
+
+    question: str = Field(min_length=1, max_length=1_000)
+    screening: ScreeningContext
+    history: ScreeningHistory | None = None
+
+
 class FacilitySessionPayload(ContractModel):
     """Continue an owner-bound facility view; coordinates belong to the saved search."""
 
@@ -462,6 +485,7 @@ CapabilityPayload = (
     | GeneralPayload
     | VetContactPayload
     | CareLogProposal
+    | SkinPayload
 )
 _PAYLOAD_TYPES = {
     CapabilityName.TRAINING: TrainingPayload,
@@ -473,6 +497,7 @@ _PAYLOAD_TYPES = {
     # 제안과 payload 가 같은 타입이다 — 확인 단계의 약속("보여 준 것만 들어간다")을
     # 사람이 아니라 타입이 지키게 하려는 것이고, 이유는 `CareLogProposal` 독스트링에 있다.
     CapabilityName.CARE_LOG: CareLogProposal,
+    CapabilityName.SKIN: SkinPayload,
 }
 
 

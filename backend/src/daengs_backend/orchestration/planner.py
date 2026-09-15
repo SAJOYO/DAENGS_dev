@@ -44,6 +44,11 @@ docstring and D-051 ②.
 `resolve_care_log_route` 는 아무것도 안 쓴다 (확인 되묻기, 아니면 기록 화면 HANDOFF).
 둘 다 모델을 안 태우고, 기록될 값은 전부 신뢰된 context 와 서버 시계에서 온다 — 쓰기가
 붙어도 D-051 의 "모델은 payload 를 한 글자도 쓰지 않는다" 가 그대로인 이유다.
+
+**`skin` 도 공유 조립기를 안 지난다** (D-078). `resolve_skin_route` 가 명시 신호
+`requested_capability="skin"` 에 **서버가 해소한 판정 기록**(`context["screening"]`)이 붙었을 때만
+배타 단일 요청을 직접 만든다. 새 신호를 발명한 것이 아니다 — 같은 신호가 기록 없이 오면
+`resolve_deterministic_route` 가 예전처럼 skin HANDOFF 를 낸다. 기록이 붙은 요청만 가로챈다.
 """
 
 from __future__ import annotations
@@ -80,7 +85,17 @@ from daengs_backend.orchestration.semantic import (
 _GENERAL = "general"
 _VET_CONTACT = "vet_contact"
 _CARE_LOG = "care_log"
-_EXECUTION_ORDER = ("training", "life", "walk", "place", _GENERAL, _VET_CONTACT, _CARE_LOG)
+_SKIN = "skin"
+_EXECUTION_ORDER = (
+    "training",
+    "life",
+    "walk",
+    "place",
+    _GENERAL,
+    _VET_CONTACT,
+    _CARE_LOG,
+    _SKIN,
+)
 # The names the router (and the explicit signal) may select. `general` is executable but
 # never selectable — it only ever enters a plan through the fallback rule below, so it is
 # excluded here on purpose: `requested_capability="general"` is an unresolved signal.
@@ -91,9 +106,16 @@ _EXECUTION_ORDER = ("training", "life", "walk", "place", _GENERAL, _VET_CONTACT,
 # 능력을 못 부른다. 여는 길은 `resolve_care_log_write` 하나뿐이고, 그것은 사용자가 앞 턴의
 # 제안에 승낙했을 때만 열린다. 대신 같은 이름의 HANDOFF 는 `_HANDOFF_REASONS` 에 있어서
 # 명시 신호로 부를 수 있다 — 그쪽은 아무것도 안 쓰고 기록 화면으로 보낼 뿐이다.
+# `skin` (D-078) 이 빠지는 이유는 **여기 넣으면 신호의 뜻이 바뀌어서**다. `skin` 은 이미
+# `_HANDOFF_REASONS` 의 명시 신호이고, `resolve_deterministic_route` 는 이 집합을 먼저 본다 —
+# 넣는 순간 기록 없는 `skin` 신호가 HANDOFF 대신 payload 규칙 없는 EXECUTE 가 되어 500 이 난다.
+# 판정 기록이 붙은 `skin` 은 `resolve_skin_route` 가 그보다 앞에서 소비한다.
 _EXECUTE_NAMES = frozenset(
-    name for name in _EXECUTION_ORDER if name not in {_GENERAL, _VET_CONTACT, _CARE_LOG}
+    name for name in _EXECUTION_ORDER if name not in {_GENERAL, _VET_CONTACT, _CARE_LOG, _SKIN}
 )
+#: `SkinPayload.question` 의 한도. 넘으면 계획을 안 열고 HANDOFF 로 떨어진다 — 계약 검증이
+#: 500 을 내는 것보다 예전 동작이 낫다. `AssistantQueryRequest.query` 에는 공통 상한이 없다.
+_SKIN_QUESTION_LIMIT = 1_000
 _EXECUTION_INDEX = {name: index for index, name in enumerate(_EXECUTION_ORDER)}
 # Capabilities whose payload carries trusted coordinates. Missing coordinates make
 # the whole plan a CLARIFY, so this set is what the coordinate gate reads.
@@ -157,6 +179,50 @@ def resolve_emergency_route(
     return RoutePlan.model_validate(
         {
             "requests": [{"capability": _VET_CONTACT, "payload": payload, "timeout_ms": None}],
+            "handoffs": [],
+            "clarify": None,
+            "router": RouterKind.DETERMINISTIC,
+            "model": None,
+            "prompt_version": None,
+        }
+    )
+
+
+def resolve_skin_route(
+    *,
+    query: str,
+    context: dict[str, Any],
+    requested_capability: str | None,
+    enabled: bool,
+) -> RoutePlan | None:
+    """판정 기록이 붙은 `skin` 신호면 피부 해설 하나짜리 계획을, 아니면 None 을 낸다 (D-078).
+
+    **셋이 다 맞아야 연다** — 명시 신호가 `skin` 이고, 킬 스위치(`settings.skin_agent`)가 켜져
+    있고, `routers/assistant._with_screening_context` 가 소유를 확인해 해소한 판정이
+    `context["screening"]` 에 있을 것. 하나라도 아니면 None 이고, 같은 신호는 뒤의
+    `resolve_deterministic_route` 에서 오늘과 같은 skin HANDOFF 가 된다. 그래서 이 함수는
+    그것보다 **앞**에 선다 (`service._plan_and_execute`). 응급은 이것보다 앞이다.
+
+    **판정은 본문이 아니라 서버가 읽은 기록에서만 온다.** 여기서 읽는 것은 `_screening_context`
+    · `screening_history` 두 화이트리스트를 지난 판정 종류와 경과일뿐이다 (불변식 15). 병변
+    이름과 확률은 payload 에 칸이 없다.
+
+    **배타다.** 판정 해설에 산책 조건이나 제도 정보가 섞이면 결과 화면에서 이어 물은 질문의
+    답이 흐려진다. 좌표도 안 싣는다.
+    """
+    if not enabled or requested_capability != _SKIN:
+        return None
+    screening = _screening_context(context)
+    if screening is None or len(query) > _SKIN_QUESTION_LIMIT:
+        return None
+    payload: dict[str, Any] = {"question": query, "screening": screening}
+    history = screening_history(context)
+    if history is not None:
+        payload["history"] = history
+
+    return RoutePlan.model_validate(
+        {
+            "requests": [{"capability": _SKIN, "payload": payload, "timeout_ms": None}],
             "handoffs": [],
             "clarify": None,
             "router": RouterKind.DETERMINISTIC,
@@ -843,4 +909,5 @@ __all__ = [
     "resolve_care_log_write",
     "resolve_deterministic_route",
     "resolve_emergency_route",
+    "resolve_skin_route",
 ]

@@ -14,6 +14,7 @@ from daengs_backend.orchestration.adapters import (
     GeneralCapabilityAdapter,
     LifeCapabilityAdapter,
     PlaceCapabilityAdapter,
+    SkinCapabilityAdapter,
     TrainingCapabilityAdapter,
     VetContactCapabilityAdapter,
     WalkCapabilityAdapter,
@@ -66,6 +67,9 @@ class OrchestrationEngine:
                 CapabilityName.GENERAL: GeneralCapabilityAdapter(),
                 # 라우터가 고를 수 없는 능력이다 — `resolve_emergency_route` 만 계획에 넣는다.
                 CapabilityName.VET_CONTACT: VetContactCapabilityAdapter(),
+                # 라우터가 고를 수 없다 — 판정 기록이 붙은 `skin` 신호만 `resolve_skin_route`
+                # 가 계획에 넣는다 (D-078).
+                CapabilityName.SKIN: SkinCapabilityAdapter(),
             }
         self._adapters = dict(adapters)
         if place_adapter is not None:

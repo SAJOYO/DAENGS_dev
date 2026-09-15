@@ -496,6 +496,8 @@ AssistantResponse:
     가 셋을 대조합니다.
 
     `general` (D-057) 은 셋 다에 있습니다 — v9 부터 라우터 목적지이기도 해서입니다 (§3 끝).
+    `vet_contact` · `care_log` · `skin`(D-078) 은 `ExecuteName` 에 없고 나머지 둘에만 있습니다 —
+    라우터가 고를 수 없고 결정론 게이트나 명시 신호로만 들어오는 능력입니다.
     프론트의 `lib/assistant.ts CapabilityName` 도 손으로 맞추는 사본입니다.
 
 15. **스크리닝의 통제 문구와 병변 분포는 어떤 payload · 프롬프트 · 그래프 상태에도 들어가지

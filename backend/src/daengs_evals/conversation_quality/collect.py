@@ -377,6 +377,7 @@ def build_adapters(mode: AdapterMode, general_sink: dict[str, Any]) -> Mapping[A
     from daengs_backend.orchestration.adapters import (
         LifeCapabilityAdapter,
         PlaceCapabilityAdapter,
+        SkinCapabilityAdapter,
         TrainingCapabilityAdapter,
         VetContactCapabilityAdapter,
         WalkCapabilityAdapter,
@@ -395,6 +396,9 @@ def build_adapters(mode: AdapterMode, general_sink: dict[str, Any]) -> Mapping[A
             # 결정론적 게이트로만 들어오고 모델을 안 태우므로 real 모드에서도 recording
             # 래퍼가 필요 없다 — 진짜 어댑터를 그대로 문다.
             CapabilityName.VET_CONTACT: VetContactCapabilityAdapter(),
+            # 판정 기록이 붙은 `skin` 신호로만 들어온다 (D-078). 하네스는 기록 id 를 안
+            # 보내므로 실제로는 안 돈다 — 운영 엔진과 같은 등록을 두는 것뿐이다.
+            CapabilityName.SKIN: SkinCapabilityAdapter(),
         }
     if mode == "fake":
         return _fake_adapters()

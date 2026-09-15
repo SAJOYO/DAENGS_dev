@@ -862,6 +862,21 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
         carers = {uid for pid, uid in store.pet_members if pid in group}
         return owners | carers
 
+    async def identity_guardian_ids_many(session, *, pet_ids, identity_ids):
+        # 진짜와 같게 **보호자가 없는 열쇠는 키가 없습니다.** 그룹 쪽은
+        # `identity_guardian_ids` 를 그대로 써서 두 정의가 갈라지지 않게 합니다.
+        out: dict = {}
+        for pid in set(pet_ids):
+            owners = {p.app_user_id for p in store.pets if p.id == pid}
+            carers = {uid for rid, uid in store.pet_members if rid == pid}
+            if owners | carers:
+                out[pid] = owners | carers
+        for iid in set(identity_ids):
+            guardians = await identity_guardian_ids(session, iid)
+            if guardians:
+                out[iid] = guardians
+        return out
+
     async def identity_pet_of_user(session, identity_id, app_user_id):
         # 진짜와 같게 **많아야 하나**입니다 — `pets_identity_one_per_user` 부분 UNIQUE 가
         # "한 사람은 한 그룹에 행 하나" 를 보장합니다.
@@ -887,6 +902,7 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
     monkeypatch.setattr(identity_repo, "pet_ids_for", identity_pet_ids_for)
     monkeypatch.setattr(identity_repo, "count_pets", identity_count_pets)
     monkeypatch.setattr(identity_repo, "guardian_ids", identity_guardian_ids)
+    monkeypatch.setattr(identity_repo, "guardian_ids_many", identity_guardian_ids_many)
     monkeypatch.setattr(identity_repo, "pet_of_user", identity_pet_of_user)
     monkeypatch.setattr(identity_repo, "delete", identity_delete)
 

@@ -28,6 +28,7 @@ from daengs_backend.repositories import pet_identity as identity_repo
 __all__ = [
     "NotGroupOwnerError",
     "PetView",
+    "has_other_carers",
     "collapse",
     "common_of",
     "detach_user",
@@ -207,6 +208,35 @@ async def group_pet_ids_of(session: AsyncSession, pet: Pet) -> list[uuid.UUID]:
         return [pet.id]
     ids = await identity_repo.pet_ids_for(session, pet.identity_id)
     return ids or [pet.id]
+
+
+async def has_other_carers(
+    session: AsyncSession, viewer: uuid.UUID, views: list[PetView]
+) -> dict[uuid.UUID, bool]:
+    """카드(`display.id`) → **그 논리 강아지 그룹에 `viewer` 말고 보호자가 있는가.**
+
+    카드의 그룹은 `collapse` 가 접은 단위 그대로입니다 — 연결 안 된 아이는 행 하나
+    (`pet.id`), 연결된 아이는 `identity_id` 의 모든 행. 보호자는 각 행의 대표 ∪ 돌보미를
+    **사용자 id 로 중복 제거**한 것(`identity_repo.guardian_ids` 와 같은 정의)이고, 거기서
+    `viewer` 를 뺍니다. 그래서 한 사람이 자기 행의 대표이면서 앵커 행의 돌보미여도 한 번만
+    셉니다.
+
+    카드가 몇 장이든 **쿼리는 한 번**입니다(`identity_repo.guardian_ids_many`).
+    """
+    if not views:
+        return {}
+    keys = {v.display.id: v.display.identity_id or v.display.id for v in views}
+    guardians = await identity_repo.guardian_ids_many(
+        session,
+        pet_ids=[v.display.id for v in views if v.display.identity_id is None],
+        identity_ids=[
+            v.display.identity_id for v in views if v.display.identity_id is not None
+        ],
+    )
+    return {
+        card_id: bool(guardians.get(key, set()) - {viewer})
+        for card_id, key in keys.items()
+    }
 
 
 async def link(session: AsyncSession, invited: Pet, target: Pet) -> uuid.UUID:

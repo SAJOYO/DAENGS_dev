@@ -43,3 +43,6 @@
 실제 준비·작성 조립·저장·재조회 함수를 사용한다. 작성 응답만 주입하고 외부 API/LLM/DB에는
 접속하지 않는다. 환경 용량 0, 장면 결합, 변조, 과거 JSON 호환, 실패 발행을 확인한다.
 실제 서버 배포와 폰 설치는 별도 단계다.
+
+실행 결과: test_scene_conditions.py 3개, 기존 test_diary_temperature.py와
+test_diary_card_writing.py 30개 통과. 변경 파일 Ruff 통과. APP 대응 검사 19개 및 APK 빌드 통과.

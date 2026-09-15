@@ -19,7 +19,7 @@ def fallback(prepared, revision, code="budget_exceeded"):
     base = prepared.board.board.model_copy(
         update={"model_status": "unavailable", "failure_code": code}
     )
-    return store_board(prepared, publish_board(base, prepared.board.plan), revision)
+    return store_board(prepared, publish_board(base, prepared.board.plan, prepared.board.slots), revision)
 
 
 def publication_reservation(prepared, revision, started, deadline):

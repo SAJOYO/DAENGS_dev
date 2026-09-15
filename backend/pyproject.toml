@@ -86,6 +86,14 @@ override-dependencies = [
     "opencv-contrib-python; sys_platform == 'never'",
 ]
 
+# `cardgen`(D-078)은 diffusers 가 huggingface-hub>=1.x 를 요구하고, `ml` 은 sentence-transformers →
+# transformers<5 → huggingface-hub<1 에 묶여 한 해석에 같이 못 들어간다. 두 그룹을 한 venv·이미지에
+# 같이 까는 곳이 없으므로(backend=ml·screening, pipeline 이미지=ml·pipeline·pdf, cardgen 이미지=cardgen 만)
+# 서로 배타적인 그룹으로 선언한다. ⚠ 둘을 같이 설치하려 하면 uv 가 거부한다 — 그게 의도다.
+conflicts = [
+    [{ group = "ml" }, { group = "cardgen" }],
+]
+
 [[tool.uv.index]]
 name = "pytorch-cu126"
 url = "https://download.pytorch.org/whl/cu126"
@@ -254,8 +262,14 @@ realtime = [
 # 덮어쓴다 — `[tool.uv.sources]` 를 풀지 말 것.
 # ⚠ 이름을 바꾸면 `docker/cardgen/Dockerfile` 의 `--only-group` 인자도 같이 고쳐라.
 cardgen = [
+    "accelerate>=1.0",
+    "bitsandbytes>=0.45",
+    "diffusers>=0.40",
     "fastapi[standard]>=0.141.1",
+    "huggingface-hub>=0.34",
     "pillow>=10.2",
+    "torch==2.13.0",
+    "transformers>=4.57.6",
 ]
 
 [tool.ruff]

@@ -72,7 +72,7 @@ DISTANCE_FROM_RECORDED_WALKS_ONLY = (
     "말씀해 주신 경로는 기록에 없어서 재어 드릴 수 없어요."
 )
 
-#: 피부 판정 해설(D-078)의 다음 행동. 모델은 **무엇을** 할지만 고르고 문장은 여기서 나간다 —
+#: 피부 판정 해설(D-079)의 다음 행동. 모델은 **무엇을** 할지만 고르고 문장은 여기서 나간다 —
 #: "병원에 가 보라" 는 제품 문장이지 생성물이 아니다 (#278). `vet_visit` 은
 #: `SCOPED_REDIRECT_MESSAGES["diagnosis"]` 의 둘째 문장과 **같은 말**이다 — 거절로 가든
 #: 안내로 가든 병원 권유가 같은 문장으로 읽혀야 한다.
@@ -88,7 +88,7 @@ SKIN_ACTION_MESSAGES: dict[SkinAction, str] = {
 #: (`VET_CONTACT_HOURS_UNKNOWN` 과 같은 판단). "진단" 이라는 말은 쓰지 않는다.
 SKIN_REFERENCE_NOTICE = "사진으로 본 판정은 참고용이에요. 정확한 확인은 수의사 진료로 해 주세요."
 
-#: 모델 해설이 병변 이름이나 확률을 말했을 때 **그 문장 대신** 나가는 판정 요약 (D-078).
+#: 모델 해설이 병변 이름이나 확률을 말했을 때 **그 문장 대신** 나가는 판정 요약 (D-079).
 #: 판정 이름은 `aggregate._SCREENING_VERDICTS` 와 같은 말이다 — 같은 판정이 답변마다 다른
 #: 말로 나오면 사용자가 그것을 다른 판정으로 읽는다.
 SKIN_VERDICT_SUMMARY: dict[str, str] = {

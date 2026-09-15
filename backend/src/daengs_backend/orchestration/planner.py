@@ -45,7 +45,7 @@ docstring and D-051 ②.
 둘 다 모델을 안 태우고, 기록될 값은 전부 신뢰된 context 와 서버 시계에서 온다 — 쓰기가
 붙어도 D-051 의 "모델은 payload 를 한 글자도 쓰지 않는다" 가 그대로인 이유다.
 
-**`skin` 도 공유 조립기를 안 지난다** (D-078). `resolve_skin_route` 가 명시 신호
+**`skin` 도 공유 조립기를 안 지난다** (D-079). `resolve_skin_route` 가 명시 신호
 `requested_capability="skin"` 에 **서버가 해소한 판정 기록**(`context["screening"]`)이 붙었을 때만
 배타 단일 요청을 직접 만든다. 새 신호를 발명한 것이 아니다 — 같은 신호가 기록 없이 오면
 `resolve_deterministic_route` 가 예전처럼 skin HANDOFF 를 낸다. 기록이 붙은 요청만 가로챈다.
@@ -106,7 +106,7 @@ _EXECUTION_ORDER = (
 # 능력을 못 부른다. 여는 길은 `resolve_care_log_write` 하나뿐이고, 그것은 사용자가 앞 턴의
 # 제안에 승낙했을 때만 열린다. 대신 같은 이름의 HANDOFF 는 `_HANDOFF_REASONS` 에 있어서
 # 명시 신호로 부를 수 있다 — 그쪽은 아무것도 안 쓰고 기록 화면으로 보낼 뿐이다.
-# `skin` (D-078) 이 빠지는 이유는 **여기 넣으면 신호의 뜻이 바뀌어서**다. `skin` 은 이미
+# `skin` (D-079) 이 빠지는 이유는 **여기 넣으면 신호의 뜻이 바뀌어서**다. `skin` 은 이미
 # `_HANDOFF_REASONS` 의 명시 신호이고, `resolve_deterministic_route` 는 이 집합을 먼저 본다 —
 # 넣는 순간 기록 없는 `skin` 신호가 HANDOFF 대신 payload 규칙 없는 EXECUTE 가 되어 500 이 난다.
 # 판정 기록이 붙은 `skin` 은 `resolve_skin_route` 가 그보다 앞에서 소비한다.
@@ -195,7 +195,7 @@ def resolve_skin_route(
     requested_capability: str | None,
     enabled: bool,
 ) -> RoutePlan | None:
-    """판정 기록이 붙은 `skin` 신호면 피부 해설 하나짜리 계획을, 아니면 None 을 낸다 (D-078).
+    """판정 기록이 붙은 `skin` 신호면 피부 해설 하나짜리 계획을, 아니면 None 을 낸다 (D-079).
 
     **셋이 다 맞아야 연다** — 명시 신호가 `skin` 이고, 킬 스위치(`settings.skin_agent`)가 켜져
     있고, `routers/assistant._with_screening_context` 가 소유를 확인해 해소한 판정이

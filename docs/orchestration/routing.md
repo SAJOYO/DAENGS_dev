@@ -430,7 +430,7 @@ Place 는 PR #196 에서 실행 registry 에 들어왔고 `requested_capability=
 | Walk | YES | YES |
 | Place | YES | YES |
 | Skin 판정 EXECUTE (`/screen/*`) | NO | NO |
-| Skin 판정 해설 EXECUTE — 기록이 붙은 `skin` 신호 (D-078) | YES | NO (기록이 없어 HANDOFF) |
+| Skin 판정 해설 EXECUTE — 기록이 붙은 `skin` 신호 (D-079) | YES | NO (기록이 없어 HANDOFF) |
 | Gait EXECUTE | NO | NO |
 
 - **앱 회원의 assistant 경유 Training 실행은 의도된 제품 접근 확대입니다** — 우발적
@@ -446,7 +446,7 @@ Place 는 PR #196 에서 실행 registry 에 들어왔고 `requested_capability=
 
 - **Skin · Gait 로는 EXECUTE 하지 않습니다.** 대화에서 그 도메인이 감지되면 HANDOFF 입니다.
   예외는 하나입니다 — 앱이 판정 기록(`screening_record_id`)을 붙여 `skin` 신호를 보내면, 그
-  판정을 **해설**하는 `skin` EXECUTE 가 돕니다 (D-078, `planner.resolve_skin_route`). 판정을
+  판정을 **해설**하는 `skin` EXECUTE 가 돕니다 (D-079, `planner.resolve_skin_route`). 판정을
   새로 내는 것은 여전히 HANDOFF 이고, 라우터는 `skin` 을 EXECUTE 로 고를 수 없습니다.
   Skin 은 #100/D-040 이후 main backend 의 `/screen/*` 로 기술적으로 호출 가능하지만,
   multipart 업로드와 통제 문구 보존이 필요한 전용 플로우라 Card 1 역할은 그대로

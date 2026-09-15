@@ -35,7 +35,7 @@ class CapabilityName(StrEnum):
     #: 이것은 **사용자가 앞 턴의 제안에 승낙했을 때만** 열린다 (`planner.resolve_care_log_write`).
     #: 라우터가 낼 수 있는 것은 같은 뜻의 HANDOFF 하나뿐이고, 그 HANDOFF 는 아무것도 안 쓴다.
     CARE_LOG = "care_log"
-    #: 피부 판정 해설 (D-078). **판정을 새로 내지 않는다** — 이미 끝난 스크리닝 기록 한 건을 받아
+    #: 피부 판정 해설 (D-079). **판정을 새로 내지 않는다** — 이미 끝난 스크리닝 기록 한 건을 받아
     #: 무슨 뜻인지 풀고 다음 행동(다시 찍기 · 진료 · 지켜보기)을 고른다.
     #:
     #: `vet_contact` 와 같이 `semantic.ExecuteName` 에 없다. 들어오는 길은 명시 신호

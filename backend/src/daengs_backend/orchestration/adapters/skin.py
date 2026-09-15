@@ -1,4 +1,4 @@
-"""피부 판정 해설 서브에이전트 (D-078).
+"""피부 판정 해설 서브에이전트 (D-079).
 
 보호자가 스크리닝 결과 화면에서 이어 묻는 질문("이거 병원 가야 해?", "다시 찍으라는 게 무슨
 뜻이야?")에, **이미 끝난 판정**이 무슨 뜻인지 풀고 다음 행동을 고른다. 판정을 새로 내지 않는다 —
@@ -62,7 +62,7 @@ from daengs_backend.orchestration.semantic import (
     _gemini_client,
 )
 
-# v1 (D-078): 첫 판본. 규칙 문장이나 `SkinGuidance` 스키마가 한 글자라도 바뀌면 올린다 —
+# v1 (D-079): 첫 판본. 규칙 문장이나 `SkinGuidance` 스키마가 한 글자라도 바뀌면 올린다 —
 # 스키마가 프롬프트 본문에 그대로 들어가므로 칸 하나가 늘어도 본문이 달라진다.
 SKIN_PROMPT_VERSION = "skin-guide-ko-v1"
 SKIN_MODEL_ID = ROUTER_MODEL_ID

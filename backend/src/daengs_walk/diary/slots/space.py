@@ -89,10 +89,7 @@ def space_candidates(saved, anchor, scene_scope, policy, reject):
 def writing_facts(item):
     """Keep application relations; internal geometry/counts never become prose instructions."""
     if item.facts.get("format") == "diary-movement-material-v1":
-        from daengs_walk.diary.board.activity import activity_projection
-
-        payload, _ = activity_projection({"movement": [{"id": item.id, "facts": item.facts}]})
-        return {**payload, "subject": "recording_device", "action_meaning": "not_inferred"}
+        raise ValueError("movement context requires a behavior pin, not a space projection")
     if item.facts.get("format") == "route-pattern-material-v1":
         return {
             key: item.facts[key] for key in ("material", "relation", "subject", "action_meaning")

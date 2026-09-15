@@ -1,0 +1,14 @@
+{
+  "mode": "offline-placeholder",
+  "external_calls": 0,
+  "source": "public-02",
+  "input_sha256": "6d713480f69d669aeb0594feff5a0d1644aaf97af5154e7251bb0c384bf2af62",
+  "backgrounds_sha256": "34c6ec2dc371c1b6b17801850f614ef790c86231b05dab394f1b5f5c3b5584dd",
+  "writer_version": "448fe6dc588141acc7251576f852b6152c64f6f54011036be2ea0214d98b217f",
+  "cards": 8,
+  "activity_jobs": 8,
+  "combined_action_jobs": 1,
+  "movement_only_jobs": 7,
+  "title_jobs": 1,
+  "storage_roundtrip": true
+}

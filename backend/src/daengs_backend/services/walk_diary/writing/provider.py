@@ -1,4 +1,4 @@
-"""One bounded Gemini transport call; model SDK is loaded only when invoked."""
+"""Bounded Gemini writing; space may make one invocation-local detail lookup."""
 
 import json
 
@@ -21,6 +21,39 @@ async def generate_card_prose(stage, payload, schema):
             retry_options=types.HttpRetryOptions(attempts=1),
         ),
     ).aio as client:
+        if stage == "space":
+            from daengs_backend.services.walk_diary import space_details
+            from daengs_backend.services.walk_diary.writing.space_dialogue import write_space
+
+            async def send(contents, declarations):
+                return await client.models.generate_content(
+                    model=policy.MODEL,
+                    contents=contents,
+                    config=types.GenerateContentConfig(
+                        system_instruction=policy.PROMPTS[stage] + space_details.INSTRUCTION,
+                        temperature=0,
+                        candidate_count=1,
+                        max_output_tokens=512,
+                        automatic_function_calling=types.AutomaticFunctionCallingConfig(
+                            disable=True
+                        ),
+                        **(
+                            {
+                                "tools": [types.Tool(function_declarations=declarations)],
+                                "tool_config": types.ToolConfig(
+                                    function_calling_config=types.FunctionCallingConfig(mode="AUTO")
+                                ),
+                            }
+                            if declarations
+                            else {
+                                "response_mime_type": "application/json",
+                                "response_json_schema": schema,
+                            }
+                        ),
+                    ),
+                )
+
+            return await write_space(payload, send)
         response = await client.models.generate_content(
             model=policy.MODEL,
             contents=json.dumps(payload, ensure_ascii=False),

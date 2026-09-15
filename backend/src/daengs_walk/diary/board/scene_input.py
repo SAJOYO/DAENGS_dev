@@ -11,6 +11,8 @@ PART_FIELDS = {"space": "where", "motion": "route_pattern", "environment": "envi
 def action_anchor(scene):
     if not isinstance(scene.core, RecordCore) or scene.core.record.content.kind != "behavior":
         return None
+    if scene.core.record.deleted:
+        return None
     content = scene.core.record.content
     return {
         "id": "action:" + digest(scene.core_ref),
@@ -30,6 +32,8 @@ def scene_input(scene, stamp):
     context = {field: [] for field in PART_FIELDS.values()}
     preserve = preserve_original(scene)
     for item in stamp.materials():
+        if item.facts.get("format") == "diary-movement-material-v1":
+            continue  # Only the pin-bound action request may consume the new movement format.
         if preserve and item.part == "motion":
             continue  # User-authored moments receive only spatial/environment supplements.
         context[PART_FIELDS[item.part]].append(

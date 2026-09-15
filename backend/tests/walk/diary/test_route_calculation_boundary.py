@@ -16,11 +16,20 @@ from tests.walk.diary.test_diary_service_package import SOURCE, imports
 from tests.walk.support.route_contracts import results
 
 
-def test_pre_extraction_geometry_observation_board_and_movement_hashes():
+def test_pre_extraction_shared_geometry_observation_and_board_hashes():
     golden = json.loads(
         (Path(__file__).parents[1] / "fixtures/route-boundary-v1.json").read_text(encoding="utf-8")
     )
-    assert results() == golden["cases"]
+
+    # #520 deliberately replaces diary movement shapes and their versioned proof.
+    # test_diary_movement_materials checks those semantics; shared calculations,
+    # observation selection, board selection and legacy output must remain byte-identical.
+    def shared(cases):
+        return {
+            name: {k: v for k, v in case.items() if k != "movement"} for name, case in cases.items()
+        }
+
+    assert shared(results()) == shared(golden["cases"])
 
 
 def test_shared_calculations_and_diary_do_not_import_legacy_policy():

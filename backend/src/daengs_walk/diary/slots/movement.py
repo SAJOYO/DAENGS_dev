@@ -1,7 +1,5 @@
 """Bind composed movement to one visit and a bounded card explanation interval."""
 
-from datetime import datetime
-
 from daengs_walk.diary.contracts.input import Point
 from daengs_walk.diary.contracts.slots import SlotDecision
 from daengs_walk.diary.route.movement import phases_for
@@ -70,17 +68,11 @@ def movement_candidates(scene, scenes, catalog, policy, decisions):
     for claim in catalog.claims:
         if claim["block"] != block:
             continue
-        if claim["meaning"].startswith("turn_"):
-            pivot = claim["proof"]["anchor"]
-            binding = policy.route_patterns
-            max_seconds = binding.turn_near_s if binding else 20
-            max_distance = binding.focus_radius_m if binding else 15
-            if (
-                abs((anchor.event_at - datetime.fromisoformat(pivot["at"])).total_seconds())
-                > max_seconds
-                or metres(anchor.point, Point(lat=pivot["lat"], lng=pivot["lng"])) > max_distance
-            ):
-                continue
+        if "event_s" in claim and not (
+            left <= claim["event_s"] < right
+            or claim["event_s"] == right == blocks[block][-1]["elapsed_s"]
+        ):
+            continue
         claims.append(claim)
     phases = phases_for(claims, left, right)
     if not phases:

@@ -1,0 +1,2481 @@
+[
+  {
+    "stage": "space",
+    "request": {
+      "version": "scene-comparison-v1",
+      "current": {
+        "scene_id": "stamp:9e82be6f4ff6d65eb3d67647139cc351eff5446e36212071ff81b71a98d824bc",
+        "walk_id": "59c763115707e37337d82d8e1e751bebdb04d59dbb879af84f2d36b6b5af3f3f",
+        "recorded_at": "2026-09-14T01:04:20Z",
+        "point": {
+          "lat": 37.470589119054424,
+          "lng": 127.03785721894909
+        },
+        "accuracy_m": 5.0,
+        "position_basis": "observed",
+        "facts": [
+          {
+            "id": "e1",
+            "family": "road",
+            "value": {
+              "name": "매헌로"
+            },
+            "scope": {
+              "kind": "record_point",
+              "description": "좌표에 대응한 주소의 도로명. 실제 통과·진입 도로는 미확인",
+              "coverage_key": "17ce1c62bd4a49831c90fd9d5ee6102ec9e56528a7a5fa100166076866b30e9f"
+            },
+            "subject_key": null,
+            "observed_at": null,
+            "reference_date": null,
+            "time_meaning": "조회 시점의 주소 대응. 도로의 관측 시점은 미확인"
+          },
+          {
+            "id": "e2",
+            "family": "surrounding_object",
+            "value": {
+              "name": "마  방",
+              "park_type": "근린공원",
+              "registered_point": {
+                "lat": 37.47230907,
+                "lng": 127.0382419
+              },
+              "distance_m": 194.24,
+              "query_radius_m": 1000.0,
+              "area_m2": 6547.0,
+              "reference_dates": [
+                "2025-08-07"
+              ],
+              "catalog_complete": false
+            },
+            "scope": {
+              "kind": "registered_point",
+              "description": "근처에 공원이 있음. 경계·내부·방문 여부는 미확인",
+              "coverage_key": "9c3e53d4b5e78fa81ba94d6b0d810a4d9f705a83f7b6db8e350ccaa5cb3ecb27"
+            },
+            "subject_key": "public-normalized-park:11650-00005",
+            "observed_at": null,
+            "reference_date": "2025-08-07",
+            "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인"
+          },
+          {
+            "id": "e3",
+            "family": "land_cover",
+            "value": {
+              "피복": "풀밭",
+              "classification": {
+                "피복": "기타초지"
+              },
+              "layer": "EGIS:lv3_2025y"
+            },
+            "scope": {
+              "kind": "record_point",
+              "description": "이 위치의 배경 유형. 실제 통과·현장 풍경·식생의 밀도는 미확인",
+              "coverage_key": "ce82ebf409ad65935f55ad86e58f7e188aa03d719d6c11a33018d957550ff587"
+            },
+            "subject_key": "public-normalized-land_cover:EGIS:lv3_2025y:lv3_2025y.1950758",
+            "observed_at": null,
+            "reference_date": "2024-12-30Z",
+            "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인"
+          },
+          {
+            "id": "e4",
+            "family": "area_context",
+            "value": {
+              "composition": {
+                "업종구성": "여러 업종 혼합",
+                "조회영역_등록분포": "등록 지점이 흩어져 있음"
+              },
+              "query": {
+                "kind": "query_circle",
+                "point": {
+                  "lat": 37.470589119054424,
+                  "lng": 127.03785721894909
+                },
+                "radius_m": 1000.0
+              },
+              "registered_count": 3940,
+              "groups": {
+                "arts_sports": 110,
+                "business_support": 266,
+                "education": 232,
+                "food": 795,
+                "health": 45,
+                "lodging": 27,
+                "personal_service": 255,
+                "professional": 1343,
+                "real_estate": 131,
+                "retail": 736
+              },
+              "registered_sites": 1151,
+              "spread_rms_m": 556.565,
+              "nearest_registered_point_m": 79.177,
+              "centroid_distance_m": 411.112,
+              "reference_month": "202606",
+              "beverage_count": 156,
+              "classification_policy": {
+                "sparse_max_shops": 5,
+                "dominant_min_shops": 10,
+                "dominant_share": 0.4,
+                "dominant_gap": 0.15,
+                "cluster_rms_radius_ratio": 0.25
+              },
+              "source_hash": "2c884e877ef6ef07cf95e7f851437b15a9b0b0ade5a3637f9659e9075c337348"
+            },
+            "scope": {
+              "kind": "query_area",
+              "description": "조회 원 전체의 등록 상가 분포. 기록 지점의 길 모습·영업·방문·혼잡은 미확인",
+              "coverage_key": "5ed2f2a17ba5c72e008c673df2e31a6446fb219cfc2416d352e25a9de9332020"
+            },
+            "subject_key": "public-normalized-commerce:area:5ed2f2a17ba5c72e008c673df2e31a6446fb219cfc2416d352e25a9de9332020",
+            "observed_at": null,
+            "reference_date": "202606",
+            "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인"
+          }
+        ],
+        "collection": {
+          "road": "complete",
+          "land_cover": "partial",
+          "surrounding_object": "partial",
+          "area_context": "partial"
+        },
+        "collection_reasons": {
+          "road": [
+            "road_name_only"
+          ],
+          "land_cover": [],
+          "surrounding_object": [],
+          "area_context": []
+        }
+      },
+      "earlier": null,
+      "connection": null,
+      "relation_slots": {
+        "background": {
+          "status": "not_applicable",
+          "policy_version": "scene-comparison-v1",
+          "reason": "initial_scene",
+          "items": []
+        },
+        "proximity": {
+          "status": "not_applicable",
+          "policy_version": "scene-comparison-v1",
+          "reason": "initial_scene",
+          "items": []
+        },
+        "area_context": {
+          "status": "not_applicable",
+          "policy_version": "scene-comparison-v1",
+          "reason": "initial_scene",
+          "items": []
+        }
+      },
+      "narration": {
+        "narrator": "이 산책을 기록한 보호자(나)",
+        "companions": [
+          {
+            "name": "보리"
+          }
+        ],
+        "scope": "현재 장면"
+      },
+      "route_evidence": null,
+      "citation_ids": [
+        "e1",
+        "e2",
+        "e3",
+        "e4"
+      ],
+      "relation_ids": []
+    },
+    "raw": "{\n  \"text\": \"매헌로 근처를 지나며 주변을 둘러보니 풀밭이 펼쳐져 있고, 가까운 곳에 마방 근린공원이 자리하고 있었다. 이 일대는 다양한 업종의 상점들이 모여 있는 활기찬 지역이었다.\",\n  \"evidence_ids\": [\n    \"e1\",\n    \"e2\",\n    \"e3\",\n    \"e4\"\n  ],\n  \"focus\": \"매헌로 인근의 풀밭과 마방 근린공원, 그리고 주변의 다양한 상권 분포를 소개함.\",\n  \"relation_ids\": []\n}",
+    "elapsed_s": 3.375
+  },
+  {
+    "stage": "review",
+    "request": {
+      "part": "space",
+      "evidence": {
+        "version": "scene-comparison-v1",
+        "current": {
+          "scene_id": "stamp:9e82be6f4ff6d65eb3d67647139cc351eff5446e36212071ff81b71a98d824bc",
+          "walk_id": "59c763115707e37337d82d8e1e751bebdb04d59dbb879af84f2d36b6b5af3f3f",
+          "recorded_at": "2026-09-14T01:04:20Z",
+          "point": {
+            "lat": 37.470589119054424,
+            "lng": 127.03785721894909
+          },
+          "accuracy_m": 5.0,
+          "position_basis": "observed",
+          "facts": [
+            {
+              "id": "e1",
+              "family": "road",
+              "value": {
+                "name": "매헌로"
+              },
+              "scope": {
+                "kind": "record_point",
+                "description": "좌표에 대응한 주소의 도로명. 실제 통과·진입 도로는 미확인",
+                "coverage_key": "17ce1c62bd4a49831c90fd9d5ee6102ec9e56528a7a5fa100166076866b30e9f"
+              },
+              "subject_key": null,
+              "observed_at": null,
+              "reference_date": null,
+              "time_meaning": "조회 시점의 주소 대응. 도로의 관측 시점은 미확인"
+            },
+            {
+              "id": "e2",
+              "family": "surrounding_object",
+              "value": {
+                "name": "마  방",
+                "park_type": "근린공원",
+                "registered_point": {
+                  "lat": 37.47230907,
+                  "lng": 127.0382419
+                },
+                "distance_m": 194.24,
+                "query_radius_m": 1000.0,
+                "area_m2": 6547.0,
+                "reference_dates": [
+                  "2025-08-07"
+                ],
+                "catalog_complete": false
+              },
+              "scope": {
+                "kind": "registered_point",
+                "description": "근처에 공원이 있음. 경계·내부·방문 여부는 미확인",
+                "coverage_key": "9c3e53d4b5e78fa81ba94d6b0d810a4d9f705a83f7b6db8e350ccaa5cb3ecb27"
+              },
+              "subject_key": "public-normalized-park:11650-00005",
+              "observed_at": null,
+              "reference_date": "2025-08-07",
+              "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인"
+            },
+            {
+              "id": "e3",
+              "family": "land_cover",
+              "value": {
+                "피복": "풀밭",
+                "classification": {
+                  "피복": "기타초지"
+                },
+                "layer": "EGIS:lv3_2025y"
+              },
+              "scope": {
+                "kind": "record_point",
+                "description": "이 위치의 배경 유형. 실제 통과·현장 풍경·식생의 밀도는 미확인",
+                "coverage_key": "ce82ebf409ad65935f55ad86e58f7e188aa03d719d6c11a33018d957550ff587"
+              },
+              "subject_key": "public-normalized-land_cover:EGIS:lv3_2025y:lv3_2025y.1950758",
+              "observed_at": null,
+              "reference_date": "2024-12-30Z",
+              "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인"
+            },
+            {
+              "id": "e4",
+              "family": "area_context",
+              "value": {
+                "composition": {
+                  "업종구성": "여러 업종 혼합",
+                  "조회영역_등록분포": "등록 지점이 흩어져 있음"
+                },
+                "query": {
+                  "kind": "query_circle",
+                  "point": {
+                    "lat": 37.470589119054424,
+                    "lng": 127.03785721894909
+                  },
+                  "radius_m": 1000.0
+                },
+                "registered_count": 3940,
+                "groups": {
+                  "arts_sports": 110,
+                  "business_support": 266,
+                  "education": 232,
+                  "food": 795,
+                  "health": 45,
+                  "lodging": 27,
+                  "personal_service": 255,
+                  "professional": 1343,
+                  "real_estate": 131,
+                  "retail": 736
+                },
+                "registered_sites": 1151,
+                "spread_rms_m": 556.565,
+                "nearest_registered_point_m": 79.177,
+                "centroid_distance_m": 411.112,
+                "reference_month": "202606",
+                "beverage_count": 156,
+                "classification_policy": {
+                  "sparse_max_shops": 5,
+                  "dominant_min_shops": 10,
+                  "dominant_share": 0.4,
+                  "dominant_gap": 0.15,
+                  "cluster_rms_radius_ratio": 0.25
+                },
+                "source_hash": "2c884e877ef6ef07cf95e7f851437b15a9b0b0ade5a3637f9659e9075c337348"
+              },
+              "scope": {
+                "kind": "query_area",
+                "description": "조회 원 전체의 등록 상가 분포. 기록 지점의 길 모습·영업·방문·혼잡은 미확인",
+                "coverage_key": "5ed2f2a17ba5c72e008c673df2e31a6446fb219cfc2416d352e25a9de9332020"
+              },
+              "subject_key": "public-normalized-commerce:area:5ed2f2a17ba5c72e008c673df2e31a6446fb219cfc2416d352e25a9de9332020",
+              "observed_at": null,
+              "reference_date": "202606",
+              "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인"
+            }
+          ],
+          "collection": {
+            "road": "complete",
+            "land_cover": "partial",
+            "surrounding_object": "partial",
+            "area_context": "partial"
+          },
+          "collection_reasons": {
+            "road": [
+              "road_name_only"
+            ],
+            "land_cover": [],
+            "surrounding_object": [],
+            "area_context": []
+          }
+        },
+        "earlier": null,
+        "connection": null,
+        "relation_slots": {
+          "background": {
+            "status": "not_applicable",
+            "policy_version": "scene-comparison-v1",
+            "reason": "initial_scene",
+            "items": []
+          },
+          "proximity": {
+            "status": "not_applicable",
+            "policy_version": "scene-comparison-v1",
+            "reason": "initial_scene",
+            "items": []
+          },
+          "area_context": {
+            "status": "not_applicable",
+            "policy_version": "scene-comparison-v1",
+            "reason": "initial_scene",
+            "items": []
+          }
+        },
+        "narration": {
+          "narrator": "이 산책을 기록한 보호자(나)",
+          "companions": [
+            {
+              "name": "보리"
+            }
+          ],
+          "scope": "현재 장면"
+        },
+        "route_evidence": null,
+        "citation_ids": [
+          "e1",
+          "e2",
+          "e3",
+          "e4"
+        ],
+        "relation_ids": []
+      },
+      "candidate": {
+        "text": "매헌로 근처를 지나며 주변을 둘러보니 풀밭이 펼쳐져 있고, 가까운 곳에 마방 근린공원이 자리하고 있었다. 이 일대는 다양한 업종의 상점들이 모여 있는 활기찬 지역이었다.",
+        "evidence_ids": [
+          "e1",
+          "e2",
+          "e3",
+          "e4"
+        ],
+        "focus": "매헌로 인근의 풀밭과 마방 근린공원, 그리고 주변의 다양한 상권 분포를 소개함.",
+        "relation_ids": []
+      },
+      "required_evidence_ids": []
+    },
+    "raw": "{\n  \"supported\": false,\n  \"preserves_subjects\": true,\n  \"preserves_relation_axis\": true,\n  \"preserves_scope\": false,\n  \"no_invented_experience\": false,\n  \"required_meanings_present\": true,\n  \"readable_as_diary\": true,\n  \"used_evidence_ids\": [\"e1\", \"e2\", \"e3\", \"e4\"],\n  \"issues\": [\"e1의 근거는 좌표에 대응한 도로명일 뿐 실제 통과 여부를 증명하지 않는데 '지나며'라고 표현함\", \"e3의 근거는 해당 지점의 배경 유형(피복)일 뿐 실제 현장 풍경을 직접 확인한 것처럼 '풀밭이 펼쳐져 있고'라고 표현함\", \"e4의 근거는 조회 영역 내 등록된 상가 분포 통계일 뿐 실제 현장의 활기찬 분위기를 증명하지 않는데 '활기찬 지역이었다'라고 평가함\"]\n}",
+    "elapsed_s": 1.797
+  },
+  {
+    "stage": "space",
+    "request": {
+      "version": "scene-comparison-v1",
+      "current": {
+        "scene_id": "stamp:0a1a08f3801cbe9ef7550551e07ad2227b1f304c053601501653c9fb1c7b08bc",
+        "walk_id": "59c763115707e37337d82d8e1e751bebdb04d59dbb879af84f2d36b6b5af3f3f",
+        "recorded_at": "2026-09-14T01:10:00Z",
+        "point": {
+          "lat": 37.47333149207589,
+          "lng": 127.03729634665666
+        },
+        "accuracy_m": 5.0,
+        "position_basis": "observed",
+        "facts": [
+          {
+            "id": "e5",
+            "family": "road",
+            "value": {
+              "name": "강남대로"
+            },
+            "scope": {
+              "kind": "record_point",
+              "description": "좌표에 대응한 주소의 도로명. 실제 통과·진입 도로는 미확인",
+              "coverage_key": "895727821bdde3d27238ec52052980402bcadf644ea38e2acf66dfab988f31b0"
+            },
+            "subject_key": null,
+            "observed_at": null,
+            "reference_date": null,
+            "time_meaning": "조회 시점의 주소 대응. 도로의 관측 시점은 미확인"
+          },
+          {
+            "id": "e6",
+            "family": "area_context",
+            "value": {
+              "composition": {
+                "업종구성": "여러 업종 혼합",
+                "조회영역_등록분포": "등록 지점이 흩어져 있음"
+              },
+              "query": {
+                "kind": "query_circle",
+                "point": {
+                  "lat": 37.47333149207589,
+                  "lng": 127.03729634665666
+                },
+                "radius_m": 1000.0
+              },
+              "registered_count": 4279,
+              "groups": {
+                "arts_sports": 117,
+                "business_support": 306,
+                "education": 269,
+                "food": 824,
+                "health": 51,
+                "lodging": 30,
+                "personal_service": 283,
+                "professional": 1515,
+                "real_estate": 140,
+                "retail": 744
+              },
+              "registered_sites": 1354,
+              "spread_rms_m": 564.594,
+              "nearest_registered_point_m": 6.702,
+              "centroid_distance_m": 427.562,
+              "reference_month": "202606",
+              "beverage_count": 152,
+              "classification_policy": {
+                "sparse_max_shops": 5,
+                "dominant_min_shops": 10,
+                "dominant_share": 0.4,
+                "dominant_gap": 0.15,
+                "cluster_rms_radius_ratio": 0.25
+              },
+              "source_hash": "6249839e842794fd4dfb8c023bc93ee13ec6b3eaf547a73e7278372fe034da48"
+            },
+            "scope": {
+              "kind": "query_area",
+              "description": "조회 원 전체의 등록 상가 분포. 기록 지점의 길 모습·영업·방문·혼잡은 미확인",
+              "coverage_key": "eca1c50da80ace81cd8d87a1e5761294565c4bd8838bdd720ce70df18da9cb31"
+            },
+            "subject_key": "public-normalized-commerce:area:eca1c50da80ace81cd8d87a1e5761294565c4bd8838bdd720ce70df18da9cb31",
+            "observed_at": null,
+            "reference_date": "202606",
+            "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인"
+          },
+          {
+            "id": "e7",
+            "family": "surrounding_object",
+            "value": {
+              "name": "마  방",
+              "park_type": "근린공원",
+              "registered_point": {
+                "lat": 37.47230907,
+                "lng": 127.0382419
+              },
+              "distance_m": 141.024,
+              "query_radius_m": 1000.0,
+              "area_m2": 6547.0,
+              "reference_dates": [
+                "2025-08-07"
+              ],
+              "catalog_complete": false
+            },
+            "scope": {
+              "kind": "registered_point",
+              "description": "근처에 공원이 있음. 경계·내부·방문 여부는 미확인",
+              "coverage_key": "e7adcca9d375c23ff6fd9c25fb0f58e630e3f421b2c2868a8d152fc8615a70fd"
+            },
+            "subject_key": "public-normalized-park:11650-00005",
+            "observed_at": null,
+            "reference_date": "2025-08-07",
+            "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인"
+          },
+          {
+            "id": "e8",
+            "family": "land_cover",
+            "value": {
+              "피복": "길",
+              "classification": {
+                "피복": "도로"
+              },
+              "layer": "EGIS:lv3_2025y"
+            },
+            "scope": {
+              "kind": "record_point",
+              "description": "이 위치의 배경 유형. 실제 통과·현장 풍경·식생의 밀도는 미확인",
+              "coverage_key": "06df43d6f3188da04232a3e5c4eef35b50287a639307be3c2a10d6c5248ebee5"
+            },
+            "subject_key": "public-normalized-land_cover:EGIS:lv3_2025y:lv3_2025y.1951172",
+            "observed_at": null,
+            "reference_date": "2024-12-30Z",
+            "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인"
+          }
+        ],
+        "collection": {
+          "road": "complete",
+          "land_cover": "partial",
+          "surrounding_object": "partial",
+          "area_context": "partial"
+        },
+        "collection_reasons": {
+          "road": [
+            "road_name_only"
+          ],
+          "land_cover": [],
+          "surrounding_object": [],
+          "area_context": []
+        }
+      },
+      "earlier": {
+        "scene_id": "stamp:9e82be6f4ff6d65eb3d67647139cc351eff5446e36212071ff81b71a98d824bc",
+        "walk_id": "59c763115707e37337d82d8e1e751bebdb04d59dbb879af84f2d36b6b5af3f3f",
+        "recorded_at": "2026-09-14T01:04:20Z",
+        "point": {
+          "lat": 37.470589119054424,
+          "lng": 127.03785721894909
+        },
+        "accuracy_m": 5.0,
+        "position_basis": "observed",
+        "facts": [
+          {
+            "id": "e1",
+            "family": "road",
+            "value": {
+              "name": "매헌로"
+            },
+            "scope": {
+              "kind": "record_point",
+              "description": "좌표에 대응한 주소의 도로명. 실제 통과·진입 도로는 미확인",
+              "coverage_key": "17ce1c62bd4a49831c90fd9d5ee6102ec9e56528a7a5fa100166076866b30e9f"
+            },
+            "subject_key": null,
+            "observed_at": null,
+            "reference_date": null,
+            "time_meaning": "조회 시점의 주소 대응. 도로의 관측 시점은 미확인"
+          },
+          {
+            "id": "e2",
+            "family": "surrounding_object",
+            "value": {
+              "name": "마  방",
+              "park_type": "근린공원",
+              "registered_point": {
+                "lat": 37.47230907,
+                "lng": 127.0382419
+              },
+              "distance_m": 194.24,
+              "query_radius_m": 1000.0,
+              "area_m2": 6547.0,
+              "reference_dates": [
+                "2025-08-07"
+              ],
+              "catalog_complete": false
+            },
+            "scope": {
+              "kind": "registered_point",
+              "description": "근처에 공원이 있음. 경계·내부·방문 여부는 미확인",
+              "coverage_key": "9c3e53d4b5e78fa81ba94d6b0d810a4d9f705a83f7b6db8e350ccaa5cb3ecb27"
+            },
+            "subject_key": "public-normalized-park:11650-00005",
+            "observed_at": null,
+            "reference_date": "2025-08-07",
+            "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인"
+          },
+          {
+            "id": "e3",
+            "family": "land_cover",
+            "value": {
+              "피복": "풀밭",
+              "classification": {
+                "피복": "기타초지"
+              },
+              "layer": "EGIS:lv3_2025y"
+            },
+            "scope": {
+              "kind": "record_point",
+              "description": "이 위치의 배경 유형. 실제 통과·현장 풍경·식생의 밀도는 미확인",
+              "coverage_key": "ce82ebf409ad65935f55ad86e58f7e188aa03d719d6c11a33018d957550ff587"
+            },
+            "subject_key": "public-normalized-land_cover:EGIS:lv3_2025y:lv3_2025y.1950758",
+            "observed_at": null,
+            "reference_date": "2024-12-30Z",
+            "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인"
+          },
+          {
+            "id": "e4",
+            "family": "area_context",
+            "value": {
+              "composition": {
+                "업종구성": "여러 업종 혼합",
+                "조회영역_등록분포": "등록 지점이 흩어져 있음"
+              },
+              "query": {
+                "kind": "query_circle",
+                "point": {
+                  "lat": 37.470589119054424,
+                  "lng": 127.03785721894909
+                },
+                "radius_m": 1000.0
+              },
+              "registered_count": 3940,
+              "groups": {
+                "arts_sports": 110,
+                "business_support": 266,
+                "education": 232,
+                "food": 795,
+                "health": 45,
+                "lodging": 27,
+                "personal_service": 255,
+                "professional": 1343,
+                "real_estate": 131,
+                "retail": 736
+              },
+              "registered_sites": 1151,
+              "spread_rms_m": 556.565,
+              "nearest_registered_point_m": 79.177,
+              "centroid_distance_m": 411.112,
+              "reference_month": "202606",
+              "beverage_count": 156,
+              "classification_policy": {
+                "sparse_max_shops": 5,
+                "dominant_min_shops": 10,
+                "dominant_share": 0.4,
+                "dominant_gap": 0.15,
+                "cluster_rms_radius_ratio": 0.25
+              },
+              "source_hash": "2c884e877ef6ef07cf95e7f851437b15a9b0b0ade5a3637f9659e9075c337348"
+            },
+            "scope": {
+              "kind": "query_area",
+              "description": "조회 원 전체의 등록 상가 분포. 기록 지점의 길 모습·영업·방문·혼잡은 미확인",
+              "coverage_key": "5ed2f2a17ba5c72e008c673df2e31a6446fb219cfc2416d352e25a9de9332020"
+            },
+            "subject_key": "public-normalized-commerce:area:5ed2f2a17ba5c72e008c673df2e31a6446fb219cfc2416d352e25a9de9332020",
+            "observed_at": null,
+            "reference_date": "202606",
+            "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인"
+          }
+        ],
+        "collection": {
+          "road": "complete",
+          "land_cover": "partial",
+          "surrounding_object": "partial",
+          "area_context": "partial"
+        },
+        "collection_reasons": {
+          "road": [
+            "road_name_only"
+          ],
+          "land_cover": [],
+          "surrounding_object": [],
+          "area_context": []
+        }
+      },
+      "connection": {
+        "earlier_scene_id": "stamp:9e82be6f4ff6d65eb3d67647139cc351eff5446e36212071ff81b71a98d824bc",
+        "current_scene_id": "stamp:0a1a08f3801cbe9ef7550551e07ad2227b1f304c053601501653c9fb1c7b08bc",
+        "elapsed_seconds": 340.0,
+        "route_status": "unavailable",
+        "route_evidence_ids": [],
+        "scope": "두 기록 사이의 경과 시간. 이동을 설명할 범위는 route_status와 관측 근거를 따른다"
+      },
+      "relation_slots": {
+        "background": {
+          "status": "confirmed",
+          "policy_version": "scene-comparison-v1",
+          "reason": "see_individual_correspondences",
+          "items": [
+            {
+              "id": "r1",
+              "family": "road",
+              "axis": "record_location",
+              "result": "different_values",
+              "earlier_evidence_ids": [
+                "e1"
+              ],
+              "current_evidence_ids": [
+                "e5"
+              ],
+              "distance_delta_m": null,
+              "composition_values_equal": null,
+              "comparison_basis": {
+                "attribute": "name",
+                "source_dates": [],
+                "source_dates_differ": false,
+                "source_time_unknown": true,
+                "reason": "normalized_values"
+              },
+              "scope": "두 기록 위치에 연결된 주소·지도 분류의 비교. 동일 장소의 시간 변화·중간 통과는 미확인"
+            },
+            {
+              "id": "r2",
+              "family": "land_cover",
+              "axis": "record_location",
+              "result": "different_values",
+              "earlier_evidence_ids": [
+                "e3"
+              ],
+              "current_evidence_ids": [
+                "e8"
+              ],
+              "distance_delta_m": null,
+              "composition_values_equal": null,
+              "comparison_basis": {
+                "attribute": "classification",
+                "source_dates": [
+                  "2024-12-30Z"
+                ],
+                "source_dates_differ": false,
+                "source_time_unknown": false,
+                "reason": "normalized_values"
+              },
+              "scope": "두 기록 위치에 연결된 주소·지도 분류의 비교. 동일 장소의 시간 변화·중간 통과는 미확인"
+            }
+          ]
+        },
+        "proximity": {
+          "status": "confirmed",
+          "policy_version": "scene-comparison-v1",
+          "reason": "see_individual_correspondences",
+          "items": [
+            {
+              "id": "r3",
+              "family": "surrounding_object",
+              "axis": "object_distance",
+              "result": "same_object",
+              "earlier_evidence_ids": [
+                "e2"
+              ],
+              "current_evidence_ids": [
+                "e7"
+              ],
+              "distance_delta_m": -53.216,
+              "composition_values_equal": null,
+              "comparison_basis": {
+                "subject_key": "public-normalized-park:11650-00005",
+                "registered_point_equal": true,
+                "reason": "endpoint_distances"
+              },
+              "scope": "동일 공원 등록점까지의 양 끝 거리 차이. 중간의 지속적 접근·공원 진입은 미확인"
+            }
+          ]
+        },
+        "area_context": {
+          "status": "confirmed",
+          "policy_version": "scene-comparison-v1",
+          "reason": "see_individual_correspondences",
+          "items": [
+            {
+              "id": "r4",
+              "family": "area_context",
+              "axis": "query_area",
+              "result": "different_query_areas",
+              "earlier_evidence_ids": [
+                "e4"
+              ],
+              "current_evidence_ids": [
+                "e6"
+              ],
+              "distance_delta_m": null,
+              "composition_values_equal": true,
+              "comparison_basis": {
+                "statistics_comparable": true,
+                "changed_fields": [
+                  "groups",
+                  "registered_count",
+                  "registered_sites",
+                  "spread_rms_m",
+                  "nearest_registered_point_m",
+                  "centroid_distance_m",
+                  "beverage_count"
+                ],
+                "reason": "same_series_month_radius_policy"
+              },
+              "scope": "조회 영역 전체의 등록 자료 비교. 지점의 풍경·혼잡·동일 지역의 시간 변화는 확정하지 않음"
+            }
+          ]
+        }
+      },
+      "narration": {
+        "narrator": "이 산책을 기록한 보호자(나)",
+        "companions": [
+          {
+            "name": "보리"
+          }
+        ],
+        "scope": "현재 장면"
+      },
+      "route_evidence": null,
+      "citation_ids": [
+        "e1",
+        "e2",
+        "e3",
+        "e4",
+        "e5",
+        "e6",
+        "e7",
+        "e8"
+      ],
+      "relation_ids": [
+        "r1",
+        "r2",
+        "r3",
+        "r4"
+      ]
+    },
+    "raw": "{\n  \"text\": \"매헌로의 풀밭을 지나 어느덧 강남대로의 길 위로 걸음을 옮겼고, 근처 마방 공원과의 거리도 조금 더 가까워졌다.\",\n  \"evidence_ids\": [\n    \"e1\",\n    \"e2\",\n    \"e3\",\n    \"e5\",\n    \"e7\",\n    \"e8\"\n  ],\n  \"focus\": \"이동에 따른 도로 피복의 변화와 공원과의 거리 단축\",\n  \"relation_ids\": [\n    \"r1\",\n    \"r2\",\n    \"r3\"\n  ]\n}",
+    "elapsed_s": 1.641
+  },
+  {
+    "stage": "action",
+    "request": {
+      "recorded_action": {
+        "id": "a1",
+        "actor": "보리",
+        "action": "냄새 맡기"
+      },
+      "pin_at": "2026-09-14T01:10:00Z",
+      "current_space": [
+        {
+          "id": "space:stamp:0a1a08f3801cbe9ef7550551e07ad2227b1f304c053601501653c9fb1c7b08bc:slot:82636147b7bc5ba4f933c229e009a724ab37d2b651f2e0571c5f2dc2d9383764",
+          "role": "point_land_cover",
+          "material": {
+            "피복": "길"
+          },
+          "relation": "이 위치의 배경 유형. 실제 통과·현장 풍경·식생의 밀도는 미확인",
+          "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인"
+        }
+      ],
+      "road_reference": {
+        "id": "stamp:0a1a08f3801cbe9ef7550551e07ad2227b1f304c053601501653c9fb1c7b08bc:road:b74b71c959a02baadcca7bccf2e3b3cec4d2891c78b8221347632fff00a626cf",
+        "road_nm": "강남대로",
+        "scope": "좌표에 대응한 주소의 도로명. 실제 통과·진입 도로는 미확인"
+      },
+      "movement_context": null,
+      "current_gait": [],
+      "current_shape": [],
+      "narration": {
+        "narrator": "이 산책을 기록한 보호자(나)",
+        "companions": [
+          {
+            "name": "보리"
+          }
+        ],
+        "scope": "현재 장면"
+      },
+      "citation_ids": [
+        "a1",
+        "space:stamp:0a1a08f3801cbe9ef7550551e07ad2227b1f304c053601501653c9fb1c7b08bc:slot:82636147b7bc5ba4f933c229e009a724ab37d2b651f2e0571c5f2dc2d9383764",
+        "stamp:0a1a08f3801cbe9ef7550551e07ad2227b1f304c053601501653c9fb1c7b08bc:road:b74b71c959a02baadcca7bccf2e3b3cec4d2891c78b8221347632fff00a626cf"
+      ]
+    },
+    "raw": "{\n  \"text\": \"보리가 강남대로 길 위에서 냄새를 맡았다.\",\n  \"evidence_ids\": [\n    \"a1\",\n    \"space:stamp:0a1a08f3801cbe9ef7550551e07ad2227b1f304c053601501653c9fb1c7b08bc:slot:82636147b7bc5ba4f933c229e009a724ab37d2b651f2e0571c5f2dc2d9383764\",\n    \"stamp:0a1a08f3801cbe9ef7550551e07ad2227b1f304c053601501653c9fb1c7b08bc:road:b74b71c959a02baadcca7bccf2e3b3cec4d2891c78b8221347632fff00a626cf\"\n  ]\n}",
+    "elapsed_s": 1.5
+  },
+  {
+    "stage": "review",
+    "request": {
+      "part": "space",
+      "evidence": {
+        "version": "scene-comparison-v1",
+        "current": {
+          "scene_id": "stamp:0a1a08f3801cbe9ef7550551e07ad2227b1f304c053601501653c9fb1c7b08bc",
+          "walk_id": "59c763115707e37337d82d8e1e751bebdb04d59dbb879af84f2d36b6b5af3f3f",
+          "recorded_at": "2026-09-14T01:10:00Z",
+          "point": {
+            "lat": 37.47333149207589,
+            "lng": 127.03729634665666
+          },
+          "accuracy_m": 5.0,
+          "position_basis": "observed",
+          "facts": [
+            {
+              "id": "e5",
+              "family": "road",
+              "value": {
+                "name": "강남대로"
+              },
+              "scope": {
+                "kind": "record_point",
+                "description": "좌표에 대응한 주소의 도로명. 실제 통과·진입 도로는 미확인",
+                "coverage_key": "895727821bdde3d27238ec52052980402bcadf644ea38e2acf66dfab988f31b0"
+              },
+              "subject_key": null,
+              "observed_at": null,
+              "reference_date": null,
+              "time_meaning": "조회 시점의 주소 대응. 도로의 관측 시점은 미확인"
+            },
+            {
+              "id": "e6",
+              "family": "area_context",
+              "value": {
+                "composition": {
+                  "업종구성": "여러 업종 혼합",
+                  "조회영역_등록분포": "등록 지점이 흩어져 있음"
+                },
+                "query": {
+                  "kind": "query_circle",
+                  "point": {
+                    "lat": 37.47333149207589,
+                    "lng": 127.03729634665666
+                  },
+                  "radius_m": 1000.0
+                },
+                "registered_count": 4279,
+                "groups": {
+                  "arts_sports": 117,
+                  "business_support": 306,
+                  "education": 269,
+                  "food": 824,
+                  "health": 51,
+                  "lodging": 30,
+                  "personal_service": 283,
+                  "professional": 1515,
+                  "real_estate": 140,
+                  "retail": 744
+                },
+                "registered_sites": 1354,
+                "spread_rms_m": 564.594,
+                "nearest_registered_point_m": 6.702,
+                "centroid_distance_m": 427.562,
+                "reference_month": "202606",
+                "beverage_count": 152,
+                "classification_policy": {
+                  "sparse_max_shops": 5,
+                  "dominant_min_shops": 10,
+                  "dominant_share": 0.4,
+                  "dominant_gap": 0.15,
+                  "cluster_rms_radius_ratio": 0.25
+                },
+                "source_hash": "6249839e842794fd4dfb8c023bc93ee13ec6b3eaf547a73e7278372fe034da48"
+              },
+              "scope": {
+                "kind": "query_area",
+                "description": "조회 원 전체의 등록 상가 분포. 기록 지점의 길 모습·영업·방문·혼잡은 미확인",
+                "coverage_key": "eca1c50da80ace81cd8d87a1e5761294565c4bd8838bdd720ce70df18da9cb31"
+              },
+              "subject_key": "public-normalized-commerce:area:eca1c50da80ace81cd8d87a1e5761294565c4bd8838bdd720ce70df18da9cb31",
+              "observed_at": null,
+              "reference_date": "202606",
+              "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인"
+            },
+            {
+              "id": "e7",
+              "family": "surrounding_object",
+              "value": {
+                "name": "마  방",
+                "park_type": "근린공원",
+                "registered_point": {
+                  "lat": 37.47230907,
+                  "lng": 127.0382419
+                },
+                "distance_m": 141.024,
+                "query_radius_m": 1000.0,
+                "area_m2": 6547.0,
+                "reference_dates": [
+                  "2025-08-07"
+                ],
+                "catalog_complete": false
+              },
+              "scope": {
+                "kind": "registered_point",
+                "description": "근처에 공원이 있음. 경계·내부·방문 여부는 미확인",
+                "coverage_key": "e7adcca9d375c23ff6fd9c25fb0f58e630e3f421b2c2868a8d152fc8615a70fd"
+              },
+              "subject_key": "public-normalized-park:11650-00005",
+              "observed_at": null,
+              "reference_date": "2025-08-07",
+              "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인"
+            },
+            {
+              "id": "e8",
+              "family": "land_cover",
+              "value": {
+                "피복": "길",
+                "classification": {
+                  "피복": "도로"
+                },
+                "layer": "EGIS:lv3_2025y"
+              },
+              "scope": {
+                "kind": "record_point",
+                "description": "이 위치의 배경 유형. 실제 통과·현장 풍경·식생의 밀도는 미확인",
+                "coverage_key": "06df43d6f3188da04232a3e5c4eef35b50287a639307be3c2a10d6c5248ebee5"
+              },
+              "subject_key": "public-normalized-land_cover:EGIS:lv3_2025y:lv3_2025y.1951172",
+              "observed_at": null,
+              "reference_date": "2024-12-30Z",
+              "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인"
+            }
+          ],
+          "collection": {
+            "road": "complete",
+            "land_cover": "partial",
+            "surrounding_object": "partial",
+            "area_context": "partial"
+          },
+          "collection_reasons": {
+            "road": [
+              "road_name_only"
+            ],
+            "land_cover": [],
+            "surrounding_object": [],
+            "area_context": []
+          }
+        },
+        "earlier": {
+          "scene_id": "stamp:9e82be6f4ff6d65eb3d67647139cc351eff5446e36212071ff81b71a98d824bc",
+          "walk_id": "59c763115707e37337d82d8e1e751bebdb04d59dbb879af84f2d36b6b5af3f3f",
+          "recorded_at": "2026-09-14T01:04:20Z",
+          "point": {
+            "lat": 37.470589119054424,
+            "lng": 127.03785721894909
+          },
+          "accuracy_m": 5.0,
+          "position_basis": "observed",
+          "facts": [
+            {
+              "id": "e1",
+              "family": "road",
+              "value": {
+                "name": "매헌로"
+              },
+              "scope": {
+                "kind": "record_point",
+                "description": "좌표에 대응한 주소의 도로명. 실제 통과·진입 도로는 미확인",
+                "coverage_key": "17ce1c62bd4a49831c90fd9d5ee6102ec9e56528a7a5fa100166076866b30e9f"
+              },
+              "subject_key": null,
+              "observed_at": null,
+              "reference_date": null,
+              "time_meaning": "조회 시점의 주소 대응. 도로의 관측 시점은 미확인"
+            },
+            {
+              "id": "e2",
+              "family": "surrounding_object",
+              "value": {
+                "name": "마  방",
+                "park_type": "근린공원",
+                "registered_point": {
+                  "lat": 37.47230907,
+                  "lng": 127.0382419
+                },
+                "distance_m": 194.24,
+                "query_radius_m": 1000.0,
+                "area_m2": 6547.0,
+                "reference_dates": [
+                  "2025-08-07"
+                ],
+                "catalog_complete": false
+              },
+              "scope": {
+                "kind": "registered_point",
+                "description": "근처에 공원이 있음. 경계·내부·방문 여부는 미확인",
+                "coverage_key": "9c3e53d4b5e78fa81ba94d6b0d810a4d9f705a83f7b6db8e350ccaa5cb3ecb27"
+              },
+              "subject_key": "public-normalized-park:11650-00005",
+              "observed_at": null,
+              "reference_date": "2025-08-07",
+              "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인"
+            },
+            {
+              "id": "e3",
+              "family": "land_cover",
+              "value": {
+                "피복": "풀밭",
+                "classification": {
+                  "피복": "기타초지"
+                },
+                "layer": "EGIS:lv3_2025y"
+              },
+              "scope": {
+                "kind": "record_point",
+                "description": "이 위치의 배경 유형. 실제 통과·현장 풍경·식생의 밀도는 미확인",
+                "coverage_key": "ce82ebf409ad65935f55ad86e58f7e188aa03d719d6c11a33018d957550ff587"
+              },
+              "subject_key": "public-normalized-land_cover:EGIS:lv3_2025y:lv3_2025y.1950758",
+              "observed_at": null,
+              "reference_date": "2024-12-30Z",
+              "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인"
+            },
+            {
+              "id": "e4",
+              "family": "area_context",
+              "value": {
+                "composition": {
+                  "업종구성": "여러 업종 혼합",
+                  "조회영역_등록분포": "등록 지점이 흩어져 있음"
+                },
+                "query": {
+                  "kind": "query_circle",
+                  "point": {
+                    "lat": 37.470589119054424,
+                    "lng": 127.03785721894909
+                  },
+                  "radius_m": 1000.0
+                },
+                "registered_count": 3940,
+                "groups": {
+                  "arts_sports": 110,
+                  "business_support": 266,
+                  "education": 232,
+                  "food": 795,
+                  "health": 45,
+                  "lodging": 27,
+                  "personal_service": 255,
+                  "professional": 1343,
+                  "real_estate": 131,
+                  "retail": 736
+                },
+                "registered_sites": 1151,
+                "spread_rms_m": 556.565,
+                "nearest_registered_point_m": 79.177,
+                "centroid_distance_m": 411.112,
+                "reference_month": "202606",
+                "beverage_count": 156,
+                "classification_policy": {
+                  "sparse_max_shops": 5,
+                  "dominant_min_shops": 10,
+                  "dominant_share": 0.4,
+                  "dominant_gap": 0.15,
+                  "cluster_rms_radius_ratio": 0.25
+                },
+                "source_hash": "2c884e877ef6ef07cf95e7f851437b15a9b0b0ade5a3637f9659e9075c337348"
+              },
+              "scope": {
+                "kind": "query_area",
+                "description": "조회 원 전체의 등록 상가 분포. 기록 지점의 길 모습·영업·방문·혼잡은 미확인",
+                "coverage_key": "5ed2f2a17ba5c72e008c673df2e31a6446fb219cfc2416d352e25a9de9332020"
+              },
+              "subject_key": "public-normalized-commerce:area:5ed2f2a17ba5c72e008c673df2e31a6446fb219cfc2416d352e25a9de9332020",
+              "observed_at": null,
+              "reference_date": "202606",
+              "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인"
+            }
+          ],
+          "collection": {
+            "road": "complete",
+            "land_cover": "partial",
+            "surrounding_object": "partial",
+            "area_context": "partial"
+          },
+          "collection_reasons": {
+            "road": [
+              "road_name_only"
+            ],
+            "land_cover": [],
+            "surrounding_object": [],
+            "area_context": []
+          }
+        },
+        "connection": {
+          "earlier_scene_id": "stamp:9e82be6f4ff6d65eb3d67647139cc351eff5446e36212071ff81b71a98d824bc",
+          "current_scene_id": "stamp:0a1a08f3801cbe9ef7550551e07ad2227b1f304c053601501653c9fb1c7b08bc",
+          "elapsed_seconds": 340.0,
+          "route_status": "unavailable",
+          "route_evidence_ids": [],
+          "scope": "두 기록 사이의 경과 시간. 이동을 설명할 범위는 route_status와 관측 근거를 따른다"
+        },
+        "relation_slots": {
+          "background": {
+            "status": "confirmed",
+            "policy_version": "scene-comparison-v1",
+            "reason": "see_individual_correspondences",
+            "items": [
+              {
+                "id": "r1",
+                "family": "road",
+                "axis": "record_location",
+                "result": "different_values",
+                "earlier_evidence_ids": [
+                  "e1"
+                ],
+                "current_evidence_ids": [
+                  "e5"
+                ],
+                "distance_delta_m": null,
+                "composition_values_equal": null,
+                "comparison_basis": {
+                  "attribute": "name",
+                  "source_dates": [],
+                  "source_dates_differ": false,
+                  "source_time_unknown": true,
+                  "reason": "normalized_values"
+                },
+                "scope": "두 기록 위치에 연결된 주소·지도 분류의 비교. 동일 장소의 시간 변화·중간 통과는 미확인"
+              },
+              {
+                "id": "r2",
+                "family": "land_cover",
+                "axis": "record_location",
+                "result": "different_values",
+                "earlier_evidence_ids": [
+                  "e3"
+                ],
+                "current_evidence_ids": [
+                  "e8"
+                ],
+                "distance_delta_m": null,
+                "composition_values_equal": null,
+                "comparison_basis": {
+                  "attribute": "classification",
+                  "source_dates": [
+                    "2024-12-30Z"
+                  ],
+                  "source_dates_differ": false,
+                  "source_time_unknown": false,
+                  "reason": "normalized_values"
+                },
+                "scope": "두 기록 위치에 연결된 주소·지도 분류의 비교. 동일 장소의 시간 변화·중간 통과는 미확인"
+              }
+            ]
+          },
+          "proximity": {
+            "status": "confirmed",
+            "policy_version": "scene-comparison-v1",
+            "reason": "see_individual_correspondences",
+            "items": [
+              {
+                "id": "r3",
+                "family": "surrounding_object",
+                "axis": "object_distance",
+                "result": "same_object",
+                "earlier_evidence_ids": [
+                  "e2"
+                ],
+                "current_evidence_ids": [
+                  "e7"
+                ],
+                "distance_delta_m": -53.216,
+                "composition_values_equal": null,
+                "comparison_basis": {
+                  "subject_key": "public-normalized-park:11650-00005",
+                  "registered_point_equal": true,
+                  "reason": "endpoint_distances"
+                },
+                "scope": "동일 공원 등록점까지의 양 끝 거리 차이. 중간의 지속적 접근·공원 진입은 미확인"
+              }
+            ]
+          },
+          "area_context": {
+            "status": "confirmed",
+            "policy_version": "scene-comparison-v1",
+            "reason": "see_individual_correspondences",
+            "items": [
+              {
+                "id": "r4",
+                "family": "area_context",
+                "axis": "query_area",
+                "result": "different_query_areas",
+                "earlier_evidence_ids": [
+                  "e4"
+                ],
+                "current_evidence_ids": [
+                  "e6"
+                ],
+                "distance_delta_m": null,
+                "composition_values_equal": true,
+                "comparison_basis": {
+                  "statistics_comparable": true,
+                  "changed_fields": [
+                    "groups",
+                    "registered_count",
+                    "registered_sites",
+                    "spread_rms_m",
+                    "nearest_registered_point_m",
+                    "centroid_distance_m",
+                    "beverage_count"
+                  ],
+                  "reason": "same_series_month_radius_policy"
+                },
+                "scope": "조회 영역 전체의 등록 자료 비교. 지점의 풍경·혼잡·동일 지역의 시간 변화는 확정하지 않음"
+              }
+            ]
+          }
+        },
+        "narration": {
+          "narrator": "이 산책을 기록한 보호자(나)",
+          "companions": [
+            {
+              "name": "보리"
+            }
+          ],
+          "scope": "현재 장면"
+        },
+        "route_evidence": null,
+        "citation_ids": [
+          "e1",
+          "e2",
+          "e3",
+          "e4",
+          "e5",
+          "e6",
+          "e7",
+          "e8"
+        ],
+        "relation_ids": [
+          "r1",
+          "r2",
+          "r3",
+          "r4"
+        ]
+      },
+      "candidate": {
+        "text": "매헌로의 풀밭을 지나 어느덧 강남대로의 길 위로 걸음을 옮겼고, 근처 마방 공원과의 거리도 조금 더 가까워졌다.",
+        "evidence_ids": [
+          "e1",
+          "e2",
+          "e3",
+          "e5",
+          "e7",
+          "e8"
+        ],
+        "focus": "이동에 따른 도로 피복의 변화와 공원과의 거리 단축",
+        "relation_ids": [
+          "r1",
+          "r2",
+          "r3"
+        ]
+      },
+      "required_evidence_ids": []
+    },
+    "raw": "{\n  \"supported\": true,\n  \"preserves_subjects\": true,\n  \"preserves_relation_axis\": true,\n  \"preserves_scope\": true,\n  \"no_invented_experience\": true,\n  \"required_meanings_present\": true,\n  \"readable_as_diary\": true,\n  \"used_evidence_ids\": [\"e1\", \"e2\", \"e3\", \"e5\", \"e7\", \"e8\"],\n  \"issues\": []\n}",
+    "elapsed_s": 1.609
+  },
+  {
+    "stage": "review",
+    "request": {
+      "part": "action",
+      "evidence": {
+        "recorded_action": {
+          "id": "a1",
+          "actor": "보리",
+          "action": "냄새 맡기"
+        },
+        "pin_at": "2026-09-14T01:10:00Z",
+        "current_space": [
+          {
+            "id": "space:stamp:0a1a08f3801cbe9ef7550551e07ad2227b1f304c053601501653c9fb1c7b08bc:slot:82636147b7bc5ba4f933c229e009a724ab37d2b651f2e0571c5f2dc2d9383764",
+            "role": "point_land_cover",
+            "material": {
+              "피복": "길"
+            },
+            "relation": "이 위치의 배경 유형. 실제 통과·현장 풍경·식생의 밀도는 미확인",
+            "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인"
+          }
+        ],
+        "road_reference": {
+          "id": "stamp:0a1a08f3801cbe9ef7550551e07ad2227b1f304c053601501653c9fb1c7b08bc:road:b74b71c959a02baadcca7bccf2e3b3cec4d2891c78b8221347632fff00a626cf",
+          "road_nm": "강남대로",
+          "scope": "좌표에 대응한 주소의 도로명. 실제 통과·진입 도로는 미확인"
+        },
+        "movement_context": null,
+        "current_gait": [],
+        "current_shape": [],
+        "narration": {
+          "narrator": "이 산책을 기록한 보호자(나)",
+          "companions": [
+            {
+              "name": "보리"
+            }
+          ],
+          "scope": "현재 장면"
+        },
+        "citation_ids": [
+          "a1",
+          "space:stamp:0a1a08f3801cbe9ef7550551e07ad2227b1f304c053601501653c9fb1c7b08bc:slot:82636147b7bc5ba4f933c229e009a724ab37d2b651f2e0571c5f2dc2d9383764",
+          "stamp:0a1a08f3801cbe9ef7550551e07ad2227b1f304c053601501653c9fb1c7b08bc:road:b74b71c959a02baadcca7bccf2e3b3cec4d2891c78b8221347632fff00a626cf"
+        ]
+      },
+      "candidate": {
+        "text": "보리가 강남대로 길 위에서 냄새를 맡았다.",
+        "evidence_ids": [
+          "a1",
+          "space:stamp:0a1a08f3801cbe9ef7550551e07ad2227b1f304c053601501653c9fb1c7b08bc:slot:82636147b7bc5ba4f933c229e009a724ab37d2b651f2e0571c5f2dc2d9383764",
+          "stamp:0a1a08f3801cbe9ef7550551e07ad2227b1f304c053601501653c9fb1c7b08bc:road:b74b71c959a02baadcca7bccf2e3b3cec4d2891c78b8221347632fff00a626cf"
+        ]
+      },
+      "required_evidence_ids": [
+        "a1"
+      ]
+    },
+    "raw": "{\n  \"supported\": true,\n  \"preserves_subjects\": true,\n  \"preserves_relation_axis\": true,\n  \"preserves_scope\": true,\n  \"no_invented_experience\": true,\n  \"required_meanings_present\": true,\n  \"readable_as_diary\": true,\n  \"used_evidence_ids\": [\n    \"a1\",\n    \"space:stamp:0a1a08f3801cbe9ef7550551e07ad2227b1f304c053601501653c9fb1c7b08bc:slot:82636147b7bc5ba4f933c229e009a724ab37d2b651f2e0571c5f2dc2d9383764\",\n    \"stamp:0a1a08f3801cbe9ef7550551e07ad2227b1f304c053601501653c9fb1c7b08bc:road:b74b71c959a02baadcca7bccf2e3b3cec4d2891c78b8221347632fff00a626cf\"\n  ],\n  \"issues\": []\n}",
+    "elapsed_s": 2.969
+  },
+  {
+    "stage": "space",
+    "request": {
+      "version": "scene-comparison-v1",
+      "current": {
+        "scene_id": "stamp:330bbd9b1be86ddf15657f4d2e04c4ad7fb6cfeb93d1f585ff5cb54e1a3bc927",
+        "walk_id": "59c763115707e37337d82d8e1e751bebdb04d59dbb879af84f2d36b6b5af3f3f",
+        "recorded_at": "2026-09-14T01:15:50Z",
+        "point": {
+          "lat": 37.47385678898773,
+          "lng": 127.03468728149925
+        },
+        "accuracy_m": 5.0,
+        "position_basis": "observed",
+        "facts": [
+          {
+            "id": "e5",
+            "family": "road",
+            "value": {
+              "name": "양재천로3길"
+            },
+            "scope": {
+              "kind": "record_point",
+              "description": "좌표에 대응한 주소의 도로명. 실제 통과·진입 도로는 미확인",
+              "coverage_key": "2f8657b6a4450c5289e14842325cafa8cd406df7a3125ece8dec7597b7a16ada"
+            },
+            "subject_key": null,
+            "observed_at": null,
+            "reference_date": null,
+            "time_meaning": "조회 시점의 주소 대응. 도로의 관측 시점은 미확인"
+          },
+          {
+            "id": "e6",
+            "family": "surrounding_object",
+            "value": {
+              "name": "종  열",
+              "park_type": "어린이공원",
+              "registered_point": {
+                "lat": 37.47404511,
+                "lng": 127.0337157
+              },
+              "distance_m": 88.26,
+              "query_radius_m": 1000.0,
+              "area_m2": 848.0,
+              "reference_dates": [
+                "2025-08-07"
+              ],
+              "catalog_complete": false
+            },
+            "scope": {
+              "kind": "registered_point",
+              "description": "근처에 공원이 있음. 경계·내부·방문 여부는 미확인",
+              "coverage_key": "d3c0ebf24c2361ac10f9da2b8cb8fd8af3b644c074b1f2b6ea12ebe9c150edb4"
+            },
+            "subject_key": "public-normalized-park:11650-00050",
+            "observed_at": null,
+            "reference_date": "2025-08-07",
+            "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인"
+          },
+          {
+            "id": "e7",
+            "family": "land_cover",
+            "value": {
+              "피복": "숲",
+              "classification": {
+                "피복": "활엽수림"
+              },
+              "layer": "EGIS:lv3_2025y"
+            },
+            "scope": {
+              "kind": "record_point",
+              "description": "이 위치의 배경 유형. 실제 통과·현장 풍경·식생의 밀도는 미확인",
+              "coverage_key": "a26f8fc9294d266890abb017348c979b85e69724eebec2b637704d173498ac80"
+            },
+            "subject_key": "public-normalized-land_cover:EGIS:lv3_2025y:lv3_2025y.1951219",
+            "observed_at": null,
+            "reference_date": "2024-12-30Z",
+            "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인"
+          },
+          {
+            "id": "e8",
+            "family": "surrounding_object",
+            "value": {
+              "name": "바우뫼",
+              "park_type": "근린공원",
+              "registered_point": {
+                "lat": 37.47456671,
+                "lng": 127.0344603
+              },
+              "distance_m": 81.441,
+              "query_radius_m": 1000.0,
+              "area_m2": 16386.0,
+              "reference_dates": [
+                "2025-08-07"
+              ],
+              "catalog_complete": false
+            },
+            "scope": {
+              "kind": "registered_point",
+              "description": "근처에 공원이 있음. 경계·내부·방문 여부는 미확인",
+              "coverage_key": "dfbec0462d1b1cc99138d0ebc1704677c501cc2e814f02ae8c6f91084d8eebbe"
+            },
+            "subject_key": "public-normalized-park:11650-00013",
+            "observed_at": null,
+            "reference_date": "2025-08-07",
+            "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인"
+          },
+          {
+            "id": "e9",
+            "family": "area_context",
+            "value": {
+              "composition": {
+                "업종구성": "여러 업종 혼합",
+                "조회영역_등록분포": "등록 지점이 흩어져 있음"
+              },
+              "query": {
+                "kind": "query_circle",
+                "point": {
+                  "lat": 37.47385678898773,
+                  "lng": 127.03468728149925
+                },
+                "radius_m": 1000.0
+              },
+              "registered_count": 3637,
+              "groups": {
+                "arts_sports": 105,
+                "business_support": 259,
+                "education": 251,
+                "food": 684,
+                "health": 44,
+                "lodging": 23,
+                "personal_service": 218,
+                "professional": 1296,
+                "real_estate": 118,
+                "retail": 639
+              },
+              "registered_sites": 1037,
+              "spread_rms_m": 606.281,
+              "nearest_registered_point_m": 37.539,
+              "centroid_distance_m": 457.541,
+              "reference_month": "202606",
+              "beverage_count": 134,
+              "classification_policy": {
+                "sparse_max_shops": 5,
+                "dominant_min_shops": 10,
+                "dominant_share": 0.4,
+                "dominant_gap": 0.15,
+                "cluster_rms_radius_ratio": 0.25
+              },
+              "source_hash": "eb67bcccdfb5913456eab401bea6546cc5c530208750c28f4dd018a8c8bb9b7c"
+            },
+            "scope": {
+              "kind": "query_area",
+              "description": "조회 원 전체의 등록 상가 분포. 기록 지점의 길 모습·영업·방문·혼잡은 미확인",
+              "coverage_key": "6e79e70a3aa5c455e9d08a82abeb3b6f221dae51a76047cce4ed04da1426b8ee"
+            },
+            "subject_key": "public-normalized-commerce:area:6e79e70a3aa5c455e9d08a82abeb3b6f221dae51a76047cce4ed04da1426b8ee",
+            "observed_at": null,
+            "reference_date": "202606",
+            "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인"
+          }
+        ],
+        "collection": {
+          "road": "complete",
+          "land_cover": "partial",
+          "surrounding_object": "partial",
+          "area_context": "partial"
+        },
+        "collection_reasons": {
+          "road": [
+            "road_name_only"
+          ],
+          "land_cover": [],
+          "surrounding_object": [],
+          "area_context": []
+        }
+      },
+      "earlier": {
+        "scene_id": "stamp:0a1a08f3801cbe9ef7550551e07ad2227b1f304c053601501653c9fb1c7b08bc",
+        "walk_id": "59c763115707e37337d82d8e1e751bebdb04d59dbb879af84f2d36b6b5af3f3f",
+        "recorded_at": "2026-09-14T01:10:00Z",
+        "point": {
+          "lat": 37.47333149207589,
+          "lng": 127.03729634665666
+        },
+        "accuracy_m": 5.0,
+        "position_basis": "observed",
+        "facts": [
+          {
+            "id": "e1",
+            "family": "road",
+            "value": {
+              "name": "강남대로"
+            },
+            "scope": {
+              "kind": "record_point",
+              "description": "좌표에 대응한 주소의 도로명. 실제 통과·진입 도로는 미확인",
+              "coverage_key": "895727821bdde3d27238ec52052980402bcadf644ea38e2acf66dfab988f31b0"
+            },
+            "subject_key": null,
+            "observed_at": null,
+            "reference_date": null,
+            "time_meaning": "조회 시점의 주소 대응. 도로의 관측 시점은 미확인"
+          },
+          {
+            "id": "e2",
+            "family": "area_context",
+            "value": {
+              "composition": {
+                "업종구성": "여러 업종 혼합",
+                "조회영역_등록분포": "등록 지점이 흩어져 있음"
+              },
+              "query": {
+                "kind": "query_circle",
+                "point": {
+                  "lat": 37.47333149207589,
+                  "lng": 127.03729634665666
+                },
+                "radius_m": 1000.0
+              },
+              "registered_count": 4279,
+              "groups": {
+                "arts_sports": 117,
+                "business_support": 306,
+                "education": 269,
+                "food": 824,
+                "health": 51,
+                "lodging": 30,
+                "personal_service": 283,
+                "professional": 1515,
+                "real_estate": 140,
+                "retail": 744
+              },
+              "registered_sites": 1354,
+              "spread_rms_m": 564.594,
+              "nearest_registered_point_m": 6.702,
+              "centroid_distance_m": 427.562,
+              "reference_month": "202606",
+              "beverage_count": 152,
+              "classification_policy": {
+                "sparse_max_shops": 5,
+                "dominant_min_shops": 10,
+                "dominant_share": 0.4,
+                "dominant_gap": 0.15,
+                "cluster_rms_radius_ratio": 0.25
+              },
+              "source_hash": "6249839e842794fd4dfb8c023bc93ee13ec6b3eaf547a73e7278372fe034da48"
+            },
+            "scope": {
+              "kind": "query_area",
+              "description": "조회 원 전체의 등록 상가 분포. 기록 지점의 길 모습·영업·방문·혼잡은 미확인",
+              "coverage_key": "eca1c50da80ace81cd8d87a1e5761294565c4bd8838bdd720ce70df18da9cb31"
+            },
+            "subject_key": "public-normalized-commerce:area:eca1c50da80ace81cd8d87a1e5761294565c4bd8838bdd720ce70df18da9cb31",
+            "observed_at": null,
+            "reference_date": "202606",
+            "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인"
+          },
+          {
+            "id": "e3",
+            "family": "surrounding_object",
+            "value": {
+              "name": "마  방",
+              "park_type": "근린공원",
+              "registered_point": {
+                "lat": 37.47230907,
+                "lng": 127.0382419
+              },
+              "distance_m": 141.024,
+              "query_radius_m": 1000.0,
+              "area_m2": 6547.0,
+              "reference_dates": [
+                "2025-08-07"
+              ],
+              "catalog_complete": false
+            },
+            "scope": {
+              "kind": "registered_point",
+              "description": "근처에 공원이 있음. 경계·내부·방문 여부는 미확인",
+              "coverage_key": "e7adcca9d375c23ff6fd9c25fb0f58e630e3f421b2c2868a8d152fc8615a70fd"
+            },
+            "subject_key": "public-normalized-park:11650-00005",
+            "observed_at": null,
+            "reference_date": "2025-08-07",
+            "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인"
+          },
+          {
+            "id": "e4",
+            "family": "land_cover",
+            "value": {
+              "피복": "길",
+              "classification": {
+                "피복": "도로"
+              },
+              "layer": "EGIS:lv3_2025y"
+            },
+            "scope": {
+              "kind": "record_point",
+              "description": "이 위치의 배경 유형. 실제 통과·현장 풍경·식생의 밀도는 미확인",
+              "coverage_key": "06df43d6f3188da04232a3e5c4eef35b50287a639307be3c2a10d6c5248ebee5"
+            },
+            "subject_key": "public-normalized-land_cover:EGIS:lv3_2025y:lv3_2025y.1951172",
+            "observed_at": null,
+            "reference_date": "2024-12-30Z",
+            "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인"
+          }
+        ],
+        "collection": {
+          "road": "complete",
+          "land_cover": "partial",
+          "surrounding_object": "partial",
+          "area_context": "partial"
+        },
+        "collection_reasons": {
+          "road": [
+            "road_name_only"
+          ],
+          "land_cover": [],
+          "surrounding_object": [],
+          "area_context": []
+        }
+      },
+      "connection": {
+        "earlier_scene_id": "stamp:0a1a08f3801cbe9ef7550551e07ad2227b1f304c053601501653c9fb1c7b08bc",
+        "current_scene_id": "stamp:330bbd9b1be86ddf15657f4d2e04c4ad7fb6cfeb93d1f585ff5cb54e1a3bc927",
+        "elapsed_seconds": 350.0,
+        "route_status": "unavailable",
+        "route_evidence_ids": [],
+        "scope": "두 기록 사이의 경과 시간. 이동을 설명할 범위는 route_status와 관측 근거를 따른다"
+      },
+      "relation_slots": {
+        "background": {
+          "status": "confirmed",
+          "policy_version": "scene-comparison-v1",
+          "reason": "see_individual_correspondences",
+          "items": [
+            {
+              "id": "r1",
+              "family": "road",
+              "axis": "record_location",
+              "result": "different_values",
+              "earlier_evidence_ids": [
+                "e1"
+              ],
+              "current_evidence_ids": [
+                "e5"
+              ],
+              "distance_delta_m": null,
+              "composition_values_equal": null,
+              "comparison_basis": {
+                "attribute": "name",
+                "source_dates": [],
+                "source_dates_differ": false,
+                "source_time_unknown": true,
+                "reason": "normalized_values"
+              },
+              "scope": "두 기록 위치에 연결된 주소·지도 분류의 비교. 동일 장소의 시간 변화·중간 통과는 미확인"
+            },
+            {
+              "id": "r2",
+              "family": "land_cover",
+              "axis": "record_location",
+              "result": "different_values",
+              "earlier_evidence_ids": [
+                "e4"
+              ],
+              "current_evidence_ids": [
+                "e7"
+              ],
+              "distance_delta_m": null,
+              "composition_values_equal": null,
+              "comparison_basis": {
+                "attribute": "classification",
+                "source_dates": [
+                  "2024-12-30Z"
+                ],
+                "source_dates_differ": false,
+                "source_time_unknown": false,
+                "reason": "normalized_values"
+              },
+              "scope": "두 기록 위치에 연결된 주소·지도 분류의 비교. 동일 장소의 시간 변화·중간 통과는 미확인"
+            }
+          ]
+        },
+        "proximity": {
+          "status": "insufficient_evidence",
+          "policy_version": "scene-comparison-v1",
+          "reason": "see_individual_correspondences",
+          "items": [
+            {
+              "id": "r3",
+              "family": "surrounding_object",
+              "axis": "object_distance",
+              "result": "only_one_snapshot_has_evidence",
+              "earlier_evidence_ids": [
+                "e3"
+              ],
+              "current_evidence_ids": [],
+              "distance_delta_m": null,
+              "composition_values_equal": null,
+              "comparison_basis": {},
+              "scope": "한쪽 스냅샷에만 근거가 있음. 대상의 출현·소멸·이탈은 확정하지 않음"
+            },
+            {
+              "id": "r4",
+              "family": "surrounding_object",
+              "axis": "object_distance",
+              "result": "only_one_snapshot_has_evidence",
+              "earlier_evidence_ids": [],
+              "current_evidence_ids": [
+                "e8"
+              ],
+              "distance_delta_m": null,
+              "composition_values_equal": null,
+              "comparison_basis": {},
+              "scope": "한쪽 스냅샷에만 근거가 있음. 대상의 출현·소멸·이탈은 확정하지 않음"
+            },
+            {
+              "id": "r5",
+              "family": "surrounding_object",
+              "axis": "object_distance",
+              "result": "only_one_snapshot_has_evidence",
+              "earlier_evidence_ids": [],
+              "current_evidence_ids": [
+                "e6"
+              ],
+              "distance_delta_m": null,
+              "composition_values_equal": null,
+              "comparison_basis": {},
+              "scope": "한쪽 스냅샷에만 근거가 있음. 대상의 출현·소멸·이탈은 확정하지 않음"
+            }
+          ]
+        },
+        "area_context": {
+          "status": "confirmed",
+          "policy_version": "scene-comparison-v1",
+          "reason": "see_individual_correspondences",
+          "items": [
+            {
+              "id": "r6",
+              "family": "area_context",
+              "axis": "query_area",
+              "result": "different_query_areas",
+              "earlier_evidence_ids": [
+                "e2"
+              ],
+              "current_evidence_ids": [
+                "e9"
+              ],
+              "distance_delta_m": null,
+              "composition_values_equal": true,
+              "comparison_basis": {
+                "statistics_comparable": true,
+                "changed_fields": [
+                  "groups",
+                  "registered_count",
+                  "registered_sites",
+                  "spread_rms_m",
+                  "nearest_registered_point_m",
+                  "centroid_distance_m",
+                  "beverage_count"
+                ],
+                "reason": "same_series_month_radius_policy"
+              },
+              "scope": "조회 영역 전체의 등록 자료 비교. 지점의 풍경·혼잡·동일 지역의 시간 변화는 확정하지 않음"
+            }
+          ]
+        }
+      },
+      "narration": {
+        "narrator": "이 산책을 기록한 보호자(나)",
+        "companions": [
+          {
+            "name": "보리"
+          }
+        ],
+        "scope": "현재 장면"
+      },
+      "route_evidence": null,
+      "citation_ids": [
+        "e1",
+        "e2",
+        "e3",
+        "e4",
+        "e5",
+        "e6",
+        "e7",
+        "e8",
+        "e9"
+      ],
+      "relation_ids": [
+        "r1",
+        "r2",
+        "r6"
+      ]
+    },
+    "raw": "{\n  \"text\": \"강남대로를 지나 양재천로3길로 들어서니 도로의 풍경이 바뀌고 숲이 우거진 곳에 다다랐다. 주변에는 바우뫼공원과 종열어린이공원이 자리하고 있어 이전보다 한결 차분한 분위기 속에서 산책을 이어갔다.\",\n  \"evidence_ids\": [\"e1\", \"e5\", \"e4\", \"e7\", \"e8\", \"e6\"],\n  \"focus\": \"도로명과 지형적 특성의 변화 및 주변 공원 시설의 등장\",\n  \"relation_ids\": [\"r1\", \"r2\", \"r6\"]\n}",
+    "elapsed_s": 1.922
+  },
+  {
+    "stage": "review",
+    "request": {
+      "part": "space",
+      "evidence": {
+        "version": "scene-comparison-v1",
+        "current": {
+          "scene_id": "stamp:330bbd9b1be86ddf15657f4d2e04c4ad7fb6cfeb93d1f585ff5cb54e1a3bc927",
+          "walk_id": "59c763115707e37337d82d8e1e751bebdb04d59dbb879af84f2d36b6b5af3f3f",
+          "recorded_at": "2026-09-14T01:15:50Z",
+          "point": {
+            "lat": 37.47385678898773,
+            "lng": 127.03468728149925
+          },
+          "accuracy_m": 5.0,
+          "position_basis": "observed",
+          "facts": [
+            {
+              "id": "e5",
+              "family": "road",
+              "value": {
+                "name": "양재천로3길"
+              },
+              "scope": {
+                "kind": "record_point",
+                "description": "좌표에 대응한 주소의 도로명. 실제 통과·진입 도로는 미확인",
+                "coverage_key": "2f8657b6a4450c5289e14842325cafa8cd406df7a3125ece8dec7597b7a16ada"
+              },
+              "subject_key": null,
+              "observed_at": null,
+              "reference_date": null,
+              "time_meaning": "조회 시점의 주소 대응. 도로의 관측 시점은 미확인"
+            },
+            {
+              "id": "e6",
+              "family": "surrounding_object",
+              "value": {
+                "name": "종  열",
+                "park_type": "어린이공원",
+                "registered_point": {
+                  "lat": 37.47404511,
+                  "lng": 127.0337157
+                },
+                "distance_m": 88.26,
+                "query_radius_m": 1000.0,
+                "area_m2": 848.0,
+                "reference_dates": [
+                  "2025-08-07"
+                ],
+                "catalog_complete": false
+              },
+              "scope": {
+                "kind": "registered_point",
+                "description": "근처에 공원이 있음. 경계·내부·방문 여부는 미확인",
+                "coverage_key": "d3c0ebf24c2361ac10f9da2b8cb8fd8af3b644c074b1f2b6ea12ebe9c150edb4"
+              },
+              "subject_key": "public-normalized-park:11650-00050",
+              "observed_at": null,
+              "reference_date": "2025-08-07",
+              "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인"
+            },
+            {
+              "id": "e7",
+              "family": "land_cover",
+              "value": {
+                "피복": "숲",
+                "classification": {
+                  "피복": "활엽수림"
+                },
+                "layer": "EGIS:lv3_2025y"
+              },
+              "scope": {
+                "kind": "record_point",
+                "description": "이 위치의 배경 유형. 실제 통과·현장 풍경·식생의 밀도는 미확인",
+                "coverage_key": "a26f8fc9294d266890abb017348c979b85e69724eebec2b637704d173498ac80"
+              },
+              "subject_key": "public-normalized-land_cover:EGIS:lv3_2025y:lv3_2025y.1951219",
+              "observed_at": null,
+              "reference_date": "2024-12-30Z",
+              "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인"
+            },
+            {
+              "id": "e8",
+              "family": "surrounding_object",
+              "value": {
+                "name": "바우뫼",
+                "park_type": "근린공원",
+                "registered_point": {
+                  "lat": 37.47456671,
+                  "lng": 127.0344603
+                },
+                "distance_m": 81.441,
+                "query_radius_m": 1000.0,
+                "area_m2": 16386.0,
+                "reference_dates": [
+                  "2025-08-07"
+                ],
+                "catalog_complete": false
+              },
+              "scope": {
+                "kind": "registered_point",
+                "description": "근처에 공원이 있음. 경계·내부·방문 여부는 미확인",
+                "coverage_key": "dfbec0462d1b1cc99138d0ebc1704677c501cc2e814f02ae8c6f91084d8eebbe"
+              },
+              "subject_key": "public-normalized-park:11650-00013",
+              "observed_at": null,
+              "reference_date": "2025-08-07",
+              "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인"
+            },
+            {
+              "id": "e9",
+              "family": "area_context",
+              "value": {
+                "composition": {
+                  "업종구성": "여러 업종 혼합",
+                  "조회영역_등록분포": "등록 지점이 흩어져 있음"
+                },
+                "query": {
+                  "kind": "query_circle",
+                  "point": {
+                    "lat": 37.47385678898773,
+                    "lng": 127.03468728149925
+                  },
+                  "radius_m": 1000.0
+                },
+                "registered_count": 3637,
+                "groups": {
+                  "arts_sports": 105,
+                  "business_support": 259,
+                  "education": 251,
+                  "food": 684,
+                  "health": 44,
+                  "lodging": 23,
+                  "personal_service": 218,
+                  "professional": 1296,
+                  "real_estate": 118,
+                  "retail": 639
+                },
+                "registered_sites": 1037,
+                "spread_rms_m": 606.281,
+                "nearest_registered_point_m": 37.539,
+                "centroid_distance_m": 457.541,
+                "reference_month": "202606",
+                "beverage_count": 134,
+                "classification_policy": {
+                  "sparse_max_shops": 5,
+                  "dominant_min_shops": 10,
+                  "dominant_share": 0.4,
+                  "dominant_gap": 0.15,
+                  "cluster_rms_radius_ratio": 0.25
+                },
+                "source_hash": "eb67bcccdfb5913456eab401bea6546cc5c530208750c28f4dd018a8c8bb9b7c"
+              },
+              "scope": {
+                "kind": "query_area",
+                "description": "조회 원 전체의 등록 상가 분포. 기록 지점의 길 모습·영업·방문·혼잡은 미확인",
+                "coverage_key": "6e79e70a3aa5c455e9d08a82abeb3b6f221dae51a76047cce4ed04da1426b8ee"
+              },
+              "subject_key": "public-normalized-commerce:area:6e79e70a3aa5c455e9d08a82abeb3b6f221dae51a76047cce4ed04da1426b8ee",
+              "observed_at": null,
+              "reference_date": "202606",
+              "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인"
+            }
+          ],
+          "collection": {
+            "road": "complete",
+            "land_cover": "partial",
+            "surrounding_object": "partial",
+            "area_context": "partial"
+          },
+          "collection_reasons": {
+            "road": [
+              "road_name_only"
+            ],
+            "land_cover": [],
+            "surrounding_object": [],
+            "area_context": []
+          }
+        },
+        "earlier": {
+          "scene_id": "stamp:0a1a08f3801cbe9ef7550551e07ad2227b1f304c053601501653c9fb1c7b08bc",
+          "walk_id": "59c763115707e37337d82d8e1e751bebdb04d59dbb879af84f2d36b6b5af3f3f",
+          "recorded_at": "2026-09-14T01:10:00Z",
+          "point": {
+            "lat": 37.47333149207589,
+            "lng": 127.03729634665666
+          },
+          "accuracy_m": 5.0,
+          "position_basis": "observed",
+          "facts": [
+            {
+              "id": "e1",
+              "family": "road",
+              "value": {
+                "name": "강남대로"
+              },
+              "scope": {
+                "kind": "record_point",
+                "description": "좌표에 대응한 주소의 도로명. 실제 통과·진입 도로는 미확인",
+                "coverage_key": "895727821bdde3d27238ec52052980402bcadf644ea38e2acf66dfab988f31b0"
+              },
+              "subject_key": null,
+              "observed_at": null,
+              "reference_date": null,
+              "time_meaning": "조회 시점의 주소 대응. 도로의 관측 시점은 미확인"
+            },
+            {
+              "id": "e2",
+              "family": "area_context",
+              "value": {
+                "composition": {
+                  "업종구성": "여러 업종 혼합",
+                  "조회영역_등록분포": "등록 지점이 흩어져 있음"
+                },
+                "query": {
+                  "kind": "query_circle",
+                  "point": {
+                    "lat": 37.47333149207589,
+                    "lng": 127.03729634665666
+                  },
+                  "radius_m": 1000.0
+                },
+                "registered_count": 4279,
+                "groups": {
+                  "arts_sports": 117,
+                  "business_support": 306,
+                  "education": 269,
+                  "food": 824,
+                  "health": 51,
+                  "lodging": 30,
+                  "personal_service": 283,
+                  "professional": 1515,
+                  "real_estate": 140,
+                  "retail": 744
+                },
+                "registered_sites": 1354,
+                "spread_rms_m": 564.594,
+                "nearest_registered_point_m": 6.702,
+                "centroid_distance_m": 427.562,
+                "reference_month": "202606",
+                "beverage_count": 152,
+                "classification_policy": {
+                  "sparse_max_shops": 5,
+                  "dominant_min_shops": 10,
+                  "dominant_share": 0.4,
+                  "dominant_gap": 0.15,
+                  "cluster_rms_radius_ratio": 0.25
+                },
+                "source_hash": "6249839e842794fd4dfb8c023bc93ee13ec6b3eaf547a73e7278372fe034da48"
+              },
+              "scope": {
+                "kind": "query_area",
+                "description": "조회 원 전체의 등록 상가 분포. 기록 지점의 길 모습·영업·방문·혼잡은 미확인",
+                "coverage_key": "eca1c50da80ace81cd8d87a1e5761294565c4bd8838bdd720ce70df18da9cb31"
+              },
+              "subject_key": "public-normalized-commerce:area:eca1c50da80ace81cd8d87a1e5761294565c4bd8838bdd720ce70df18da9cb31",
+              "observed_at": null,
+              "reference_date": "202606",
+              "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인"
+            },
+            {
+              "id": "e3",
+              "family": "surrounding_object",
+              "value": {
+                "name": "마  방",
+                "park_type": "근린공원",
+                "registered_point": {
+                  "lat": 37.47230907,
+                  "lng": 127.0382419
+                },
+                "distance_m": 141.024,
+                "query_radius_m": 1000.0,
+                "area_m2": 6547.0,
+                "reference_dates": [
+                  "2025-08-07"
+                ],
+                "catalog_complete": false
+              },
+              "scope": {
+                "kind": "registered_point",
+                "description": "근처에 공원이 있음. 경계·내부·방문 여부는 미확인",
+                "coverage_key": "e7adcca9d375c23ff6fd9c25fb0f58e630e3f421b2c2868a8d152fc8615a70fd"
+              },
+              "subject_key": "public-normalized-park:11650-00005",
+              "observed_at": null,
+              "reference_date": "2025-08-07",
+              "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인"
+            },
+            {
+              "id": "e4",
+              "family": "land_cover",
+              "value": {
+                "피복": "길",
+                "classification": {
+                  "피복": "도로"
+                },
+                "layer": "EGIS:lv3_2025y"
+              },
+              "scope": {
+                "kind": "record_point",
+                "description": "이 위치의 배경 유형. 실제 통과·현장 풍경·식생의 밀도는 미확인",
+                "coverage_key": "06df43d6f3188da04232a3e5c4eef35b50287a639307be3c2a10d6c5248ebee5"
+              },
+              "subject_key": "public-normalized-land_cover:EGIS:lv3_2025y:lv3_2025y.1951172",
+              "observed_at": null,
+              "reference_date": "2024-12-30Z",
+              "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인"
+            }
+          ],
+          "collection": {
+            "road": "complete",
+            "land_cover": "partial",
+            "surrounding_object": "partial",
+            "area_context": "partial"
+          },
+          "collection_reasons": {
+            "road": [
+              "road_name_only"
+            ],
+            "land_cover": [],
+            "surrounding_object": [],
+            "area_context": []
+          }
+        },
+        "connection": {
+          "earlier_scene_id": "stamp:0a1a08f3801cbe9ef7550551e07ad2227b1f304c053601501653c9fb1c7b08bc",
+          "current_scene_id": "stamp:330bbd9b1be86ddf15657f4d2e04c4ad7fb6cfeb93d1f585ff5cb54e1a3bc927",
+          "elapsed_seconds": 350.0,
+          "route_status": "unavailable",
+          "route_evidence_ids": [],
+          "scope": "두 기록 사이의 경과 시간. 이동을 설명할 범위는 route_status와 관측 근거를 따른다"
+        },
+        "relation_slots": {
+          "background": {
+            "status": "confirmed",
+            "policy_version": "scene-comparison-v1",
+            "reason": "see_individual_correspondences",
+            "items": [
+              {
+                "id": "r1",
+                "family": "road",
+                "axis": "record_location",
+                "result": "different_values",
+                "earlier_evidence_ids": [
+                  "e1"
+                ],
+                "current_evidence_ids": [
+                  "e5"
+                ],
+                "distance_delta_m": null,
+                "composition_values_equal": null,
+                "comparison_basis": {
+                  "attribute": "name",
+                  "source_dates": [],
+                  "source_dates_differ": false,
+                  "source_time_unknown": true,
+                  "reason": "normalized_values"
+                },
+                "scope": "두 기록 위치에 연결된 주소·지도 분류의 비교. 동일 장소의 시간 변화·중간 통과는 미확인"
+              },
+              {
+                "id": "r2",
+                "family": "land_cover",
+                "axis": "record_location",
+                "result": "different_values",
+                "earlier_evidence_ids": [
+                  "e4"
+                ],
+                "current_evidence_ids": [
+                  "e7"
+                ],
+                "distance_delta_m": null,
+                "composition_values_equal": null,
+                "comparison_basis": {
+                  "attribute": "classification",
+                  "source_dates": [
+                    "2024-12-30Z"
+                  ],
+                  "source_dates_differ": false,
+                  "source_time_unknown": false,
+                  "reason": "normalized_values"
+                },
+                "scope": "두 기록 위치에 연결된 주소·지도 분류의 비교. 동일 장소의 시간 변화·중간 통과는 미확인"
+              }
+            ]
+          },
+          "proximity": {
+            "status": "insufficient_evidence",
+            "policy_version": "scene-comparison-v1",
+            "reason": "see_individual_correspondences",
+            "items": [
+              {
+                "id": "r3",
+                "family": "surrounding_object",
+                "axis": "object_distance",
+                "result": "only_one_snapshot_has_evidence",
+                "earlier_evidence_ids": [
+                  "e3"
+                ],
+                "current_evidence_ids": [],
+                "distance_delta_m": null,
+                "composition_values_equal": null,
+                "comparison_basis": {},
+                "scope": "한쪽 스냅샷에만 근거가 있음. 대상의 출현·소멸·이탈은 확정하지 않음"
+              },
+              {
+                "id": "r4",
+                "family": "surrounding_object",
+                "axis": "object_distance",
+                "result": "only_one_snapshot_has_evidence",
+                "earlier_evidence_ids": [],
+                "current_evidence_ids": [
+                  "e8"
+                ],
+                "distance_delta_m": null,
+                "composition_values_equal": null,
+                "comparison_basis": {},
+                "scope": "한쪽 스냅샷에만 근거가 있음. 대상의 출현·소멸·이탈은 확정하지 않음"
+              },
+              {
+                "id": "r5",
+                "family": "surrounding_object",
+                "axis": "object_distance",
+                "result": "only_one_snapshot_has_evidence",
+                "earlier_evidence_ids": [],
+                "current_evidence_ids": [
+                  "e6"
+                ],
+                "distance_delta_m": null,
+                "composition_values_equal": null,
+                "comparison_basis": {},
+                "scope": "한쪽 스냅샷에만 근거가 있음. 대상의 출현·소멸·이탈은 확정하지 않음"
+              }
+            ]
+          },
+          "area_context": {
+            "status": "confirmed",
+            "policy_version": "scene-comparison-v1",
+            "reason": "see_individual_correspondences",
+            "items": [
+              {
+                "id": "r6",
+                "family": "area_context",
+                "axis": "query_area",
+                "result": "different_query_areas",
+                "earlier_evidence_ids": [
+                  "e2"
+                ],
+                "current_evidence_ids": [
+                  "e9"
+                ],
+                "distance_delta_m": null,
+                "composition_values_equal": true,
+                "comparison_basis": {
+                  "statistics_comparable": true,
+                  "changed_fields": [
+                    "groups",
+                    "registered_count",
+                    "registered_sites",
+                    "spread_rms_m",
+                    "nearest_registered_point_m",
+                    "centroid_distance_m",
+                    "beverage_count"
+                  ],
+                  "reason": "same_series_month_radius_policy"
+                },
+                "scope": "조회 영역 전체의 등록 자료 비교. 지점의 풍경·혼잡·동일 지역의 시간 변화는 확정하지 않음"
+              }
+            ]
+          }
+        },
+        "narration": {
+          "narrator": "이 산책을 기록한 보호자(나)",
+          "companions": [
+            {
+              "name": "보리"
+            }
+          ],
+          "scope": "현재 장면"
+        },
+        "route_evidence": null,
+        "citation_ids": [
+          "e1",
+          "e2",
+          "e3",
+          "e4",
+          "e5",
+          "e6",
+          "e7",
+          "e8",
+          "e9"
+        ],
+        "relation_ids": [
+          "r1",
+          "r2",
+          "r6"
+        ]
+      },
+      "candidate": {
+        "text": "강남대로를 지나 양재천로3길로 들어서니 도로의 풍경이 바뀌고 숲이 우거진 곳에 다다랐다. 주변에는 바우뫼공원과 종열어린이공원이 자리하고 있어 이전보다 한결 차분한 분위기 속에서 산책을 이어갔다.",
+        "evidence_ids": [
+          "e1",
+          "e5",
+          "e4",
+          "e7",
+          "e8",
+          "e6"
+        ],
+        "focus": "도로명과 지형적 특성의 변화 및 주변 공원 시설의 등장",
+        "relation_ids": [
+          "r1",
+          "r2",
+          "r6"
+        ]
+      },
+      "required_evidence_ids": []
+    },
+    "raw": "{\n  \"supported\": false,\n  \"preserves_subjects\": true,\n  \"preserves_relation_axis\": true,\n  \"preserves_scope\": false,\n  \"no_invented_experience\": false,\n  \"required_meanings_present\": true,\n  \"readable_as_diary\": true,\n  \"used_evidence_ids\": [\"e1\", \"e5\", \"e4\", \"e7\", \"e8\", \"e6\"],\n  \"issues\": [\"두 지점 사이의 이동 경로(강남대로에서 양재천로3길로의 진입)를 증명할 수 없음\", \"숲이 우거졌다는 표현은 지적 피복 정보(e7)를 넘어선 주관적 풍경 묘사임\", \"이전보다 차분한 분위기라는 정서적 평가는 근거에 없음\", \"두 지점의 기록은 서로 다른 위치일 뿐, 한 곳에서 다른 곳으로 이동하며 풍경이 변했다는 인과관계를 확정할 수 없음\"]\n}",
+    "elapsed_s": 1.875
+  },
+  {
+    "stage": "title",
+    "request": {
+      "scenes": [
+        {
+          "id": "scene:1",
+          "body": "매헌로의 풀밭을 지나 어느덧 강남대로의 길 위로 걸음을 옮겼고, 근처 마방 공원과의 거리도 조금 더 가까워졌다.\n보리가 강남대로 길 위에서 냄새를 맡았다."
+        }
+      ]
+    },
+    "raw": "{\"title\": \"매헌로와 강남대로, 마방 공원 산책\"}",
+    "elapsed_s": 0.984
+  },
+  {
+    "stage": "review",
+    "request": {
+      "part": "title",
+      "evidence": {
+        "scenes": [
+          {
+            "id": "scene:1",
+            "body": "매헌로의 풀밭을 지나 어느덧 강남대로의 길 위로 걸음을 옮겼고, 근처 마방 공원과의 거리도 조금 더 가까워졌다.\n보리가 강남대로 길 위에서 냄새를 맡았다."
+          }
+        ]
+      },
+      "candidate": {
+        "text": "매헌로와 강남대로, 마방 공원 산책",
+        "evidence_ids": [
+          "scene:1"
+        ]
+      },
+      "required_evidence_ids": []
+    },
+    "raw": "{\n  \"supported\": true,\n  \"preserves_subjects\": true,\n  \"preserves_relation_axis\": true,\n  \"preserves_scope\": true,\n  \"no_invented_experience\": true,\n  \"required_meanings_present\": true,\n  \"readable_as_diary\": true,\n  \"used_evidence_ids\": [\"scene:1\"],\n  \"issues\": []\n}",
+    "elapsed_s": 1.218
+  }
+]

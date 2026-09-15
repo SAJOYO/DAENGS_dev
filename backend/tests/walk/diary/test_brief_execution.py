@@ -121,6 +121,9 @@ async def test_runtime_uses_canonical_briefs_and_one_title_without_review(
         assert row["response_schema"] == brief_response_schema(brief)
         assert row["status"] == "returned" and row["semantic_status"] == "unverified"
     spaces = [p for s, p, _ in seen if s == "space"]
+    relations = [r for p in spaces for slot in p.get("relation_slots", {}).values() for r in slot]
+    assert relations and all("relationship" in r and "result" not in r for r in relations)
+    assert result.receipt["writing"]["policy"] == "single-writing-brief-v3"
     assert len(spaces) >= 2 and spaces[1]["delivery_memory"]
     assert (
         spaces[1]["delivery_memory"][0]["selected_in_scene"]
@@ -235,6 +238,6 @@ async def test_same_meaning_is_suppressed_or_recovered_in_real_sequence(
     )
     assert len(space_calls) == (2 if first_fails else 1)
     if first_fails:
-        assert not space_calls[1]["delivery_memory"]
+        assert "delivery_memory" not in space_calls[1]
         assert result.prepared["snapshot"]["plans"][1]["state_transition"] == "recover_introduction"
     assert result.receipt["cards"][-1]["parts"]["space"]["status"] == "not_requested"

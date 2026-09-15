@@ -14,6 +14,7 @@ from daengs_walk.diary.relational.title_context import (
     title_context,
     title_request_revision,
 )
+from daengs_walk.diary.relational.title_writer_view import TITLE_WRITER_POLICY, title_writer_view
 from daengs_walk.value_contracts import digest
 
 
@@ -21,20 +22,22 @@ async def write_relational_title(receipt, *, send, review=False):
     if type(review) is not bool:
         raise TypeError("title review policy must be explicit")
     context = title_context(receipt)
-    request = context.model_dump(mode="json")
+    request = title_writer_view(context)
+    citation_ids = [s["scene_id"] for s in request["scenes"]]
     schema = TitleAnswer.model_json_schema()
     prompt_revision = digest(PROMPTS["title"])
     title = {
         "status": "not_requested",
         "text": "산책 기록",
         "request": deepcopy(request),
+        "writer_policy": TITLE_WRITER_POLICY,
         "content_revision": digest(context),
         "response_schema": deepcopy(schema),
         "prompt_revision": prompt_revision,
         "review_enabled": review,
         "request_revision": title_request_revision(prompt_revision, request, schema),
     }
-    if not context.scenes:
+    if not request["scenes"]:
         return title
     phase = "request"
     try:
@@ -48,7 +51,7 @@ async def write_relational_title(receipt, *, send, review=False):
             checked = await review_answer(
                 "title",
                 request,
-                {"text": value, "evidence_ids": context.citation_ids()},
+                {"text": value, "evidence_ids": citation_ids},
                 set(),
                 send,
                 audit=title["semantic_review"],

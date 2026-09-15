@@ -15,6 +15,7 @@ from daengs_walk.diary.relational.title_context import (
     title_request_revision,
     validate_title_publication,
 )
+from daengs_walk.diary.relational.title_writer_view import title_writer_view
 from daengs_walk.value_contracts import digest
 from tests.walk.diary.test_relational_orchestration import send as body_sender
 from tests.walk.diary.test_relational_takeover import assessment
@@ -108,6 +109,10 @@ async def test_writer_and_reviewer_read_the_same_frozen_input():
     validate_title_publication(receipt)
     assert [stage for stage, _ in requests] == ["title", "review"]
     assert requests[0][1] == requests[1][1]["evidence"] == title["request"]
+    wire = json.dumps(title["request"], ensure_ascii=False)
+    assert "현재 기록" not in wire and "movement_observations" not in wire
+    assert "보리가 냄새를 맡았다." in wire
+    assert "action" not in title["request"]["scenes"][0]
     assert requests[1][1]["candidate"]["evidence_ids"] == ["original:0", "original:2"]
 
 
@@ -143,11 +148,8 @@ async def test_empty_body_or_failed_title_does_not_trigger_rewriting(case):
     )
     validate_title_publication(receipt)
     title = receipt["title"]
-    if case == "empty":
+    if case in {"empty", "motion_only"}:
         assert seen == [] and title["status"] == "not_requested"
-    elif case == "motion_only":
-        assert seen == ["title", "review"] and title["status"] == "returned"
-        assert title["request"]["scenes"][0]["order"] == 3
     else:
         assert title["status"] == "failed"
         assert seen == (["title", "review"] if case == "reject" else ["title"])
@@ -185,7 +187,7 @@ async def test_real_orchestration_and_local_saved_title_binding(prepared, tmp_pa
     result = await generate_prepared_relational_diary(prepared, send=body_sender)
     title = result["receipt"]["title"]
     assert title["status"] == "returned"
-    assert title["request"] == title_context(result["receipt"]).model_dump(mode="json")
+    assert title["request"] == title_writer_view(title_context(result["receipt"]))
     path = tmp_path / "title.json"
     save_skeleton(path, result)
     assert read_skeleton(path) == result["receipt"]

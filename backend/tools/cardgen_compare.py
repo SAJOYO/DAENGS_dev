@@ -8,6 +8,8 @@
     uv run python tools/cardgen_compare.py --engine cardgen --url http://127.0.0.1:8091 --photos ... \
         --months 4,9 --seeds 1 --panel-text --gen-size 1280x2048 --out ../cardimage/out/_cardgen/e1-both
 
+    # #557 E2 — 한 요청에 4장: --batch 4 (순차 4회 비교는 --seeds 1,2,3,4)
+
 결과: `<out>/<사진>_<달>_s<seed>.png` 와 `<out>/results.jsonl` 한 줄씩 — 닮음·글자·아바타(검수),
 틀 밀림(`drift`), 제목판 어긋남(`plate_shift`, 못 재면 null), 걸린 시간(`seconds`, 서비스 쪽은 `service.seconds`),
 조건(`gen_size`, `panel_text`).
@@ -79,6 +81,31 @@ class PromptSuffixEngine:
                                     prompt=f"{prompt}\n\n{self._suffix}")
 
 
+class BatchReplayEngine:
+    """서비스를 한 번 불러 N장을 받아 두고, `generate_card` 가 부를 때마다 다음 장을 준다 (#557 E2).
+    `generate_card(judge_min=1)` 은 카드 한 장에 엔진을 한 번만 부르므로 N번 부르면 N장이 된다."""
+
+    def __init__(self, inner, count: int) -> None:
+        self._inner, self._count = inner, count
+        self._cards: list[bytes] | None = None
+        self._next = 0
+        self.last_meta: dict | None = None
+
+    def generate(self, *, template_png: bytes, photo_jpeg: bytes, prompt: str) -> bytes:
+        if self._cards is None:
+            self._cards = self._inner.generate_batch(template_png=template_png, photo_jpeg=photo_jpeg,
+                                                     prompt=prompt, count=self._count)
+        if self._next >= len(self._cards):
+            raise RuntimeError(f"{self._count} 장을 이미 다 줬습니다")
+        meta = self._inner.last_meta or {}
+        i = self._next
+        self._next += 1
+        self.last_meta = {"seed": (meta.get("seeds") or [None] * self._count)[i], "index": i,
+                          "batch_seconds": meta.get("seconds"), "model": meta.get("model"),
+                          "size": meta.get("size"), "count": self._count}
+        return self._cards[i]
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--engine", choices=("cardgen", "gemini"), required=True)
@@ -90,6 +117,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--gen-size", type=parse_size, default=GEN_SIZE,
                         help="cardgen 생성 크기 WxH (기본 1024x1632, 서비스 상한 2048)")
     parser.add_argument("--panel-text", action="store_true", help="아래 패널 문구를 프롬프트 끝에 적는다 (#557 E1)")
+    parser.add_argument("--batch", type=int, default=0, help="cardgen 한 요청에 N장(2~4) — 카드 이름에 _b<i> (#557 E2)")
     parser.add_argument("--out", required=True)
     args = parser.parse_args(argv)
 
@@ -103,6 +131,9 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     if args.engine == "cardgen" and not args.url:
         print("--engine cardgen 에는 --url 이 필요합니다", file=sys.stderr)
+        return 2
+    if args.batch and (args.engine != "cardgen" or not 2 <= args.batch <= 4):
+        print("--batch 는 cardgen 엔진에서 2~4", file=sys.stderr)
         return 2
 
     judge = GeminiCardJudge(api_key=key, model=settings.cardimage_judge_model,
@@ -126,36 +157,40 @@ def main(argv: list[str] | None = None) -> int:
                 if args.engine == "cardgen":
                     engine = HttpCardImageEngine(base_url=args.url, timeout_s=settings.cardgen_timeout_s, seed=seed,
                                                  gen_size=args.gen_size)
+                    if args.batch:
+                        engine = BatchReplayEngine(engine, args.batch)
                 else:
                     engine = GeminiCardImageEngine(api_key=key, model=settings.cardimage_model,
                                                    size=settings.cardimage_size,
                                                    timeout_ms=settings.cardimage_timeout_ms)
                 if args.panel_text:
                     engine = PromptSuffixEngine(engine, panel_sentence(month))
-                started = time.monotonic()
-                card = generate_card(
-                    photo=photo, content_type=MIME[photo_path.suffix.lower()], month=month,
-                    dog_name=args.dog_name, engine=engine, judge=judge, base_dir=settings.cardimage_dir,
-                    open_months=frozenset(months), judge_min=1,
-                )
-                seconds = round(time.monotonic() - started, 1)
-                name = f"{photo_path.stem}_{month}_s{seed}"
-                (out / f"{name}.png").write_bytes(card.png)
-                image = Image.open(io.BytesIO(card.png)).convert("RGB")
-                row = {
-                    "name": name, "engine": args.engine, "photo": photo_path.name, "month": month, "seed": seed,
-                    "gen_size": gen_size if args.engine == "cardgen" else None, "panel_text": args.panel_text,
-                    "seconds": seconds, "service": getattr(engine, "last_meta", None),
-                    "likeness": card.judge.likeness if card.judge else None,
-                    "text_ok": card.judge.text_ok if card.judge else None,
-                    "avatar_ok": card.judge.avatar_ok if card.judge else None,
-                    "judge_note": card.judge.note if card.judge else None,
-                    "drift": asdict(frame_drift(template, image)),
-                    "plate_shift": plate_shift(image, catalog.get(month).plate),
-                }
-                with (out / "results.jsonl").open("a", encoding="utf-8") as f:
-                    f.write(json.dumps(row, ensure_ascii=False) + "\n")
-                print(json.dumps(row, ensure_ascii=False), flush=True)
+                for copy in range(args.batch or 1):
+                    started = time.monotonic()
+                    card = generate_card(
+                        photo=photo, content_type=MIME[photo_path.suffix.lower()], month=month,
+                        dog_name=args.dog_name, engine=engine, judge=judge, base_dir=settings.cardimage_dir,
+                        open_months=frozenset(months), judge_min=1,
+                    )
+                    seconds = round(time.monotonic() - started, 1)
+                    name = f"{photo_path.stem}_{month}_s{seed}" + (f"_b{copy}" if args.batch else "")
+                    (out / f"{name}.png").write_bytes(card.png)
+                    image = Image.open(io.BytesIO(card.png)).convert("RGB")
+                    row = {
+                        "name": name, "engine": args.engine, "photo": photo_path.name, "month": month, "seed": seed,
+                        "gen_size": gen_size if args.engine == "cardgen" else None, "panel_text": args.panel_text,
+                        "batch": args.batch or None,
+                        "seconds": seconds, "service": getattr(engine, "last_meta", None),
+                        "likeness": card.judge.likeness if card.judge else None,
+                        "text_ok": card.judge.text_ok if card.judge else None,
+                        "avatar_ok": card.judge.avatar_ok if card.judge else None,
+                        "judge_note": card.judge.note if card.judge else None,
+                        "drift": asdict(frame_drift(template, image)),
+                        "plate_shift": plate_shift(image, catalog.get(month).plate),
+                    }
+                    with (out / "results.jsonl").open("a", encoding="utf-8") as f:
+                        f.write(json.dumps(row, ensure_ascii=False) + "\n")
+                    print(json.dumps(row, ensure_ascii=False), flush=True)
     return 0
 
 

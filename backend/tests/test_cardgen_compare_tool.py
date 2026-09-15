@@ -4,7 +4,7 @@ import argparse
 
 import pytest
 
-from tools.cardgen_compare import PANEL_TEXT, PromptSuffixEngine, panel_sentence, parse_size
+from tools.cardgen_compare import PANEL_TEXT, BatchReplayEngine, PromptSuffixEngine, panel_sentence, parse_size
 
 
 def test_parse_size() -> None:
@@ -50,3 +50,28 @@ def test_prompt_suffix_engine_appends_and_exposes_meta() -> None:
     assert engine.generate(template_png=b"t", photo_jpeg=b"p", prompt="BASE") == b"card"
     assert inner.prompts == ["BASE\n\nEXTRA"]
     assert engine.last_meta == {"seed": 1}
+
+
+class _BatchInner:
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, int]] = []
+        self.last_meta = None
+
+    def generate_batch(self, *, template_png: bytes, photo_jpeg: bytes, prompt: str, count: int) -> list[bytes]:
+        self.calls.append((prompt, count))
+        self.last_meta = {"seeds": [5, 6], "seconds": 3.0, "model": "fake", "size": "1024x1632", "count": count}
+        return [b"c0", b"c1"]
+
+
+def test_batch_replay_calls_service_once_and_hands_out_each_card() -> None:
+    inner = _BatchInner()
+    engine = BatchReplayEngine(inner, 2)
+    first = engine.generate(template_png=b"t", photo_jpeg=b"p", prompt="P")
+    assert engine.last_meta == {"seed": 5, "index": 0, "batch_seconds": 3.0, "model": "fake",
+                                "size": "1024x1632", "count": 2}
+    second = engine.generate(template_png=b"t", photo_jpeg=b"p", prompt="P")
+    assert (first, second) == (b"c0", b"c1")
+    assert engine.last_meta["seed"] == 6 and engine.last_meta["index"] == 1
+    assert inner.calls == [("P", 2)]
+    with pytest.raises(RuntimeError):
+        engine.generate(template_png=b"t", photo_jpeg=b"p", prompt="P")

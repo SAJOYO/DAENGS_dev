@@ -111,3 +111,38 @@ def test_gen_size_is_sent_and_result_still_fits_card() -> None:
     assert (seen["body"]["width"], seen["body"]["height"]) == (1280, 2048)
     assert Image.open(io.BytesIO(out)).size == (994, 1582)
     assert engine.last_meta["size"] == "1280x2048"
+
+
+def test_generate_batch_decodes_each_image_and_keeps_seeds() -> None:
+    seen: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["body"] = json.loads(request.content)
+        images = [base64.b64encode(png(1024, 1632, (i, i, i))).decode() for i in range(3)]
+        return httpx.Response(200, json={"model": "fake", "size": "1024x1632", "seconds": 9.5,
+                                         "seeds": [11, 12, 13], "images_png_b64": images})
+
+    engine = _engine(handler)
+    outs = engine.generate_batch(template_png=png(), photo_jpeg=b"j", prompt="P", count=3)
+
+    assert seen["body"]["count"] == 3 and seen["body"]["seed"] == 11
+    assert [Image.open(io.BytesIO(o)).size for o in outs] == [(994, 1582)] * 3
+    assert engine.last_meta == {"seeds": [11, 12, 13], "seconds": 9.5, "model": "fake",
+                                "size": "1024x1632", "count": 3}
+
+
+def test_generate_batch_wrong_count_is_no_image() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"model": "fake", "size": "1024x1632", "seconds": 1.0, "seeds": [11],
+                                         "images_png_b64": [base64.b64encode(png()).decode()]})
+
+    with pytest.raises(EngineError) as info:
+        _engine(handler).generate_batch(template_png=png(), photo_jpeg=b"j", prompt="P", count=2)
+    assert info.value.code == "no_image"
+
+
+def test_generate_batch_non_200_is_upstream() -> None:
+    engine = _engine(lambda request: httpx.Response(500, text="boom"))
+    with pytest.raises(EngineError) as info:
+        engine.generate_batch(template_png=png(), photo_jpeg=b"j", prompt="P", count=2)
+    assert info.value.code == "upstream"

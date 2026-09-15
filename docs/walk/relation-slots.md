@@ -452,7 +452,7 @@ relation_selection은 어떤 관계를 공간·행동·기기 관측에 연결�
 ## v8 작성용 의미 경계 — 2026-09-15
 
 위 v6 관계 저장 계약과 별도로, v8 brief 작성의 모델 전달 정책은
-`single-writing-brief-v2`로 분리한다. 원자료·분석 계약·발행 형식을 변경하지 않고
+`single-writing-brief-v3`로 분리한다. 원자료·분석 계약·발행 형식을 변경하지 않고
 `writer_view.py` → `writer_meaning.py`에서 중첩 필드까지 명시적으로 선택한다.
 원본에 새 필드가 생겨도 모델 입력으로 자동 전파하지 않는다.
 
@@ -485,6 +485,9 @@ walk_movement_coincident_with_event 관계로 전달하고, 인과관계의 부�
 
 새 제목 정책은 `adopted-prose-title-v2`이며 관측 문장만 있고 채택 본문이 없으면 호출하지 않는다.
 과거 v1 발행본은 `legacy_writer_view.py`와 기존 제목 readmodel로 그대로 검증한다.
+v2 발행본의 `result` 판정명도 이전 투영으로 검증한다. 신규 작성과 숏메모리는
+공유 `relation_vocabulary.py`의 `relationship` 어휘를 사용한다. 지점 비교의 범위는 유지하며
+구간 이동이 확인된 것처럼 어휘를 바꾸지 않는다.
 새 결과는 정책·프롬프트·실제 요청 해시를 함께 보존한다. 새로운 요청 규칙으로 과거 발행본을
 재해석하지 않는다. 순수 관계 계산과 기존 공간 호출 선정 정책은 이 변경의 대상이 아니다.
 

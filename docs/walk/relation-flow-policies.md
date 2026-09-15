@@ -1,7 +1,9 @@
 # 관계 계산과 모델 전달 정책
 
-2026-09-15 로컬 실험 구현. 실제 Gemini 호출을 연결한 준비 어댑터에서 사용한다.
-운영 v8 발행·DB·APP에 연결한 상태는 아니다. 기존 발행본이나 원자료를 변경하지 않는다.
+2026-09-15. 두 지점 비교의 새 어휘는 운영 작성기와 숏메모리에 연결했다
+(`single-writing-brief-v3`). 기존 v1/v2 발행본은 각각의 입력 정책으로 검증한다.
+구간 거리열을 만드는 공급자 연결과 구간 관계 선정은 여전히 실험 어댑터 범위다.
+기존 발행본이나 원자료를 변경하지 않는다.
 
 ## 책임
 
@@ -11,6 +13,14 @@
 | `relation_flow_analysis.py` | 동일 대상의 거리 관측열 / 기존 동선 판정 → 구간 관계 | 표현 어휘·중심 주제 선정 |
 | `relation_injection.py` | 현재 장면의 시각·대상 식별자·관계 후보 → 명시적 허용 목록 | 어휘 변경·문체·필수 표현 지정 |
 | `relation_delivery.py` | 선택 결과 → 모델 요청 | 관계 재판정·임의 재료 탈락 |
+| `relation_vocabulary.py` | 확정된 판정명 → 모델용 어휘 | 계산·주입 선택·문체 지시 |
+
+운영 경로는 `write_brief_task → brief_writer_view → writer_view → relation_view`이며
+`memory_view`도 같은 `relation_view`를 사용한다. 별도 기능 플래그 없이 신규 생성에 적용한다.
+`nearer/farther/same_distance`는 `closer_at_this_scene/farther_at_this_scene/comparable_distance`로,
+배경의 동일/차이는 `shared_background/contrasting_background`로 보낸다.
+내부 판정과 근거 ID는 유지한다. `drawing_closer`나 `leaving_behind` 같은 **구간** 어휘는
+아래 거리열 근거가 있을 때의 실험 경로용이며, 두 끝점만 가진 운영 입력에 끼워 넣지 않는다.
 
 실험 연결은 `backend/tools/run_relation_policy_experiment.py`에 있다. 공원 시험 자료의 명시적인 객체 ID에 등록 좌표를 연결하고, 계산된 유효 GPS 위치들로 그 점과의 거리열을 만든다. 임의 이름 매칭이나 모델의 위치 추론을 사용하지 않는다. 실제 공급자 객체·형상 연결은 운영 통합 때 별도 어댑터로 제공해야 한다.
 
@@ -52,3 +62,8 @@
 ## 확인
 
 `tests/walk/diary/test_relation_flow_policy.py`는 케이스, 필요한 공간 근거, 시간 절단, 공백, 대상별 중복 대체, 전달 경계, 사건 시각과 분석 범위 분리를 검사한다. 실제 출력·시나리오·원장·선택 결과·요청은 별도 실험 산출물에 보존한다. 인용 ID 통과는 자연어 의미 정확성 통과를 뜻하지 않는다.
+
+운영 어휘 연결 재현: `uv run python tools/run_writer_vocabulary_smoke.py --env <환경 파일> --output <결과 JSON>`.
+합성 스냅샷 두 개를 실제 `write_brief_task`와 운영 프롬프트·Gemini 전송 함수로 보내고,
+발행 결과 검증 함수를 거친다. 10초 간격, 최대 2회, 재시도 없음. DB·APP·운영 서버 호출은 아니다.
+결과는 `backend/evals/walk_diary/writer_policy_20260915/production_vocabulary.json`에 보존한다.

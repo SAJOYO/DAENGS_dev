@@ -1,5 +1,14 @@
 관계 계산 · 주입 선택 · 모델 전달 정책 분리
 
+운영 어휘 연결 추가 (2026-09-15)
+- production_vocabulary.json: 합성 지점 비교 두 건을 실제 write_brief_task → 운영 프롬프트 → generate_relation_part로 호출한 결과. 두 건 모두 응답·인용·발행 결과 검증을 통과했다. 호출 간격 10초, 재시도 없음.
+- 신규 v3 작성과 숏메모리의 지점 비교에 shared_background / contrasting_background / closer_at_this_scene / farther_at_this_scene / comparable_distance를 적용했다. 이전 v2 원시 result 입력은 과거 발행본 검증에만 남는다.
+- 구간 거리열을 만드는 운영 어댑터는 아직 연결하지 않았다. 아래의 drawing_closer 등 구간 실험과 이번 지점 비교의 운영 연결은 범위가 다르다.
+- 실제 출력에는 ‘매헌로를 따라’, ‘상점들을 지나쳤다’처럼 두 지점 근거보다 강한 이동 표현이 남았다. 어휘가 전달된 것과 의미 품질을 구분한다. 프롬프트는 이번 수정에서 변경하지 않았다.
+- 재현: backend에서 uv run python tools/run_writer_vocabulary_smoke.py --env <환경 파일> --output <결과 JSON>.
+
+아래는 기존 구간 실험의 기록이다.
+
 구현
 - relation_flow_contracts.py: 내부 거리 관측열·관계 원장·선택 결과 계약.
 - relation_flow_analysis.py: 접근·멀어짐·접근 후 멀어짐·거리 유지·곁을 따라감·지나침 계산과 기존 회전·되짚기·복귀 연결.

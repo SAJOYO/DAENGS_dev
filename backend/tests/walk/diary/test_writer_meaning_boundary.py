@@ -64,9 +64,12 @@ def test_spatial_relationship_and_memory_preserve_meaning_without_bookkeeping():
     assert brief.model_dump_json() == before
     assert "등록" in before and "unverified" in before
     relations = [r for rows in request["relation_slots"].values() for r in rows]
-    assert any(r["result"] == "nearer" and r["axis"] == "object_distance" for r in relations)
     assert any(
-        r["family"] == "land_cover" and r["result"] == "different_characteristics"
+        r["relationship"] == "closer_at_this_scene" and r["axis"] == "object_distance"
+        for r in relations
+    )
+    assert any(
+        r["family"] == "land_cover" and r["relationship"] == "contrasting_background"
         for r in relations
     )
     area = next(f for f in request["available_facts"] if f["meaning"]["kind"] == "area_context")
@@ -264,3 +267,62 @@ def test_unknown_policy_cannot_reinterpret_saved_input():
     brief = build_space_brief(context(None, snapshot(scenes[0], walk), positions))
     with pytest.raises(ValueError, match="unsupported"):
         publication_writer_view(brief, "unknown")
+
+
+@pytest.mark.parametrize(
+    "distance, word", [(30, "closer_at_this_scene"), (200, "farther_at_this_scene")]
+)
+async def test_production_dispatch_and_saved_v2_keep_their_own_vocabulary(distance, word):
+    from daengs_backend.services.walk_diary.writing.brief_writer import write_brief_task
+    from daengs_walk.diary.relational.brief_publication import validate_brief_result
+    from daengs_walk.diary.relational.brief_response import brief_request_revision
+    from daengs_walk.diary.relational.contracts import WriterTask, writer_task
+    from daengs_walk.diary.relational.writer_view import memory_view
+
+    walk, scenes, positions = case()
+    a, b = snapshot(scenes[0], walk), snapshot(scenes[1], walk, distance=distance)
+    ctx = context(a, b, positions)
+    relation = ctx.relation_slots.proximity[0]
+    selected = DeliveredMeaning(
+        context=ctx, evidence_ids=relation.current_evidence_ids, relation_ids=(relation.id,)
+    )
+    brief = build_space_brief(ctx)
+    task = WriterTask.model_validate(writer_task("space", scenes[1].id, brief))
+    seen = []
+
+    async def send(stage, payload, schema):
+        seen.append(deepcopy(payload))
+        return json.dumps(
+            {
+                "focus": "공간 관계",
+                "text": "공원과의 거리가 달랐다.",
+                "evidence_ids": list(relation.current_evidence_ids),
+                "relation_ids": [relation.id],
+            }
+        )
+
+    result = await write_brief_task(task, send=send)
+    assert result["status"] == "returned"
+    assert result["policy"] == "single-writing-brief-v3"
+    assert validate_brief_result(task, result)
+    request = seen[0]
+    assert request["relation_slots"]["proximity"][0]["relationship"] == word
+    assert memory_view(selected)["selected_relations"][0]["relationship"] == word
+    assert request["relation_slots"]["proximity"][0]["scope"] == {"kind": "endpoint_comparison"}
+    assert "result" not in request["relation_slots"]["proximity"][0]
+
+    old = deepcopy(result)
+    old["policy"] = "single-writing-brief-v2"
+    old["request"] = publication_writer_view(brief, old["policy"])
+    old["request_revision"] = brief_request_revision(
+        old["policy"], old["prompt_revision"], old["request"], old["response_schema"]
+    )
+    assert old["request"]["relation_slots"]["proximity"][0]["result"] == relation.result
+    assert (
+        memory_view(selected, legacy_v2=True)["selected_relations"][0]["result"] == relation.result
+    )
+    assert validate_brief_result(task, old)
+    # A saved request cannot silently adopt the new vocabulary under the old version.
+    old["request"] = request
+    with pytest.raises(ValueError, match="canonical"):
+        validate_brief_result(task, old)

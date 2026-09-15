@@ -5,6 +5,7 @@ missing claims are omitted, not enumerated as unknown or false.
 """
 
 from daengs_walk.diary.relational.brief_contracts import NarrativeFact
+from daengs_walk.diary.relational.relation_vocabulary import ENDPOINT_WORDS
 
 
 def instant(value):
@@ -114,12 +115,16 @@ def fact_view(fact):
     )
 
 
-def relation_view(relation):
+def relation_view(relation, *, legacy_v2=False):
     return {
         "id": relation.id,
         "family": relation.family,
         "axis": "surrounding_area" if relation.axis == "query_area" else relation.axis,
-        "result": relation.result,
+        **(
+            {"result": relation.result}
+            if legacy_v2
+            else {"relationship": ENDPOINT_WORDS[relation.result]}
+        ),
         "earlier_evidence_ids": list(relation.earlier_evidence_ids),
         "current_evidence_ids": list(relation.current_evidence_ids),
         "scope": {"kind": "endpoint_comparison"},

@@ -2,22 +2,11 @@
 
 from copy import deepcopy
 
+from .relation_vocabulary import FLOW_WORDS
 from .writer_meaning import present
 from .writer_view import writer_view
 
 DELIVERY_POLICY = "relation-delivery-v1"
-FLOW_WORDS = {
-    "distance_decrease": "drawing_closer",
-    "distance_increase": "leaving_behind",
-    "distance_valley": "drawing_closer_then_away",
-    "passing": "passing_by",
-    "distance_stable": "keeping_a_similar_distance",
-    "alongside": "staying_alongside",
-    "route_retrace": "retracing",
-    "route_return": "coming_back",
-    "route_turn": "turning_back",
-    "route_straight": "carrying_on_straight",
-}
 
 
 def flow_view(flow):
@@ -68,17 +57,8 @@ def deliver_relations(brief, selection, *, memory=()):
         for row in rows:
             if row["id"] not in allowed:
                 continue
-            item = deepcopy(row)
-            # Endpoint-only comparisons remain comparisons, not invented journeys.
-            value = item.pop("result")
-            item["relationship"] = {
-                "nearer": "closer_at_this_scene",
-                "farther": "farther_at_this_scene",
-                "same_distance": "comparable_distance",
-                "same_characteristics": "shared_background",
-                "different_characteristics": "contrasting_background",
-            }[value]
-            items.append(item)
+            # Production writer_view already applies the shared vocabulary.
+            items.append(deepcopy(row))
         if items:
             slots[name] = items
     flows = [flow_view(f) for f in selection.flows]

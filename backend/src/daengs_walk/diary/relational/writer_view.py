@@ -14,10 +14,10 @@ from daengs_walk.diary.relational.writer_meaning import (
     walk_view,
 )
 
-WRITER_POLICY = "single-writing-brief-v2"
+WRITER_POLICY = "single-writing-brief-v3"
 
 
-def memory_view(selection):
+def memory_view(selection, *, legacy_v2=False):
     context = selection.context
     relations = [
         r for r in context.relation_slots.all_relations() if r.id in selection.relation_ids
@@ -35,14 +35,14 @@ def memory_view(selection):
             if a and a.position.scene_id in scenes
         ],
         selected_facts=[fact_view(f) for f in facts],
-        selected_relations=[relation_view(r) for r in relations],
+        selected_relations=[relation_view(r, legacy_v2=legacy_v2) for r in relations],
         selected_route=route_view(context.route)
         if context.route and context.route.id in ids
         else None,
     )
 
 
-def writer_view(brief):
+def writer_view(brief, *, legacy_v2=False):
     common = {
         "version": brief.version,
         "part": brief.part,
@@ -68,21 +68,26 @@ def writer_view(brief):
         **present(
             earlier=anchor_view(context.earlier) if context.earlier else None,
             relation_slots={
-                name: [relation_view(r) for r in getattr(context.relation_slots, name)]
+                name: [
+                    relation_view(r, legacy_v2=legacy_v2)
+                    for r in getattr(context.relation_slots, name)
+                ]
                 for name in ("background", "proximity", "area_context")
                 if getattr(context.relation_slots, name)
             },
             connection=connection_view(context.connection),
             route=route_view(context.route),
-            delivery_memory=[memory_view(m) for m in brief.delivery.recent],
+            delivery_memory=[memory_view(m, legacy_v2=legacy_v2) for m in brief.delivery.recent],
         ),
     }
 
 
 def publication_writer_view(brief, policy):
-    """Historical validation is explicitly versioned; new generation always uses v2."""
+    """Historical validation is explicitly versioned; new generation always uses v3."""
     if policy == WRITER_POLICY:
         return writer_view(brief)
+    if policy == "single-writing-brief-v2":
+        return writer_view(brief, legacy_v2=True)
     if policy == "single-writing-brief-v1":
         from .legacy_writer_view import brief_writer_view
 

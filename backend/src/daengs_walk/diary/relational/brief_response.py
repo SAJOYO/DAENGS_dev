@@ -3,6 +3,12 @@
 from daengs_walk.diary.relational.brief_contracts import ActionWritingBrief, SpaceWritingBrief
 from daengs_walk.diary.relational.contracts import WriterAnswer
 from daengs_walk.diary.relational.scene_comparison_contracts import SpaceComparisonAnswer
+from daengs_walk.value_contracts import digest
+
+
+def brief_request_revision(policy, prompt_revision, request, schema):
+    """Frozen request binding, independent of subsequently edited prompts."""
+    return digest([policy, prompt_revision, request, schema])
 
 
 def parse_brief(payload):

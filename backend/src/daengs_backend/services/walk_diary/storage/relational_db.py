@@ -1,9 +1,13 @@
-"""Versioned JSONB envelope and deterministic public projection of a frozen v7 receipt."""
+"""Versioned JSONB envelope and deterministic public projection of frozen v7/v8 receipts."""
 
 from copy import deepcopy
 
 from daengs_backend.schemas.walk_relational_diary import RELATIONAL_STORAGE, RelationalBundle
 from daengs_backend.services.walk_diary.relational_execution import RelationalDiaryResult
+from daengs_walk.diary.relational.brief_publication import (
+    BRIEF_PUBLICATION,
+    validate_brief_publication,
+)
 from daengs_walk.diary.relational.publication import PUBLICATION_VERSION, validate_publication
 from daengs_walk.diary.relational.title_context import validate_title_publication
 from daengs_walk.value_contracts import digest
@@ -81,11 +85,13 @@ def store_result(result, base, *, revision, generation, target):
         raise ValueError("writer result belongs to another reservation")
     validate_prepared(result.prepared)
     expected = assemble_receipt(result.prepared, result.receipt["writing"])
-    if result.receipt.get("version") != PUBLICATION_VERSION or any(
+    if result.receipt.get("version") not in {PUBLICATION_VERSION, BRIEF_PUBLICATION} or any(
         result.receipt.get(k) != value for k, value in expected.items()
     ):
         raise ValueError("result differs from canonical publication")
     validate_title_publication(result.receipt)
+    if result.receipt["version"] == BRIEF_PUBLICATION:
+        validate_brief_publication(result.prepared, result.receipt)
     body = {
         "source_revision": revision,
         "generation": generation,
@@ -111,7 +117,13 @@ def read_result(raw, *, walk_id, session_id, revision, generation):
         body["generation"],
     ) != (str(walk_id), str(session_id), revision, generation):
         raise ValueError("stored relational binding changed")
-    validate_publication(body["receipt"])
+    version = body["receipt"].get("version")
+    if version == BRIEF_PUBLICATION:
+        validate_brief_publication(body["prepared"], body["receipt"])
+    elif version == PUBLICATION_VERSION:
+        validate_publication(body["receipt"])
+    else:
+        raise ValueError("unsupported relational publication")
     value = project(body["receipt"], session_id)
     if value.model_dump(mode="json") != body["public"]:
         raise ValueError("stored public projection changed")

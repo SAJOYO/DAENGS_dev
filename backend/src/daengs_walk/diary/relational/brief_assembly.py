@@ -3,25 +3,17 @@
 Persistence/read compatibility is a separate adapter. This assembles the service result.
 """
 
-import json
 from copy import deepcopy
 
 from daengs_walk.diary.relational.brief_binding import validate_brief_plans
 from daengs_walk.diary.relational.brief_contracts import BriefDeliveryState, DeliveredMeaning
-from daengs_walk.diary.relational.brief_response import (
-    brief_response_schema,
-    parse_brief,
-    resolve_brief_answer,
-)
+from daengs_walk.diary.relational.brief_publication import BRIEF_PUBLICATION, validate_brief_result
 from daengs_walk.diary.relational.comparison_writing import comparison_input
 from daengs_walk.diary.relational.writing_brief import (
     advance_brief_delivery,
-    brief_writer_view,
     build_space_brief,
 )
 from daengs_walk.value_contracts import digest
-
-BRIEF_PUBLICATION = "relational-diary-skeleton-v8"
 
 
 def assemble_brief_receipt(prepared, written):
@@ -36,25 +28,7 @@ def assemble_brief_receipt(prepared, written):
     if len(results) != len(written["results"]) or results.keys() != tasks.keys():
         raise ValueError("missing, duplicate or unexpected brief result")
     for key, result in results.items():
-        task = tasks[key]
-        if any(result[k] != getattr(task, k) for k in ("scene_id", "stage", "revision")):
-            raise ValueError("brief result belongs to another task")
-        brief = parse_brief(task.payload)
-        if result.get("request") != brief_writer_view(brief) or result.get(
-            "response_schema"
-        ) != brief_response_schema(brief):
-            raise ValueError("writer did not receive the canonical brief")
-        if result["status"] == "returned":
-            answer = resolve_brief_answer(brief, json.loads(result["raw_text"]))
-            if (
-                answer.model_dump(mode="json") != result["answer"]
-                or result["candidate"] != result["answer"]
-            ):
-                raise ValueError("accepted answer differs from the raw brief response")
-            if result["semantic_status"] not in {"unverified", "model_reviewed"}:
-                raise ValueError("invalid accepted semantic status")
-        elif result["status"] != "failed":
-            raise ValueError("unknown brief result status")
+        validate_brief_result(tasks[key], result)
     cards, memory = [], BriefDeliveryState()
     frames = snapshot["frames"]
     for index, (frame, plan) in enumerate(zip(frames, snapshot["plans"], strict=True)):

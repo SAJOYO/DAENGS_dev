@@ -6,6 +6,7 @@ from copy import deepcopy
 
 from daengs_backend.services.walk_diary.writing.brief_prompts import BRIEF_POLICY, BRIEF_PROMPTS
 from daengs_walk.diary.relational.brief_response import (
+    brief_request_revision,
     brief_response_schema,
     parse_brief,
     resolve_brief_answer,
@@ -36,7 +37,10 @@ async def write_brief_task(task, *, send, review=False):
             response_schema=deepcopy(schema),
             prompt_revision=digest(BRIEF_PROMPTS[task.stage]),
             policy=BRIEF_POLICY,
-            request_revision=digest([BRIEF_POLICY, BRIEF_PROMPTS[task.stage], request, schema]),
+            review_enabled=review,
+            request_revision=brief_request_revision(
+                BRIEF_POLICY, digest(BRIEF_PROMPTS[task.stage]), request, schema
+            ),
         )
         raw = await send(task.stage, deepcopy(request), deepcopy(schema))
         record["raw_text"] = raw

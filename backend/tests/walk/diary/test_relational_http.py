@@ -10,6 +10,8 @@ from daengs_backend.routers import walk_storyboard as router
 from daengs_backend.schemas.walk_relational_diary import RELATIONAL_FORMAT, RELATIONAL_STORAGE
 from daengs_backend.services.walk_diary.lifecycle import relational
 from daengs_backend.services.walk_diary.runtime import write_relational_board
+from tests.walk.diary.test_brief_execution import answer
+from tests.walk.diary.test_brief_execution import prepare as brief_prepare  # noqa: F401
 from tests.walk.diary.test_relational_orchestration import (
     prepare,  # noqa: F401 -- fixture registration
     public_collector,  # noqa: F401 -- fixture registration
@@ -21,12 +23,13 @@ from tests.walk.support.photo_input import OWNER, WALK
 QUERY = f"?bundle_format={RELATIONAL_FORMAT}&target_scene_count=3"
 
 
-@pytest.fixture
-def relational_api(api, prepare, monkeypatch):  # noqa: F811
+@pytest.fixture(params=["v7", "v8"])
+def relational_api(api, prepare, brief_prepare, monkeypatch, request):  # noqa: F811
     client, state, db = api
     state.relational_calls = 0
     state.relational_hook = None
     state.relational_failure = None
+    state.publication_version = request.param
     original_store = relational.store_result
 
     def store(*args, **kwargs):
@@ -47,8 +50,8 @@ def relational_api(api, prepare, monkeypatch):  # noqa: F811
             return await write_relational_board(
                 source,
                 base,
-                prepare=prepare,
-                send=send,
+                prepare=brief_prepare if request.param == "v8" else prepare,
+                send=brief_send if request.param == "v8" else send,
                 execution_policy=replace(kwargs["execution_policy"], minimum_interval_s=0),
             )
         except Exception as exc:
@@ -57,6 +60,10 @@ def relational_api(api, prepare, monkeypatch):  # noqa: F811
 
     client.app.dependency_overrides[router.get_diary_writer] = lambda: write
     return client, state, db
+
+
+async def brief_send(stage, payload, schema):
+    return answer(stage, payload)
 
 
 def spec(state, **updates):
@@ -70,6 +77,7 @@ def test_http_stores_canonical_parts_and_get_never_replans(relational_api, monke
     value = result.json()
     assert value["status"] == "ready", (value, state.relational_failure)
     assert state.row.bundle["format"] == RELATIONAL_STORAGE
+    assert state.row.bundle["payload"]["receipt"]["version"].endswith(state.publication_version)
     assert value["bundle"]["cards"]
     for card in value["bundle"]["cards"]:
         assert card["body"] == "\n".join(
@@ -157,6 +165,7 @@ def test_corrupted_saved_receipt_is_not_displayed(relational_api):
     assert result["status"] == "failed" and result["bundle"] is None
 
 
+@pytest.mark.parametrize("relational_api", ["v7"], indirect=True)
 def test_old_dong_only_publication_still_reads(relational_api):
     from daengs_walk.value_contracts import digest
 

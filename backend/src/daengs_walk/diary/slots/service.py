@@ -6,10 +6,10 @@ from daengs_walk.diary.board.models import (
 )
 from daengs_walk.diary.contracts.input import DiaryInput
 from daengs_walk.diary.contracts.slots import BoardSlotSnapshot, SlotPolicy
-from daengs_walk.diary.slots.admission import admit
+from daengs_walk.diary.slots.admission import admit, eligible_candidates
 
 
-def prepare_board_slots(
+def _prepare_board_evidence(
     source: DiaryInput,
     board: BaseBoard,
     policy: SlotPolicy,
@@ -18,7 +18,8 @@ def prepare_board_slots(
     scene_backgrounds=None,
     frozen_motion: BoardSlotSnapshot | None = None,
     eligible_frames: dict | None = None,
-) -> BoardSlotSnapshot:
+    eligibility_only: bool = False,
+) -> BoardSlotSnapshot | dict:
     """Apply part rules to already-selected scenes without selecting a second board."""
     from daengs_walk.diary.slots.sources import candidates_for_scene, verified_motion
 
@@ -50,6 +51,7 @@ def prepare_board_slots(
 
         patterns = prepare_route_patterns(source, route, policy.route_patterns)
     stamps = []
+    eligible_result = {}
     for scene in board.scenes:
         candidates, decisions = candidates_for_scene(
             source,
@@ -76,14 +78,53 @@ def prepare_board_slots(
             from daengs_walk.diary.slots.route import pattern_candidates
 
             candidates.extend(pattern_candidates(scene, patterns, policy, decisions))
+        if eligibility_only:
+            eligible_result[scene.id] = tuple(eligible_candidates(candidates, decisions, policy))
+            continue
         frame = [] if eligible_frames is not None else None
         stamps.append(admit(scene.id, candidates, decisions, policy, eligible_out=frame))
         if eligible_frames is not None:
             eligible_frames[scene.id] = tuple(frame)
+    if eligibility_only:
+        return eligible_result
     return BoardSlotSnapshot(
         client_session_id=board.client_session_id,
         input_revision=board.input_revision,
         plan_revision=board.plan_revision,
         policy=policy,
         stamps=tuple(stamps),
+    )
+
+
+def prepare_board_slots(
+    source,
+    board,
+    policy,
+    *,
+    route=None,
+    scene_backgrounds=None,
+    frozen_motion=None,
+    eligible_frames=None,
+):
+    """Historical capacity selection over shared source eligibility."""
+    return _prepare_board_evidence(
+        source,
+        board,
+        policy,
+        route=route,
+        scene_backgrounds=scene_backgrounds,
+        frozen_motion=frozen_motion,
+        eligible_frames=eligible_frames,
+    )
+
+
+def prepare_eligible_scene_facts(source, board, policy, *, route=None, scene_backgrounds=None):
+    """Complete valid evidence per selected scene; never run writing capacity selection."""
+    return _prepare_board_evidence(
+        source,
+        board,
+        policy,
+        route=route,
+        scene_backgrounds=scene_backgrounds,
+        eligibility_only=True,
     )

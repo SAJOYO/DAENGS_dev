@@ -1,5 +1,34 @@
 # 관계 모듈과 결과 칸 — v6
 
+## DEV 통합 준비: 구형 의존성과 실제 수집 연결 (2026-09-15)
+
+체크포인트 `4b35fc9f` 이후 새 준비 입력은 `planning_contract=scene-comparison-plan-v1`을
+사용한다. 아래의 초기 v6 계획 설명은 과거 입력의 호환 경로이며 새 생성의 기준이 아니다.
+
+- `slots.service.prepare_eligible_scene_facts`는 공통 후보 생성·적합성 검사를 사용하고
+  용량 배분은 실행하지 않는다. 공간과 현재 행동 모두 그 전체 적합 근거에서 준비한다.
+- `preparation.relational`은 구형 `writing.context`를 호출하지 않는다. 전체 스냅샷을
+  조립하고 `relational.comparison_planning`에서 직접 공간 비교·현재 행동 작업을 만든다.
+  구형 공간 작업을 만든 뒤 새 작업으로 덮어쓰는 단계는 새 경로에서 제거했다.
+- 공간 사실의 의미 변환은 `diary/space/semantics.py`, 현재 핀에 걸치는 이동 해석은
+  `diary/route/pin_context.py`로 이동했다. 구형 작성기의 공개 import는 호환 재노출로
+  유지하되 새 준비가 구형 프롬프트·용량·작성 입력에 의존하지 않는다.
+- `walk_background/providers/sgis.py`에 SGIS 공급자를 두고, 동(20)과 도로명(10)을
+  구분한다. 같은 좌표의 변환은 공유하고 응답 캐시는 조회 유형별로 분리한다.
+  도로명 내부 숫자는 유지하고 건물 번호·전체 주소는 입력에 남기지 않는다.
+- `collection.relational.collect_and_prepare_relational`은 실제 공간·동 수집과 도로명
+  조회를 준비 함수에 연결한다. `configured_relational_preparation`이 설정 기반 진입점이다.
+  기본 수집 예산은 공간·동 4초와 도로명 4초로 각각 적용되며 변경 가능하다.
+  아직 API·DB 오케스트레이션에 등록하지 않았다. 전체 DEV 최신 변경을 병합한 것도 아니다.
+- 조회 실패, 미조회, 성공한 빈 도로명 응답은 구분한다. 어느 것도 도로에서 벗어났다는
+  근거로 승격하지 않는다. 현재 행동의 공간·도로명은 같은 스냅샷에 묶여 검증된다.
+
+실제 SGIS 연결 확인: 공개 좌표 `(37.5, 127.0)`에서 `반포4동`과 `사평대로28길`을
+각 조회 유형으로 받았다. 사용자 산책 기록이나 LLM 서술 실험이 아니다.
+코드 검사 대상은 `test_relational_source_connection.py`, 기존 스냅샷·비교 작성·발행,
+행동 경계, SGIS 공급자와 구형 import를 사용하는 작성 경계다. 원문 응답으로 보는 LLM
+품질, API·DB 발행, APP 표시는 이번 완료 범위에 포함하지 않는다.
+
 ## 전체 장면 비교 계약 — 1단계 추가
 
 `backend/src/daengs_walk/diary/relational/scene_comparison_contracts.py`에

@@ -9,20 +9,7 @@ from datetime import datetime
 from daengs_walk.diary.board.narration import narration_context
 from daengs_walk.diary.board.scene_input import ACTION_MEANINGS
 from daengs_walk.diary.contracts.input import digest
-
-SHAPE_TEXT = {
-    "straight_run": "대체로 곧게 이동",
-    "curve_left": "왼쪽으로 완만하게 휘어 이동",
-    "curve_right": "오른쪽으로 완만하게 휘어 이동",
-    "turn_left": "왼쪽으로 방향을 바꾸는 지점에서 이동",
-    "turn_right": "오른쪽으로 방향을 바꾸는 지점에서 이동",
-    "turn_sharp_left": "왼쪽으로 크게 방향을 바꾸는 지점에서 이동",
-    "turn_sharp_right": "오른쪽으로 크게 방향을 바꾸는 지점에서 이동",
-    "turn_reverse": "진행 방향을 반대로 바꾸는 지점에서 이동",
-    "direction_left": "왼쪽으로 진행 방향이 바뀌는 부분에서 이동",
-    "direction_right": "오른쪽으로 진행 방향이 바뀌는 부분에서 이동",
-    "local_stay": "좁은 범위 안에서 위치가 모인 상태",
-}
+from daengs_walk.diary.route.pin_context import SHAPE_TEXT, pin_movement
 
 
 def require_action(request):
@@ -51,36 +38,6 @@ def require_scene_action(scene, request):
         or action["actor"].get("id") != record.pet_id
     ):
         raise ValueError("action writing is not bound to this behavior pin")
-
-
-def pin_movement(items):
-    """Retain only the supported phase containing the pin, without neighboring events."""
-    selected = []
-    for item in items:
-        facts = item["facts"]
-        at = facts["scene_at_s"]
-        claims = {c["id"]: c for c in facts["claims"]}
-        phases = []
-        for phase in facts["phases"]:
-            if not phase["start_s"] <= at < phase["end_s"]:
-                continue
-            refs = [r for r in phase["claims"] if claims[r].get("event_s", at) == at]
-            if refs:
-                phases.append({**phase, "claims": refs})
-        if phases:
-            refs = {r for p in phases for r in p["claims"]}
-            selected.append(
-                {
-                    **item,
-                    "facts": {
-                        **facts,
-                        "phases": phases,
-                        "claims": [c for c in facts["claims"] if c["id"] in refs],
-                    },
-                }
-            )
-    # A pin cannot establish two different simultaneous phases. Keep the action alone.
-    return selected if sum(len(x["facts"]["phases"]) for x in selected) == 1 else []
 
 
 def context_uses(request):
@@ -129,3 +86,6 @@ def project_action(request):
     }
     refs["m1"] = sorted(u["id"] for u in uses if u["meaning"] in selected_kinds)
     return payload, refs
+
+
+__all__ = ["SHAPE_TEXT", "pin_movement"]

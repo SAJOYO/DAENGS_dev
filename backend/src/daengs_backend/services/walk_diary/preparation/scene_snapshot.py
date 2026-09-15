@@ -1,15 +1,15 @@
 """Assemble full eligible scene facts and display header without acquisition or LLM."""
 
-import re
 from copy import deepcopy
 
-from daengs_backend.services.walk_diary.model_materials import material
 from daengs_backend.services.walk_diary.preparation.scene_facts import FAMILIES, project_scene_fact
 from daengs_walk.diary.relational.scene_comparison_contracts import (
     SceneCardHeader,
     SceneFact,
     SceneSnapshot,
 )
+from daengs_walk.diary.space.road import road_name
+from daengs_walk.diary.space.semantics import material
 from daengs_walk.value_contracts import digest
 
 
@@ -64,11 +64,17 @@ def _road(scene_id, point, snapshots):
         rows = response.get("result", [])
         if response.get("errCd") != 0 or not isinstance(rows, list) or len(rows) != 1:
             continue
+        if not isinstance(rows[0], dict):
+            continue
         name = rows[0].get("road_nm")
         # Numbers inside a road name (e.g. 양재천로3길) are valid; building numbers are not.
-        if isinstance(name, str) and re.fullmatch(r"[가-힣A-Za-z0-9·.\-]+(?:로|길)", name.strip()):
+        if road_name(name) is not None:
             candidates.append((name.strip(), saved))
     if not candidates:
+        if matching and all(s.get("response") == {"errCd": 0, "result": []} for s in matching):
+            return None, "empty", "road_query_empty; not_proof_of_road_absence"
+        if matching and all(s.get("status") == "not_requested" for s in matching):
+            return None, "not_requested", "road_not_requested"
         return None, "unknown", "road_response_unusable" if matching else "road_not_supplied"
     if len({name for name, _ in candidates}) != 1:
         return None, "partial", "conflicting_road_names"
@@ -186,6 +192,19 @@ def validate_scene_snapshot_bindings(prepared_snapshot):
             raise ValueError("scene snapshot does not match eligible evidence and sources")
         if header.model_dump(mode="json") != frame["card_header"]:
             raise ValueError("card header does not match eligible evidence")
+        if frame.get("planning_contract") == "scene-comparison-plan-v1":
+            from daengs_walk.diary.relational.current_action import current_background
+
+            if frame["space"]["materials"] != current_background(frame["scene_snapshot"]):
+                raise ValueError("current action background differs from scene snapshot")
+            road = next((f for f in rebuilt.facts if f.family == "road"), None)
+            expected_road = (
+                {"id": road.id, "road_nm": road.value["name"], "scope": road.scope.description}
+                if road
+                else None
+            )
+            if frame.get("road_reference") != expected_road:
+                raise ValueError("current action road differs from scene snapshot")
         comparisons = collect_spatial_comparisons(rebuilt, previous)
         if comparisons != frame["spatial_comparison_slots"]:
             raise ValueError("spatial comparison slots do not match scene snapshots")

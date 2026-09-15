@@ -36,7 +36,11 @@ JSON focus(드러낼 의미를 짧게), relation_ids(표현한 관계), evidence
 
 
 def writing_prompt(stage, payload):
-    return COMPARISON_PROMPT if stage == "space" and payload.get("version") == "scene-comparison-v1" else PROMPTS[stage]
+    return (
+        COMPARISON_PROMPT
+        if stage == "space" and payload.get("version") == "scene-comparison-v1"
+        else PROMPTS[stage]
+    )
 
 
 PROMPTS = {
@@ -109,7 +113,9 @@ async def generate_relation_part(stage, payload, schema):
                     system_instruction=writing_prompt(stage, payload),
                     temperature=0,
                     candidate_count=1,
-                    max_output_tokens=1024 if stage == "review" or payload.get("version") == "scene-comparison-v1" else 512,
+                    max_output_tokens=1024
+                    if stage == "review" or payload.get("version") == "scene-comparison-v1"
+                    else 512,
                     automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
                     response_mime_type="application/json",
                     response_json_schema=schema,
@@ -147,13 +153,29 @@ def validate_prepared(prepared):
             i for i, f in enumerate(snapshot["frames"]) if f["scene_id"] == frame["scene_id"]
         )
         previous = snapshot["frames"][index - 1] if index else None
-        if plan.get("relation_slots") != collect_relations(frame, previous):
+        direct_comparison = frame.get("planning_contract") == "scene-comparison-plan-v1"
+        if direct_comparison:
+            from daengs_walk.diary.relational.comparison_planning import make_comparison_plan
+
+            expected_plan = make_comparison_plan(frame, previous)
+            expected_slots = expected_plan["relation_slots"]
+            if plan.get("planning_contract") != frame["planning_contract"]:
+                raise ValueError("comparison planning contract changed")
+            if plan["action_task"] != expected_plan["action_task"]:
+                raise ValueError("action task must use current pin only")
+        else:
+            expected_slots = collect_relations(frame, previous)
+        if plan.get("relation_slots") != expected_slots:
             raise ValueError("relation slots do not match frame evidence")
         if plan["anchor"] != frame["anchor"]:
             raise ValueError("plan anchor changed")
         if bool(plan["action_task"]) != bool(frame["action"]):
             raise ValueError("action task must match current pin")
-        current = [m for role, m in spatial_context(frame).items() if role != "road_address"]
+        current = (
+            frame["space"]["materials"]
+            if direct_comparison
+            else [m for role, m in spatial_context(frame).items() if role != "road_address"]
+        )
         if "scene_snapshot" in frame:
             from daengs_walk.diary.relational.comparison_writing import (
                 comparison_input,
@@ -190,8 +212,8 @@ def validate_prepared(prepared):
                 task.payload["recorded_action"] != frame["action"]["recorded_action"]
                 or task.payload["pin_at"] != frame["anchor"]["event_at"]
                 or task.payload.get("movement_context") != frame["action"].get("movement_context")
-                or task.payload.get('current_gait', []) != frame['action'].get('current_gait', [])
-                or task.payload.get('current_shape', []) != frame['action'].get('current_shape', [])
+                or task.payload.get("current_gait", []) != frame["action"].get("current_gait", [])
+                or task.payload.get("current_shape", []) != frame["action"].get("current_shape", [])
             ):
                 raise ValueError("action task must use current pin only")
             if stage == "space":
@@ -251,7 +273,9 @@ def citation_contract(task):
             ids.append("journey")
     else:
         ids.append(task.payload["recorded_action"]["id"])
-        ids.extend(x['id'] for key in ('current_gait', 'current_shape') for x in task.payload.get(key, []))
+        ids.extend(
+            x["id"] for key in ("current_gait", "current_shape") for x in task.payload.get(key, [])
+        )
         if task.payload.get("movement_context"):
             ids.append(task.payload["movement_context"]["id"])
     if len(set(ids)) != len(ids):
@@ -272,7 +296,9 @@ def citation_contract(task):
     else:
         required = {task.payload["recorded_action"]["id"]}
         allowed.update(required)
-        allowed.update(x['id'] for key in ('current_gait', 'current_shape') for x in task.payload.get(key, []))
+        allowed.update(
+            x["id"] for key in ("current_gait", "current_shape") for x in task.payload.get(key, [])
+        )
         motion = task.payload.get("movement_context")
         if motion:
             allowed.add(motion["id"])
@@ -342,7 +368,9 @@ async def write_relational_diary(prepared, *, send=None, review=True, model=None
             try:
                 allowed, required = citation_contract(task)
                 request = {**deepcopy(task.payload), "citation_ids": sorted(allowed)}
-                comparison = task.stage == "space" and task.payload.get("version") == "scene-comparison-v1"
+                comparison = (
+                    task.stage == "space" and task.payload.get("version") == "scene-comparison-v1"
+                )
                 if comparison:
                     from daengs_walk.diary.relational.comparison_writing import writer_projection
 
@@ -372,13 +400,17 @@ async def write_relational_diary(prepared, *, send=None, review=True, model=None
                         relation_ids={"type": "array", "items": {"type": "string"}},
                     )
                     if request["relation_ids"]:
-                        schema["properties"]["relation_ids"]["items"]["enum"] = request["relation_ids"]
+                        schema["properties"]["relation_ids"]["items"]["enum"] = request[
+                            "relation_ids"
+                        ]
                     else:
                         schema["properties"]["relation_ids"]["maxItems"] = 0
                     schema["required"] += ["focus", "relation_ids"]
                 record["request"] = deepcopy(request)
                 record["response_schema"] = deepcopy(schema)
-                record["request_revision"] = digest([POLICY, writing_prompt(task.stage, request), request, schema])
+                record["request_revision"] = digest(
+                    [POLICY, writing_prompt(task.stage, request), request, schema]
+                )
                 raw = await send(task.stage, deepcopy(request), deepcopy(schema))
                 record["raw_text"] = raw
                 phase = "references"
@@ -390,7 +422,9 @@ async def write_relational_diary(prepared, *, send=None, review=True, model=None
 
                     answer = resolve_answer(task.payload, json.loads(raw))
                     record["citation_map"], record["relation_map"] = citation_maps(task.payload)
-                    if not answer.focus.strip() or len(set(answer.relation_ids)) != len(answer.relation_ids):
+                    if not answer.focus.strip() or len(set(answer.relation_ids)) != len(
+                        answer.relation_ids
+                    ):
                         raise ValueError("invalid selected comparison relations")
                 else:
                     answer = WriterAnswer.model_validate(json.loads(raw))

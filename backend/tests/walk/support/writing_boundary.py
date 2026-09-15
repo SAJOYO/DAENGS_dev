@@ -6,7 +6,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 from daengs_backend.config import settings
-from daengs_backend.services import walk_sgis
+from daengs_backend.services.walk_background.providers import sgis as walk_sgis
 from daengs_backend.services.walk_diary import contracts as diary_contracts
 from daengs_backend.services.walk_diary import runtime as writing
 from daengs_backend.services.walk_diary.collection import service as collection

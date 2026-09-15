@@ -10,7 +10,7 @@ def movement_observations(frame, previous, catalog):
         or frame["block"] != previous["block"]
     ):
         return []
-    from daengs_walk.diary.board.activity import MEANINGS
+    from daengs_walk.diary.route.pin_context import MEANINGS
 
     left, at = previous["at_s"], frame["at_s"]
     result = []

@@ -6,9 +6,8 @@ not prose instructions. Raw geometry and shop ID lists remain in eligible_eviden
 
 from copy import deepcopy
 
-from daengs_backend.services.walk_diary.model_materials import material
-from daengs_backend.services.walk_diary.writing.policy import LAND_WORDS
 from daengs_walk.diary.relational.scene_comparison_contracts import SceneFact
+from daengs_walk.diary.space.semantics import LAND_WORDS, material
 from daengs_walk.value_contracts import digest
 
 FAMILIES = {"land_cover": "land_cover", "park": "surrounding_object", "commerce": "area_context"}

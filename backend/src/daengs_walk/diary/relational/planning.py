@@ -14,6 +14,10 @@ from daengs_walk.value_contracts import digest
 
 
 def make_plan(frame, previous, catalog, state=None):
+    if frame.get("planning_contract") == "scene-comparison-plan-v1":
+        from daengs_walk.diary.relational.comparison_planning import make_comparison_plan
+
+        return make_comparison_plan(frame, previous)
     state = deepcopy(state or {"active_context": {}, "planned_meanings": []})
     current = spatial_context(frame)
     frame = deepcopy(frame)
@@ -87,8 +91,8 @@ def make_plan(frame, previous, catalog, state=None):
                 current_space=tuple({**m, "id": "space:" + m["id"]} for m in materials),
                 road_reference=frame.get("road_reference"),
                 movement_context=action.get("movement_context"),
-                current_gait=action.get('current_gait', ()),
-                current_shape=action.get('current_shape', ()),
+                current_gait=action.get("current_gait", ()),
+                current_shape=action.get("current_shape", ()),
                 narration=frame["space"].get("narration"),
             ),
         )
@@ -126,7 +130,8 @@ def make_plan(frame, previous, catalog, state=None):
 
         plan["space_task"] = (
             writer_task("space", frame["scene_id"], comparison_input(frame, previous))
-            if should_write_space(frame, previous) else None
+            if should_write_space(frame, previous)
+            else None
         )
         plan["state_transition"] = (
             "introduce" if previous is None else "compare" if plan["space_task"] else "maintain"

@@ -2,56 +2,7 @@
 
 from datetime import datetime
 
-from daengs_walk.diary.board.action_context import SHAPE_TEXT
-from daengs_walk.diary.contracts.input import digest
-from daengs_walk.diary.route.patterns import PATTERN_CASES
-
-MEANINGS = {
-    **{key: next(iter(value.values())) for key, value in PATTERN_CASES.items()},
-    **{key: value for key, value in SHAPE_TEXT.items() if key not in PATTERN_CASES},
-    "relative_slow": "이번 산책의 기준 속도보다 상대적으로 느린 이동",
-    "relative_fast": "이번 산책의 기준 속도보다 상대적으로 빠른 이동",
-}
-
-
-def movement_uses(request):
-    uses = []
-    for item in request.get("movement", []):
-        facts = item["facts"]
-        if facts.get("format") != "diary-movement-material-v1":
-            raise ValueError("unsupported activity movement")
-        claims = {c["id"]: c for c in facts["claims"]}
-        for phase in facts["phases"]:
-            for ref in phase["claims"]:
-                claim = claims[ref]
-                left, right = phase["start_s"], phase["end_s"]
-                if not claim["start_s"] <= left < right <= claim["end_s"]:
-                    raise ValueError("phase exceeds original claim")
-                if claim["meaning"] not in MEANINGS:
-                    raise ValueError("unknown movement meaning")
-                uses.append(
-                    {
-                        "id": "movement-use:" + digest([item["id"], ref, left, right]),
-                        "slot_id": item["id"],
-                        "source_id": ref,
-                        "kind": claim["kind"],
-                        "meaning": claim["meaning"],
-                        "from_s": left - facts["scene_at_s"],
-                        "to_s": right - facts["scene_at_s"],
-                        "support_from_s": claim["start_s"] - facts["scene_at_s"],
-                        "support_to_s": claim["end_s"] - facts["scene_at_s"],
-                        **(
-                            {"at_s": claim["event_s"] - facts["scene_at_s"]}
-                            if "event_s" in claim
-                            else {}
-                        ),
-                    }
-                )
-    if len({u["id"] for u in uses}) != len(uses):
-        raise ValueError("duplicate activity claim")
-    if {u["slot_id"] for u in uses} != {m["id"] for m in request.get("movement", [])}:
-        raise ValueError("selected movement has no writing claims")
-    return uses
+from daengs_walk.diary.route.pin_context import MEANINGS, movement_uses
 
 
 def activity_projection(request):
@@ -96,3 +47,6 @@ def covers_observation(request, used_ids, observation):
             break
         cursor = right
     return cursor >= end
+
+
+__all__ = ["MEANINGS", "movement_uses"]

@@ -12,6 +12,8 @@
   결과가 **깨짐**: 검수 닮음 2 · 글자 실패. 눈으로 보면 **틀의 갈색 푸들 그대로 + 화면 전체 고른 노이즈** — 강아지·아바타 교체가 일어나지 않았다(klein 은 교체됨). `cardimage/out/_cardgen/smoke-qwen/`.
   원인은 가르지 못함(추정): text_encoder nf4 로 참조 이해 붕괴 / transformer nf4 로 디노이즈 붕괴 / VAE tiling. L4 에선 양자화를 빼면 메모리가 모자라 이 자리에서 싸게 가를 방법이 없다.
 - **판정**: L4 + nf4 로는 Qwen 비교 표본을 못 얻었다. 서빙 관점에서도 로드 ~20분·장당 ~12분이라 어렵다.
+- **비교 이미지**: `cardimage/out/_cardgen/compare_4_template_nanobanana_klein_qwen.png` (틀 · Nano Banana 2 09-14 `service_check_1.png` · klein · Qwen, 같은 사진 `_03`·4월). 눈으로: Nano Banana 2 는 교체·무대·글자 모두 깨끗, klein 은 교체·무대는 근접하나 목줄 추가·`PETL PPAUSE`, Qwen 은 교체 없음 + 노이즈.
+- **정리 (사용자 결정 "둘 다 지우자")**: 서비스 `daengs-cardgen-qwen` 삭제, 버킷 `hub/models--Qwen--Qwen-Image-Edit-2511/`(53.75GiB)·`hub/.locks/models--Qwen--…` 삭제, 로컬 proxy 8092 종료. klein 서비스·가중치(14.88GiB)는 남김. **Task 8 은 klein vs Nano Banana 2 만.**
 
 ## 2026-09-15 오후 — #544 GPU 서비스 Task 6: klein 4B 배포·첫 카드 (잰 값만)
 

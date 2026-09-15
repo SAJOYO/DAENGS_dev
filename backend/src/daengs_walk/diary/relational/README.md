@@ -1,58 +1,40 @@
-# 관계 기반 산책 일기: 워킹 스켈레톤 v2
+# 관계 기반 산책 일기 v5
 
-이 경로의 고정 원칙은 **공간은 관계, 행동은 현재, 이동은 기기 관측**이다.
-통합 장면 작성기는 제거했다. 사용자 원안의 분리를 유지하며 기능을 확장한다.
+기획 기준: `docs/walk/relational-diary-contract.md`.
 
-## 실행 경로
+공간은 관계 중심으로, 행동은 현재 핀에 묶어 별도로 작성한다. 원자료·메모·사진은 생략 여부와 무관하게 보존한다. GPS 연결과 공간 경계·도로 통과는 다른 주장이다.
 
-1. `prepare_relational_diary`: 기존 준비본에서 용량 제한 전 적합 근거를 확보하고 원본 버전을 고정한다.
-2. `relations.py`: 기록점의 공간 설명 비교와 지원되는 기기 이동 구간을 별도로 계산한다.
-3. `planning.py`: 공간 상태를 시간순 갱신한다. 공간·현재 행동 작업과 별도 이동 관측을 만든다.
-4. `write_relational_diary`: SpaceInput/ActionInput 계약을 검사하고 최대 4개 병렬 호출한다.
-5. `assemble_receipt`: 생성 부분을 재작성하지 않고 조립한다. 실패, 단독 맥락, 원문 참조를 보존한다.
-6. `generate_relational_skeleton`: 조립 후 본문과 이동 관측만 제목 작성기에 전달한다.
-7. `save_skeleton` / `read_skeleton`: 명시한 로컬 파일에 저장하고 저장 영수증만 읽는다.
+## 진입점
 
-## 넘으면 안 되는 책임 경계
+- `generate_relational_skeleton(base, ...)`: 기존 준비 계층부터 실행한다.
+- `generate_prepared_relational_diary(prepared, ...)`: 저장된 v5 준비본에서 같은 작성·검수·조립·저장 경로를 실행한다.
+- `write_relational_diary`: 독립 작업 작성기. `review=False`는 검수 없는 명시적 실험이며 의미 성공으로 표시하지 않는다.
 
-| 경로 | 허용 입력 | 전달하지 않는 입력 |
-| --- | --- | --- |
-| 공간 LLM | 이전·현재 공간 설명의 관계, 현재 공간, 도로명 | 행동핀, 기기 이동 이력, 원문 |
-| 행동 LLM | 현재 핀의 주체·행동·시각, 현재 공간, 핀 시각의 이동 맥락 | 이전 행동, 이전 공간 비교, 구간 전체 이력, 원문 |
-| 이동 관측 | 검증된 기기 구간·방향 전환 | 반려견 행동·의도·인과 |
-| 제목 LLM | 조립된 생성 본문·기기 관측 | 사용자 원문, 원자료, 앞선 프롬프트 |
-| 조회 | 저장된 영수증 | 최신 API·관계 재계산·LLM |
+기본 opt-in 경로는 숏메모리를 사용한다. 소개 실패 후 다음 동일 맥락의 소개를 복구하되, 성공한 소개에서 생략한 선택적 사실을 전부 나열하도록 강제하지 않는다. 생성문은 기억의 근거가 아니다.
 
-입력 계약은 추가 필드를 거절한다. action 입력에 relations를 붙이거나 space 입력에 recorded_action을 붙이면 실행 전에 실패한다. 작업에는 stage와 scene_id를 포함한 해시가 있고, 현재 행동은 프레임의 핀·시각·이동 입력과 일치해야 한다. v1 통합 실험 스냅샷은 새 작성기가 받지 않는다.
+## 오프라인 검사
 
-## 현재 구현된 상태
+backend 디렉터리에서 기존 프로젝트 환경으로 실행한다.
 
-- 최초 도입, 두 점의 차이, 동일 설명 유지, 현재 자료 미확인 시 보류, 다시 자료가 생겼을 때 재도입.
-- 동일 공간 설명에는 공간 LLM 호출을 생략하고 단독 맥락을 유지한다.
-- 같은 종류의 행동핀이 반복돼도 각 핀은 별개 작업이다. 행동은 상태에 저장하지 않는다.
-- 공간 비교는 현재 피복·행정동·도로명에 한정한다. 같은 양 끝 값은 연속성의 증명이 아니다.
-- 기기 이동은 원래 카탈로그를 구간에 맞춰 자르고, 관측 블록을 넘거나 미래 회전을 가져오지 않는다.
-- 도로명은 `road_nm`만 모델로 전달한다. 전체 원응답은 분석 스냅샷에 보존한다.
-- 전송 실패는 해당 부분만 실패로 남기고, 나머지 부분·단독 맥락·원문은 유지한다.
-- 계획상 소개한 의미와 반환된 작업 목록을 구별한다. 근거 ID가 맞다고 의미 전달을 확정하지 않는다.
-
-## 재현
-
-backend에서 실행한다. 출력 폴더는 매번 새 경로를 사용한다.
-
-```powershell
-uv run --no-sync python -X utf8 tools/run_relational_skeleton.py --env <환경파일> --source evals/diary_route_scenario/public-02 --scene-selection evals/diary_route_scenario/narration-gemini-01/input.json --roads <저장된-SGIS-응답폴더> --output <새-출력폴더>
+```sh
+uv run pytest tests/walk/diary/test_relational_takeover.py -q
+uv run python tools/run_relational_takeover.py --prepared evals/relational_takeover/prepared_v5.json.gz --output outputs/relational-inspect-new
 ```
 
-scene-selection을 생략하면 준비된 전체 장면을 대상으로 한다. roads는 생략 가능하다. 원래 public-02 동선은 모의 GPS이며 공공 공간 자료는 저장 응답이다.
+두 번째 명령은 기본적으로 모델을 호출하지 않는다. 저장 준비본이 v5인지와 계획을 확인한다.
 
-## 이번 확인
+## 명시적 실제 호출
 
-- 구조 검사 8건 통과: 입력 분리, 동일 공간의 호출 생략과 반복 핀 유지, 미확인 보류, 공백/미래 사건 제외, 예산 전 사실 보존, 실패/원문/저장 재조회.
-- 실제 공간 3회 + 행동 1회 + 제목 1회, 모두 반환. 준비·생성·저장·재조회 약 10.69초.
-- 행동 출력: `보리가 길에서 냄새를 맡았다.`
-- 공간 출력은 두 점의 차이를 실제 진입·체류로 확대하는 문제가 남았다. 이는 의미 품질 실패로 기록하며 프롬프트 누적으로 숨기지 않는다.
+```sh
+uv run python tools/run_relational_takeover.py --prepared evals/relational_takeover/prepared_v5.json.gz --output outputs/relational-live-new --live --env /path/to/project.env --max-calls 16 --minimum-interval 10
+```
 
-## 아직 구현하지 않은 확장
+`--live`는 실제 provider 호출을 발생시킨다. 설정된 배포 모델을 사용하며 다른 모델로 자동 교체하지 않는다. 공간 3개·행동 1개·제목의 정상 경로는 작성 5회와 검수 5회다. 429는 그 실행을 중단하며 자동 재시도는 없다.
 
-운영 API/DB/APP 연결, 100m 분석 분할, 자동 장면 병합, 동일 시설과의 거리 변화, 중간 전체가 확인된 공간 지속·재등장, 세밀한 의존성 캐시와 동시 수정 발행 경계는 후속 범위다. 파일 저장 어댑터를 운영 DB 구현으로 부르지 않는다. 계획상 의미 이력은 현재 저장되지만 복잡한 장기 상태 선택 정책은 없다.
+## 자료와 판정
+
+`evals/relational_takeover`의 source와 v4 호출·발행본은 사용자 제공 묶음의 `app-gps-skeleton-08`에서 가져온 독립 합성 GPS·공간 자료다. 실측 산책이나 새 API 결과가 아니다. v5 준비본은 이 저장 프레임을 새 계획기로 재계획했다. 원래 이동 관측은 보존했으며 측정 커널을 다시 실행한 것으로 표시하지 않는다.
+
+회귀 테스트의 writer/reviewer는 명시적 테스트 더블이다. 테스트 통과는 Gemini의 문장 품질이나 의미 검수 정확도가 확인됐다는 뜻이 아니다. 각 결과의 실패 단계·원문·실제 요청·검수 응답을 함께 본다.
+
+운영 API 기본 전환, DB 마이그레이션, APP 반영은 이 opt-in 변경에 포함하지 않는다. 이전 v2/v3/v4 발행본은 읽기 호환을 유지한다.

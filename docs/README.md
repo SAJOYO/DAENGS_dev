@@ -5,6 +5,7 @@
 
 | 파일 | 내용 |
 | --- | --- |
+| [walk/relation-slots.md](walk/relation-slots.md) | 관계 모듈의 고정 결과 칸과 전체 장면 비교 입력·출력 계약, 단계별 연결 상태 |
 | [walk/stored-measurements.md](walk/stored-measurements.md) | 불변 측정 저장·경로 청크와 일반 APP 상세 소비 계약 |
 | [walk/card-orchestration.md](walk/card-orchestration.md) | 실제 API의 SGIS·EGIS 준비, 독립 공간·조건부 행동·카드 제목 작업과 APP 저장 연결 |
 | [walk/diary-remaining-plan.md](walk/diary-remaining-plan.md) | 대화 경위·남은 기획·완료 기준, 실제 작성/미리보기/호환 분기와 SGIS·공간 선정·공통 실행의 혼동 방지 |

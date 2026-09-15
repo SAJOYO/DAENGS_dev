@@ -9,12 +9,26 @@ from daengs_walk.diary.relational.contracts import ActionInput, SpaceInput
 from daengs_walk.diary.relational.planning import make_plan
 
 
+def review_double(payload):
+    # An authored protocol stub, not a measured model-quality result.
+    return json.dumps({
+        **{k: True for k in ("supported", "preserves_subjects", "preserves_relation_axis",
+                            "preserves_scope", "no_invented_experience",
+                            "required_meanings_present", "readable_as_diary")},
+        "used_evidence_ids": payload["candidate"]["evidence_ids"], "issues": [],
+    })
+
+
 def frame(at, cover="길", block=0, action=False):
     return {
         "at_s": at,
         "block": block,
         "scene_id": str(at),
-        "anchor": {"event_at": f"2026-09-14T10:{at:02d}:00+09:00"},
+        "anchor": {"event_at": f"2026-09-14T10:{at:02d}:00+09:00",
+                   "point": {"lat": 37.47 + at * 0.001, "lng": 127.03}},
+        "observation_basis": {"point_land_cover": {
+            "source_series": "synthetic-map-v1", "subject_key": str(at),
+            "observed_at": "2026-09-01T00:00:00+09:00", "support_radius_m": 5}},
         "space": {
             "materials": [
                 {
@@ -41,7 +55,11 @@ def frame(at, cover="길", block=0, action=False):
 def test_spatial_history_and_current_action_are_separate():
     p = make_plan(frame(20, "숲", action=True), frame(0, "길"), None)
     space, action = p["space_task"]["payload"], p["action_task"]["payload"]
-    assert space["relations"][0]["before"] == {"피복": "길"}
+    relation = space["relations"][0]
+    assert relation["comparison_axis"] == "location"
+    assert relation["subjects"][0]["value"] == {"피복": "길"}
+    assert relation["subjects"][1]["value"] == {"피복": "숲"}
+    assert "source_ids" not in json.dumps(space)
     assert action["current_space"][0]["material"] == {"피복": "숲"}
     assert "action" not in space and "movement_context" not in space
     assert "relations" not in action and "before" not in action
@@ -68,6 +86,8 @@ def test_missing_space_suspends_without_claiming_departure():
     assert plan["space_task"] is None
     assert plan["state_transition"] == "suspend"
     assert plan["space_relations"][0]["kind"] == "unconfirmed"
+    assert plan["space_relations"][0]["current_record_point"]["record_point_id"] == "20"
+    assert plan["space_relations"][0]["current_record_point"]["observation"] is None
     assert plan["state_after"]["active_context"] == {}
 
 
@@ -132,6 +152,8 @@ async def test_working_skeleton_failure_originals_and_saved_read(tmp_path):
 
     async def send(stage, payload, schema):
         seen.append((stage, deepcopy(payload)))
+        if stage == "review":
+            return review_double(payload)
         if stage == "title":
             return json.dumps({"title": "산책 기록"})
         if stage == "space":
@@ -144,7 +166,7 @@ async def test_working_skeleton_failure_originals_and_saved_read(tmp_path):
               "response": {"errCd": 0, "result": [{"road_nm": f"시험로{i}길"}]}}
              for i, s in enumerate(base.board.scenes) if s.anchor.point is not None]
     result = await generate_relational_skeleton(base, send=send, road_snapshots=roads)
-    assert seen[-1][0] == "title"
+    assert seen[-2][0] == "title" and seen[-1][0] == "review"
     originals = result["prepared"]["snapshot"]["originals"]
     assert originals
     for original in originals:
@@ -164,3 +186,53 @@ async def test_working_skeleton_failure_originals_and_saved_read(tmp_path):
     path.write_text(json.dumps(data), encoding="utf-8")
     with pytest.raises(ValueError):
         read_skeleton(path)
+
+
+def test_comparison_axis_requires_source_and_subject_support():
+    a, b = frame(0), frame(20, "숲")
+    basis = b["observation_basis"]["point_land_cover"]
+    basis["subject_key"] = "0"
+    basis["observed_at"] = "2026-09-02T00:00:00+09:00"
+    b["anchor"]["point"] = a["anchor"]["point"]
+    p = make_plan(b, a, None)
+    assert p["space_task"]["payload"]["relations"][0]["comparison_axis"] == "observation_time"
+    basis["observed_at"] = "2026-09-01T00:00:00+09:00"
+    b["fetched_at"] = "2026-09-15T00:00:00+09:00"
+    p = make_plan(b, a, None)
+    assert p["space_task"]["payload"]["relations"] == []
+    assert p["space_task"]["payload"]["mode"] == "current_context"
+    b.pop("observation_basis")
+    assert make_plan(b, a, None)["space_relations"][0]["kind"] == "deferred"
+
+
+async def test_writer_citations_match_schema_and_exclude_internal_ids():
+    from daengs_backend.services.walk_diary.writing.relational import write_relational_diary
+    from daengs_walk.value_contracts import digest
+    from daengs_walk.diary.relational.contracts import VERSION
+    a, b = frame(0), frame(20, "숲")
+    p = make_plan(b, a, None)
+    snapshot = {"version": VERSION, "frames": [a, b], "plans": [p]}
+    async def send(stage, payload, schema):
+        if stage == "review":
+            return review_double(payload)
+        assert set(payload["citation_ids"]) == set(schema["properties"]["evidence_ids"]["items"]["enum"])
+        assert "source_ids" not in json.dumps(payload)
+        return json.dumps({"text": "비교 결과", "evidence_ids": payload["required_relation_ids"]})
+    written = await write_relational_diary({"snapshot": snapshot, "revision": digest(snapshot)}, send=send)
+    assert written["results"][0]["status"] == "returned"
+
+
+def test_record_chronology_is_separate_from_source_observation_time():
+    a, b = frame(0), frame(20, '숲')
+    a['walk_session'] = b['walk_session'] = 'same-walk'
+    b['anchor']['event_at'] = '2026-09-14T01:05:00+00:00'
+    r = make_plan(b, a, None)['space_task']['payload']['relations'][0]
+    clock = r['record_chronology']
+    assert clock['elapsed_record_seconds'] == 300
+    assert clock['same_walk'] is True
+    assert clock['same_source_observation_time'] is True
+    assert clock['location_relationship'] == 'distinct_locations'
+    b.pop('walk_session')
+    assert make_plan(b, a, None)['space_task']['payload']['relations'][0]['record_chronology']['same_walk'] is None
+    b['anchor']['event_at'] = '2026-09-14T09:00:00+09:00'
+    assert make_plan(b, a, None)['space_task']['payload']['relations'][0]['record_chronology']['elapsed_record_seconds'] is None

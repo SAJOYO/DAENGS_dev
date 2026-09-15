@@ -70,6 +70,7 @@ class PartStamp(DiaryContract):
     evidence: tuple[SlotEvidence, ...] = Field(max_length=16)
     decisions: tuple[SlotDecision, ...]
     location_reference: SlotEvidence | None = None
+    temperature_reference: SlotEvidence | None = Field(default=None, exclude_if=lambda v: v is None)
 
     def materials(self):
         return self.evidence + ((self.location_reference,) if self.location_reference else ())

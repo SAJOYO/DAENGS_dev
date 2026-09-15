@@ -4,6 +4,7 @@ from typing import Literal
 
 from pydantic import Field, model_validator
 
+from daengs_walk.diary.board.conditions import SceneTemperature, scene_temperature
 from daengs_walk.diary.board.models import (
     BaseBoard,
     BoundaryCore,
@@ -51,10 +52,13 @@ class PublishedBoardScene(DiaryContract):
     checkpoint: RouteCheckpoint | None = None
     boundary: Literal["start", "end"] | None = None
     place_reference: tuple[BackgroundPiece, ...] = ()
+    temperature: SceneTemperature | None = Field(default=None, exclude_if=lambda v: v is None)
     writing: CardNarrative | None = Field(default=None, exclude_if=lambda v: v is None)
 
     @model_validator(mode="after")
     def matching_core(self):
+        if self.temperature and self.temperature.scene_at != self.anchor.event_at:
+            raise ValueError("temperature belongs to another scene time")
         values = {
             "user_record": self.user_record,
             "movement_observation": self.observation,
@@ -144,10 +148,15 @@ class PublishedBoard(DiaryContract):
         return self
 
 
-def publish_board(board: BaseBoard, plan) -> PublishedBoard:
+def publish_board(board: BaseBoard, plan, slots=None) -> PublishedBoard:
     if board.plan_revision != plan.revision():
         raise ValueError("public board requires its prepared plan")
     backgrounds = {s.id: s.background for s in plan.stamps}
+    if slots is not None and (
+        slots.input_revision != board.input_revision or slots.plan_revision != board.plan_revision
+    ):
+        raise ValueError("conditions require the same prepared board")
+    stamps = {s.scene_id: s for s in slots.stamps} if slots is not None else {}
     scenes = []
     for scene in board.scenes:
         core = scene.core
@@ -171,6 +180,9 @@ def publish_board(board: BaseBoard, plan) -> PublishedBoard:
                 place_reference=tuple(
                     p for p in backgrounds[scene.id] if p.kind == "place_reference"
                 ),
+                temperature=scene_temperature(stamps[scene.id], scene.anchor)
+                if scene.id in stamps
+                else None,
             )
         )
     return PublishedBoard(

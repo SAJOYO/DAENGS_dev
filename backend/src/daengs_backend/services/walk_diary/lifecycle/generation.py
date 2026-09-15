@@ -102,7 +102,9 @@ async def generate_diary(
                 update={"model_status": "unavailable", "failure_code": "provider_failed"}
             )
             bundle = store_board(
-                prepared, publish_board(default_board, prepared.board.plan), revision
+                prepared,
+                publish_board(default_board, prepared.board.plan, prepared.board.slots),
+                revision,
             )
         else:
             bundle, failure = None, "diary_generation_failed"

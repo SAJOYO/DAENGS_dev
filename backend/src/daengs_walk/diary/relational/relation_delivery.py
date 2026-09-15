@@ -3,6 +3,7 @@
 from copy import deepcopy
 
 from .relation_vocabulary import FLOW_WORDS
+from .writer_material_policy import omit_retrace
 from .writer_meaning import present
 from .writer_time import local_writer_times
 
@@ -72,4 +73,5 @@ def deliver_relations(brief, selection, *, memory=()):
     request.pop("delivery_memory", None)
     if memory:
         request["delivery_memory"] = deepcopy(list(memory))
-    return local_writer_times(request)
+    hidden = {f.id for f in selection.flows if f.case == "route_retrace"}
+    return omit_retrace(local_writer_times(request), hidden)

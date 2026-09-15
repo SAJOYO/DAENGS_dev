@@ -304,7 +304,7 @@ async def test_production_dispatch_and_saved_v2_keep_their_own_vocabulary(distan
 
     result = await write_brief_task(task, send=send)
     assert result["status"] == "returned"
-    assert result["policy"] == "single-writing-brief-v5"
+    assert result["policy"] == "single-writing-brief-v6"
     assert validate_brief_result(task, result)
     request = seen[0]
     assert request["relation_slots"]["proximity"][0]["relationship"] == word

@@ -25,7 +25,7 @@ from daengs_backend.core.storage import (
     NotConfiguredStorage,
     StorageNotConfiguredError,
 )
-from daengs_backend.models import AiCard
+from daengs_backend.models import AiCard, AiCardUsage
 from daengs_backend.repositories import ai_card as ai_card_repo
 from daengs_backend.repositories import app_user as app_user_repo
 from daengs_backend.services import ai_card as service
@@ -393,3 +393,109 @@ def test_cleanup_without_objects_does_not_touch_storage(store, jobs, monkeypatch
     _start()  # generating, 객체 없음
     monkeypatch.setattr(service, "get_storage", lambda: NotConfiguredStorage())
     assert asyncio.run(service.cleanup_for_owner(FakeSession(), OWNER)) == 1
+
+
+# ── #543 제품 규칙 ──────────────────────────────────────────────────────
+
+
+def test_ready_records_usage(store, jobs) -> None:
+    card = _start()
+    assert store.ai_card_usage == []  # 시작만으로는 안 센다
+    _run_all(jobs)
+    assert len(store.ai_card_usage) == 1
+    usage = store.ai_card_usage[0]
+    assert isinstance(usage, AiCardUsage)
+    assert usage.card_id == card.id and usage.app_user_id == OWNER and usage.used_at is not None
+
+
+def test_failed_records_no_usage(store, jobs, monkeypatch) -> None:
+    monkeypatch.setattr(ai_card_engine, "default_engine", lambda: FakeEngine(error=EngineError("upstream", "x")))
+    _start()
+    _run_all(jobs)
+    assert store.ai_card_usage == []
+
+
+def test_row_deleted_mid_generation_records_no_usage(store, jobs, monkeypatch) -> None:
+    card = _start()
+    monkeypatch.setattr(
+        ai_card_engine, "default_engine", lambda: _SideEffectEngine(lambda: store.ai_cards.remove(card))
+    )
+    _run_all(jobs)
+    assert store.ai_card_usage == []
+
+
+def test_deleting_ready_card_does_not_give_limit_back(store, jobs) -> None:
+    card = _start()
+    _run_all(jobs)
+    asyncio.run(service.delete_card(FakeSession(), OWNER, card.id))
+    assert len(store.ai_card_usage) == 1  # 기록은 남는다
+    with pytest.raises(quota.AiCardLimitError):
+        _start()
+
+
+def test_same_dog_same_month_is_taken_other_month_is_ok(store, jobs, monkeypatch) -> None:
+    monkeypatch.setattr(settings, "cardimage_daily_limit", 0)
+    pet = FakePet(app_user_id=OWNER, name="네옹", breed="mix")
+    store.pets.append(pet)
+    _start(dog_id=pet.id, month=4)
+    _run_all(jobs)
+    with pytest.raises(quota.AiCardMonthTakenError):
+        _start(dog_id=pet.id, month=4)
+    assert _start(dog_id=pet.id, month=9).status == "generating"
+
+
+def test_other_dog_same_month_is_ok(store, jobs, monkeypatch) -> None:
+    monkeypatch.setattr(settings, "cardimage_daily_limit", 0)
+    first = FakePet(app_user_id=OWNER, name="첫째", breed="mix")
+    second = FakePet(app_user_id=OWNER, name="둘째", breed="mix")
+    store.pets.extend([first, second])
+    _start(dog_id=first.id, month=4)
+    _run_all(jobs)
+    assert _start(dog_id=second.id, month=4).status == "generating"
+
+
+def test_deleting_month_card_reopens_month(store, jobs, monkeypatch) -> None:
+    monkeypatch.setattr(settings, "cardimage_daily_limit", 0)
+    pet = FakePet(app_user_id=OWNER, name="네옹", breed="mix")
+    store.pets.append(pet)
+    card = _start(dog_id=pet.id, month=4)
+    _run_all(jobs)
+    asyncio.run(service.delete_card(FakeSession(), OWNER, card.id))
+    assert _start(dog_id=pet.id, month=4).status == "generating"
+
+
+def test_title_name_changes_title_only(store, jobs) -> None:
+    card = _start(title_name="  KONG   CHAN ")
+    assert card.title == "BLOSSOM KONG CHAN"
+    assert card.dog_name == "네오"
+
+
+def test_blank_title_name_falls_back_to_dog_name(store, jobs) -> None:
+    assert _start(title_name="   ").title == "BLOSSOM 네오"
+
+
+def test_title_name_is_uppercased(store, jobs) -> None:
+    assert _start(title_name="kong").title == "BLOSSOM KONG"
+
+
+def test_long_uppercased_title_name_is_clamped(store, jobs) -> None:
+    """`ß`.upper() 는 `SS` — 40자 `title_name` 의 제목도 VARCHAR(80) 을 넘지 않게 자른다."""
+    assert len(_start(title_name="ß" * 40).title) <= 80
+
+
+def test_daily_status(store, jobs, monkeypatch) -> None:
+    assert asyncio.run(service.daily_status(FakeSession(), OWNER)) == (1, 1)
+    _start()
+    _run_all(jobs)
+    assert asyncio.run(service.daily_status(FakeSession(), OWNER)) == (1, 0)
+    monkeypatch.setattr(settings, "cardimage_daily_limit", 0)
+    assert asyncio.run(service.daily_status(FakeSession(), OWNER)) == (None, None)
+
+
+def test_cleanup_for_owner_removes_usage(store, jobs) -> None:
+    card = _start()
+    _run_all(jobs)
+    store.ai_card_usage.append(AiCardUsage(card_id=uuid.uuid4(), app_user_id=STRANGER, used_at=datetime.now(UTC)))
+    assert asyncio.run(service.cleanup_for_owner(FakeSession(), OWNER)) == 1
+    assert [u.app_user_id for u in store.ai_card_usage] == [STRANGER]
+    assert card not in store.ai_cards

@@ -5,7 +5,8 @@
 POST 는 토큰만 확인하고(`CurrentAppMemberTokenOnly`) **사진을 다 받은 뒤** `start` 가 사용자 행을
 잠급니다 — 잠금 → 한도 → INSERT → commit 이 짧은 한 트랜잭션입니다. 생성은 같은
 backend 프로세스 안의 백그라운드 작업(`_run`)이 하고, 끝나면 **새 세션으로** 행을 `ready`/`failed`
-로 바꿉니다.
+로 바꿉니다. 한도 규칙은 `services/ai_card_quota.py` 가 정하고(D-077), 여기서는 카드가 `ready` 가
+되는 같은 트랜잭션에서 사용 기록(`ai_card_usage`)을 남깁니다.
 
 ⚠️ **백그라운드는 요청 세션을 쓰지 않습니다** — 요청이 끝나면 그 세션은 닫힙니다.
 ⚠️ **배포 재시작과 겹친 작업은 사라집니다.** 행은 `stale_after()` 가 지난 뒤 조회에서
@@ -45,7 +46,12 @@ from daengs_backend.repositories import ai_card as ai_card_repo
 from daengs_backend.repositories import app_user as app_user_repo
 from daengs_backend.repositories import pet as pet_repo
 from daengs_backend.services import ai_card_engine
-from daengs_backend.services.ai_card_quota import AiCardBusyError, check_quota, stale_after
+from daengs_backend.services.ai_card_quota import (
+    AiCardBusyError,
+    check_quota,
+    daily_remaining,
+    stale_after,
+)
 from daengs_cardimage import CardImageUnavailable, GeneratedCard
 from daengs_cardimage.engine import EngineError
 from daengs_cardimage.photo import prepare_photo
@@ -104,9 +110,12 @@ async def start(
     month: int,
     dog_name: str,
     dog_id: uuid.UUID | None,
+    title_name: str | None = None,
     now: datetime | None = None,
 ) -> AiCard:
     name = " ".join(dog_name.split())
+    # 제목에만 쓰는 이름 (#543). 비면 `dog_name` 그대로 — `dog_name` 은 늘 그대로 저장합니다.
+    title_source = " ".join((title_name or "").split()) or name
     # ── DB 전: 설정·사진. 여기서 걸리면 잠금도 연결도 안 잡습니다.
     meta = ai_card_engine.ready_check(month)
     if isinstance(get_storage(), NotConfiguredStorage):
@@ -132,7 +141,7 @@ async def start(
         month=month,
         dog_name=name,
         # `str.upper()` 는 글자 수를 늘릴 수 있습니다(ß → SS) — 40자 이름도 80자를 넘길 수 있어 자릅니다.
-        title=title_text(meta.card_name, name)[:_TITLE_MAX],
+        title=title_text(meta.card_name, title_source)[:_TITLE_MAX],
         status="generating",
         created_at=now,
         updated_at=now,
@@ -291,6 +300,15 @@ async def list_cards(session: AsyncSession, app_user_id: uuid.UUID, *, now: date
     return await ai_card_repo.list_for_owner(session, app_user_id)
 
 
+async def daily_status(
+    session: AsyncSession, app_user_id: uuid.UUID, *, now: datetime | None = None
+) -> tuple[int | None, int | None]:
+    """`(daily_limit, daily_remaining)`. 무제한이면 `(None, None)` — 앱이 막을지 정하는 값입니다."""
+    limit = settings.cardimage_daily_limit
+    remaining = await daily_remaining(session, app_user_id, now=now or datetime.now(UTC), daily_limit=limit)
+    return (limit or None, remaining)
+
+
 async def get_card(
     session: AsyncSession, app_user_id: uuid.UUID, card_id: uuid.UUID, *, now: datetime | None = None
 ) -> tuple[AiCard, str | None]:
@@ -332,4 +350,7 @@ async def cleanup_for_owner(session: AsyncSession, app_user_id: uuid.UUID) -> in
         storage = get_storage()
         for key in keys:
             storage.delete(key)
-    return await ai_card_repo.delete_all_for_owner(session, app_user_id)
+    deleted = await ai_card_repo.delete_all_for_owner(session, app_user_id)
+    # 사용 기록도 명시로 지웁니다 — 카드와 FK 로 안 묶였고, app_users CASCADE 는 탈퇴에서 안 돕니다.
+    await ai_card_repo.delete_usage_for_owner(session, app_user_id)
+    return deleted

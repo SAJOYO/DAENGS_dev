@@ -3,6 +3,14 @@
 세션이 끝날 때마다 한 절씩 위에 추가한다 (최신이 위). 무엇을 했고, 무엇을 정했고, 무엇을
 다음 세션에 넘기는지. 조사 내용 자체는 `research-*.md` 에, 요약·현재 상태는 `README.md` 에.
 
+## 2026-09-15 — #543 한도 제품 규칙
+
+- 계기: 앱(DAENGS_APP#414) 실기기에서 9월 카드를 만들고 지운 뒤 4월 카드가 또 만들어짐 — 한도가 남아 있는 ready 행을 셈.
+- 사용자 결정: 하루 1회(지워도 안 돌아옴·실패 안 셈) · 강아지마다 달마다 한 장(보호자마다 따로) · 제목에만 쓰는 이름 · 목록의 남은 횟수. D-077.
+- 구현: 표 `ai_card_usage`(카드 ready 때 한 줄, card_id FK 없음, 기존 ready 백필) · `check_quota` 교체(`AiCardMonthTakenError`) · `title_name` · `daily_limit`/`daily_remaining` · 탈퇴 정리. 계획 `plan-2026-09-15-ai-card-quota-rules.md`.
+- 확인한 것: `ai_cards.month` 는 연도가 없어 달별 한 장은 테마 달 기준 — 그 달 카드를 지우면 그 달은 다시 열린다.
+- 배포: `db/migrations/2026-09-15_ai_card_usage.sql` 을 코드보다 먼저 개발서버·GCP 에 적용.
+
 ## 2026-09-14 저녁 — 앱 사용자 경로 (#537)
 
 설계 대화에서 정한 다섯 가지: ① 생성 로직만 `daengs_cardimage` 로 분리(나중에 Cloud Run 으로 뗄 부분을 한

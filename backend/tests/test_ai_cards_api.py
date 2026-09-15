@@ -11,7 +11,7 @@ from collections.abc import Iterator
 
 import pytest
 from cardimage_fakes import FakeEngine, FakeJudge
-from fakes import FakeAdmin, FakeAppUser, FakeSession, Store, install
+from fakes import FakeAdmin, FakeAppUser, FakePet, FakeSession, Store, install
 from fastapi import FastAPI
 from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
@@ -229,3 +229,61 @@ def test_withdrawn_user_is_401(client: TestClient, store: Store, jobs: list, mon
 
 def test_bridge_unknown_key_is_404(client: TestClient) -> None:
     assert client.get(f"/app/ai-cards/_bridge/download/ai-cards/{OWNER}/{uuid.uuid4()}.png").status_code == 404
+
+
+# ── #543 제품 규칙 ──────────────────────────────────────────────────────
+
+
+def test_title_name_goes_to_title_only(client: TestClient) -> None:
+    r = _post(client, title_name="kong")
+    assert r.status_code == 202, r.text
+    body = r.json()
+    assert body["title"] == "BLOSSOM KONG" and body["dog_name"] == "네오"
+
+
+def test_title_name_too_long_is_422(client: TestClient) -> None:
+    assert _post(client, title_name="a" * 41).status_code == 422
+
+
+def test_month_taken_is_409_with_dog_name(
+    client: TestClient, store: Store, jobs: list, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(settings, "cardimage_daily_limit", 0)
+    pet = FakePet(app_user_id=OWNER, name="네오", breed="mix")
+    store.pets.append(pet)
+    assert _post(client, dog_id=str(pet.id)).status_code == 202
+    _run_all(jobs)
+    r = _post(client, dog_id=str(pet.id))
+    assert r.status_code == 409
+    assert r.json()["detail"] == {"code": "month_taken", "message": "네오는 이미 4월 카드가 있어요."}
+
+
+def test_delete_does_not_give_limit_back(client: TestClient, jobs: list) -> None:
+    card_id = _post(client).json()["id"]
+    _run_all(jobs)
+    assert client.delete(f"/app/ai-cards/{card_id}").status_code == 204
+    r = _post(client)
+    assert r.status_code == 429 and r.json()["detail"]["code"] == "limit_reached"
+
+
+def test_list_has_daily_remaining(client: TestClient, jobs: list) -> None:
+    before = client.get("/app/ai-cards").json()
+    assert (before["daily_limit"], before["daily_remaining"]) == (1, 1)
+    _post(client)
+    _run_all(jobs)
+    after = client.get("/app/ai-cards").json()
+    assert (after["daily_limit"], after["daily_remaining"]) == (1, 0)
+
+
+def test_list_unlimited_is_null(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "cardimage_daily_limit", 0)
+    body = client.get("/app/ai-cards").json()
+    assert body["daily_limit"] is None and body["daily_remaining"] is None
+
+
+@pytest.mark.parametrize(
+    ("name", "expected"),
+    [("네오", "네오는"), ("콩", "콩은"), ("KONG", "KONG은(는)"), ("보리 2", "보리 2은(는)")],
+)
+def test_with_topic(name: str, expected: str) -> None:
+    assert ai_card_router._with_topic(name) == expected

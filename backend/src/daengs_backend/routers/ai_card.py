@@ -25,7 +25,11 @@ from daengs_backend.repositories import ai_card as ai_card_repo
 from daengs_backend.routers.raw_body import read_limited_body
 from daengs_backend.schemas.ai_card import AiCardListResponse, AiCardResponse
 from daengs_backend.services import ai_card as ai_card_service
-from daengs_backend.services.ai_card_quota import AiCardBusyError, AiCardLimitError
+from daengs_backend.services.ai_card_quota import (
+    AiCardBusyError,
+    AiCardLimitError,
+    AiCardMonthTakenError,
+)
 from daengs_cardimage import CardImageUnavailable
 from daengs_cardimage.catalog import MonthNotOpenError
 from daengs_cardimage.photo import MAX_PHOTO_BYTES, PhotoError
@@ -43,6 +47,14 @@ def _error(status_code: int, code: str, message: str) -> HTTPException:
 
 def _not_found() -> HTTPException:
     return _error(status.HTTP_404_NOT_FOUND, "not_found", "카드를 찾을 수 없습니다.")
+
+
+def _with_topic(name: str) -> str:
+    """이름 뒤에 은/는. 마지막 글자가 한글 음절이 아니면(영문·숫자) 받침을 모르므로 `은(는)`."""
+    last = name[-1]
+    if "가" <= last <= "힣":
+        return name + ("은" if (ord(last) - ord("가")) % 28 else "는")
+    return name + "은(는)"
 
 
 def _to_response(card: AiCard, image_url: str | None = None) -> AiCardResponse:
@@ -71,8 +83,11 @@ async def create_card(
     month: Annotated[int, Query(ge=1, le=12)],
     dog_name: Annotated[str, Query(min_length=1, max_length=40)],
     dog_id: uuid.UUID | None = None,
+    title_name: Annotated[str | None, Query(max_length=40)] = None,
 ) -> AiCardResponse:
     """사진 한 장으로 카드 만들기를 **시작합니다.** 끝나면 `GET /{id}` 가 `ready` 를 줍니다.
+
+    `title_name` 은 제목에만 씁니다 — 비우면 `dog_name` (#543).
 
     인증은 **토큰만** 봅니다 (`CurrentAppMemberTokenOnly`) — `CurrentAppUser` 는 요청 세션에서
     `app_users FOR UPDATE` 를 먼저 잡아, 최대 20MB 본문을 받는 동안 잠금과 연결을 쥐게 됩니다.
@@ -91,6 +106,7 @@ async def create_card(
             month=month,
             dog_name=dog_name,
             dog_id=dog_id,
+            title_name=title_name,
         )
     except PhotoError as exc:
         raise _error(status.HTTP_400_BAD_REQUEST, exc.code, exc.detail) from None
@@ -111,6 +127,11 @@ async def create_card(
         raise _error(
             status.HTTP_409_CONFLICT, "already_generating", "만들고 있는 카드가 있어요. 끝나면 다시 시도해 주세요."
         ) from None
+    except AiCardMonthTakenError:
+        name = " ".join(dog_name.split())
+        raise _error(
+            status.HTTP_409_CONFLICT, "month_taken", f"{_with_topic(name)} 이미 {month}월 카드가 있어요."
+        ) from None
     except AiCardLimitError:
         raise _error(
             status.HTTP_429_TOO_MANY_REQUESTS, "limit_reached", "오늘은 카드를 더 만들 수 없어요. 내일 다시 시도해 주세요."
@@ -120,9 +141,12 @@ async def create_card(
 
 @router.get("", response_model=AiCardListResponse)
 async def list_cards(user: CurrentAppUser, session: Session) -> AiCardListResponse:
-    """내 카드 전부, 최근 것부터. **이미지 주소는 안 싣습니다** — 필요한 것만 단건 조회합니다."""
+    """내 카드 전부, 최근 것부터 + 오늘 남은 횟수. **이미지 주소는 안 싣습니다** — 필요한 것만 단건 조회합니다."""
     cards = await ai_card_service.list_cards(session, user.app_user_id)
-    return AiCardListResponse(cards=[_to_response(c) for c in cards])
+    daily_limit, daily_remaining = await ai_card_service.daily_status(session, user.app_user_id)
+    return AiCardListResponse(
+        cards=[_to_response(c) for c in cards], daily_limit=daily_limit, daily_remaining=daily_remaining
+    )
 
 
 @router.get("/{card_id}", response_model=AiCardResponse)

@@ -41,7 +41,7 @@ from daengs_backend.models.admin_audit_log import (
     AdminAuditLog,
 )
 from daengs_backend.models.admin_user import ADMIN_ROLES, ADMIN_STATUSES, AdminUser
-from daengs_backend.models.ai_card import AI_CARD_STATUSES, AiCard
+from daengs_backend.models.ai_card import AI_CARD_STATUSES, AiCard, AiCardUsage
 from daengs_backend.models.answer_report import (
     ANSWER_REPORT_STATUSES,
     REASON_MAX_CHARS,
@@ -163,6 +163,7 @@ __all__ = [
     "AdminAuditLog",
     "AdminUser",
     "AiCard",
+    "AiCardUsage",
     "AnswerReport",
     "AppUser",
     "Base",

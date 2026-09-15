@@ -1,13 +1,21 @@
-"""GPU 카드 생성 서비스(D-078)와 Nano Banana 2 를 같은 사진·틀·seed 로 비교한다 (#544).
+"""GPU 카드 생성 서비스(D-078)와 Nano Banana 2 를 같은 사진·틀·seed 로 비교한다 (#544, #557).
 
     uv run python tools/cardgen_compare.py --engine cardgen --url http://127.0.0.1:8091 \
         --photos ../cardimage/test/_03.jpg --months 4,9 --seeds 1,2 --out ../cardimage/out/_cardgen/klein
     uv run python tools/cardgen_compare.py --engine gemini --photos ... --out ../cardimage/out/_cardgen/gemini
 
+    # #557 E1 글씨 유지 — 아래 패널 문구를 프롬프트에 적고 / 생성 크기를 올린다
+    uv run python tools/cardgen_compare.py --engine cardgen --url http://127.0.0.1:8091 --photos ... \
+        --months 4,9 --seeds 1 --panel-text --gen-size 1280x2048 --out ../cardimage/out/_cardgen/e1-both
+
 결과: `<out>/<사진>_<달>_s<seed>.png` 와 `<out>/results.jsonl` 한 줄씩 — 닮음·글자·아바타(검수),
-틀 밀림(`drift`), 제목판 어긋남(`plate_shift`, 못 재면 null), 걸린 시간(`seconds`, 서비스 쪽은 `service.seconds`).
+틀 밀림(`drift`), 제목판 어긋남(`plate_shift`, 못 재면 null), 걸린 시간(`seconds`, 서비스 쪽은 `service.seconds`),
+조건(`gen_size`, `panel_text`).
 재시도는 하지 않는다(`judge_min=1`) — 한 장 한 장이 비교 표본이다.
 `--engine gemini` 에서 seed 는 파일 이름·반복 번호일 뿐이다(Gemini 는 seed 를 받지 않는다) — 같은 seed 끼리 짝지은 비교가 아니다.
+`--gen-size` 는 cardgen 엔진에만 쓰인다. `--panel-text` 는 제품 프롬프트(`build_prompt`)를 바꾸지 않고
+엔진을 감싸 끝에 문장을 붙인다 — 효과가 확인되면 그때 `catalog` 로 옮긴다.
+강아지 이름 기본값은 영문 `MOMO` 다 — 검수가 한글 이름을 깨진 글자로 오판한다(09-15).
 
 ⚠ 돈이 나간다: gemini 엔진 장당 약 $0.10, 검수 장당 몇 원, cardgen 은 Cloud Run L4 가 떠 있는 시간.
 **실행 전에 사람에게 장수·순서를 설명하고 승인받는다** (docs/cardimage/README).
@@ -19,6 +27,7 @@ from __future__ import annotations
 import argparse
 import io
 import json
+import re
 import sys
 import time
 from dataclasses import asdict
@@ -26,13 +35,48 @@ from pathlib import Path
 
 from PIL import Image
 
-from daengs_backend.config import settings
 from daengs_cardimage import catalog, generate_card
 from daengs_cardimage.drift import frame_drift
-from daengs_cardimage.engine import GeminiCardImageEngine, HttpCardImageEngine
-from daengs_cardimage.judge import GeminiCardJudge
+from daengs_cardimage.engine import GEN_SIZE, GeminiCardImageEngine, HttpCardImageEngine
 
 MIME = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp"}
+
+#: 틀에 구워진 아래 패널 문구 — 제목 · 부제 · 왼쪽 칸 · 숫자 · 맨 아래 줄 (09-16 틀 이미지에서 읽음).
+#: 09-15 FLUX.2-klein-4B 에서 4월 제목이 `PETL PPAUSE` 로 깨졌다(3/12, 전부 seed 1).
+PANEL_TEXT: dict[int, tuple[str, ...]] = {
+    4: ("PETAL PAUSE", "One petal. Perfect timing.", "SPRING", "920", "Bloomed right on schedule."),
+    9: ("SONGPYEON SWEEP", "Full moon. Fuller snack tray.", "MOON LUCK", "925", "A warm Chuseok surprise."),
+}
+
+
+def parse_size(text: str) -> tuple[int, int]:
+    m = re.fullmatch(r"(\d+)[xX](\d+)", text.strip())
+    if not m:
+        raise argparse.ArgumentTypeError(f"크기는 WxH 형식입니다(예: 1280x2048): {text!r}")
+    return int(m.group(1)), int(m.group(2))
+
+
+def panel_sentence(month: int) -> str:
+    quoted = ", ".join(f'"{t}"' for t in PANEL_TEXT[month])
+    return (
+        "The bottom panel text must stay exactly as in image 1, letter for letter, in the same font, size and "
+        f"position: {quoted}. Do not misspell, merge, duplicate or drop any letter."
+    )
+
+
+class PromptSuffixEngine:
+    """안쪽 엔진을 부르기 전에 프롬프트 끝에 문장을 붙인다. 비교 도구 전용 — 제품 프롬프트는 그대로 둔다."""
+
+    def __init__(self, inner, suffix: str) -> None:
+        self._inner, self._suffix = inner, suffix
+
+    @property
+    def last_meta(self):
+        return getattr(self._inner, "last_meta", None)
+
+    def generate(self, *, template_png: bytes, photo_jpeg: bytes, prompt: str) -> bytes:
+        return self._inner.generate(template_png=template_png, photo_jpeg=photo_jpeg,
+                                    prompt=f"{prompt}\n\n{self._suffix}")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -42,9 +86,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--photos", required=True, help="쉼표로 구분한 사진 경로")
     parser.add_argument("--months", default="4,9")
     parser.add_argument("--seeds", default="1")
-    parser.add_argument("--dog-name", default="테스트")
+    parser.add_argument("--dog-name", default="MOMO")
+    parser.add_argument("--gen-size", type=parse_size, default=GEN_SIZE,
+                        help="cardgen 생성 크기 WxH (기본 1024x1632, 서비스 상한 2048)")
+    parser.add_argument("--panel-text", action="store_true", help="아래 패널 문구를 프롬프트 끝에 적는다 (#557 E1)")
     parser.add_argument("--out", required=True)
     args = parser.parse_args(argv)
+
+    from daengs_backend.config import settings
+    from daengs_cardimage.judge import GeminiCardJudge
+    from daengs_cardimage.title import plate_shift
 
     key = settings.cardimage_gemini_api_key.get_secret_value().strip()
     if not key:
@@ -54,14 +105,18 @@ def main(argv: list[str] | None = None) -> int:
         print("--engine cardgen 에는 --url 이 필요합니다", file=sys.stderr)
         return 2
 
-    from daengs_cardimage.title import plate_shift
-
     judge = GeminiCardJudge(api_key=key, model=settings.cardimage_judge_model,
                             timeout_ms=settings.cardimage_timeout_ms)
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     months = sorted(int(m) for m in args.months.split(","))
     seeds = [int(s) for s in args.seeds.split(",")]
+    if args.panel_text:
+        missing = [m for m in months if m not in PANEL_TEXT]
+        if missing:
+            print(f"--panel-text 문구가 없는 달: {missing}", file=sys.stderr)
+            return 2
+    gen_size = f"{args.gen_size[0]}x{args.gen_size[1]}"
 
     for photo_path in [Path(p) for p in args.photos.split(",")]:
         photo = photo_path.read_bytes()
@@ -69,11 +124,14 @@ def main(argv: list[str] | None = None) -> int:
             template = Image.open(catalog.template_path(month, settings.cardimage_dir)).convert("RGB")
             for seed in seeds:
                 if args.engine == "cardgen":
-                    engine = HttpCardImageEngine(base_url=args.url, timeout_s=settings.cardgen_timeout_s, seed=seed)
+                    engine = HttpCardImageEngine(base_url=args.url, timeout_s=settings.cardgen_timeout_s, seed=seed,
+                                                 gen_size=args.gen_size)
                 else:
                     engine = GeminiCardImageEngine(api_key=key, model=settings.cardimage_model,
                                                    size=settings.cardimage_size,
                                                    timeout_ms=settings.cardimage_timeout_ms)
+                if args.panel_text:
+                    engine = PromptSuffixEngine(engine, panel_sentence(month))
                 started = time.monotonic()
                 card = generate_card(
                     photo=photo, content_type=MIME[photo_path.suffix.lower()], month=month,
@@ -86,6 +144,7 @@ def main(argv: list[str] | None = None) -> int:
                 image = Image.open(io.BytesIO(card.png)).convert("RGB")
                 row = {
                     "name": name, "engine": args.engine, "photo": photo_path.name, "month": month, "seed": seed,
+                    "gen_size": gen_size if args.engine == "cardgen" else None, "panel_text": args.panel_text,
                     "seconds": seconds, "service": getattr(engine, "last_meta", None),
                     "likeness": card.judge.likeness if card.judge else None,
                     "text_ok": card.judge.text_ok if card.judge else None,

@@ -21,10 +21,12 @@ ENV UV_LINK_MODE=copy \
     UV_COMPILE_BYTECODE=1 \
     PYTHONUNBUFFERED=1
 WORKDIR /app
+# PYTORCH_CUDA_ALLOC_CONF: 2026-09-15 Qwen OOM 때 "1.97GiB reserved but unallocated" — 조각난 캐시를 다시 쓰게 한다.
 ENV UV_PROJECT_ENVIRONMENT=/opt/venv \
     PYTHONPATH=/app/src \
     HF_HOME=/models \
-    HF_HUB_DISABLE_TELEMETRY=1
+    HF_HUB_DISABLE_TELEMETRY=1 \
+    PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
 # torch 2.13 의 CUDA 경로는 Triton 커널을 실행 시점에 컴파일한다 — slim 에는 gcc 가 없다 (2026-09-08 L4 실측).
 RUN apt-get update && apt-get install -y --no-install-recommends gcc libc6-dev \

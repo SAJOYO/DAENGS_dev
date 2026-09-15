@@ -11,14 +11,20 @@ D-070 이 `DAENGS_REALTIME_URL` 값에 따라 같은 프로세스 호출과 HTTP
 from __future__ import annotations
 
 from daengs_backend.config import settings
+from daengs_backend.services import realtime_client
 from daengs_cardimage import CardImageUnavailable, GeneratedCard, catalog, generate_card
-from daengs_cardimage.engine import CardImageEngine, GeminiCardImageEngine
+from daengs_cardimage.engine import CardImageEngine, GeminiCardImageEngine, HttpCardImageEngine
 from daengs_cardimage.judge import CardJudge, GeminiCardJudge
 
 
 def default_engine() -> CardImageEngine:
-    """설정에서 실제 엔진을 만든다. 전역 `settings.gemini_api_key` 로 대체하지 않는다 —
-    카드 생성 키는 `DAENGS_CARDIMAGE_GEMINI_API_KEY` 하나뿐이다(채팅 예산을 먹지 않게)."""
+    """설정에서 실제 엔진을 만든다. `DAENGS_CARDGEN_URL` 이 있으면 GPU 서비스(D-078), 없으면
+    Nano Banana 2 — D-070 의 `DAENGS_REALTIME_URL` 갈림길과 같은 모양이다.
+    전역 `settings.gemini_api_key` 로 대체하지 않는다 — 카드 생성 키는 `DAENGS_CARDIMAGE_GEMINI_API_KEY` 하나뿐이다."""
+    url = settings.cardgen_url.strip()
+    if url:
+        return HttpCardImageEngine(base_url=url, timeout_s=settings.cardgen_timeout_s,
+                                   auth=realtime_client.id_token)
     return GeminiCardImageEngine(
         api_key=settings.cardimage_gemini_api_key.get_secret_value(),
         model=settings.cardimage_model,
@@ -65,7 +71,7 @@ def ready_check(month: int) -> catalog.MonthCard:
     행을 만들기 전에 불러, 어차피 실패할 요청이 한도를 먹거나 백그라운드로 가지 않게 한다.
     """
     card = catalog.require_open(month, settings.cardimage_months)
-    if not settings.cardimage_gemini_api_key.get_secret_value().strip():
+    if not settings.cardgen_url.strip() and not settings.cardimage_gemini_api_key.get_secret_value().strip():
         raise CardImageUnavailable("DAENGS_CARDIMAGE_GEMINI_API_KEY 가 비어 있습니다")
     for path in (
         catalog.template_path(month, settings.cardimage_dir),

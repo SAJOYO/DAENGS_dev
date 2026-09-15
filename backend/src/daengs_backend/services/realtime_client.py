@@ -59,6 +59,12 @@ def _id_token(audience: str) -> str:
     return creds.token
 
 
+def id_token(audience: str) -> str:
+    """다른 Cloud Run 서비스(카드 생성, D-078)도 같은 캐시로 토큰을 받게 여는 공개 이름.
+    `_id_token` 을 호출 시점에 찾으므로 그 이름을 갈아끼우는 기존 테스트가 그대로 먹는다."""
+    return _id_token(audience)
+
+
 def _call(method: str, path: str, *, base_url: str, **kwargs: Any) -> tuple[int, Any]:
     root = base_url.rstrip("/")
     try:
@@ -93,4 +99,4 @@ def post_weather_at(payload: dict[str, Any], *, base_url: str) -> tuple[int, Any
     return _call("POST", "/weather/at", base_url=base_url, json=payload)
 
 
-__all__ = ["TIMEOUT_SEC", "RealtimeUnavailable", "get_walk", "post_weather_at"]
+__all__ = ["TIMEOUT_SEC", "RealtimeUnavailable", "get_walk", "post_weather_at", "id_token"]

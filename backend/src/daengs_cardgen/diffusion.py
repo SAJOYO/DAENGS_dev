@@ -10,7 +10,7 @@ from typing import Any
 
 from PIL import Image
 
-from daengs_cardgen.models import CardGenModel, EditRequest
+from daengs_cardgen.models import CardGenModel, EditRequest, seeds_for
 
 MODEL_REPOS = {
     "klein-4b": "black-forest-labs/FLUX.2-klein-4B",
@@ -38,18 +38,22 @@ class KleinModel:
             MODEL_REPOS[self.name], torch_dtype=torch.bfloat16
         ).to("cuda")
 
-    def edit(self, req: EditRequest) -> Image.Image:
+    def edit(self, req: EditRequest) -> list[Image.Image]:
         if self._pipe is None:
             raise RuntimeError("load() 를 먼저 불러야 합니다")
         import torch
 
         steps, guidance = resolve(req, KLEIN_DEFAULTS)
+        # 장마다 자기 seed 의 generator — count=1 은 지금과 같은 단일 generator(09-15 결과와 같은 입력).
+        seeds = seeds_for(req.seed, req.count)
+        generators = [torch.Generator("cuda").manual_seed(s) for s in seeds]
         result = self._pipe(
             image=req.images, prompt=req.prompt, width=req.width, height=req.height,
             num_inference_steps=steps, guidance_scale=guidance,
-            generator=torch.Generator("cuda").manual_seed(req.seed),
+            num_images_per_prompt=req.count,
+            generator=generators[0] if req.count == 1 else generators,
         )
-        return result.images[0]
+        return list(result.images)
 
 
 MODELS: dict[str, type] = {KleinModel.name: KleinModel}

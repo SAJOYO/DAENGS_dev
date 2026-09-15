@@ -119,7 +119,7 @@ def complete_cards(prepared, output):
         or value.writer_version != digest(writing_version())
     ):
         raise ValueError("card writing returned another snapshot")
-    public = publish_board(base.board, base.plan)
+    public = publish_board(base.board, base.plan, base.slots)
     if [s.id for s in value.bundle.scenes] != [s.id for s in public.scenes]:
         raise ValueError("writer changed selected cards")
     for old, new in zip(public.scenes, value.bundle.scenes, strict=True):

@@ -189,7 +189,7 @@ class _DiaryRun:
 
     async def freeze(self, state):
         prepared = state["prepared"]
-        public = publish_board(prepared.board, prepared.plan)
+        public = publish_board(prepared.board, prepared.plan, prepared.slots)
         cards = [
             assembly.frozen_card(s, stamp, result, state["action_results"].get(s.id))
             for s, stamp, result in zip(
@@ -226,7 +226,7 @@ class _DiaryRun:
             or any(a.origin == "generated" for a in c.writing.actions)
             for c in cards
         )
-        public = publish_board(prepared.board, prepared.plan)
+        public = publish_board(prepared.board, prepared.plan, prepared.slots)
         bundle = PublishedBoard.model_validate(
             {
                 **public.model_dump(mode="json"),

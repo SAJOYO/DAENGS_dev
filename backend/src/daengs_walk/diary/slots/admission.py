@@ -51,6 +51,12 @@ def admit(scene_id, candidates, decisions, policy, *, eligible_out=None):
     candidates = eligible_candidates(candidates, decisions, policy)
     if eligible_out is not None:
         eligible_out.extend(candidates)
+    # Display metadata is independent of prose capacity. Conflicts were resolved above.
+    temperatures = sorted(
+        (c for c in candidates if c.role == "grid_temperature_observation"),
+        key=lambda c: (c.rank, c.id),
+    )
+    temperature = temperatures[0] if temperatures else None
     addresses = sorted(
         (c for c in candidates if c.role == "scene_address_reference"), key=lambda c: c.id
     )
@@ -110,5 +116,6 @@ def admit(scene_id, candidates, decisions, policy, *, eligible_out=None):
         scene_id=scene_id,
         evidence=tuple(kept),
         location_reference=location,
+        temperature_reference=temperature,
         decisions=tuple(decisions),
     )

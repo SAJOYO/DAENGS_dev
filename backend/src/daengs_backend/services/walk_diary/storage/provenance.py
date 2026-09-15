@@ -40,6 +40,7 @@ def writing_receipt(prepared, bundle, revision, output=None):
                 }
             ),
             base.plan,
+            base.slots,
         )
         written = {}
     else:

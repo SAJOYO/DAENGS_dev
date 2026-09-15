@@ -20,4 +20,4 @@ def complete_slot_board(prepared, output):
     if prepared.input.source.revision() != base.board.input_revision:
         raise ValueError("board completion requires its prepared source")
     board = assemble_slot_writing(base.board, base.slots, output)
-    return publish_board(board, base.plan)
+    return publish_board(board, base.plan, base.slots)

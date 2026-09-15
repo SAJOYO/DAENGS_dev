@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from daengs_backend.core.database import get_session
 from daengs_backend.core.deps import CurrentAppUser
 from daengs_backend.core.storage import StorageNotConfiguredError
+from daengs_backend.models import Pet
 from daengs_backend.repositories import pet as pet_repo
 from daengs_backend.schemas.pet import (
     PetDisplayUpdate,
@@ -61,7 +62,11 @@ def _photo_conflict(exc: pet_service.PetPhotoConflictError) -> HTTPException:
 
 
 def _to_response(
-    view: identity_service.PetView, primary_pet_id: uuid.UUID | None, viewer: uuid.UUID
+    view: identity_service.PetView,
+    primary_pet_id: uuid.UUID | None,
+    viewer: uuid.UUID,
+    *,
+    has_other_carers: bool = False,
 ) -> PetResponse:
     """`viewer` 는 **부른 사람**입니다 — 목록에 돌보미로 참여 중인 아이가 섞여 오므로
     (docs/co-care.md §2), 그 아이의 대표가 나인지를 여기서 붙입니다.
@@ -97,9 +102,24 @@ def _to_response(
         is_primary=display.id == primary_pet_id,
         is_owner=display.app_user_id == viewer,
         is_group_owner=common.app_user_id == viewer,
+        has_other_carers=has_other_carers,
         updated_at=display.updated_at,
         has_photo=display.photo_storage_key is not None,
         photo_updated_at=display.photo_updated_at,
+    )
+
+
+async def _single_response(
+    session: AsyncSession, pet: Pet, viewer: uuid.UUID
+) -> PetResponse:
+    """카드 한 장짜리 응답(수정·이름·사진 확정). 목록과 **같은 값**이 나가도록 같은 두
+    계산(`view_of` · `has_other_carers`)을 거칩니다 — 여기서 `has_other_carers` 를 빼면
+    수정 직후 앱이 받은 카드만 뱃지가 사라집니다."""
+    view = await identity_service.view_of(session, pet)
+    _, primary_id = await pet_service.list_pets(session, viewer)
+    others = await identity_service.has_other_carers(session, viewer, [view])
+    return _to_response(
+        view, primary_id, viewer, has_other_carers=others.get(view.display.id, False)
     )
 
 
@@ -135,8 +155,18 @@ async def list_pets(
     앱에 숫자를 박아 두면 서버가 상한을 바꿀 때 갈라집니다.
     """
     views, primary_id = await pet_service.list_pets(session, user.app_user_id)
+    # 카드마다 보호자 목록을 따로 읽지 않습니다 — 몇 장이든 쿼리 한 번입니다.
+    others = await identity_service.has_other_carers(session, user.app_user_id, views)
     return PetListResponse(
-        pets=[_to_response(v, primary_id, user.app_user_id) for v in views],
+        pets=[
+            _to_response(
+                v,
+                primary_id,
+                user.app_user_id,
+                has_other_carers=others.get(v.display.id, False),
+            )
+            for v in views
+        ],
         max_pets=pet_service.MAX_PETS_PER_USER,
     )
 
@@ -199,9 +229,7 @@ async def update_pet(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "강아지를 찾을 수 없습니다.") from None
     except identity_service.NotGroupOwnerError as exc:
         raise _not_group_owner(exc) from None
-    view = await identity_service.view_of(session, pet)
-    _, primary_id = await pet_service.list_pets(session, user.app_user_id)
-    return _to_response(view, primary_id, user.app_user_id)
+    return await _single_response(session, pet, user.app_user_id)
 
 
 @router.patch("/{pet_id}/display", response_model=PetResponse)
@@ -225,9 +253,7 @@ async def update_display(
         )
     except pet_service.PetNotFoundError:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "강아지를 찾을 수 없습니다.") from None
-    view = await identity_service.view_of(session, pet)
-    _, primary_id = await pet_service.list_pets(session, user.app_user_id)
-    return _to_response(view, primary_id, user.app_user_id)
+    return await _single_response(session, pet, user.app_user_id)
 
 
 @router.delete("/{pet_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -338,9 +364,7 @@ async def confirm_photo(
         raise _photo_conflict(exc) from None
     except StorageNotConfiguredError as exc:
         raise _photo_unavailable(exc) from None
-    view = await identity_service.view_of(session, pet)
-    _, primary_id = await pet_service.list_pets(session, user.app_user_id)
-    return _to_response(view, primary_id, user.app_user_id)
+    return await _single_response(session, pet, user.app_user_id)
 
 
 @router.get("/{pet_id}/photo", response_model=PetPhotoResponse)

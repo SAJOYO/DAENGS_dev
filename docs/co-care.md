@@ -789,6 +789,35 @@ COUNT(DISTINCT COALESCE(pets.identity_id, pets.id))
 계약은 409 로 막고, 좁은 계약(`PATCH /app/pets/{id}/display`, 이름 한 칸)을 새로 열었다.
 사진은 이미 티켓·confirm 이 따로이고 그쪽은 계속 행 대표다.
 
+### 목록 필드 — `has_other_carers`
+
+`PetResponse.has_other_carers: bool = False` — **이 카드의 논리 강아지 그룹에 나 말고 다른
+보호자가 한 명이라도 있는가.** `GET /app/pets` 목록과, 카드 한 장을 돌려주는 자리(`PUT
+/app/pets/{id}` · `PATCH .../display` · `POST .../photo/confirm`)가 같은 값을 낸다.
+`POST /app/pets`(갓 만든 아이)는 보호자가 나뿐이라 언제나 false 다.
+
+| 카드 | 보는 사람 집합 |
+| --- | --- |
+| 연결 안 된 아이 | 그 행의 대표 ∪ 그 행의 돌보미(`pet_members`) |
+| 연결된 아이 | 그룹(`identity_id`) 모든 행의 대표 ∪ 각 행의 돌보미 |
+
+1. 위 집합을 **사용자 id 로 중복 제거**한다 — 자기 행의 대표이면서 앵커 행의 돌보미인 사람은 한 명.
+2. **부른 사람을 뺀다.**
+3. 하나라도 남으면 true, 나뿐이면 false.
+
+연결 없이 같은 행에 참여한 돌보미도, 다른 행을 연결한 공동 보호자도 모두 "다른 보호자" 다.
+그룹 쪽 정의는 보호자 상한이 쓰는 `pet_identity.guardian_ids` 와 같은 식이라, 「함께 돌보는
+사람」 명단(그룹 행 전부의 대표 ∪ 돌보미)에서 나를 뺀 사람이 있을 때와 값이 같다.
+
+- **계산 위치**: `services/pet_identity.py::has_other_carers` → `repositories/pet_identity.py::guardian_ids_many`.
+  카드가 몇 장이든 **UNION 쿼리 한 번**이다 — 카드마다 보호자 목록 API 를 부르지 않는다.
+- **이름과 뜻.** 연결 차단 사유 `has_other_carers`(`services/pet_member.py::_require_link_candidate`)
+  와 이름이 같지만 뜻이 넓다. 저건 "받는 사람이 고른 행에 돌보미가 있다"(연결 후보 조건),
+  이건 "그룹에 나 말고 보호자가 있다"(표시용).
+- **권한이 아니다.** 버튼은 여전히 `is_owner` · `is_group_owner` 로 가린다. 이 값은 그룹 주보호자
+  본인 카드처럼 두 값이 모두 true 여도 공동 돌봄 중임을 앱이 알 수 있게 하는 표시용이다.
+- **하위 호환.** 필드 추가뿐이고 기본값이 false 라, 필드를 모르는 구 앱은 그대로 돈다. DB 변경 없음.
+
 ### 초대 묶음
 
 - 그룹 주보호자가 자기 아이 1~5마리를 고른다. 묶음은 토큰 하나다.

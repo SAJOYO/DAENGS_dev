@@ -1,7 +1,6 @@
 """One opt-in path: prepare -> delivery-aware separate writers -> review -> receipt."""
 
 import asyncio
-import json
 from copy import deepcopy
 from dataclasses import asdict
 
@@ -12,15 +11,12 @@ from daengs_backend.services.walk_diary.relational_execution import (
     RelationalExecutionPolicy,
 )
 from daengs_backend.services.walk_diary.writing.relational import (
-    FAILURES,
-    PROMPTS,
-    failure_record,
     generate_relation_part,
-    review_answer,
 )
+from daengs_backend.services.walk_diary.writing.relational_title import write_relational_title
 from daengs_backend.services.walk_diary.writing.relational_transport import CallCoordinator
 from daengs_backend.services.walk_diary.writing.short_memory import write_with_short_memory
-from daengs_walk.value_contracts import digest
+from daengs_walk.diary.relational.title_context import TITLE_CONTRACT, validate_title_publication
 
 
 async def generate_prepared_relational_diary(
@@ -52,55 +48,9 @@ async def generate_prepared_relational_diary(
     )
     result = await write_with_short_memory(prepared, send=coordinator, review=review, model=model)
     receipt = result["receipt"]
-    scenes = []
-    for card in receipt["cards"]:
-        if card["body"]:
-            scenes.append({"id": f"scene:{len(scenes) + 1}", "body": card["body"]})
-        for observation in card["movement_observations"]:
-            scenes.append(
-                {"id": f"scene:{len(scenes) + 1}", "device_observation": observation["text"]}
-            )
-    title = {"status": "not_requested", "text": "산책 기록"}
-    if scenes:
-        phase = "request"
-        try:
-            request = {"scenes": scenes}
-            schema = {
-                "type": "object",
-                "additionalProperties": False,
-                "properties": {"title": {"type": "string", "minLength": 1, "maxLength": 30}},
-                "required": ["title"],
-            }
-            title["request"] = deepcopy(request)
-            title["request_revision"] = digest([PROMPTS["title"], request, schema])
-            raw = await coordinator("title", deepcopy(request), deepcopy(schema))
-            title["raw_text"] = raw
-            value = json.loads(raw)["title"]
-            if not isinstance(value, str) or not value.strip() or len(value) > 30:
-                raise ValueError("invalid title")
-            title["candidate"] = value
-            if review:
-                phase = "semantic_review"
-                title["semantic_review"] = {}
-                checked = await review_answer(
-                    "title",
-                    request,
-                    {"text": value, "evidence_ids": [s["id"] for s in scenes]},
-                    set(),
-                    coordinator,
-                    audit=title["semantic_review"],
-                )
-                title["semantic_review"] = checked
-                if checked["status"] != "passed":
-                    raise ValueError("title semantic review rejected")
-            title.update(
-                status="returned",
-                text=value,
-                semantic_status="model_reviewed" if review else "unverified",
-            )
-        except FAILURES as exc:
-            failure_record(title, exc, phase)
-    receipt["title"] = title
+    receipt["title"] = await write_relational_title(receipt, send=coordinator, review=review)
+    receipt["title_contract"] = TITLE_CONTRACT
+    validate_title_publication(receipt)
     receipt["execution"] = {
         "model": model,
         "model_call_attempts": coordinator.calls,

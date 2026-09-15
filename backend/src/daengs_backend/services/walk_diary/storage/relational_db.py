@@ -5,6 +5,7 @@ from copy import deepcopy
 from daengs_backend.schemas.walk_relational_diary import RELATIONAL_STORAGE, RelationalBundle
 from daengs_backend.services.walk_diary.relational_execution import RelationalDiaryResult
 from daengs_walk.diary.relational.publication import PUBLICATION_VERSION, validate_publication
+from daengs_walk.diary.relational.title_context import validate_title_publication
 from daengs_walk.value_contracts import digest
 
 
@@ -84,6 +85,7 @@ def store_result(result, base, *, revision, generation, target):
         result.receipt.get(k) != value for k, value in expected.items()
     ):
         raise ValueError("result differs from canonical publication")
+    validate_title_publication(result.receipt)
     body = {
         "source_revision": revision,
         "generation": generation,

@@ -58,7 +58,13 @@ def reviewed_roles(task, result):
     return roles
 
 
-async def write_with_short_memory(prepared, *, enabled=True, send=None, review=True, model=None):
+async def write_with_short_memory(prepared, *, enabled=True, send=None, review=False, model=None):
+    if prepared["snapshot"].get("writing_brief_version"):
+        from daengs_backend.services.walk_diary.writing.brief_sequence import write_brief_sequence
+
+        return await write_brief_sequence(
+            prepared, enabled=enabled, send=send, review=review, model=model
+        )
     if prepared["snapshot"].get("scene_comparison_version") == "scene-comparison-v1":
         from daengs_backend.services.walk_diary.writing.comparison_sequence import (
             write_comparison_sequence,

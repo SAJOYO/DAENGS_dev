@@ -103,7 +103,7 @@ async def test_writer_and_reviewer_read_the_same_frozen_input():
             request["scenes"].clear()
         return raw
 
-    title = await write_relational_title(receipt, send=sender)
+    title = await write_relational_title(receipt, send=sender, review=True)
     receipt.update(title=title, title_contract=TITLE_CONTRACT)
     validate_title_publication(receipt)
     assert [stage for stage, _ in requests] == ["title", "review"]
@@ -138,7 +138,8 @@ async def test_empty_body_or_failed_title_does_not_trigger_rewriting(case):
         return await title_sender(stage, request, schema)
 
     receipt.update(
-        title=await write_relational_title(receipt, send=sender), title_contract=TITLE_CONTRACT
+        title=await write_relational_title(receipt, send=sender, review=True),
+        title_contract=TITLE_CONTRACT,
     )
     validate_title_publication(receipt)
     title = receipt["title"]
@@ -156,7 +157,7 @@ async def test_empty_body_or_failed_title_does_not_trigger_rewriting(case):
 async def test_saved_title_cannot_be_rebound_by_only_rehashing_request(change):
     receipt = cards()
     receipt.update(
-        title=await write_relational_title(receipt, send=title_sender),
+        title=await write_relational_title(receipt, send=title_sender, review=True),
         title_contract=TITLE_CONTRACT,
     )
     title = receipt["title"]

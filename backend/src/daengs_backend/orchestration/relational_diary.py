@@ -1,4 +1,4 @@
-"""One opt-in path: prepare -> delivery-aware separate writers -> review -> receipt."""
+"""Prepare -> delivery-aware separate writers -> adopted-body title -> versioned receipt."""
 
 import asyncio
 from copy import deepcopy
@@ -23,7 +23,7 @@ async def generate_prepared_relational_diary(
     prepared,
     *,
     send=None,
-    review=True,
+    review=False,
     model=None,
     minimum_interval_s=None,
     max_calls=64,
@@ -32,8 +32,7 @@ async def generate_prepared_relational_diary(
 ):
     """Replay and normal preparation meet at this exact production-independent boundary.
 
-    review=False is an explicitly marked experiment, never a semantic-success claim.
-    No API/DB default is switched by this module.
+    Review is off by default. Accepted references are not a semantic-success claim.
     """
     if send is None:
         model = MODEL
@@ -116,7 +115,9 @@ class RelationalDiaryOrchestrationService:
             or {f["scene_id"] for f in snapshot["frames"]} != set(selected)
             or {p["scene_id"] for p in snapshot["plans"]} != set(selected)
             or any(
-                f.get("planning_contract") != "scene-comparison-plan-v1" for f in snapshot["frames"]
+                f.get("planning_contract")
+                not in {"scene-comparison-plan-v1", "writing-brief-plan-v1"}
+                for f in snapshot["frames"]
             )
         ):
             raise ValueError("collector returned a different relational preparation")
@@ -154,7 +155,7 @@ async def generate_relational_skeleton(
     scene_ids=None,
     road_snapshots=(),
     send=None,
-    review=True,
+    review=False,
     model=None,
     minimum_interval_s=None,
     max_calls=64,

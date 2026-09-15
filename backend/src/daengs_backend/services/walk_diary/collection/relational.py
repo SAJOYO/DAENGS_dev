@@ -67,6 +67,7 @@ async def collect_and_prepare_relational(
     timeout_s=4.0,
     sgis_key="",
     sgis_secret="",
+    writing_briefs=False,
     **space_options,
 ):
     """Use real scene-source snapshots; no old with_scene_backgrounds/slot reassembly."""
@@ -79,6 +80,7 @@ async def collect_and_prepare_relational(
                 timeout_s=timeout_s,
                 sgis_key=sgis_key,
                 sgis_secret=sgis_secret,
+                writing_briefs=writing_briefs,
                 **space_options,
             )
     selected = tuple(scene_ids) if scene_ids is not None else None
@@ -105,6 +107,7 @@ async def collect_and_prepare_relational(
         replace(base, scene_backgrounds=backgrounds.validate_board(base.board)),
         scene_ids=selected,
         road_snapshots=roads,
+        writing_briefs=writing_briefs,
     )
 
 
@@ -114,6 +117,7 @@ async def configured_relational_preparation(base, *, scene_ids=None):
     return await collect_and_prepare_relational(
         base,
         scene_ids=scene_ids,
+        writing_briefs=True,
         sgis_key=settings.walk_sgis_key.get_secret_value().strip(),
         sgis_secret=settings.walk_sgis_secret.get_secret_value().strip(),
         commerce_key=settings.walk_public_data_key.get_secret_value().strip(),

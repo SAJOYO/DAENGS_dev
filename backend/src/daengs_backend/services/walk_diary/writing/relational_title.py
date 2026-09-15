@@ -17,7 +17,7 @@ from daengs_walk.diary.relational.title_context import (
 from daengs_walk.value_contracts import digest
 
 
-async def write_relational_title(receipt, *, send, review=True):
+async def write_relational_title(receipt, *, send, review=False):
     if type(review) is not bool:
         raise TypeError("title review policy must be explicit")
     context = title_context(receipt)

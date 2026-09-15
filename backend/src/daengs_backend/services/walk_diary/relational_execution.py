@@ -17,7 +17,7 @@ class RelationalExecutionPolicy:
     call_timeout_s: float = 15.0
     minimum_interval_s: float = 10.0
     max_calls: int = 64
-    semantic_review: bool = True
+    semantic_review: bool = False
 
     def __post_init__(self):
         for value in (self.preparation_timeout_s, self.call_timeout_s):
@@ -57,7 +57,7 @@ class RelationalExecutionPolicy:
 
 @dataclass(frozen=True)
 class RelationalDiaryResult:
-    """Prepared facts and the frozen v7 receipt; not a CardWritingResult or DB publication."""
+    """Prepared facts and a versioned receipt; not a CardWritingResult or DB publication."""
 
     input_revision: str
     board_revision: str

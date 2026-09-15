@@ -37,6 +37,10 @@ JSON focus(드러낼 의미를 짧게), relation_ids(표현한 관계), evidence
 
 
 def writing_prompt(stage, payload):
+    if payload.get("version") in {"space-writing-brief-v1", "action-writing-brief-v1"}:
+        from daengs_backend.services.walk_diary.writing.brief_prompts import BRIEF_PROMPTS
+
+        return BRIEF_PROMPTS[stage]
     return (
         COMPARISON_PROMPT
         if stage == "space" and payload.get("version") == "scene-comparison-v1"
@@ -113,9 +117,7 @@ async def generate_relation_part(stage, payload, schema):
                     system_instruction=writing_prompt(stage, payload),
                     temperature=0,
                     candidate_count=1,
-                    max_output_tokens=1024
-                    if stage == "review" or payload.get("version") == "scene-comparison-v1"
-                    else 512,
+                    max_output_tokens=1024 if stage in {"space", "review"} else 512,
                     automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
                     response_mime_type="application/json",
                     response_json_schema=schema,
@@ -138,6 +140,10 @@ def validate_prepared(prepared):
     if len(frames) != len(snapshot["frames"]):
         raise ValueError("duplicate frames")
     validate_scene_snapshot_bindings(snapshot)
+    if snapshot.get("writing_brief_version"):
+        from daengs_walk.diary.relational.brief_binding import validate_brief_sources
+
+        validate_brief_sources(snapshot)
     return _validate_plans(snapshot)
 
 
@@ -146,6 +152,10 @@ def _validate_plans(snapshot, plans=None, *, frame_positions=None):
 
     Internal sequence boundary only. Public callers must use validate_prepared.
     """
+    if snapshot.get("writing_brief_version"):
+        from daengs_walk.diary.relational.brief_binding import validate_brief_plans
+
+        return validate_brief_plans(snapshot, plans, frame_positions=frame_positions)
     plans = snapshot["plans"] if plans is None else plans
     frame_positions = (
         {f["scene_id"]: i for i, f in enumerate(snapshot["frames"])}
@@ -377,6 +387,10 @@ async def _write_validated_tasks(tasks, *, snapshot_revision, send=None, review=
     semaphore = asyncio.Semaphore(4)
 
     async def run(task):
+        if task.payload.get("version") in {"space-writing-brief-v1", "action-writing-brief-v1"}:
+            from daengs_backend.services.walk_diary.writing.brief_writer import write_brief_task
+
+            return await write_brief_task(task, send=send, review=review)
         record = {
             "task_id": task.id,
             "scene_id": task.scene_id,

@@ -27,7 +27,10 @@ from tests.walk.support.base_board import policy, saved_case
 
 
 def execution(**overrides):
-    return RelationalExecutionPolicy(minimum_interval_s=0, **overrides)
+    # These historical v7 replay cases explicitly exercise the optional review path.
+    return RelationalExecutionPolicy(
+        **{"minimum_interval_s": 0, "semantic_review": True, **overrides}
+    )
 
 
 @pytest.fixture
@@ -328,7 +331,7 @@ def test_explicit_deadline_and_call_cap_are_preserved():
 
 
 async def test_twelve_scenes_can_finish_with_pacing_and_review_without_real_waiting():
-    policy = RelationalExecutionPolicy().resolve(12, 0)
+    policy = RelationalExecutionPolicy(semantic_review=True).resolve(12, 0)
     now, started = [0.0], []
 
     async def sleep(seconds):

@@ -36,6 +36,11 @@ def assemble_scene_requests(frame, brief: SpaceWritingBrief, previous=None):
             "spatial_comparison": context.relation_slots.model_dump(mode="json"),
             "movement": motion,
             "route_revisit": revisit,
+            **(
+                {"interval": context.model_dump(mode="json")["interval_relations"]}
+                if context.interval_relations is not None
+                else {}
+            ),
         },
         "relation_selection": {
             "space": [],

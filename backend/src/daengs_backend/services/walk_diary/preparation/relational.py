@@ -45,8 +45,12 @@ def prepare_relational_diary(base, *, scene_ids=None, road_snapshots=(), writing
     scene_backgrounds = {}
     state = None
     if writing_briefs:
+        from daengs_walk.diary.relational.interval_sources import freeze_interval_sources
         from daengs_walk.diary.relational.walk_phase import scene_positions
 
+        interval_sources = freeze_interval_sources(
+            base.input.source, route, route_revision, catalog
+        )
         positions = scene_positions(
             base.input.source, [s for s in base.board.scenes if s.id in selected]
         )
@@ -128,6 +132,7 @@ def prepare_relational_diary(base, *, scene_ids=None, road_snapshots=(), writing
             from daengs_walk.diary.relational.brief_contracts import SpaceWritingBrief
             from daengs_walk.diary.relational.comparison_writing import comparison_input
             from daengs_walk.diary.relational.current_action import build_action_brief
+            from daengs_walk.diary.relational.interval_materials import attach_interval_materials
             from daengs_walk.diary.relational.narrative_space import build_space_context
             from daengs_walk.diary.relational.scene_requests import (
                 BRIEF_PLAN,
@@ -135,6 +140,7 @@ def prepare_relational_diary(base, *, scene_ids=None, road_snapshots=(), writing
             )
 
             context = build_space_context(comparison_input(frame, previous), positions)
+            context = attach_interval_materials(context, interval_sources, frame, previous)
             action_brief = build_action_brief(
                 scene, base.input.source, base.input.pet_names, eligible[scene.id], context
             )
@@ -166,6 +172,7 @@ def prepare_relational_diary(base, *, scene_ids=None, road_snapshots=(), writing
         from daengs_walk.diary.relational.scene_requests import BRIEF_PREPARATION
 
         result.update(
+            interval_sources=interval_sources.model_dump(mode="json"),
             writing_brief_version=BRIEF_PREPARATION,
             scene_positions={
                 key: value.model_dump(mode="json") for key, value in positions.items()

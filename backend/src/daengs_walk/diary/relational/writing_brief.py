@@ -14,6 +14,8 @@ def build_space_brief(context, delivery=None):
 def space_work_reason(brief: SpaceWritingBrief):
     """Planning consumes exactly the context that the writer and delivery will consume."""
     context = brief.context
+    if context.flow_ids:
+        return "interval_context"
     if not context.current_facts:
         return "unavailable"
     if context.earlier is None:

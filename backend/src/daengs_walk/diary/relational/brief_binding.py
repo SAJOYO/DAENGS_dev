@@ -33,6 +33,11 @@ def validate_brief_sources(snapshot):
     if len(set(subjects["pet_ids"])) != len(subjects["pet_ids"]):
         raise ValueError("duplicate event subjects")
     previous = None
+    interval_sources = None
+    if "interval_sources" in snapshot:
+        from daengs_walk.diary.relational.interval_sources import IntervalSources
+
+        interval_sources = IntervalSources.model_validate(snapshot["interval_sources"])
     for index, frame in enumerate(frames, 1):
         position = positions[frame["scene_id"]]
         if (
@@ -44,6 +49,15 @@ def validate_brief_sources(snapshot):
         ):
             raise ValueError("brief chronology differs from frozen frames")
         context = build_space_context(comparison_input(frame, previous), positions)
+        if interval_sources:
+            from daengs_walk.diary.relational.interval_materials import attach_interval_materials
+
+            if (
+                frame.get("journey")
+                and frame["journey"]["source_revision"] != interval_sources.route_revision
+            ):
+                raise ValueError("interval sources differ from the bound scene journey")
+            context = attach_interval_materials(context, interval_sources, frame, previous)
         if frame["narrative_context"] != context.model_dump(mode="json"):
             raise ValueError("narrative context differs from source facts")
         saved_record = frame["behavior_record"]

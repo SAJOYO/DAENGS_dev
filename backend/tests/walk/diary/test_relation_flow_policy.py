@@ -143,13 +143,14 @@ def test_return_does_not_upgrade_endpoint_proximity_without_connected_journey():
 
 def test_delivery_consumes_the_allowlist_without_reintroducing_old_distance_result(monkeypatch):
     from daengs_walk.diary.relational import relation_delivery
+    from daengs_walk.diary.relational import writer_view as writer_module
     from daengs_walk.diary.relational.relation_flow_contracts import RelationSelection
 
     flow = calculate(track([150, 110, 70]))
     brief = NS(context=NS(current=NS(position=NS(scene_id="s2"))), relation_ids=("old-distance",))
     selected = RelationSelection("s2", (flow,), (), ("old-distance",))
     monkeypatch.setattr(
-        relation_delivery,
+        writer_module,
         "writer_view",
         lambda _: {
             "citation_ids": ["f1", "old-distance"],

@@ -303,7 +303,7 @@ async def test_production_dispatch_and_saved_v2_keep_their_own_vocabulary(distan
 
     result = await write_brief_task(task, send=send)
     assert result["status"] == "returned"
-    assert result["policy"] == "single-writing-brief-v3"
+    assert result["policy"] == "single-writing-brief-v4"
     assert validate_brief_result(task, result)
     request = seen[0]
     assert request["relation_slots"]["proximity"][0]["relationship"] == word
@@ -312,6 +312,13 @@ async def test_production_dispatch_and_saved_v2_keep_their_own_vocabulary(distan
     assert "result" not in request["relation_slots"]["proximity"][0]
 
     old = deepcopy(result)
+    old["policy"] = "single-writing-brief-v3"
+    old["request_revision"] = brief_request_revision(
+        old["policy"], old["prompt_revision"], old["request"], old["response_schema"]
+    )
+    assert "interval_relations" not in brief.context.model_dump(mode="json")
+    assert validate_brief_result(task, old)
+
     old["policy"] = "single-writing-brief-v2"
     old["request"] = publication_writer_view(brief, old["policy"])
     old["request_revision"] = brief_request_revision(

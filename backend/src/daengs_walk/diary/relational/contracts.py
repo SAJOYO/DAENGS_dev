@@ -155,7 +155,7 @@ class CurrentMotion(DiaryContract):
     @model_validator(mode="after")
     def contains_pin(self):
         if not self.from_pin_s <= 0 < self.to_pin_s or self.event_at_pin_s not in (None, 0):
-            raise ValueError('action motion must contain the current pin')
+            raise ValueError("action motion must contain the current pin")
         return self
 
 
@@ -180,11 +180,22 @@ class WriterTask(DiaryContract):
     @model_validator(mode="after")
     def check_input_boundary(self):
         contract = SpaceInput if self.stage == "space" else ActionInput
+        if self.payload.get("version") in {"space-writing-brief-v1", "action-writing-brief-v1"}:
+            from daengs_walk.diary.relational.brief_contracts import (
+                ActionWritingBrief,
+                SpaceWritingBrief,
+            )
+
+            contract = SpaceWritingBrief if self.stage == "space" else ActionWritingBrief
         if self.stage == "space" and self.payload.get("version") == "scene-comparison-v1":
             from daengs_walk.diary.relational.scene_comparison_contracts import SpaceComparisonInput
 
             contract = SpaceComparisonInput
-        contract.model_validate(self.payload)
+        parsed = contract.model_validate(self.payload)
+        if self.payload.get("version") in {"space-writing-brief-v1", "action-writing-brief-v1"}:
+            position = parsed.context.current.position if self.stage == "space" else parsed.position
+            if position.scene_id != self.scene_id:
+                raise ValueError("brief belongs to another scene")
         if digest([self.stage, self.scene_id, self.payload]) != self.revision:
             raise ValueError("writer task changed")
         return self

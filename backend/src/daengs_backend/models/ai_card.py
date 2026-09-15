@@ -91,3 +91,24 @@ class AiCard(Base):
 
     def __repr__(self) -> str:
         return f"<AiCard {self.id} {self.status}>"
+
+
+class AiCardUsage(Base):
+    """AI 카드 하루 한도를 세는 사용 기록 (#543, D-077). 스키마 원본은 `db/init/39_ai_card_usage.sql`.
+
+    카드가 `ready` 가 되는 순간 한 줄. **카드를 지워도 남습니다** — 그래서 `card_id` 에 FK 가 없습니다.
+    """
+
+    __tablename__ = "ai_card_usage"
+
+    __table_args__ = (Index("idx_ai_card_usage_owner_used", "app_user_id", "used_at"),)
+
+    card_id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True)
+
+    #: ⚠️ **이 CASCADE 에 기대면 안 됩니다.** 탈퇴는 `app_users` 행을 남깁니다 — `cleanup_for_owner` 가 지웁니다.
+    app_user_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey("app_users.id", ondelete="CASCADE"))
+
+    used_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), server_default=text("NOW()"))
+
+    def __repr__(self) -> str:
+        return f"<AiCardUsage {self.card_id} {self.used_at}>"

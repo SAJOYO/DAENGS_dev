@@ -18,6 +18,10 @@ from daengs_walk.value_contracts import digest
 
 
 def assemble_receipt(prepared, written):
+    if prepared["snapshot"].get("writing_brief_version"):
+        from daengs_walk.diary.relational.brief_assembly import assemble_brief_receipt
+
+        return assemble_brief_receipt(prepared, written)
     if (
         digest(prepared["snapshot"]) != prepared["revision"]
         or written["snapshot_revision"] != prepared["revision"]

@@ -239,6 +239,25 @@ GAIT_RECORDS_POSE_MODEL_ROWS = (
 # **모듈 수준에 둔다** — `coverage_checks()` 가 "등록됐나"를 이 목록에서 읽는다. 함수 안에
 # 있으면 그 검사가 소스를 정규식으로 긁어야 하고, 그러면 목록을 고칠 때마다 정규식이 낡는다.
 CHECKS = (
+        # 사용 기록(#543). 픽스처에 ready 카드 한 장을 넣어 **백필이 실제로 돈다** — 'DELETE' 변조가 그것을 잰다.
+        ('2026-09-15', 'ai_card_usage',
+         APP_USERS + PETS_ONLY + SET_UPDATED_AT + prerequisites('2026-09-14_ai_cards')
+         + "INSERT INTO ai_cards(id, app_user_id, month, dog_name, title, status,"
+           " storage_key, generation, size_bytes, width, height) VALUES"
+           " ('77777777-7777-7777-7777-777777777777', '11111111-1111-1111-1111-111111111111',"
+           "  4, 'x', 'BLOSSOM X', 'ready', 'k', 'g', 1, 994, 1582);",
+         'ai_card_usage', [
+            'ALTER TABLE ai_card_usage DROP COLUMN used_at',
+            'ALTER TABLE ai_card_usage ALTER COLUMN app_user_id DROP NOT NULL',
+            'ALTER TABLE ai_card_usage DROP CONSTRAINT ai_card_usage_pkey',
+            # **card_id 에 FK 가 붙는 변조** — 카드를 지우면 기록이 같이 사라져 횟수가 돌아온다.
+            'ALTER TABLE ai_card_usage ADD FOREIGN KEY(card_id) REFERENCES ai_cards(id) ON DELETE CASCADE',
+            'ALTER TABLE ai_card_usage DROP CONSTRAINT ai_card_usage_app_user_id_fkey;'
+            ' ALTER TABLE ai_card_usage ADD FOREIGN KEY(app_user_id) REFERENCES app_users(id)',
+            'DROP INDEX idx_ai_card_usage_owner_used',
+            # 백필이 빠진 상태
+            'DELETE FROM ai_card_usage',
+        ]),
         ('2026-09-14', 'ai_cards', APP_USERS + PETS_ONLY + SET_UPDATED_AT, 'ai_cards', [
             'ALTER TABLE ai_cards DROP COLUMN status CASCADE',
             'ALTER TABLE ai_cards ALTER COLUMN dog_name TYPE varchar(80)',

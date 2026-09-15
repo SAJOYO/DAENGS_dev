@@ -15,7 +15,7 @@ from daengs_walk.diary.slots.service import prepare_eligible_scene_facts
 from daengs_walk.value_contracts import digest
 
 
-def prepare_relational_diary(base, *, scene_ids=None, road_snapshots=()):
+def prepare_relational_diary(base, *, scene_ids=None, road_snapshots=(), writing_briefs=False):
     """Keep full eligible facts; selected scenes define the comparison intervals."""
     road_snapshots = tuple(road_snapshots)
     observation = base.input.observation_source
@@ -44,6 +44,12 @@ def prepare_relational_diary(base, *, scene_ids=None, road_snapshots=()):
     frames, plans, originals = [], [], []
     scene_backgrounds = {}
     state = None
+    if writing_briefs:
+        from daengs_walk.diary.relational.walk_phase import scene_positions
+
+        positions = scene_positions(
+            base.input.source, [s for s in base.board.scenes if s.id in selected]
+        )
     for scene in sorted(base.board.scenes, key=lambda s: (s.anchor.event_at, s.id)):
         if scene.id not in selected:
             continue
@@ -103,7 +109,7 @@ def prepare_relational_diary(base, *, scene_ids=None, road_snapshots=()):
             frame["scene_snapshot"], frames[-1]["scene_snapshot"] if frames else None
         )
         record = getattr(scene.core, "record", None)
-        if record is not None and not record.deleted and record.content.kind in {"note", "photo"}:
+        if record is not None and not record.deleted:
             originals.append({"scene_id": scene.id, "record": record.model_dump(mode="json")})
         frame["journey"] = extract_journey(
             frames[-1] if frames else None, frame, route.evidence if route else None, route_revision
@@ -118,7 +124,25 @@ def prepare_relational_diary(base, *, scene_ids=None, road_snapshots=()):
         frame["relation_observations"] = (
             movement_observations(frame, previous, catalog) if comparable else None
         )
-        plan = make_plan(frame, frames[-1] if frames else None, catalog, state)
+        if writing_briefs:
+            from daengs_walk.diary.relational.brief_planning import BRIEF_PLAN, make_brief_plan
+            from daengs_walk.diary.relational.comparison_writing import comparison_input
+            from daengs_walk.diary.relational.current_action import build_action_brief
+            from daengs_walk.diary.relational.narrative_space import build_space_context
+
+            context = build_space_context(comparison_input(frame, previous), positions)
+            action_brief = build_action_brief(
+                scene, base.input.source, base.input.pet_names, eligible[scene.id], context
+            )
+            frame.update(
+                planning_contract=BRIEF_PLAN,
+                narrative_context=context.model_dump(mode="json"),
+                action_brief=action_brief.model_dump(mode="json") if action_brief else None,
+                behavior_record=record.model_dump(mode="json") if action_brief else None,
+            )
+            plan = make_brief_plan(frame, previous)
+        else:
+            plan = make_plan(frame, frames[-1] if frames else None, catalog, state)
         state = plan["state_after"]
         plans.append(plan)
         frames.append(frame)
@@ -134,4 +158,17 @@ def prepare_relational_diary(base, *, scene_ids=None, road_snapshots=()):
         "scene_comparison_version": "scene-comparison-v1",
         "scene_backgrounds": scene_backgrounds,
     }
+    if writing_briefs:
+        from daengs_walk.diary.relational.brief_planning import BRIEF_PREPARATION
+
+        result.update(
+            writing_brief_version=BRIEF_PREPARATION,
+            scene_positions={
+                key: value.model_dump(mode="json") for key, value in positions.items()
+            },
+            event_subjects={
+                "pet_ids": list(base.input.source.pet_ids),
+                "pet_names": list(base.input.pet_names),
+            },
+        )
     return {"snapshot": deepcopy(result), "revision": digest(result)}

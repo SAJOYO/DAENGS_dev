@@ -6,17 +6,22 @@ from copy import deepcopy
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
+from daengs_walk.diary.relational.brief_publication import (
+    BRIEF_PUBLICATION,
+    validate_brief_publication,
+)
 from daengs_walk.diary.relational.contracts import VERSION
 from daengs_walk.diary.relational.publication import PUBLICATION_VERSION, validate_publication
+from daengs_walk.diary.relational.title_context import validate_title_publication
 from daengs_walk.value_contracts import digest
 
 
 def save_skeleton(path, result):
     body = deepcopy(result)
     version = body["receipt"]["version"]
-    if version not in {VERSION, PUBLICATION_VERSION}:
+    if version not in {VERSION, PUBLICATION_VERSION, BRIEF_PUBLICATION}:
         raise ValueError("unsupported receipt")
-    if version == PUBLICATION_VERSION:
+    if version in {PUBLICATION_VERSION, BRIEF_PUBLICATION}:
         from daengs_backend.services.walk_diary.writing.relational import validate_prepared
         from daengs_walk.diary.relational.assembly import assemble_receipt
 
@@ -24,6 +29,9 @@ def save_skeleton(path, result):
         expected = assemble_receipt(body["prepared"], body["receipt"]["writing"])
         if any(body["receipt"].get(k) != v for k, v in expected.items()):
             raise ValueError("receipt differs from frozen preparation and accepted writing")
+    validate_title_publication(body["receipt"])
+    if version == BRIEF_PUBLICATION:
+        validate_brief_publication(body["prepared"], body["receipt"])
     document = {"format": version, "payload": body, "digest": digest(body)}
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -60,6 +68,7 @@ def read_skeleton(path):
             "relational-diary-skeleton-v5",
             VERSION,
             PUBLICATION_VERSION,
+            BRIEF_PUBLICATION,
         }
         or digest(document["payload"]) != document["digest"]
     ):
@@ -68,6 +77,10 @@ def read_skeleton(path):
     receipt = document["payload"]["receipt"]
     if document["format"] != receipt["version"]:
         raise ValueError("stored format differs from receipt version")
-    if receipt["version"] == PUBLICATION_VERSION:
+    if receipt["version"] == BRIEF_PUBLICATION:
+        validate_brief_publication(document["payload"]["prepared"], receipt)
+    elif receipt["version"] == PUBLICATION_VERSION:
         validate_publication(receipt)
+    else:
+        validate_title_publication(receipt)
     return receipt

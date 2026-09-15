@@ -86,7 +86,13 @@ async def test_header_and_originals_are_outside_space_facts(prepared):
             "id": "dong",
             "role": "scene_address_reference",
             "source_id": "sgis",
-            "facts": {"dong": "양재2동", "full_address": "노출하지 않을 주소"},
+            "facts": {
+                "dong": "양재2동",
+                "sido": "서울특별시",
+                "sigungu": "서초구",
+                "address_type": "administrative_dong",
+                "full_address": "노출하지 않을 주소",
+            },
         },
         {
             "id": "weather",
@@ -101,9 +107,60 @@ async def test_header_and_originals_are_outside_space_facts(prepared):
     snap, header = assemble_scene_snapshot(frame)
     assert frame == before
     assert header.dong == "양재2동"
+    assert header.administrative_address.model_dump() == {
+        "sido": "서울특별시",
+        "sigungu": "서초구",
+        "dong": "양재2동",
+        "address_type": "administrative_dong",
+    }
     assert header.weather["observations"][0]["facts"]["temperature_c"] == 24.2
-    for excluded in ("양재2동", "temperature_c", "사용자 메모 원문", "현재 행동", "full_address"):
+    for excluded in (
+        "서울특별시",
+        "서초구",
+        "양재2동",
+        "temperature_c",
+        "사용자 메모 원문",
+        "현재 행동",
+        "full_address",
+    ):
         assert excluded not in snap.model_dump_json()
+
+
+async def test_addresses_from_different_records_are_not_combined(prepared):
+    frame = deepcopy(prepared["snapshot"]["frames"][0])
+    frame["eligible_evidence"] = [
+        {"id": str(i), "role": "scene_address_reference", "source_id": "sgis", "facts": facts}
+        for i, facts in enumerate(
+            [
+                {"sido": "서울특별시", "dong": "중앙동"},
+                {"sigungu": "중구", "dong": "중앙동"},
+            ]
+        )
+    ]
+    _, header = assemble_scene_snapshot(frame)
+    assert header.dong == "중앙동"
+    assert header.administrative_address is None
+    assert "administrative_address" not in header.model_dump(mode="json")
+
+
+async def test_old_prepared_headers_still_validate(prepared):
+    from daengs_backend.services.walk_diary.preparation.scene_snapshot import (
+        validate_scene_snapshot_bindings,
+    )
+
+    snapshot = deepcopy(prepared["snapshot"])
+    for frame in snapshot["frames"]:
+        frame["eligible_evidence"].append(
+            {
+                "id": "address",
+                "role": "scene_address_reference",
+                "source_id": "sgis",
+                "facts": {"sido": "서울특별시", "sigungu": "서초구", "dong": "양재2동"},
+            }
+        )
+        frame["card_header"]["dong"] = "양재2동"
+        frame["card_header"].pop("administrative_address", None)
+    validate_scene_snapshot_bindings(snapshot)
 
 
 async def test_wrong_point_and_conflicting_roads(prepared):

@@ -1,5 +1,6 @@
 """Authenticated HTTP -> real relational orchestration -> saved receipt -> GET."""
 
+import uuid
 from copy import deepcopy
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
@@ -10,6 +11,8 @@ from daengs_backend.routers import walk_storyboard as router
 from daengs_backend.schemas.walk_relational_diary import RELATIONAL_FORMAT, RELATIONAL_STORAGE
 from daengs_backend.services.walk_diary.lifecycle import relational
 from daengs_backend.services.walk_diary.runtime import write_relational_board
+from tests.walk.diary.test_brief_execution import answer
+from tests.walk.diary.test_brief_execution import prepare as brief_prepare  # noqa: F401
 from tests.walk.diary.test_relational_orchestration import (
     prepare,  # noqa: F401 -- fixture registration
     public_collector,  # noqa: F401 -- fixture registration
@@ -21,12 +24,13 @@ from tests.walk.support.photo_input import OWNER, WALK
 QUERY = f"?bundle_format={RELATIONAL_FORMAT}&target_scene_count=3"
 
 
-@pytest.fixture
-def relational_api(api, prepare, monkeypatch):  # noqa: F811
+@pytest.fixture(params=["v7", "v8"])
+def relational_api(api, prepare, brief_prepare, monkeypatch, request):  # noqa: F811
     client, state, db = api
     state.relational_calls = 0
     state.relational_hook = None
     state.relational_failure = None
+    state.publication_version = request.param
     original_store = relational.store_result
 
     def store(*args, **kwargs):
@@ -47,8 +51,8 @@ def relational_api(api, prepare, monkeypatch):  # noqa: F811
             return await write_relational_board(
                 source,
                 base,
-                prepare=prepare,
-                send=send,
+                prepare=brief_prepare if request.param == "v8" else prepare,
+                send=brief_send if request.param == "v8" else send,
                 execution_policy=replace(kwargs["execution_policy"], minimum_interval_s=0),
             )
         except Exception as exc:
@@ -57,6 +61,10 @@ def relational_api(api, prepare, monkeypatch):  # noqa: F811
 
     client.app.dependency_overrides[router.get_diary_writer] = lambda: write
     return client, state, db
+
+
+async def brief_send(stage, payload, schema):
+    return answer(stage, payload)
 
 
 def spec(state, **updates):
@@ -70,6 +78,7 @@ def test_http_stores_canonical_parts_and_get_never_replans(relational_api, monke
     value = result.json()
     assert value["status"] == "ready", (value, state.relational_failure)
     assert state.row.bundle["format"] == RELATIONAL_STORAGE
+    assert state.row.bundle["payload"]["receipt"]["version"].endswith(state.publication_version)
     assert value["bundle"]["cards"]
     for card in value["bundle"]["cards"]:
         assert card["body"] == "\n".join(
@@ -105,6 +114,55 @@ def test_background_completion_does_not_invalidate_but_original_edit_does(relati
     state.entries[0].payload = {**state.entries[0].payload, "note": "새 원문"}
     stale = client.get(PATH + QUERY).json()
     assert stale["status"] == "stale" and stale["bundle"] is None
+
+
+@pytest.mark.parametrize("action_fails", [False, True])
+def test_each_behavior_keeps_its_original_reference_even_when_writing_fails(
+    relational_api,
+    monkeypatch,
+    action_fails,
+):
+    import sys
+
+    client, state, _ = relational_api
+    expected = {}
+    state.envelope = None  # The shared fixture's envelope belongs only to its original note.
+    # Identical time/location and repeated codes must still have distinct identities.
+    for code in ("sniffing", "sniffing", "barking", "excretion"):
+        entry = deepcopy(state.entries[0])
+        entry.id = uuid.uuid4()
+        entry.payload = {k: v for k, v in entry.payload.items() if k != "note"}
+        entry.payload.update(kind="behavior", behavior_code=code, pet_id=None)
+        state.entries.append(entry)
+        expected[str(entry.id)] = (str(entry.revision), code)
+    sender_name = "brief_send" if state.publication_version == "v8" else "send"
+    real_send = getattr(sys.modules[__name__], sender_name)
+
+    async def writer(stage, payload, schema):
+        assert "originals" not in payload
+        if action_fails and stage == "action":
+            raise ValueError("simulated writer failure")
+        return await real_send(stage, payload, schema)
+
+    monkeypatch.setattr(sys.modules[__name__], sender_name, writer)
+    response = client.post(PATH, json=spec(state))
+    assert response.status_code == 200, response.text
+    value = response.json()
+    assert value["status"] == "ready", (value, state.relational_failure)
+    found = {}
+    for card in value["bundle"]["cards"]:
+        for original in card["originals"]:
+            if original["content"]["kind"] != "behavior":
+                continue
+            ref = original["ref"]
+            assert ref["store"] == "walk_entry" and ref["version_kind"] == "revision"
+            assert original["anchor"] == card["anchor"]
+            assert original["content"]["pet_id"] is None
+            assert card["action"]["status"] == ("failed" if action_fails else "returned")
+            assert ref["id"] not in found
+            found[ref["id"]] = (ref["version"], original["content"]["code"])
+    assert found == expected
+    assert client.get(PATH + QUERY).json() == value
 
 
 def test_original_edit_during_generation_prevents_publication(relational_api):
@@ -155,6 +213,23 @@ def test_corrupted_saved_receipt_is_not_displayed(relational_api):
     state.row.bundle["payload"]["public"]["cards"][0]["body"] = "다른 글"
     result = client.get(PATH + QUERY).json()
     assert result["status"] == "failed" and result["bundle"] is None
+
+
+@pytest.mark.parametrize("relational_api", ["v7"], indirect=True)
+def test_old_dong_only_publication_still_reads(relational_api):
+    from daengs_walk.value_contracts import digest
+
+    client, state, _ = relational_api
+    value = client.post(PATH, json=spec(state)).json()
+    assert value["status"] == "ready"
+    saved = state.row.bundle["payload"]
+    for card in saved["receipt"]["cards"]:
+        card["comparison"]["header"].pop("administrative_address", None)
+    for bundle in (saved["public"], value["bundle"]):
+        for card in bundle["cards"]:
+            card["header"].pop("administrative_address", None)
+    state.row.bundle["digest"] = digest(saved)
+    assert client.get(PATH + QUERY).json() == value
 
 
 async def test_newer_generation_wins_completion(relational_api):

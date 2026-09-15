@@ -296,6 +296,9 @@ def test_no_care_capability_exists_in_the_contracts() -> None:
         "vet_contact",
         # `care_log` 도 결정적 게이트로만 닿는다 — 다만 이쪽은 **쓴다** (위 독스트링).
         "care_log",
+        # `skin` (D-079) 도 육아 질문을 받는 목적지가 아니다 — 판정 기록이 붙은 `skin` 신호로만
+        # 들어와 **이미 끝난 판정을 해설**한다. 라우터는 못 고른다 (`ExecuteName` 에 없다).
+        "skin",
     }
     for invented in ("care", "husbandry", "nutrition"):
         assert invented not in {name.value for name in CapabilityName}

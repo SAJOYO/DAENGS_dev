@@ -102,6 +102,11 @@ def _plate_shift(card: Image.Image, plate: Plate) -> int:
     return tops[len(tops) // 2] - plate.top_y
 
 
+def plate_shift(card: Image.Image, plate: Plate = APRIL_PLATE) -> int:
+    """비교 판정용 공개 이름 — 모델 출력의 제목판이 틀보다 몇 px 위(-)·아래(+)로 그려졌는지. 못 재면 0."""
+    return _plate_shift(card.convert("RGB"), plate)
+
+
 def _layout(text: str, font_path: Path, plate: Plate, center_y: int) -> list[_Run]:
     cap = CAP_HEIGHT
     while True:

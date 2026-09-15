@@ -41,7 +41,7 @@ def make_brief_plan(frame, previous=None, delivery=None):
         },
         "standalone_context": {"facts": [f.model_dump(mode="json") for f in context.current_facts]},
         "space_task": writer_task("space", frame["scene_id"], brief)
-        if reason not in {"unavailable", "maintain"}
+        if reason != "unavailable"
         else None,
         "action_task": writer_task("action", frame["scene_id"], action) if action else None,
         "movement_observations": observations,

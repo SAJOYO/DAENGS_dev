@@ -209,7 +209,7 @@ async def test_configured_preparer_selects_brief_path(base, monkeypatch):
 
 
 @pytest.mark.parametrize("first_fails", [False, True])
-async def test_same_meaning_is_suppressed_or_recovered_in_real_sequence(
+async def test_same_meaning_is_written_after_success_or_failure_in_real_sequence(
     base,
     public_collector,  # noqa: F811
     first_fails,
@@ -236,8 +236,11 @@ async def test_same_meaning_is_suppressed_or_recovered_in_real_sequence(
         send=send,
         execution_policy=RelationalExecutionPolicy(minimum_interval_s=0),
     )
-    assert len(space_calls) == (2 if first_fails else 1)
+    assert len(space_calls) == len(result.receipt["cards"])
     if first_fails:
         assert "delivery_memory" not in space_calls[1]
         assert result.prepared["snapshot"]["plans"][1]["state_transition"] == "recover_introduction"
-    assert result.receipt["cards"][-1]["parts"]["space"]["status"] == "not_requested"
+    else:
+        assert space_calls[1]["delivery_memory"]
+        assert result.prepared["snapshot"]["plans"][1]["state_transition"] == "maintain"
+    assert all(c["parts"]["space"]["status"] == "returned" for c in result.receipt["cards"][1:])

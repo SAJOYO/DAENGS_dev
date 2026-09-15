@@ -264,6 +264,14 @@ def test_raw_output_is_measured_separately_from_the_final_answer() -> None:
     assert not result["hard"]["lesion_term"]
 
 
+def test_action_correction_is_counted_apart_from_text_replacement() -> None:
+    raw = guide(actions=["vet_visit", "observe"])
+    corrected = checks.check_row(ok_row("확인이 필요해요.", ["vet_visit"], raw=raw), ABNORMAL)
+    assert corrected["actions_corrected"] is True and corrected["guarded"] is False
+    kept = checks.check_row(ok_row("확인이 필요해요.", ["vet_visit"], raw=guide()), ABNORMAL)
+    assert kept["actions_corrected"] is False
+
+
 def test_trend_words_go_to_review_not_to_violations() -> None:
     result = checks.check_row(ok_row("나빠졌다고 말할 수는 없어요.", ["vet_visit"]), TREND)
     assert result["trend_words"] == ["나빠졌"] and not any(result["hard"].values())

@@ -110,6 +110,11 @@ def check_row(row: Mapping[str, Any], question: Question) -> dict[str, Any]:
             "retake_first": raw_actions[:1] == ["retake"],
             "observe_on_flagged": question.verdict in FLAGGED_VERDICTS and "observe" in raw_actions,
         }
+        # 코드가 행동 목록을 고쳤나 — 모델이 고른 것(중복 제거)과 사용자에게 나간 것이 다르면 고친 것이다.
+        # `guarded` 는 해설 **문장** 교체만 센다. 행동 교정(예: 이상 소견에서 지켜보기 제거)은 여기서 센다.
+        if status == "OK":
+            chosen = list(dict.fromkeys(raw_actions))
+            out["actions_corrected"] = chosen != list(row.get("actions") or [])
     return out
 
 

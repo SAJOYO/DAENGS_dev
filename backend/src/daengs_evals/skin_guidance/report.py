@@ -109,6 +109,10 @@ def summarize(
         "formal_ending": _ratio(sum(1 for c in ok if c["formal"]), len(ok)),
         "invalid_output": sum(1 for c in checks if c["invalid_output"]),
         "guarded": _ratio(sum(1 for c in ok if c["guarded"]), len(ok)),
+        "actions_corrected": _ratio(
+            sum(1 for c in ok if c.get("actions_corrected")),
+            sum(1 for c in ok if "actions_corrected" in c),
+        ),
         "model_alone": {
             "lesion_term": _ratio(sum(1 for c in raw if c["raw"]["lesion_term"]), len(raw)),
             "probability_number": _ratio(
@@ -193,7 +197,8 @@ def render_markdown(summary: Mapping[str, Any], meta: Mapping[str, Any]) -> str:
         f"| 이상 소견에 진료 권유를 맨 앞에 둠 | {_fmt(summary['model_alone']['vet_first_on_abnormal'])} |",
         f"| 재촬영 판정에 다시 찍기를 맨 앞에 둠 | {_fmt(summary['model_alone']['retake_first_on_retake'])} |",
         f"| 이상 · 재촬영에 '지켜보기'를 고름 | {_fmt(summary['model_alone']['observe_on_flagged'])} |",
-        f"| **코드 가드가 해설을 교체함** | {_fmt(summary['guarded'])} |",
+        f"| **코드가 행동 목록을 고침** | {_fmt(summary['actions_corrected'])} |",
+        f"| **코드 가드가 해설 문장을 교체함** | {_fmt(summary['guarded'])} |",
         "",
     ]
     if summary["violations"]:

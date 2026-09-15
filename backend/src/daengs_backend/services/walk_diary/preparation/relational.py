@@ -103,7 +103,7 @@ def prepare_relational_diary(base, *, scene_ids=None, road_snapshots=()):
             frame["scene_snapshot"], frames[-1]["scene_snapshot"] if frames else None
         )
         record = getattr(scene.core, "record", None)
-        if record is not None and not record.deleted and record.content.kind in {"note", "photo"}:
+        if record is not None and not record.deleted:
             originals.append({"scene_id": scene.id, "record": record.model_dump(mode="json")})
         frame["journey"] = extract_journey(
             frames[-1] if frames else None, frame, route.evidence if route else None, route_revision

@@ -135,7 +135,8 @@ def test_each_behavior_keeps_its_original_reference_even_when_writing_fails(
         entry.payload.update(kind="behavior", behavior_code=code, pet_id=None)
         state.entries.append(entry)
         expected[str(entry.id)] = (str(entry.revision), code)
-    real_send = send
+    sender_name = "brief_send" if state.publication_version == "v8" else "send"
+    real_send = getattr(sys.modules[__name__], sender_name)
 
     async def writer(stage, payload, schema):
         assert "originals" not in payload
@@ -143,7 +144,7 @@ def test_each_behavior_keeps_its_original_reference_even_when_writing_fails(
             raise ValueError("simulated writer failure")
         return await real_send(stage, payload, schema)
 
-    monkeypatch.setattr(sys.modules[__name__], "send", writer)
+    monkeypatch.setattr(sys.modules[__name__], sender_name, writer)
     response = client.post(PATH, json=spec(state))
     assert response.status_code == 200, response.text
     value = response.json()

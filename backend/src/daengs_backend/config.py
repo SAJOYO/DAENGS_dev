@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 from typing import Annotated, Literal
 
@@ -388,6 +389,46 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("GAIT_MAX_UPLOAD_BYTES"),
     )
 
+    # 공동 돌봄 초대 웹 안내(`/invite`)가 여는 `/.well-known/assetlinks.json` 의
+    # 서명 지문. **Android App Links 검증에 쓰는 값입니다.** Play App Signing 을 쓰는
+    # 앱은 우리가 올리는 업로드 키(`daengs.uploadKeyStore`)와 스토어가 배포하는 앱의
+    # 서명 키가 **다릅니다** — 스토어 설치본을 열려면 Play Console → 릴리스 → 설정 →
+    # 앱 서명의 「앱 서명 키 인증서」 SHA-256 이 들어가야 합니다. 업로드 키 지문을 같이
+    # 넣어도 됩니다(업로드 키로 서명한 로컬 릴리스 빌드가 그것으로 검증됩니다) —
+    # 배열이라 둘 다 넣을 수 있습니다.
+    #
+    # ⚠️ **비어 있으면 App Links 검증이 그냥 실패합니다** — 일부러 그렇게 둡니다.
+    #    가짜 지문을 넣느니 검증이 안 되는 채로(=링크가 웹 안내로 떨어지는 채로) 배포하는
+    #    편이 낫습니다. 값은 JSON 배열입니다:
+    #    DAENGS_PLAY_SIGNING_SHA256_FINGERPRINTS=["AA:BB:…(32쌍)"]
+    #    파일은 `backend/.env` 입니다 — 최상단 `.env` 는 compose 용이라 backend 가 안 읽습니다.
+    #
+    # ⚠️ **모양이 틀려도 부팅을 막지 않습니다** — 선택 기능이라서입니다. 틀리면 전부 버리고
+    #    (일부만 채택하지 않음) 부팅 로그에 오류를 남기고 `/admin/status` 에 `app_links` 항목으로
+    #    보입니다. 규칙은 `app_links.py` 입니다. 위의 필수 보안 설정(카카오 앱 키·DB·키)은
+    #    여전히 부팅에서 막습니다.
+    #
+    # **원문 문자열로 받습니다.** `list[str]` 로 두면 pydantic-settings 가 검증기보다 먼저
+    # JSON 디코드를 해서, JSON 이 아닌 값 하나에 `SettingsError` 로 부팅이 죽습니다.
+    play_signing_sha256_fingerprints_raw: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("DAENGS_PLAY_SIGNING_SHA256_FINGERPRINTS"),
+    )
+
+    @property
+    def play_signing_sha256_fingerprints(self) -> list[str]:
+        """검증을 통과한 지문. 설정이 틀렸으면 빈 목록이다."""
+        from daengs_backend.app_links import parse_play_signing_fingerprints
+
+        return list(parse_play_signing_fingerprints(self.play_signing_sha256_fingerprints_raw).fingerprints)
+
+    @property
+    def play_signing_config_error(self) -> str | None:
+        """설정이 틀렸으면 그 사유(값은 싣지 않음). 비었거나 맞으면 None."""
+        from daengs_backend.app_links import parse_play_signing_fingerprints
+
+        return parse_play_signing_fingerprints(self.play_signing_sha256_fingerprints_raw).error
+
     # ── 보행 분석 엔진 (#304 · D-063) ──────────────────────────────────
     # **지금 값은 `v4` 하나입니다** — `daengs_gait.inference`(ssdlite + RTMPose AP-10K).
     # 워커가 자기 인터프리터(`sys.executable`)로 서브프로세스를 띄우고, 가중치는
@@ -561,7 +602,7 @@ def _load_settings(**overrides: object) -> Settings:
     트레이스백에 그대로 찍힙니다.
     """
     try:
-        return Settings(**overrides)  # type: ignore[arg-type]
+        loaded = Settings(**overrides)  # type: ignore[arg-type]
     except ValidationError as exc:
         problems = "\n".join(
             f"  {'.'.join(str(part) for part in error['loc']) or '(전체)'}: {error['msg']}"
@@ -571,6 +612,12 @@ def _load_settings(**overrides: object) -> Settings:
             "설정을 읽지 못했습니다. backend/.env 를 확인하세요 "
             f"(backend/.env.example 참고).\n{problems}"
         ) from None
+
+    # **선택 기능의 설정 오류는 부팅을 막지 않고 여기서 크게 남깁니다** (`app_links.py`).
+    # 사유에는 값이 없습니다. 콘솔 `/admin/status` 의 `app_links` 항목에도 같은 말이 뜹니다.
+    if loaded.play_signing_config_error:
+        logging.getLogger(__name__).error(loaded.play_signing_config_error)
+    return loaded
 
 
 settings = _load_settings()

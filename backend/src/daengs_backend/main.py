@@ -31,6 +31,7 @@ from daengs_backend.routers import (
     facility_discovery,
     gait,
     health,
+    invite_web,
     life_walk,
     metrics,
     pet,
@@ -187,6 +188,9 @@ app.add_middleware(
 )
 
 app.include_router(health.router)
+# 공동 돌봄 초대 링크의 웹 폴백(`/invite`) · App Links 검증(`/.well-known/assetlinks.json`).
+# 인증도 DB 도 안 쓴다 — `pet_member.router` 의 `/app/pet-invites/*` 와는 완전히 별개다.
+app.include_router(invite_web.router)
 app.include_router(auth.router)
 # 앱 회원(카카오)용. 관리자와 경로가 겹치지 않게 /auth/app/* 입니다.
 app.include_router(app_auth.router)

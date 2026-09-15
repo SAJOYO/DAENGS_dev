@@ -153,6 +153,45 @@ def test_DB_가_죽으면_크롤은_묻지_않는다(
     assert items["crawl"]["state"] == StatusState.DOWN
 
 
+# ---------------------------------------------------------------- App Links 지문 (선택 설정)
+_FINGERPRINT = "AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99"
+
+
+@pytest.mark.parametrize(
+    ("raw", "state"),
+    [
+        (None, StatusState.ABSENT),
+        (f'["{_FINGERPRINT}"]', StatusState.OK),
+        # 틀린 설정은 부팅을 막지 않는 대신 **사람이 볼 자리에 빨갛게** 뜬다.
+        ("not-json", StatusState.DOWN),
+        (f'["{_FINGERPRINT}","AA:BB"]', StatusState.DOWN),
+    ],
+)
+def test_앱_링크_지문_설정_상태가_항목으로_보인다(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch, raw: str | None, state: StatusState
+) -> None:
+    from daengs_backend.config import settings
+
+    monkeypatch.setattr(settings, "play_signing_sha256_fingerprints_raw", raw)
+
+    item = _items(client)["app_links"]
+    assert item["state"] == state
+    # 사유에 원문 값을 싣지 않는다.
+    assert "AA:BB" not in item["detail"]
+
+
+def test_앱_링크_지문이_틀려도_다른_항목은_그대로다(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from daengs_backend.config import settings
+
+    monkeypatch.setattr(settings, "play_signing_sha256_fingerprints_raw", "{broken")
+
+    items = _items(client)
+    assert items["app_links"]["state"] == StatusState.DOWN
+    assert items["db"]["state"] == StatusState.OK
+
+
 # ---------------------------------------------------------------- 예열
 @pytest.mark.parametrize(
     ("phase", "state"),

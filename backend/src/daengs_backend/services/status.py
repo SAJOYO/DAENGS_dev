@@ -112,7 +112,21 @@ async def collect(session: AsyncSession, warm_up: WarmUp | None) -> list[StatusI
     )
     db, crawl = db_items
     screening, redis_, place, journey, gait = others
-    return [db, _warm_up_item(warm_up), screening, redis_, place, journey, crawl, gait]
+    return [db, _warm_up_item(warm_up), screening, redis_, place, journey, crawl, gait, _app_links_item()]
+
+
+def _app_links_item() -> StatusItem:
+    """App Links 서명 지문 설정. **선택 기능이라 틀려도 서비스는 선다** — 그래서 부팅 로그 말고도
+    사람이 보는 이 화면에서 말한다. 사유 문장에는 값을 싣지 않는다(`app_links.py`)."""
+    name, label = "app_links", "App Links 서명 지문"
+    error = settings.play_signing_config_error
+    if error:
+        return StatusItem(name, label, StatusState.DOWN, error)
+    count = len(settings.play_signing_sha256_fingerprints)
+    if count == 0:
+        return StatusItem(name, label, StatusState.ABSENT,
+                          "설정하지 않았습니다 — assetlinks.json 은 빈 배열이고, 초대 링크는 웹 안내로 열립니다.")
+    return StatusItem(name, label, StatusState.OK, f"지문 {count}개를 assetlinks.json 에 싣습니다.")
 
 
 async def _db_chain(session: AsyncSession) -> tuple[StatusItem, StatusItem]:

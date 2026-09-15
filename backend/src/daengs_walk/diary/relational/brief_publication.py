@@ -12,7 +12,8 @@ from daengs_walk.diary.relational.brief_response import (
 from daengs_walk.diary.relational.contracts import SemanticReview, WriterTask
 from daengs_walk.diary.relational.scene_comparison_contracts import SpaceComparisonInput
 from daengs_walk.diary.relational.title_context import validate_title_publication
-from daengs_walk.diary.relational.writing_brief import advance_brief_delivery, brief_writer_view
+from daengs_walk.diary.relational.writer_view import publication_writer_view
+from daengs_walk.diary.relational.writing_brief import advance_brief_delivery
 from daengs_walk.value_contracts import digest
 
 BRIEF_PUBLICATION = "relational-diary-skeleton-v8"
@@ -22,7 +23,8 @@ def validate_brief_result(task, result, *, execution_review=None):
     brief = parse_brief(task.payload)
     if any(result[k] != getattr(task, k) for k in ("scene_id", "stage", "revision")):
         raise ValueError("brief result belongs to another task")
-    request, schema = brief_writer_view(brief), brief_response_schema(brief)
+    request = publication_writer_view(brief, result["policy"])
+    schema = brief_response_schema(brief)
     if result.get("request") != request or result.get("response_schema") != schema:
         raise ValueError("writer did not receive the canonical brief")
     if result["request_revision"] != brief_request_revision(

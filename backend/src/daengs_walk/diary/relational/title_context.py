@@ -6,6 +6,10 @@ from typing import Literal
 from pydantic import Field, field_validator, model_validator
 
 from daengs_walk.diary.relational.contracts import SemanticReview
+from daengs_walk.diary.relational.title_writer_view import (
+    TITLE_WRITER_POLICY,
+    title_publication_view,
+)
 from daengs_walk.value_contracts import Instant, ValueContract, digest
 
 TITLE_CONTRACT = "relational-title-readmodel-v1"
@@ -110,14 +114,14 @@ def validate_title_publication(receipt):
     title = receipt.get("title", {})
     contract = receipt.get("title_contract")
     if contract is None:
-        if title.get("request", {}).get("version") == TITLE_CONTRACT:
+        if title.get("request", {}).get("version") in {TITLE_CONTRACT, TITLE_WRITER_POLICY}:
             raise ValueError("missing title contract marker")
         return  # Historical publications retain their original title contract.
     if contract != TITLE_CONTRACT:
         raise ValueError("unsupported title contract")
     expected = title_context(receipt)
-    request = TitleReadModel.model_validate(title["request"])
-    if request != expected or title["content_revision"] != digest(expected):
+    request = title_publication_view(expected, title.get("writer_policy"))
+    if title["request"] != request or title["content_revision"] != digest(expected):
         raise ValueError("title did not read the adopted scene parts")
     schema = TitleAnswer.model_json_schema()
     if title["response_schema"] != schema or title["request_revision"] != title_request_revision(
@@ -126,7 +130,7 @@ def validate_title_publication(receipt):
         raise ValueError("title request binding changed")
     status = title["status"]
     if status not in {"returned", "failed", "not_requested"} or (
-        (status == "not_requested") != (not expected.scenes)
+        (status == "not_requested") != (not request["scenes"])
     ):
         raise ValueError("title status differs from available body")
     if status != "returned":
@@ -150,7 +154,7 @@ def validate_title_publication(receipt):
         review_request["part"] != "title"
         or review_request["evidence"] != title["request"]
         or review_request["candidate"]
-        != {"text": answer.title, "evidence_ids": expected.citation_ids()}
+        != {"text": answer.title, "evidence_ids": [s["scene_id"] for s in request["scenes"]]}
         or review_request["required_evidence_ids"] != []
     ):
         raise ValueError("title review read another candidate or body")
@@ -161,7 +165,7 @@ def validate_title_publication(receipt):
         or not assessment.passes
         or not used
         or len(set(used)) != len(used)
-        or not set(used) <= set(expected.citation_ids())
+        or not set(used) <= {s["scene_id"] for s in request["scenes"]}
         or SemanticReview.model_validate(json.loads(review["raw_text"])) != assessment
     ):
         raise ValueError("published title has no matching passed review")

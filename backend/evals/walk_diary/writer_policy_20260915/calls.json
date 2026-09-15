@@ -1,0 +1,2654 @@
+[
+  {
+    "scene_id": "stamp:6a0287e193884ccffc4fd973226a64bd68d9c4193d6ec5713c857e354b85b56c",
+    "stage": "space",
+    "request": {
+      "version": "space-writing-brief-v1",
+      "part": "space",
+      "style": {
+        "language": "ko",
+        "tense": "past",
+        "genre": "walk_diary"
+      },
+      "citation_ids": [
+        "nf:0e174f4b10bfab4382c0a2472632de7bf6bc20cdf8a1a723c718595fd8b12a74",
+        "nf:68c4b75c38fe414a4ac49a4f38c91485aea981ae07b79cc47100a43ce767da9d",
+        "nf:81ab0387b7197262534458e89478e7a72cd602fd3389ac6c3414a773064c5ee7",
+        "nf:674c02cfa6131269e26f31aeed6dca65f4a37ef43d53dac01bfada0a7b9f7b89"
+      ],
+      "walk": {
+        "started_at": "2026-09-08T06:00:00+00:00",
+        "ended_at": "2026-09-08T06:15:00+00:00",
+        "selected_scene_count": 5
+      },
+      "current": {
+        "position": {
+          "scene_id": "stamp:6a0287e193884ccffc4fd973226a64bd68d9c4193d6ec5713c857e354b85b56c",
+          "selected_scene_number": 1,
+          "recorded_at": "2026-09-08T06:00:00+00:00",
+          "phase": "departure",
+          "seconds_since_start": 0.0
+        },
+        "position_basis": "observed",
+        "accuracy_m": 5.0
+      },
+      "available_facts": [
+        {
+          "id": "nf:0e174f4b10bfab4382c0a2472632de7bf6bc20cdf8a1a723c718595fd8b12a74",
+          "scene_id": "stamp:6a0287e193884ccffc4fd973226a64bd68d9c4193d6ec5713c857e354b85b56c",
+          "meaning": {
+            "kind": "road",
+            "name": "성내천로"
+          },
+          "scope": {
+            "kind": "address_reference"
+          }
+        },
+        {
+          "id": "nf:68c4b75c38fe414a4ac49a4f38c91485aea981ae07b79cc47100a43ce767da9d",
+          "scene_id": "stamp:6a0287e193884ccffc4fd973226a64bd68d9c4193d6ec5713c857e354b85b56c",
+          "meaning": {
+            "kind": "land_cover",
+            "label": "상업·업무시설"
+          },
+          "scope": {
+            "kind": "point_land_cover"
+          }
+        },
+        {
+          "id": "nf:81ab0387b7197262534458e89478e7a72cd602fd3389ac6c3414a773064c5ee7",
+          "scene_id": "stamp:6a0287e193884ccffc4fd973226a64bd68d9c4193d6ec5713c857e354b85b56c",
+          "meaning": {
+            "kind": "area_context",
+            "business_mix": "음식점·카페 중심",
+            "spatial_distribution": "clustered",
+            "radius_m": 1000.0
+          },
+          "scope": {
+            "kind": "surrounding_area",
+            "distribution_of": "business_locations"
+          }
+        },
+        {
+          "id": "nf:674c02cfa6131269e26f31aeed6dca65f4a37ef43d53dac01bfada0a7b9f7b89",
+          "scene_id": "stamp:6a0287e193884ccffc4fd973226a64bd68d9c4193d6ec5713c857e354b85b56c",
+          "meaning": {
+            "kind": "surrounding_object",
+            "name": "공원 1",
+            "park_type": "근린공원",
+            "distance_m": 213.776,
+            "area_m2": 4500.0
+          },
+          "scope": {
+            "kind": "object_reference_point"
+          }
+        }
+      ],
+      "relation_ids": []
+    },
+    "response_schema": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 220
+        },
+        "evidence_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "nf:0e174f4b10bfab4382c0a2472632de7bf6bc20cdf8a1a723c718595fd8b12a74",
+              "nf:68c4b75c38fe414a4ac49a4f38c91485aea981ae07b79cc47100a43ce767da9d",
+              "nf:81ab0387b7197262534458e89478e7a72cd602fd3389ac6c3414a773064c5ee7",
+              "nf:674c02cfa6131269e26f31aeed6dca65f4a37ef43d53dac01bfada0a7b9f7b89"
+            ]
+          }
+        },
+        "focus": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "relation_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 0
+        }
+      },
+      "required": [
+        "text",
+        "evidence_ids",
+        "focus",
+        "relation_ids"
+      ]
+    },
+    "request_revision": "c9a288d63523802a80c9f0e98c08455735115d99e11d2441af02d787d77a909b",
+    "status": "returned",
+    "raw_text": "{\n  \"text\": \"성내천로를 따라 상업 시설이 밀집한 거리를 지나 산책을 시작했다. 근처에 근린공원이 자리 잡고 있어 차분한 분위기 속에서 걸음을 옮겼다.\",\n  \"evidence_ids\": [\n    \"nf:0e174f4b10bfab4382c0a2472632de7bf6bc20cdf8a1a723c718595fd8b12a74\",\n    \"nf:68c4b75c38fe414a4ac49a4f38c91485aea981ae07b79cc47100a43ce767da9d\",\n    \"nf:81ab0387b7197262534458e89478e7a72cd602fd3389ac6c3414a773064c5ee7\",\n    \"nf:674c02cfa6131269e26f31aeed6dca65f4a37ef43d53dac01bfada0a7b9f7b89\"\n  ],\n  \"focus\": \"성내천로 주변의 상업 시설과 인근 근린공원의 위치\",\n  \"relation_ids\": []\n}",
+    "answer": {
+      "text": "성내천로를 따라 상업 시설이 밀집한 거리를 지나 산책을 시작했다. 근처에 근린공원이 자리 잡고 있어 차분한 분위기 속에서 걸음을 옮겼다.",
+      "evidence_ids": [
+        "nf:0e174f4b10bfab4382c0a2472632de7bf6bc20cdf8a1a723c718595fd8b12a74",
+        "nf:68c4b75c38fe414a4ac49a4f38c91485aea981ae07b79cc47100a43ce767da9d",
+        "nf:81ab0387b7197262534458e89478e7a72cd602fd3389ac6c3414a773064c5ee7",
+        "nf:674c02cfa6131269e26f31aeed6dca65f4a37ef43d53dac01bfada0a7b9f7b89"
+      ],
+      "focus": "성내천로 주변의 상업 시설과 인근 근린공원의 위치",
+      "relation_ids": []
+    }
+  },
+  {
+    "scene_id": "stamp:bc16fd93cbb2b3ec53d4243d58e792dfc28880c7d9d5073909181c3195e4e1c3",
+    "stage": "space",
+    "request": {
+      "version": "space-writing-brief-v1",
+      "part": "space",
+      "style": {
+        "language": "ko",
+        "tense": "past",
+        "genre": "walk_diary"
+      },
+      "citation_ids": [
+        "nf:0e174f4b10bfab4382c0a2472632de7bf6bc20cdf8a1a723c718595fd8b12a74",
+        "nf:68c4b75c38fe414a4ac49a4f38c91485aea981ae07b79cc47100a43ce767da9d",
+        "nf:81ab0387b7197262534458e89478e7a72cd602fd3389ac6c3414a773064c5ee7",
+        "nf:674c02cfa6131269e26f31aeed6dca65f4a37ef43d53dac01bfada0a7b9f7b89",
+        "nf:4cf7daaa03ea3f61b3ae9494eb7adcf8de35683da6d770431863c5afecbbaff9",
+        "nf:daff67864f7fbc00b5e4cc3aa6e82aef400cdc9acf914b5bc39cc6b95269a59c",
+        "nf:376a38a2b4409ed5e31f03b89af0facf85f837cc5c05aea31cdb284ba275fb98",
+        "nf:914930e9f766d6919ae1cc4ecec4627efbb4794e37bfe1a101da9d0fd823ed9c",
+        "journey:5a4bccb00745119e58e156bdfdf9f1cc70ee4ec7f7a4597099681396b8ef5112",
+        "nr:0b3b5fa03aa898b12f5e5002c77fa6c18b5cb9257a160971b257d962d723036e",
+        "nr:443db8d3f210b8d62b89b7af69827ad9cf5a7fe318daa00c3c629bcb02e7c050",
+        "flow:5e2670d92ca9dc52fe951b101db7ff6b66dffda004907fdb3c0c3071f8349f0d"
+      ],
+      "walk": {
+        "started_at": "2026-09-08T06:00:00+00:00",
+        "ended_at": "2026-09-08T06:15:00+00:00",
+        "selected_scene_count": 5
+      },
+      "current": {
+        "position": {
+          "scene_id": "stamp:bc16fd93cbb2b3ec53d4243d58e792dfc28880c7d9d5073909181c3195e4e1c3",
+          "selected_scene_number": 2,
+          "recorded_at": "2026-09-08T06:03:00+00:00",
+          "phase": "in_progress",
+          "seconds_since_start": 180.0
+        },
+        "position_basis": "observed",
+        "accuracy_m": 5.0
+      },
+      "available_facts": [
+        {
+          "id": "nf:0e174f4b10bfab4382c0a2472632de7bf6bc20cdf8a1a723c718595fd8b12a74",
+          "scene_id": "stamp:6a0287e193884ccffc4fd973226a64bd68d9c4193d6ec5713c857e354b85b56c",
+          "meaning": {
+            "kind": "road",
+            "name": "성내천로"
+          },
+          "scope": {
+            "kind": "address_reference"
+          }
+        },
+        {
+          "id": "nf:68c4b75c38fe414a4ac49a4f38c91485aea981ae07b79cc47100a43ce767da9d",
+          "scene_id": "stamp:6a0287e193884ccffc4fd973226a64bd68d9c4193d6ec5713c857e354b85b56c",
+          "meaning": {
+            "kind": "land_cover",
+            "label": "상업·업무시설"
+          },
+          "scope": {
+            "kind": "point_land_cover"
+          }
+        },
+        {
+          "id": "nf:81ab0387b7197262534458e89478e7a72cd602fd3389ac6c3414a773064c5ee7",
+          "scene_id": "stamp:6a0287e193884ccffc4fd973226a64bd68d9c4193d6ec5713c857e354b85b56c",
+          "meaning": {
+            "kind": "area_context",
+            "business_mix": "음식점·카페 중심",
+            "spatial_distribution": "clustered",
+            "radius_m": 1000.0
+          },
+          "scope": {
+            "kind": "surrounding_area",
+            "distribution_of": "business_locations"
+          }
+        },
+        {
+          "id": "nf:674c02cfa6131269e26f31aeed6dca65f4a37ef43d53dac01bfada0a7b9f7b89",
+          "scene_id": "stamp:6a0287e193884ccffc4fd973226a64bd68d9c4193d6ec5713c857e354b85b56c",
+          "meaning": {
+            "kind": "surrounding_object",
+            "name": "공원 1",
+            "park_type": "근린공원",
+            "distance_m": 213.776,
+            "area_m2": 4500.0
+          },
+          "scope": {
+            "kind": "object_reference_point"
+          }
+        },
+        {
+          "id": "nf:4cf7daaa03ea3f61b3ae9494eb7adcf8de35683da6d770431863c5afecbbaff9",
+          "scene_id": "stamp:bc16fd93cbb2b3ec53d4243d58e792dfc28880c7d9d5073909181c3195e4e1c3",
+          "meaning": {
+            "kind": "road",
+            "name": "성내천로"
+          },
+          "scope": {
+            "kind": "address_reference"
+          }
+        },
+        {
+          "id": "nf:daff67864f7fbc00b5e4cc3aa6e82aef400cdc9acf914b5bc39cc6b95269a59c",
+          "scene_id": "stamp:bc16fd93cbb2b3ec53d4243d58e792dfc28880c7d9d5073909181c3195e4e1c3",
+          "meaning": {
+            "kind": "surrounding_object",
+            "name": "공원 1",
+            "park_type": "근린공원",
+            "distance_m": 49.999,
+            "area_m2": 4500.0
+          },
+          "scope": {
+            "kind": "object_reference_point"
+          }
+        },
+        {
+          "id": "nf:376a38a2b4409ed5e31f03b89af0facf85f837cc5c05aea31cdb284ba275fb98",
+          "scene_id": "stamp:bc16fd93cbb2b3ec53d4243d58e792dfc28880c7d9d5073909181c3195e4e1c3",
+          "meaning": {
+            "kind": "area_context",
+            "business_mix": "음식점·카페 중심",
+            "spatial_distribution": "clustered",
+            "radius_m": 1000.0
+          },
+          "scope": {
+            "kind": "surrounding_area",
+            "distribution_of": "business_locations"
+          }
+        },
+        {
+          "id": "nf:914930e9f766d6919ae1cc4ecec4627efbb4794e37bfe1a101da9d0fd823ed9c",
+          "scene_id": "stamp:bc16fd93cbb2b3ec53d4243d58e792dfc28880c7d9d5073909181c3195e4e1c3",
+          "meaning": {
+            "kind": "land_cover",
+            "label": "상업·업무시설"
+          },
+          "scope": {
+            "kind": "point_land_cover"
+          }
+        }
+      ],
+      "relation_ids": [
+        "nr:0b3b5fa03aa898b12f5e5002c77fa6c18b5cb9257a160971b257d962d723036e",
+        "nr:443db8d3f210b8d62b89b7af69827ad9cf5a7fe318daa00c3c629bcb02e7c050",
+        "flow:5e2670d92ca9dc52fe951b101db7ff6b66dffda004907fdb3c0c3071f8349f0d"
+      ],
+      "earlier": {
+        "position": {
+          "scene_id": "stamp:6a0287e193884ccffc4fd973226a64bd68d9c4193d6ec5713c857e354b85b56c",
+          "selected_scene_number": 1,
+          "recorded_at": "2026-09-08T06:00:00+00:00",
+          "phase": "departure",
+          "seconds_since_start": 0.0
+        },
+        "position_basis": "observed",
+        "accuracy_m": 5.0
+      },
+      "connection": {
+        "earlier_scene_id": "stamp:6a0287e193884ccffc4fd973226a64bd68d9c4193d6ec5713c857e354b85b56c",
+        "current_scene_id": "stamp:bc16fd93cbb2b3ec53d4243d58e792dfc28880c7d9d5073909181c3195e4e1c3",
+        "elapsed_seconds": 180.0,
+        "route_evidence_ids": [
+          "journey:5a4bccb00745119e58e156bdfdf9f1cc70ee4ec7f7a4597099681396b8ef5112"
+        ]
+      },
+      "route": {
+        "id": "journey:5a4bccb00745119e58e156bdfdf9f1cc70ee4ec7f7a4597099681396b8ef5112",
+        "status": "connected",
+        "started_at": "2026-09-08T06:00:00+00:00",
+        "ended_at": "2026-09-08T06:03:00+00:00",
+        "elapsed_seconds": 180.0,
+        "covered_seconds": 180.0,
+        "distance_m": 180.0,
+        "moving_distance_m": 180.0,
+        "gaps": [],
+        "scope": {
+          "kind": "walk_interval",
+          "spatial_support": "endpoints"
+        }
+      },
+      "relation_slots": {
+        "background": [
+          {
+            "id": "nr:0b3b5fa03aa898b12f5e5002c77fa6c18b5cb9257a160971b257d962d723036e",
+            "family": "road",
+            "axis": "record_location",
+            "earlier_evidence_ids": [
+              "nf:0e174f4b10bfab4382c0a2472632de7bf6bc20cdf8a1a723c718595fd8b12a74"
+            ],
+            "current_evidence_ids": [
+              "nf:4cf7daaa03ea3f61b3ae9494eb7adcf8de35683da6d770431863c5afecbbaff9"
+            ],
+            "scope": {
+              "kind": "endpoint_comparison"
+            },
+            "relationship": "shared_background"
+          },
+          {
+            "id": "nr:443db8d3f210b8d62b89b7af69827ad9cf5a7fe318daa00c3c629bcb02e7c050",
+            "family": "land_cover",
+            "axis": "record_location",
+            "earlier_evidence_ids": [
+              "nf:68c4b75c38fe414a4ac49a4f38c91485aea981ae07b79cc47100a43ce767da9d"
+            ],
+            "current_evidence_ids": [
+              "nf:914930e9f766d6919ae1cc4ecec4627efbb4794e37bfe1a101da9d0fd823ed9c"
+            ],
+            "scope": {
+              "kind": "endpoint_comparison"
+            },
+            "relationship": "shared_background"
+          }
+        ]
+      },
+      "journey_relations": [
+        {
+          "id": "flow:5e2670d92ca9dc52fe951b101db7ff6b66dffda004907fdb3c0c3071f8349f0d",
+          "relationship": "drawing_closer",
+          "interval": {
+            "started_at": "2026-09-08T06:00:00+00:00",
+            "ended_at": "2026-09-08T06:03:00+00:00"
+          },
+          "target": {
+            "name": "공원 1",
+            "scope": "reference_point"
+          },
+          "distance_profile": [
+            {
+              "at": "2026-09-08T06:00:00+00:00",
+              "meters": 213.775,
+              "accuracy_m": 5.0
+            },
+            {
+              "at": "2026-09-08T06:03:00+00:00",
+              "meters": 49.999,
+              "accuracy_m": 5.0
+            }
+          ],
+          "sample_count": 37
+        }
+      ],
+      "delivery_memory": [
+        {
+          "selected_in_scene": "stamp:6a0287e193884ccffc4fd973226a64bd68d9c4193d6ec5713c857e354b85b56c",
+          "at": {
+            "position": {
+              "scene_id": "stamp:6a0287e193884ccffc4fd973226a64bd68d9c4193d6ec5713c857e354b85b56c",
+              "selected_scene_number": 1,
+              "recorded_at": "2026-09-08T06:00:00+00:00",
+              "phase": "departure",
+              "seconds_since_start": 0.0
+            },
+            "position_basis": "observed",
+            "accuracy_m": 5.0
+          },
+          "selected_facts": [
+            {
+              "id": "nf:0e174f4b10bfab4382c0a2472632de7bf6bc20cdf8a1a723c718595fd8b12a74",
+              "scene_id": "stamp:6a0287e193884ccffc4fd973226a64bd68d9c4193d6ec5713c857e354b85b56c",
+              "meaning": {
+                "kind": "road",
+                "name": "성내천로"
+              },
+              "scope": {
+                "kind": "address_reference"
+              }
+            },
+            {
+              "id": "nf:68c4b75c38fe414a4ac49a4f38c91485aea981ae07b79cc47100a43ce767da9d",
+              "scene_id": "stamp:6a0287e193884ccffc4fd973226a64bd68d9c4193d6ec5713c857e354b85b56c",
+              "meaning": {
+                "kind": "land_cover",
+                "label": "상업·업무시설"
+              },
+              "scope": {
+                "kind": "point_land_cover"
+              }
+            },
+            {
+              "id": "nf:81ab0387b7197262534458e89478e7a72cd602fd3389ac6c3414a773064c5ee7",
+              "scene_id": "stamp:6a0287e193884ccffc4fd973226a64bd68d9c4193d6ec5713c857e354b85b56c",
+              "meaning": {
+                "kind": "area_context",
+                "business_mix": "음식점·카페 중심",
+                "spatial_distribution": "clustered",
+                "radius_m": 1000.0
+              },
+              "scope": {
+                "kind": "surrounding_area",
+                "distribution_of": "business_locations"
+              }
+            },
+            {
+              "id": "nf:674c02cfa6131269e26f31aeed6dca65f4a37ef43d53dac01bfada0a7b9f7b89",
+              "scene_id": "stamp:6a0287e193884ccffc4fd973226a64bd68d9c4193d6ec5713c857e354b85b56c",
+              "meaning": {
+                "kind": "surrounding_object",
+                "name": "공원 1",
+                "park_type": "근린공원",
+                "distance_m": 213.776,
+                "area_m2": 4500.0
+              },
+              "scope": {
+                "kind": "object_reference_point"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "response_schema": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 220
+        },
+        "evidence_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "nf:0e174f4b10bfab4382c0a2472632de7bf6bc20cdf8a1a723c718595fd8b12a74",
+              "nf:68c4b75c38fe414a4ac49a4f38c91485aea981ae07b79cc47100a43ce767da9d",
+              "nf:81ab0387b7197262534458e89478e7a72cd602fd3389ac6c3414a773064c5ee7",
+              "nf:674c02cfa6131269e26f31aeed6dca65f4a37ef43d53dac01bfada0a7b9f7b89",
+              "nf:4cf7daaa03ea3f61b3ae9494eb7adcf8de35683da6d770431863c5afecbbaff9",
+              "nf:daff67864f7fbc00b5e4cc3aa6e82aef400cdc9acf914b5bc39cc6b95269a59c",
+              "nf:376a38a2b4409ed5e31f03b89af0facf85f837cc5c05aea31cdb284ba275fb98",
+              "nf:914930e9f766d6919ae1cc4ecec4627efbb4794e37bfe1a101da9d0fd823ed9c",
+              "journey:5a4bccb00745119e58e156bdfdf9f1cc70ee4ec7f7a4597099681396b8ef5112",
+              "nr:0b3b5fa03aa898b12f5e5002c77fa6c18b5cb9257a160971b257d962d723036e",
+              "nr:443db8d3f210b8d62b89b7af69827ad9cf5a7fe318daa00c3c629bcb02e7c050",
+              "flow:5e2670d92ca9dc52fe951b101db7ff6b66dffda004907fdb3c0c3071f8349f0d"
+            ]
+          }
+        },
+        "focus": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "relation_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "nr:0b3b5fa03aa898b12f5e5002c77fa6c18b5cb9257a160971b257d962d723036e",
+              "nr:443db8d3f210b8d62b89b7af69827ad9cf5a7fe318daa00c3c629bcb02e7c050",
+              "flow:5e2670d92ca9dc52fe951b101db7ff6b66dffda004907fdb3c0c3071f8349f0d"
+            ]
+          }
+        }
+      },
+      "required": [
+        "text",
+        "evidence_ids",
+        "focus",
+        "relation_ids"
+      ]
+    },
+    "request_revision": "6d335688b339f1f3e31775f50b093f3adc3e7fb6546fcbc10e405169753ed08d",
+    "status": "returned",
+    "raw_text": "{\n  \"text\": \"성내천로를 따라 상업 시설이 밀집한 거리를 지나왔다. 어느덧 근린공원인 공원 1에 가까워졌다.\",\n  \"evidence_ids\": [\n    \"nf:4cf7daaa03ea3f61b3ae9494eb7adcf8de35683da6d770431863c5afecbbaff9\",\n    \"nf:daff67864f7fbc00b5e4cc3aa6e82aef400cdc9acf914b5bc39cc6b95269a59c\",\n    \"nf:914930e9f766d6919ae1cc4ecec4627efbb4794e37bfe1a101da9d0fd823ed9c\"\n  ],\n  \"focus\": \"성내천로를 따라 이동하며 공원 1에 가까워진 상황\",\n  \"relation_ids\": [\n    \"nr:0b3b5fa03aa898b12f5e5002c77fa6c18b5cb9257a160971b257d962d723036e\",\n    \"nr:443db8d3f210b8d62b89b7af69827ad9cf5a7fe318daa00c3c629bcb02e7c050\",\n    \"flow:5e2670d92ca9dc52fe951b101db7ff6b66dffda004907fdb3c0c3071f8349f0d\"\n  ]\n}",
+    "answer": {
+      "text": "성내천로를 따라 상업 시설이 밀집한 거리를 지나왔다. 어느덧 근린공원인 공원 1에 가까워졌다.",
+      "evidence_ids": [
+        "nf:4cf7daaa03ea3f61b3ae9494eb7adcf8de35683da6d770431863c5afecbbaff9",
+        "nf:daff67864f7fbc00b5e4cc3aa6e82aef400cdc9acf914b5bc39cc6b95269a59c",
+        "nf:914930e9f766d6919ae1cc4ecec4627efbb4794e37bfe1a101da9d0fd823ed9c"
+      ],
+      "focus": "성내천로를 따라 이동하며 공원 1에 가까워진 상황",
+      "relation_ids": [
+        "nr:0b3b5fa03aa898b12f5e5002c77fa6c18b5cb9257a160971b257d962d723036e",
+        "nr:443db8d3f210b8d62b89b7af69827ad9cf5a7fe318daa00c3c629bcb02e7c050",
+        "flow:5e2670d92ca9dc52fe951b101db7ff6b66dffda004907fdb3c0c3071f8349f0d"
+      ]
+    }
+  },
+  {
+    "scene_id": "stamp:bc16fd93cbb2b3ec53d4243d58e792dfc28880c7d9d5073909181c3195e4e1c3",
+    "stage": "action",
+    "request": {
+      "version": "action-writing-brief-v1",
+      "part": "action",
+      "style": {
+        "language": "ko",
+        "tense": "past",
+        "genre": "walk_diary"
+      },
+      "citation_ids": [
+        "event:c36128bce1df8fcf179818c51d98717caffe6de3c065a153537c3f7f0542548f",
+        "nf:4cf7daaa03ea3f61b3ae9494eb7adcf8de35683da6d770431863c5afecbbaff9",
+        "nf:914930e9f766d6919ae1cc4ecec4627efbb4794e37bfe1a101da9d0fd823ed9c",
+        "motion:860a8a8eb0ac55fc6ba861953748c66f4e43c6fa30681d6f570962ee9d6835c9"
+      ],
+      "walk": {
+        "started_at": "2026-09-08T06:00:00+00:00",
+        "ended_at": "2026-09-08T06:15:00+00:00",
+        "selected_scene_count": 5
+      },
+      "position": {
+        "scene_id": "stamp:bc16fd93cbb2b3ec53d4243d58e792dfc28880c7d9d5073909181c3195e4e1c3",
+        "selected_scene_number": 2,
+        "recorded_at": "2026-09-08T06:03:00+00:00",
+        "phase": "in_progress",
+        "seconds_since_start": 180.0
+      },
+      "required_event": {
+        "id": "event:c36128bce1df8fcf179818c51d98717caffe6de3c065a153537c3f7f0542548f",
+        "scene_id": "stamp:bc16fd93cbb2b3ec53d4243d58e792dfc28880c7d9d5073909181c3195e4e1c3",
+        "actor": {
+          "entity_type": "dog",
+          "pet_id": "same-area-dog",
+          "name": "보리"
+        },
+        "behavior": "sniffing",
+        "anchor": {
+          "event_at": "2026-09-08T06:03:00+00:00",
+          "time_basis": "event_time",
+          "position_basis": "observed",
+          "accuracy_m": 5.0
+        }
+      },
+      "required_evidence_ids": [
+        "event:c36128bce1df8fcf179818c51d98717caffe6de3c065a153537c3f7f0542548f"
+      ],
+      "context_options": [
+        {
+          "for_event_id": "event:c36128bce1df8fcf179818c51d98717caffe6de3c065a153537c3f7f0542548f",
+          "kind": "space",
+          "evidence": {
+            "id": "nf:4cf7daaa03ea3f61b3ae9494eb7adcf8de35683da6d770431863c5afecbbaff9",
+            "scene_id": "stamp:bc16fd93cbb2b3ec53d4243d58e792dfc28880c7d9d5073909181c3195e4e1c3",
+            "meaning": {
+              "kind": "road",
+              "name": "성내천로"
+            },
+            "scope": {
+              "kind": "address_reference"
+            }
+          }
+        },
+        {
+          "for_event_id": "event:c36128bce1df8fcf179818c51d98717caffe6de3c065a153537c3f7f0542548f",
+          "kind": "space",
+          "evidence": {
+            "id": "nf:914930e9f766d6919ae1cc4ecec4627efbb4794e37bfe1a101da9d0fd823ed9c",
+            "scene_id": "stamp:bc16fd93cbb2b3ec53d4243d58e792dfc28880c7d9d5073909181c3195e4e1c3",
+            "meaning": {
+              "kind": "land_cover",
+              "label": "상업·업무시설"
+            },
+            "scope": {
+              "kind": "point_land_cover"
+            }
+          }
+        },
+        {
+          "for_event_id": "event:c36128bce1df8fcf179818c51d98717caffe6de3c065a153537c3f7f0542548f",
+          "kind": "current_shape",
+          "evidence": {
+            "id": "motion:860a8a8eb0ac55fc6ba861953748c66f4e43c6fa30681d6f570962ee9d6835c9",
+            "meaning": "대체로 곧게 이동",
+            "relative_to_event": {
+              "start_seconds": -90.0,
+              "end_seconds": 150.0
+            },
+            "relationship": "walk_movement_coincident_with_event"
+          }
+        }
+      ]
+    },
+    "response_schema": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 220
+        },
+        "evidence_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "event:c36128bce1df8fcf179818c51d98717caffe6de3c065a153537c3f7f0542548f",
+              "nf:4cf7daaa03ea3f61b3ae9494eb7adcf8de35683da6d770431863c5afecbbaff9",
+              "nf:914930e9f766d6919ae1cc4ecec4627efbb4794e37bfe1a101da9d0fd823ed9c",
+              "motion:860a8a8eb0ac55fc6ba861953748c66f4e43c6fa30681d6f570962ee9d6835c9"
+            ]
+          }
+        }
+      },
+      "required": [
+        "text",
+        "evidence_ids"
+      ]
+    },
+    "request_revision": "beed057d803a7453fe5d5d8631941e6e7f15db6dfe7247a20121988df8ba4a05",
+    "status": "returned",
+    "raw_text": "{\n  \"text\": \"성내천로 상업 시설 근처를 지나던 보리가 잠시 멈춰 서서 냄새를 맡았다.\",\n  \"evidence_ids\": [\n    \"event:c36128bce1df8fcf179818c51d98717caffe6de3c065a153537c3f7f0542548f\",\n    \"nf:4cf7daaa03ea3f61b3ae9494eb7adcf8de35683da6d770431863c5afecbbaff9\",\n    \"nf:914930e9f766d6919ae1cc4ecec4627efbb4794e37bfe1a101da9d0fd823ed9c\"\n  ]\n}",
+    "answer": {
+      "text": "성내천로 상업 시설 근처를 지나던 보리가 잠시 멈춰 서서 냄새를 맡았다.",
+      "evidence_ids": [
+        "event:c36128bce1df8fcf179818c51d98717caffe6de3c065a153537c3f7f0542548f",
+        "nf:4cf7daaa03ea3f61b3ae9494eb7adcf8de35683da6d770431863c5afecbbaff9",
+        "nf:914930e9f766d6919ae1cc4ecec4627efbb4794e37bfe1a101da9d0fd823ed9c"
+      ]
+    }
+  },
+  {
+    "scene_id": "stamp:4191e7707d2e40f82af36ea591420a1a4c58a84a821a744689ce44d7d798e389",
+    "stage": "space",
+    "request": {
+      "version": "space-writing-brief-v1",
+      "part": "space",
+      "style": {
+        "language": "ko",
+        "tense": "past",
+        "genre": "walk_diary"
+      },
+      "citation_ids": [
+        "nf:4cf7daaa03ea3f61b3ae9494eb7adcf8de35683da6d770431863c5afecbbaff9",
+        "nf:daff67864f7fbc00b5e4cc3aa6e82aef400cdc9acf914b5bc39cc6b95269a59c",
+        "nf:376a38a2b4409ed5e31f03b89af0facf85f837cc5c05aea31cdb284ba275fb98",
+        "nf:914930e9f766d6919ae1cc4ecec4627efbb4794e37bfe1a101da9d0fd823ed9c",
+        "nf:86398f121495d5693998627c5d578f3a7f776b807480c74bc4b7ff585e9466bb",
+        "nf:57f0bddb47fc089baafecaadd8abb809386e2a35c7d92b43f594742703520b9f",
+        "nf:56cd16e9bba5e195ec1b7a3c437ab806e7f83d926de6a721977cdeb69f803860",
+        "nf:501c36c2d1f48bb1fbceaab945d315bba024cdaf28ed8109b123401c9a479bb5",
+        "journey:1df36d98b3263d4011e1ddb6ffe47e3ed9e565cd31383a24dbfa16b247d88421",
+        "nr:7339bc609dcb5fbfdec313751308806e18ea7827b7ac4cb180e611c728e22b95",
+        "nr:8f8a3a9b58636a43eefe8c6b703318ad753fb6edf0cceb36aa3a638d1253bce5",
+        "segment:dd800911ed44ecb85440b351675ddeba5c6d03a7454158e2ed5bebd7114ae03a",
+        "segment:80e3e8c8a334645a0373b60145d0bd49388e8a728e6108de65dd4a229bf8af9f",
+        "flow:4f319ee53b23bf59fede82ba9ff8777dc33cc8dd260b71eb329512be1b55ef58"
+      ],
+      "walk": {
+        "started_at": "2026-09-08T06:00:00+00:00",
+        "ended_at": "2026-09-08T06:15:00+00:00",
+        "selected_scene_count": 5
+      },
+      "current": {
+        "position": {
+          "scene_id": "stamp:4191e7707d2e40f82af36ea591420a1a4c58a84a821a744689ce44d7d798e389",
+          "selected_scene_number": 3,
+          "recorded_at": "2026-09-08T06:08:00+00:00",
+          "phase": "in_progress",
+          "seconds_since_start": 480.0
+        },
+        "position_basis": "observed",
+        "accuracy_m": 5.0
+      },
+      "available_facts": [
+        {
+          "id": "nf:4cf7daaa03ea3f61b3ae9494eb7adcf8de35683da6d770431863c5afecbbaff9",
+          "scene_id": "stamp:bc16fd93cbb2b3ec53d4243d58e792dfc28880c7d9d5073909181c3195e4e1c3",
+          "meaning": {
+            "kind": "road",
+            "name": "성내천로"
+          },
+          "scope": {
+            "kind": "address_reference"
+          }
+        },
+        {
+          "id": "nf:daff67864f7fbc00b5e4cc3aa6e82aef400cdc9acf914b5bc39cc6b95269a59c",
+          "scene_id": "stamp:bc16fd93cbb2b3ec53d4243d58e792dfc28880c7d9d5073909181c3195e4e1c3",
+          "meaning": {
+            "kind": "surrounding_object",
+            "name": "공원 1",
+            "park_type": "근린공원",
+            "distance_m": 49.999,
+            "area_m2": 4500.0
+          },
+          "scope": {
+            "kind": "object_reference_point"
+          }
+        },
+        {
+          "id": "nf:376a38a2b4409ed5e31f03b89af0facf85f837cc5c05aea31cdb284ba275fb98",
+          "scene_id": "stamp:bc16fd93cbb2b3ec53d4243d58e792dfc28880c7d9d5073909181c3195e4e1c3",
+          "meaning": {
+            "kind": "area_context",
+            "business_mix": "음식점·카페 중심",
+            "spatial_distribution": "clustered",
+            "radius_m": 1000.0
+          },
+          "scope": {
+            "kind": "surrounding_area",
+            "distribution_of": "business_locations"
+          }
+        },
+        {
+          "id": "nf:914930e9f766d6919ae1cc4ecec4627efbb4794e37bfe1a101da9d0fd823ed9c",
+          "scene_id": "stamp:bc16fd93cbb2b3ec53d4243d58e792dfc28880c7d9d5073909181c3195e4e1c3",
+          "meaning": {
+            "kind": "land_cover",
+            "label": "상업·업무시설"
+          },
+          "scope": {
+            "kind": "point_land_cover"
+          }
+        },
+        {
+          "id": "nf:86398f121495d5693998627c5d578f3a7f776b807480c74bc4b7ff585e9466bb",
+          "scene_id": "stamp:4191e7707d2e40f82af36ea591420a1a4c58a84a821a744689ce44d7d798e389",
+          "meaning": {
+            "kind": "road",
+            "name": "성내천로"
+          },
+          "scope": {
+            "kind": "address_reference"
+          }
+        },
+        {
+          "id": "nf:57f0bddb47fc089baafecaadd8abb809386e2a35c7d92b43f594742703520b9f",
+          "scene_id": "stamp:4191e7707d2e40f82af36ea591420a1a4c58a84a821a744689ce44d7d798e389",
+          "meaning": {
+            "kind": "land_cover",
+            "label": "상업·업무시설"
+          },
+          "scope": {
+            "kind": "point_land_cover"
+          }
+        },
+        {
+          "id": "nf:56cd16e9bba5e195ec1b7a3c437ab806e7f83d926de6a721977cdeb69f803860",
+          "scene_id": "stamp:4191e7707d2e40f82af36ea591420a1a4c58a84a821a744689ce44d7d798e389",
+          "meaning": {
+            "kind": "area_context",
+            "business_mix": "음식점·카페 중심",
+            "spatial_distribution": "clustered",
+            "radius_m": 1000.0
+          },
+          "scope": {
+            "kind": "surrounding_area",
+            "distribution_of": "business_locations"
+          }
+        },
+        {
+          "id": "nf:501c36c2d1f48bb1fbceaab945d315bba024cdaf28ed8109b123401c9a479bb5",
+          "scene_id": "stamp:4191e7707d2e40f82af36ea591420a1a4c58a84a821a744689ce44d7d798e389",
+          "meaning": {
+            "kind": "surrounding_object",
+            "name": "공원 1",
+            "park_type": "근린공원",
+            "distance_m": 184.39,
+            "area_m2": 4500.0
+          },
+          "scope": {
+            "kind": "object_reference_point"
+          }
+        }
+      ],
+      "relation_ids": [
+        "nr:7339bc609dcb5fbfdec313751308806e18ea7827b7ac4cb180e611c728e22b95",
+        "nr:8f8a3a9b58636a43eefe8c6b703318ad753fb6edf0cceb36aa3a638d1253bce5",
+        "segment:dd800911ed44ecb85440b351675ddeba5c6d03a7454158e2ed5bebd7114ae03a",
+        "segment:80e3e8c8a334645a0373b60145d0bd49388e8a728e6108de65dd4a229bf8af9f",
+        "flow:4f319ee53b23bf59fede82ba9ff8777dc33cc8dd260b71eb329512be1b55ef58"
+      ],
+      "earlier": {
+        "position": {
+          "scene_id": "stamp:bc16fd93cbb2b3ec53d4243d58e792dfc28880c7d9d5073909181c3195e4e1c3",
+          "selected_scene_number": 2,
+          "recorded_at": "2026-09-08T06:03:00+00:00",
+          "phase": "in_progress",
+          "seconds_since_start": 180.0
+        },
+        "position_basis": "observed",
+        "accuracy_m": 5.0
+      },
+      "connection": {
+        "earlier_scene_id": "stamp:bc16fd93cbb2b3ec53d4243d58e792dfc28880c7d9d5073909181c3195e4e1c3",
+        "current_scene_id": "stamp:4191e7707d2e40f82af36ea591420a1a4c58a84a821a744689ce44d7d798e389",
+        "elapsed_seconds": 300.0,
+        "route_evidence_ids": [
+          "journey:1df36d98b3263d4011e1ddb6ffe47e3ed9e565cd31383a24dbfa16b247d88421"
+        ]
+      },
+      "route": {
+        "id": "journey:1df36d98b3263d4011e1ddb6ffe47e3ed9e565cd31383a24dbfa16b247d88421",
+        "status": "connected",
+        "started_at": "2026-09-08T06:03:00+00:00",
+        "ended_at": "2026-09-08T06:08:00+00:00",
+        "elapsed_seconds": 300.0,
+        "covered_seconds": 300.0,
+        "distance_m": 210.0,
+        "moving_distance_m": 180.0,
+        "gaps": [],
+        "scope": {
+          "kind": "walk_interval",
+          "spatial_support": "endpoints"
+        }
+      },
+      "relation_slots": {
+        "background": [
+          {
+            "id": "nr:7339bc609dcb5fbfdec313751308806e18ea7827b7ac4cb180e611c728e22b95",
+            "family": "road",
+            "axis": "record_location",
+            "earlier_evidence_ids": [
+              "nf:4cf7daaa03ea3f61b3ae9494eb7adcf8de35683da6d770431863c5afecbbaff9"
+            ],
+            "current_evidence_ids": [
+              "nf:86398f121495d5693998627c5d578f3a7f776b807480c74bc4b7ff585e9466bb"
+            ],
+            "scope": {
+              "kind": "endpoint_comparison"
+            },
+            "relationship": "shared_background"
+          },
+          {
+            "id": "nr:8f8a3a9b58636a43eefe8c6b703318ad753fb6edf0cceb36aa3a638d1253bce5",
+            "family": "land_cover",
+            "axis": "record_location",
+            "earlier_evidence_ids": [
+              "nf:914930e9f766d6919ae1cc4ecec4627efbb4794e37bfe1a101da9d0fd823ed9c"
+            ],
+            "current_evidence_ids": [
+              "nf:57f0bddb47fc089baafecaadd8abb809386e2a35c7d92b43f594742703520b9f"
+            ],
+            "scope": {
+              "kind": "endpoint_comparison"
+            },
+            "relationship": "shared_background"
+          }
+        ]
+      },
+      "journey_relations": [
+        {
+          "id": "segment:dd800911ed44ecb85440b351675ddeba5c6d03a7454158e2ed5bebd7114ae03a",
+          "relationship": "turning_back",
+          "interval": {
+            "started_at": "2026-09-08T06:06:10+00:00",
+            "ended_at": "2026-09-08T06:09:10+00:00"
+          },
+          "support_started_at": "2026-09-08T06:06:10+00:00",
+          "support_ended_at": "2026-09-08T06:09:10+00:00",
+          "representative_event_at": "2026-09-08T06:07:15+00:00",
+          "event_time_precision": "estimated",
+          "certainty": "inferred",
+          "scope": {
+            "kind": "walk_movement_support_interval"
+          }
+        },
+        {
+          "id": "segment:80e3e8c8a334645a0373b60145d0bd49388e8a728e6108de65dd4a229bf8af9f",
+          "relationship": "carrying_on_straight",
+          "interval": {
+            "started_at": "2026-09-08T06:00:00+00:00",
+            "ended_at": "2026-09-08T06:08:00+00:00"
+          },
+          "support_started_at": "2026-09-08T06:00:00+00:00",
+          "support_ended_at": "2026-09-08T06:08:00+00:00",
+          "certainty": "inferred",
+          "scope": {
+            "kind": "walk_movement_support_interval"
+          }
+        },
+        {
+          "id": "flow:4f319ee53b23bf59fede82ba9ff8777dc33cc8dd260b71eb329512be1b55ef58",
+          "relationship": "drawing_closer_then_away",
+          "interval": {
+            "started_at": "2026-09-08T06:00:00+00:00",
+            "ended_at": "2026-09-08T06:04:15+00:00"
+          },
+          "target": {
+            "name": "공원 1",
+            "scope": "reference_point"
+          },
+          "distance_profile": [
+            {
+              "at": "2026-09-08T06:00:00+00:00",
+              "meters": 213.775,
+              "accuracy_m": 5.0
+            },
+            {
+              "at": "2026-09-08T06:03:30+00:00",
+              "meters": 39.999,
+              "accuracy_m": 5.0
+            },
+            {
+              "at": "2026-09-08T06:04:15+00:00",
+              "meters": 60.207,
+              "accuracy_m": 5.0
+            }
+          ],
+          "sample_count": 52
+        }
+      ],
+      "delivery_memory": [
+        {
+          "selected_in_scene": "stamp:6a0287e193884ccffc4fd973226a64bd68d9c4193d6ec5713c857e354b85b56c",
+          "at": {
+            "position": {
+              "scene_id": "stamp:6a0287e193884ccffc4fd973226a64bd68d9c4193d6ec5713c857e354b85b56c",
+              "selected_scene_number": 1,
+              "recorded_at": "2026-09-08T06:00:00+00:00",
+              "phase": "departure",
+              "seconds_since_start": 0.0
+            },
+            "position_basis": "observed",
+            "accuracy_m": 5.0
+          },
+          "selected_facts": [
+            {
+              "id": "nf:0e174f4b10bfab4382c0a2472632de7bf6bc20cdf8a1a723c718595fd8b12a74",
+              "scene_id": "stamp:6a0287e193884ccffc4fd973226a64bd68d9c4193d6ec5713c857e354b85b56c",
+              "meaning": {
+                "kind": "road",
+                "name": "성내천로"
+              },
+              "scope": {
+                "kind": "address_reference"
+              }
+            },
+            {
+              "id": "nf:68c4b75c38fe414a4ac49a4f38c91485aea981ae07b79cc47100a43ce767da9d",
+              "scene_id": "stamp:6a0287e193884ccffc4fd973226a64bd68d9c4193d6ec5713c857e354b85b56c",
+              "meaning": {
+                "kind": "land_cover",
+                "label": "상업·업무시설"
+              },
+              "scope": {
+                "kind": "point_land_cover"
+              }
+            },
+            {
+              "id": "nf:81ab0387b7197262534458e89478e7a72cd602fd3389ac6c3414a773064c5ee7",
+              "scene_id": "stamp:6a0287e193884ccffc4fd973226a64bd68d9c4193d6ec5713c857e354b85b56c",
+              "meaning": {
+                "kind": "area_context",
+                "business_mix": "음식점·카페 중심",
+                "spatial_distribution": "clustered",
+                "radius_m": 1000.0
+              },
+              "scope": {
+                "kind": "surrounding_area",
+                "distribution_of": "business_locations"
+              }
+            },
+            {
+              "id": "nf:674c02cfa6131269e26f31aeed6dca65f4a37ef43d53dac01bfada0a7b9f7b89",
+              "scene_id": "stamp:6a0287e193884ccffc4fd973226a64bd68d9c4193d6ec5713c857e354b85b56c",
+              "meaning": {
+                "kind": "surrounding_object",
+                "name": "공원 1",
+                "park_type": "근린공원",
+                "distance_m": 213.776,
+                "area_m2": 4500.0
+              },
+              "scope": {
+                "kind": "object_reference_point"
+              }
+            }
+          ]
+        },
+        {
+          "selected_in_scene": "stamp:bc16fd93cbb2b3ec53d4243d58e792dfc28880c7d9d5073909181c3195e4e1c3",
+          "at": {
+            "position": {
+              "scene_id": "stamp:bc16fd93cbb2b3ec53d4243d58e792dfc28880c7d9d5073909181c3195e4e1c3",
+              "selected_scene_number": 2,
+              "recorded_at": "2026-09-08T06:03:00+00:00",
+              "phase": "in_progress",
+              "seconds_since_start": 180.0
+            },
+            "position_basis": "observed",
+            "accuracy_m": 5.0
+          },
+          "selected_facts": [
+            {
+              "id": "nf:4cf7daaa03ea3f61b3ae9494eb7adcf8de35683da6d770431863c5afecbbaff9",
+              "scene_id": "stamp:bc16fd93cbb2b3ec53d4243d58e792dfc28880c7d9d5073909181c3195e4e1c3",
+              "meaning": {
+                "kind": "road",
+                "name": "성내천로"
+              },
+              "scope": {
+                "kind": "address_reference"
+              }
+            },
+            {
+              "id": "nf:daff67864f7fbc00b5e4cc3aa6e82aef400cdc9acf914b5bc39cc6b95269a59c",
+              "scene_id": "stamp:bc16fd93cbb2b3ec53d4243d58e792dfc28880c7d9d5073909181c3195e4e1c3",
+              "meaning": {
+                "kind": "surrounding_object",
+                "name": "공원 1",
+                "park_type": "근린공원",
+                "distance_m": 49.999,
+                "area_m2": 4500.0
+              },
+              "scope": {
+                "kind": "object_reference_point"
+              }
+            },
+            {
+              "id": "nf:914930e9f766d6919ae1cc4ecec4627efbb4794e37bfe1a101da9d0fd823ed9c",
+              "scene_id": "stamp:bc16fd93cbb2b3ec53d4243d58e792dfc28880c7d9d5073909181c3195e4e1c3",
+              "meaning": {
+                "kind": "land_cover",
+                "label": "상업·업무시설"
+              },
+              "scope": {
+                "kind": "point_land_cover"
+              }
+            }
+          ],
+          "selected_spatial_relations": [
+            {
+              "id": "nr:0b3b5fa03aa898b12f5e5002c77fa6c18b5cb9257a160971b257d962d723036e",
+              "family": "road",
+              "axis": "record_location",
+              "earlier_evidence_ids": [
+                "nf:0e174f4b10bfab4382c0a2472632de7bf6bc20cdf8a1a723c718595fd8b12a74"
+              ],
+              "current_evidence_ids": [
+                "nf:4cf7daaa03ea3f61b3ae9494eb7adcf8de35683da6d770431863c5afecbbaff9"
+              ],
+              "scope": {
+                "kind": "endpoint_comparison"
+              },
+              "relationship": "shared_background"
+            },
+            {
+              "id": "nr:443db8d3f210b8d62b89b7af69827ad9cf5a7fe318daa00c3c629bcb02e7c050",
+              "family": "land_cover",
+              "axis": "record_location",
+              "earlier_evidence_ids": [
+                "nf:68c4b75c38fe414a4ac49a4f38c91485aea981ae07b79cc47100a43ce767da9d"
+              ],
+              "current_evidence_ids": [
+                "nf:914930e9f766d6919ae1cc4ecec4627efbb4794e37bfe1a101da9d0fd823ed9c"
+              ],
+              "scope": {
+                "kind": "endpoint_comparison"
+              },
+              "relationship": "shared_background"
+            }
+          ],
+          "selected_interval_relations": [
+            {
+              "id": "flow:5e2670d92ca9dc52fe951b101db7ff6b66dffda004907fdb3c0c3071f8349f0d",
+              "relationship": "drawing_closer",
+              "interval": {
+                "started_at": "2026-09-08T06:00:00+00:00",
+                "ended_at": "2026-09-08T06:03:00+00:00"
+              },
+              "target": {
+                "name": "공원 1",
+                "scope": "reference_point"
+              },
+              "distance_profile": [
+                {
+                  "at": "2026-09-08T06:00:00+00:00",
+                  "meters": 213.775,
+                  "accuracy_m": 5.0
+                },
+                {
+                  "at": "2026-09-08T06:03:00+00:00",
+                  "meters": 49.999,
+                  "accuracy_m": 5.0
+                }
+              ],
+              "sample_count": 37
+            }
+          ]
+        }
+      ]
+    },
+    "response_schema": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 220
+        },
+        "evidence_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "nf:4cf7daaa03ea3f61b3ae9494eb7adcf8de35683da6d770431863c5afecbbaff9",
+              "nf:daff67864f7fbc00b5e4cc3aa6e82aef400cdc9acf914b5bc39cc6b95269a59c",
+              "nf:376a38a2b4409ed5e31f03b89af0facf85f837cc5c05aea31cdb284ba275fb98",
+              "nf:914930e9f766d6919ae1cc4ecec4627efbb4794e37bfe1a101da9d0fd823ed9c",
+              "nf:86398f121495d5693998627c5d578f3a7f776b807480c74bc4b7ff585e9466bb",
+              "nf:57f0bddb47fc089baafecaadd8abb809386e2a35c7d92b43f594742703520b9f",
+              "nf:56cd16e9bba5e195ec1b7a3c437ab806e7f83d926de6a721977cdeb69f803860",
+              "nf:501c36c2d1f48bb1fbceaab945d315bba024cdaf28ed8109b123401c9a479bb5",
+              "journey:1df36d98b3263d4011e1ddb6ffe47e3ed9e565cd31383a24dbfa16b247d88421",
+              "nr:7339bc609dcb5fbfdec313751308806e18ea7827b7ac4cb180e611c728e22b95",
+              "nr:8f8a3a9b58636a43eefe8c6b703318ad753fb6edf0cceb36aa3a638d1253bce5",
+              "segment:dd800911ed44ecb85440b351675ddeba5c6d03a7454158e2ed5bebd7114ae03a",
+              "segment:80e3e8c8a334645a0373b60145d0bd49388e8a728e6108de65dd4a229bf8af9f",
+              "flow:4f319ee53b23bf59fede82ba9ff8777dc33cc8dd260b71eb329512be1b55ef58"
+            ]
+          }
+        },
+        "focus": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "relation_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "nr:7339bc609dcb5fbfdec313751308806e18ea7827b7ac4cb180e611c728e22b95",
+              "nr:8f8a3a9b58636a43eefe8c6b703318ad753fb6edf0cceb36aa3a638d1253bce5",
+              "segment:dd800911ed44ecb85440b351675ddeba5c6d03a7454158e2ed5bebd7114ae03a",
+              "segment:80e3e8c8a334645a0373b60145d0bd49388e8a728e6108de65dd4a229bf8af9f",
+              "flow:4f319ee53b23bf59fede82ba9ff8777dc33cc8dd260b71eb329512be1b55ef58"
+            ]
+          }
+        }
+      },
+      "required": [
+        "text",
+        "evidence_ids",
+        "focus",
+        "relation_ids"
+      ]
+    },
+    "request_revision": "24e8d813422715f8a7ab847f7242c53ff371032f03f5e5c09340d83b99ba1bb6",
+    "status": "returned",
+    "raw_text": "{\n  \"text\": \"음식점과 카페가 밀집한 성내천로를 따라 걸었다. 근린공원인 공원 1에서 조금 멀어진 거리에서 산책을 이어갔다.\",\n  \"evidence_ids\": [\n    \"nf:86398f121495d5693998627c5d578f3a7f776b807480c74bc4b7ff585e9466bb\",\n    \"nf:57f0bddb47fc089baafecaadd8abb809386e2a35c7d92b43f594742703520b9f\",\n    \"nf:56cd16e9bba5e195ec1b7a3c437ab806e7f83d926de6a721977cdeb69f803860\",\n    \"nf:501c36c2d1f48bb1fbceaab945d315bba024cdaf28ed8109b123401c9a479bb5\"\n  ],\n  \"focus\": \"성내천로의 상업 시설 밀집 지역을 지나며 공원 1로부터 멀어지는 경로를 기록함.\",\n  \"relation_ids\": [\n    \"nr:7339bc609dcb5fbfdec313751308806e18ea7827b7ac4cb180e611c728e22b95\",\n    \"nr:8f8a3a9b58636a43eefe8c6b703318ad753fb6edf0cceb36aa3a638d1253bce5\",\n    \"flow:4f319ee53b23bf59fede82ba9ff8777dc33cc8dd260b71eb329512be1b55ef58\"\n  ]\n}",
+    "answer": {
+      "text": "음식점과 카페가 밀집한 성내천로를 따라 걸었다. 근린공원인 공원 1에서 조금 멀어진 거리에서 산책을 이어갔다.",
+      "evidence_ids": [
+        "nf:86398f121495d5693998627c5d578f3a7f776b807480c74bc4b7ff585e9466bb",
+        "nf:57f0bddb47fc089baafecaadd8abb809386e2a35c7d92b43f594742703520b9f",
+        "nf:56cd16e9bba5e195ec1b7a3c437ab806e7f83d926de6a721977cdeb69f803860",
+        "nf:501c36c2d1f48bb1fbceaab945d315bba024cdaf28ed8109b123401c9a479bb5"
+      ],
+      "focus": "성내천로의 상업 시설 밀집 지역을 지나며 공원 1로부터 멀어지는 경로를 기록함.",
+      "relation_ids": [
+        "nr:7339bc609dcb5fbfdec313751308806e18ea7827b7ac4cb180e611c728e22b95",
+        "nr:8f8a3a9b58636a43eefe8c6b703318ad753fb6edf0cceb36aa3a638d1253bce5",
+        "flow:4f319ee53b23bf59fede82ba9ff8777dc33cc8dd260b71eb329512be1b55ef58"
+      ]
+    }
+  },
+  {
+    "scene_id": "stamp:4191e7707d2e40f82af36ea591420a1a4c58a84a821a744689ce44d7d798e389",
+    "stage": "action",
+    "request": {
+      "version": "action-writing-brief-v1",
+      "part": "action",
+      "style": {
+        "language": "ko",
+        "tense": "past",
+        "genre": "walk_diary"
+      },
+      "citation_ids": [
+        "event:ee97f97142e2031c93bb37dbe71f11035f208ddf9dd827d6d00b440e697ed546",
+        "nf:86398f121495d5693998627c5d578f3a7f776b807480c74bc4b7ff585e9466bb",
+        "nf:57f0bddb47fc089baafecaadd8abb809386e2a35c7d92b43f594742703520b9f",
+        "motion:1d4494cb7f3df558d05aa29ace651beadc60cda39c5dc96895bf545dc3f5697e"
+      ],
+      "walk": {
+        "started_at": "2026-09-08T06:00:00+00:00",
+        "ended_at": "2026-09-08T06:15:00+00:00",
+        "selected_scene_count": 5
+      },
+      "position": {
+        "scene_id": "stamp:4191e7707d2e40f82af36ea591420a1a4c58a84a821a744689ce44d7d798e389",
+        "selected_scene_number": 3,
+        "recorded_at": "2026-09-08T06:08:00+00:00",
+        "phase": "in_progress",
+        "seconds_since_start": 480.0
+      },
+      "required_event": {
+        "id": "event:ee97f97142e2031c93bb37dbe71f11035f208ddf9dd827d6d00b440e697ed546",
+        "scene_id": "stamp:4191e7707d2e40f82af36ea591420a1a4c58a84a821a744689ce44d7d798e389",
+        "actor": {
+          "entity_type": "dog",
+          "pet_id": "same-area-dog",
+          "name": "보리"
+        },
+        "behavior": "sniffing",
+        "anchor": {
+          "event_at": "2026-09-08T06:08:00+00:00",
+          "time_basis": "event_time",
+          "position_basis": "observed",
+          "accuracy_m": 5.0
+        }
+      },
+      "required_evidence_ids": [
+        "event:ee97f97142e2031c93bb37dbe71f11035f208ddf9dd827d6d00b440e697ed546"
+      ],
+      "context_options": [
+        {
+          "for_event_id": "event:ee97f97142e2031c93bb37dbe71f11035f208ddf9dd827d6d00b440e697ed546",
+          "kind": "space",
+          "evidence": {
+            "id": "nf:86398f121495d5693998627c5d578f3a7f776b807480c74bc4b7ff585e9466bb",
+            "scene_id": "stamp:4191e7707d2e40f82af36ea591420a1a4c58a84a821a744689ce44d7d798e389",
+            "meaning": {
+              "kind": "road",
+              "name": "성내천로"
+            },
+            "scope": {
+              "kind": "address_reference"
+            }
+          }
+        },
+        {
+          "for_event_id": "event:ee97f97142e2031c93bb37dbe71f11035f208ddf9dd827d6d00b440e697ed546",
+          "kind": "space",
+          "evidence": {
+            "id": "nf:57f0bddb47fc089baafecaadd8abb809386e2a35c7d92b43f594742703520b9f",
+            "scene_id": "stamp:4191e7707d2e40f82af36ea591420a1a4c58a84a821a744689ce44d7d798e389",
+            "meaning": {
+              "kind": "land_cover",
+              "label": "상업·업무시설"
+            },
+            "scope": {
+              "kind": "point_land_cover"
+            }
+          }
+        },
+        {
+          "for_event_id": "event:ee97f97142e2031c93bb37dbe71f11035f208ddf9dd827d6d00b440e697ed546",
+          "kind": "current_shape",
+          "evidence": {
+            "id": "motion:1d4494cb7f3df558d05aa29ace651beadc60cda39c5dc96895bf545dc3f5697e",
+            "meaning": "대체로 곧게 이동",
+            "relative_to_event": {
+              "start_seconds": 0.0,
+              "end_seconds": 40.0
+            },
+            "relationship": "walk_movement_coincident_with_event"
+          }
+        }
+      ]
+    },
+    "response_schema": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 220
+        },
+        "evidence_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "event:ee97f97142e2031c93bb37dbe71f11035f208ddf9dd827d6d00b440e697ed546",
+              "nf:86398f121495d5693998627c5d578f3a7f776b807480c74bc4b7ff585e9466bb",
+              "nf:57f0bddb47fc089baafecaadd8abb809386e2a35c7d92b43f594742703520b9f",
+              "motion:1d4494cb7f3df558d05aa29ace651beadc60cda39c5dc96895bf545dc3f5697e"
+            ]
+          }
+        }
+      },
+      "required": [
+        "text",
+        "evidence_ids"
+      ]
+    },
+    "request_revision": "f85161efc404aeb471bdd82568204c43989698bd2717447c6cb6699da141d326",
+    "status": "returned",
+    "raw_text": "{\n  \"text\": \"성내천로의 상업 시설 앞을 지나던 보리가 잠시 멈춰 서서 냄새를 맡았다.\",\n  \"evidence_ids\": [\n    \"event:ee97f97142e2031c93bb37dbe71f11035f208ddf9dd827d6d00b440e697ed546\",\n    \"nf:86398f121495d5693998627c5d578f3a7f776b807480c74bc4b7ff585e9466bb\",\n    \"nf:57f0bddb47fc089baafecaadd8abb809386e2a35c7d92b43f594742703520b9f\",\n    \"motion:1d4494cb7f3df558d05aa29ace651beadc60cda39c5dc96895bf545dc3f5697e\"\n  ]\n}",
+    "answer": {
+      "text": "성내천로의 상업 시설 앞을 지나던 보리가 잠시 멈춰 서서 냄새를 맡았다.",
+      "evidence_ids": [
+        "event:ee97f97142e2031c93bb37dbe71f11035f208ddf9dd827d6d00b440e697ed546",
+        "nf:86398f121495d5693998627c5d578f3a7f776b807480c74bc4b7ff585e9466bb",
+        "nf:57f0bddb47fc089baafecaadd8abb809386e2a35c7d92b43f594742703520b9f",
+        "motion:1d4494cb7f3df558d05aa29ace651beadc60cda39c5dc96895bf545dc3f5697e"
+      ]
+    }
+  },
+  {
+    "scene_id": "stamp:bd9787700079949f6a0a2ea820c60d225bd0ab3ed4e5aad7745855af76320b33",
+    "stage": "space",
+    "request": {
+      "version": "space-writing-brief-v1",
+      "part": "space",
+      "style": {
+        "language": "ko",
+        "tense": "past",
+        "genre": "walk_diary"
+      },
+      "citation_ids": [
+        "nf:86398f121495d5693998627c5d578f3a7f776b807480c74bc4b7ff585e9466bb",
+        "nf:57f0bddb47fc089baafecaadd8abb809386e2a35c7d92b43f594742703520b9f",
+        "nf:56cd16e9bba5e195ec1b7a3c437ab806e7f83d926de6a721977cdeb69f803860",
+        "nf:501c36c2d1f48bb1fbceaab945d315bba024cdaf28ed8109b123401c9a479bb5",
+        "nf:7ad8608d38b26c229f5fd6979b4eae5b88e4d8e1705395024340334857667790",
+        "nf:f589b7bcc296f750263859ceb55d564a2749686e0f0cef0baaf27e27446007e3",
+        "nf:a220f691338cbe92410ad81677209cffbe6c541720b5cbc00d6f84b5325b74fa",
+        "nf:be3a80eee455beb42a343794fade70a8e43ceb556873955d9b4985c114662344",
+        "journey:3541034617fc2e889f078e90a93a1a6df77c9830a2622b341255991e8c0b1121",
+        "nr:4e5c4ee83387e5f2851d022d490e33d40fd13a6fc5a99fbb1564a8963dcbaef0",
+        "nr:e7c16232e79b335c127bd6cd01eb0276c36266553d1cc26bce6ab14940cfb485",
+        "segment:67df185d9ff2191e54f4e562e5981634bd4fa5f9097809e201da31900cb59c0f",
+        "flow:5663cc0e5be17f4c532177ffc5e41953086a21a2f9c7b1764d2edd9bd679156a"
+      ],
+      "walk": {
+        "started_at": "2026-09-08T06:00:00+00:00",
+        "ended_at": "2026-09-08T06:15:00+00:00",
+        "selected_scene_count": 5
+      },
+      "current": {
+        "position": {
+          "scene_id": "stamp:bd9787700079949f6a0a2ea820c60d225bd0ab3ed4e5aad7745855af76320b33",
+          "selected_scene_number": 4,
+          "recorded_at": "2026-09-08T06:13:00+00:00",
+          "phase": "closing",
+          "seconds_since_start": 780.0
+        },
+        "position_basis": "observed",
+        "accuracy_m": 5.0
+      },
+      "available_facts": [
+        {
+          "id": "nf:86398f121495d5693998627c5d578f3a7f776b807480c74bc4b7ff585e9466bb",
+          "scene_id": "stamp:4191e7707d2e40f82af36ea591420a1a4c58a84a821a744689ce44d7d798e389",
+          "meaning": {
+            "kind": "road",
+            "name": "성내천로"
+          },
+          "scope": {
+            "kind": "address_reference"
+          }
+        },
+        {
+          "id": "nf:57f0bddb47fc089baafecaadd8abb809386e2a35c7d92b43f594742703520b9f",
+          "scene_id": "stamp:4191e7707d2e40f82af36ea591420a1a4c58a84a821a744689ce44d7d798e389",
+          "meaning": {
+            "kind": "land_cover",
+            "label": "상업·업무시설"
+          },
+          "scope": {
+            "kind": "point_land_cover"
+          }
+        },
+        {
+          "id": "nf:56cd16e9bba5e195ec1b7a3c437ab806e7f83d926de6a721977cdeb69f803860",
+          "scene_id": "stamp:4191e7707d2e40f82af36ea591420a1a4c58a84a821a744689ce44d7d798e389",
+          "meaning": {
+            "kind": "area_context",
+            "business_mix": "음식점·카페 중심",
+            "spatial_distribution": "clustered",
+            "radius_m": 1000.0
+          },
+          "scope": {
+            "kind": "surrounding_area",
+            "distribution_of": "business_locations"
+          }
+        },
+        {
+          "id": "nf:501c36c2d1f48bb1fbceaab945d315bba024cdaf28ed8109b123401c9a479bb5",
+          "scene_id": "stamp:4191e7707d2e40f82af36ea591420a1a4c58a84a821a744689ce44d7d798e389",
+          "meaning": {
+            "kind": "surrounding_object",
+            "name": "공원 1",
+            "park_type": "근린공원",
+            "distance_m": 184.39,
+            "area_m2": 4500.0
+          },
+          "scope": {
+            "kind": "object_reference_point"
+          }
+        },
+        {
+          "id": "nf:7ad8608d38b26c229f5fd6979b4eae5b88e4d8e1705395024340334857667790",
+          "scene_id": "stamp:bd9787700079949f6a0a2ea820c60d225bd0ab3ed4e5aad7745855af76320b33",
+          "meaning": {
+            "kind": "road",
+            "name": "성내천로"
+          },
+          "scope": {
+            "kind": "address_reference"
+          }
+        },
+        {
+          "id": "nf:f589b7bcc296f750263859ceb55d564a2749686e0f0cef0baaf27e27446007e3",
+          "scene_id": "stamp:bd9787700079949f6a0a2ea820c60d225bd0ab3ed4e5aad7745855af76320b33",
+          "meaning": {
+            "kind": "area_context",
+            "business_mix": "음식점·카페 중심",
+            "spatial_distribution": "clustered",
+            "radius_m": 1000.0
+          },
+          "scope": {
+            "kind": "surrounding_area",
+            "distribution_of": "business_locations"
+          }
+        },
+        {
+          "id": "nf:a220f691338cbe92410ad81677209cffbe6c541720b5cbc00d6f84b5325b74fa",
+          "scene_id": "stamp:bd9787700079949f6a0a2ea820c60d225bd0ab3ed4e5aad7745855af76320b33",
+          "meaning": {
+            "kind": "land_cover",
+            "label": "상업·업무시설"
+          },
+          "scope": {
+            "kind": "point_land_cover"
+          }
+        },
+        {
+          "id": "nf:be3a80eee455beb42a343794fade70a8e43ceb556873955d9b4985c114662344",
+          "scene_id": "stamp:bd9787700079949f6a0a2ea820c60d225bd0ab3ed4e5aad7745855af76320b33",
+          "meaning": {
+            "kind": "surrounding_object",
+            "name": "공원 1",
+            "park_type": "근린공원",
+            "distance_m": 98.488,
+            "area_m2": 4500.0
+          },
+          "scope": {
+            "kind": "object_reference_point"
+          }
+        }
+      ],
+      "relation_ids": [
+        "nr:4e5c4ee83387e5f2851d022d490e33d40fd13a6fc5a99fbb1564a8963dcbaef0",
+        "nr:e7c16232e79b335c127bd6cd01eb0276c36266553d1cc26bce6ab14940cfb485",
+        "segment:67df185d9ff2191e54f4e562e5981634bd4fa5f9097809e201da31900cb59c0f",
+        "flow:5663cc0e5be17f4c532177ffc5e41953086a21a2f9c7b1764d2edd9bd679156a"
+      ],
+      "earlier": {
+        "position": {
+          "scene_id": "stamp:4191e7707d2e40f82af36ea591420a1a4c58a84a821a744689ce44d7d798e389",
+          "selected_scene_number": 3,
+          "recorded_at": "2026-09-08T06:08:00+00:00",
+          "phase": "in_progress",
+          "seconds_since_start": 480.0
+        },
+        "position_basis": "observed",
+        "accuracy_m": 5.0
+      },
+      "connection": {
+        "earlier_scene_id": "stamp:4191e7707d2e40f82af36ea591420a1a4c58a84a821a744689ce44d7d798e389",
+        "current_scene_id": "stamp:bd9787700079949f6a0a2ea820c60d225bd0ab3ed4e5aad7745855af76320b33",
+        "elapsed_seconds": 300.0,
+        "route_evidence_ids": [
+          "journey:3541034617fc2e889f078e90a93a1a6df77c9830a2622b341255991e8c0b1121"
+        ]
+      },
+      "route": {
+        "id": "journey:3541034617fc2e889f078e90a93a1a6df77c9830a2622b341255991e8c0b1121",
+        "status": "connected",
+        "started_at": "2026-09-08T06:08:00+00:00",
+        "ended_at": "2026-09-08T06:13:00+00:00",
+        "elapsed_seconds": 300.0,
+        "covered_seconds": 300.0,
+        "distance_m": 270.0,
+        "moving_distance_m": 270.0,
+        "gaps": [],
+        "scope": {
+          "kind": "walk_interval",
+          "spatial_support": "endpoints"
+        }
+      },
+      "relation_slots": {
+        "background": [
+          {
+            "id": "nr:4e5c4ee83387e5f2851d022d490e33d40fd13a6fc5a99fbb1564a8963dcbaef0",
+            "family": "road",
+            "axis": "record_location",
+            "earlier_evidence_ids": [
+              "nf:86398f121495d5693998627c5d578f3a7f776b807480c74bc4b7ff585e9466bb"
+            ],
+            "current_evidence_ids": [
+              "nf:7ad8608d38b26c229f5fd6979b4eae5b88e4d8e1705395024340334857667790"
+            ],
+            "scope": {
+              "kind": "endpoint_comparison"
+            },
+            "relationship": "shared_background"
+          },
+          {
+            "id": "nr:e7c16232e79b335c127bd6cd01eb0276c36266553d1cc26bce6ab14940cfb485",
+            "family": "land_cover",
+            "axis": "record_location",
+            "earlier_evidence_ids": [
+              "nf:57f0bddb47fc089baafecaadd8abb809386e2a35c7d92b43f594742703520b9f"
+            ],
+            "current_evidence_ids": [
+              "nf:a220f691338cbe92410ad81677209cffbe6c541720b5cbc00d6f84b5325b74fa"
+            ],
+            "scope": {
+              "kind": "endpoint_comparison"
+            },
+            "relationship": "shared_background"
+          }
+        ]
+      },
+      "journey_relations": [
+        {
+          "id": "segment:67df185d9ff2191e54f4e562e5981634bd4fa5f9097809e201da31900cb59c0f",
+          "relationship": "retracing",
+          "interval": {
+            "started_at": "2026-09-08T06:08:40+00:00",
+            "ended_at": "2026-09-08T06:12:50+00:00"
+          },
+          "support_started_at": "2026-09-08T06:08:40+00:00",
+          "support_ended_at": "2026-09-08T06:12:50+00:00",
+          "certainty": "inferred",
+          "scope": {
+            "kind": "walk_movement_support_interval"
+          },
+          "prior_path": {
+            "relationship": "earlier_route_in_this_walk",
+            "matched_reverse_m": 224.9999999995773
+          }
+        },
+        {
+          "id": "flow:5663cc0e5be17f4c532177ffc5e41953086a21a2f9c7b1764d2edd9bd679156a",
+          "relationship": "drawing_closer_then_away",
+          "interval": {
+            "started_at": "2026-09-08T06:08:00+00:00",
+            "ended_at": "2026-09-08T06:12:15+00:00"
+          },
+          "target": {
+            "name": "공원 1",
+            "scope": "reference_point"
+          },
+          "distance_profile": [
+            {
+              "at": "2026-09-08T06:08:00+00:00",
+              "meters": 184.391,
+              "accuracy_m": 5.0
+            },
+            {
+              "at": "2026-09-08T06:11:30+00:00",
+              "meters": 39.999,
+              "accuracy_m": 5.0
+            },
+            {
+              "at": "2026-09-08T06:12:15+00:00",
+              "meters": 60.207,
+              "accuracy_m": 5.0
+            }
+          ],
+          "sample_count": 52
+        }
+      ],
+      "delivery_memory": [
+        {
+          "selected_in_scene": "stamp:bc16fd93cbb2b3ec53d4243d58e792dfc28880c7d9d5073909181c3195e4e1c3",
+          "at": {
+            "position": {
+              "scene_id": "stamp:bc16fd93cbb2b3ec53d4243d58e792dfc28880c7d9d5073909181c3195e4e1c3",
+              "selected_scene_number": 2,
+              "recorded_at": "2026-09-08T06:03:00+00:00",
+              "phase": "in_progress",
+              "seconds_since_start": 180.0
+            },
+            "position_basis": "observed",
+            "accuracy_m": 5.0
+          },
+          "selected_facts": [
+            {
+              "id": "nf:4cf7daaa03ea3f61b3ae9494eb7adcf8de35683da6d770431863c5afecbbaff9",
+              "scene_id": "stamp:bc16fd93cbb2b3ec53d4243d58e792dfc28880c7d9d5073909181c3195e4e1c3",
+              "meaning": {
+                "kind": "road",
+                "name": "성내천로"
+              },
+              "scope": {
+                "kind": "address_reference"
+              }
+            },
+            {
+              "id": "nf:daff67864f7fbc00b5e4cc3aa6e82aef400cdc9acf914b5bc39cc6b95269a59c",
+              "scene_id": "stamp:bc16fd93cbb2b3ec53d4243d58e792dfc28880c7d9d5073909181c3195e4e1c3",
+              "meaning": {
+                "kind": "surrounding_object",
+                "name": "공원 1",
+                "park_type": "근린공원",
+                "distance_m": 49.999,
+                "area_m2": 4500.0
+              },
+              "scope": {
+                "kind": "object_reference_point"
+              }
+            },
+            {
+              "id": "nf:914930e9f766d6919ae1cc4ecec4627efbb4794e37bfe1a101da9d0fd823ed9c",
+              "scene_id": "stamp:bc16fd93cbb2b3ec53d4243d58e792dfc28880c7d9d5073909181c3195e4e1c3",
+              "meaning": {
+                "kind": "land_cover",
+                "label": "상업·업무시설"
+              },
+              "scope": {
+                "kind": "point_land_cover"
+              }
+            }
+          ],
+          "selected_spatial_relations": [
+            {
+              "id": "nr:0b3b5fa03aa898b12f5e5002c77fa6c18b5cb9257a160971b257d962d723036e",
+              "family": "road",
+              "axis": "record_location",
+              "earlier_evidence_ids": [
+                "nf:0e174f4b10bfab4382c0a2472632de7bf6bc20cdf8a1a723c718595fd8b12a74"
+              ],
+              "current_evidence_ids": [
+                "nf:4cf7daaa03ea3f61b3ae9494eb7adcf8de35683da6d770431863c5afecbbaff9"
+              ],
+              "scope": {
+                "kind": "endpoint_comparison"
+              },
+              "relationship": "shared_background"
+            },
+            {
+              "id": "nr:443db8d3f210b8d62b89b7af69827ad9cf5a7fe318daa00c3c629bcb02e7c050",
+              "family": "land_cover",
+              "axis": "record_location",
+              "earlier_evidence_ids": [
+                "nf:68c4b75c38fe414a4ac49a4f38c91485aea981ae07b79cc47100a43ce767da9d"
+              ],
+              "current_evidence_ids": [
+                "nf:914930e9f766d6919ae1cc4ecec4627efbb4794e37bfe1a101da9d0fd823ed9c"
+              ],
+              "scope": {
+                "kind": "endpoint_comparison"
+              },
+              "relationship": "shared_background"
+            }
+          ],
+          "selected_interval_relations": [
+            {
+              "id": "flow:5e2670d92ca9dc52fe951b101db7ff6b66dffda004907fdb3c0c3071f8349f0d",
+              "relationship": "drawing_closer",
+              "interval": {
+                "started_at": "2026-09-08T06:00:00+00:00",
+                "ended_at": "2026-09-08T06:03:00+00:00"
+              },
+              "target": {
+                "name": "공원 1",
+                "scope": "reference_point"
+              },
+              "distance_profile": [
+                {
+                  "at": "2026-09-08T06:00:00+00:00",
+                  "meters": 213.775,
+                  "accuracy_m": 5.0
+                },
+                {
+                  "at": "2026-09-08T06:03:00+00:00",
+                  "meters": 49.999,
+                  "accuracy_m": 5.0
+                }
+              ],
+              "sample_count": 37
+            }
+          ]
+        },
+        {
+          "selected_in_scene": "stamp:4191e7707d2e40f82af36ea591420a1a4c58a84a821a744689ce44d7d798e389",
+          "at": {
+            "position": {
+              "scene_id": "stamp:4191e7707d2e40f82af36ea591420a1a4c58a84a821a744689ce44d7d798e389",
+              "selected_scene_number": 3,
+              "recorded_at": "2026-09-08T06:08:00+00:00",
+              "phase": "in_progress",
+              "seconds_since_start": 480.0
+            },
+            "position_basis": "observed",
+            "accuracy_m": 5.0
+          },
+          "selected_facts": [
+            {
+              "id": "nf:86398f121495d5693998627c5d578f3a7f776b807480c74bc4b7ff585e9466bb",
+              "scene_id": "stamp:4191e7707d2e40f82af36ea591420a1a4c58a84a821a744689ce44d7d798e389",
+              "meaning": {
+                "kind": "road",
+                "name": "성내천로"
+              },
+              "scope": {
+                "kind": "address_reference"
+              }
+            },
+            {
+              "id": "nf:57f0bddb47fc089baafecaadd8abb809386e2a35c7d92b43f594742703520b9f",
+              "scene_id": "stamp:4191e7707d2e40f82af36ea591420a1a4c58a84a821a744689ce44d7d798e389",
+              "meaning": {
+                "kind": "land_cover",
+                "label": "상업·업무시설"
+              },
+              "scope": {
+                "kind": "point_land_cover"
+              }
+            },
+            {
+              "id": "nf:56cd16e9bba5e195ec1b7a3c437ab806e7f83d926de6a721977cdeb69f803860",
+              "scene_id": "stamp:4191e7707d2e40f82af36ea591420a1a4c58a84a821a744689ce44d7d798e389",
+              "meaning": {
+                "kind": "area_context",
+                "business_mix": "음식점·카페 중심",
+                "spatial_distribution": "clustered",
+                "radius_m": 1000.0
+              },
+              "scope": {
+                "kind": "surrounding_area",
+                "distribution_of": "business_locations"
+              }
+            },
+            {
+              "id": "nf:501c36c2d1f48bb1fbceaab945d315bba024cdaf28ed8109b123401c9a479bb5",
+              "scene_id": "stamp:4191e7707d2e40f82af36ea591420a1a4c58a84a821a744689ce44d7d798e389",
+              "meaning": {
+                "kind": "surrounding_object",
+                "name": "공원 1",
+                "park_type": "근린공원",
+                "distance_m": 184.39,
+                "area_m2": 4500.0
+              },
+              "scope": {
+                "kind": "object_reference_point"
+              }
+            }
+          ],
+          "selected_spatial_relations": [
+            {
+              "id": "nr:7339bc609dcb5fbfdec313751308806e18ea7827b7ac4cb180e611c728e22b95",
+              "family": "road",
+              "axis": "record_location",
+              "earlier_evidence_ids": [
+                "nf:4cf7daaa03ea3f61b3ae9494eb7adcf8de35683da6d770431863c5afecbbaff9"
+              ],
+              "current_evidence_ids": [
+                "nf:86398f121495d5693998627c5d578f3a7f776b807480c74bc4b7ff585e9466bb"
+              ],
+              "scope": {
+                "kind": "endpoint_comparison"
+              },
+              "relationship": "shared_background"
+            },
+            {
+              "id": "nr:8f8a3a9b58636a43eefe8c6b703318ad753fb6edf0cceb36aa3a638d1253bce5",
+              "family": "land_cover",
+              "axis": "record_location",
+              "earlier_evidence_ids": [
+                "nf:914930e9f766d6919ae1cc4ecec4627efbb4794e37bfe1a101da9d0fd823ed9c"
+              ],
+              "current_evidence_ids": [
+                "nf:57f0bddb47fc089baafecaadd8abb809386e2a35c7d92b43f594742703520b9f"
+              ],
+              "scope": {
+                "kind": "endpoint_comparison"
+              },
+              "relationship": "shared_background"
+            }
+          ],
+          "selected_interval_relations": [
+            {
+              "id": "flow:4f319ee53b23bf59fede82ba9ff8777dc33cc8dd260b71eb329512be1b55ef58",
+              "relationship": "drawing_closer_then_away",
+              "interval": {
+                "started_at": "2026-09-08T06:00:00+00:00",
+                "ended_at": "2026-09-08T06:04:15+00:00"
+              },
+              "target": {
+                "name": "공원 1",
+                "scope": "reference_point"
+              },
+              "distance_profile": [
+                {
+                  "at": "2026-09-08T06:00:00+00:00",
+                  "meters": 213.775,
+                  "accuracy_m": 5.0
+                },
+                {
+                  "at": "2026-09-08T06:03:30+00:00",
+                  "meters": 39.999,
+                  "accuracy_m": 5.0
+                },
+                {
+                  "at": "2026-09-08T06:04:15+00:00",
+                  "meters": 60.207,
+                  "accuracy_m": 5.0
+                }
+              ],
+              "sample_count": 52
+            }
+          ]
+        }
+      ]
+    },
+    "response_schema": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 220
+        },
+        "evidence_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "nf:86398f121495d5693998627c5d578f3a7f776b807480c74bc4b7ff585e9466bb",
+              "nf:57f0bddb47fc089baafecaadd8abb809386e2a35c7d92b43f594742703520b9f",
+              "nf:56cd16e9bba5e195ec1b7a3c437ab806e7f83d926de6a721977cdeb69f803860",
+              "nf:501c36c2d1f48bb1fbceaab945d315bba024cdaf28ed8109b123401c9a479bb5",
+              "nf:7ad8608d38b26c229f5fd6979b4eae5b88e4d8e1705395024340334857667790",
+              "nf:f589b7bcc296f750263859ceb55d564a2749686e0f0cef0baaf27e27446007e3",
+              "nf:a220f691338cbe92410ad81677209cffbe6c541720b5cbc00d6f84b5325b74fa",
+              "nf:be3a80eee455beb42a343794fade70a8e43ceb556873955d9b4985c114662344",
+              "journey:3541034617fc2e889f078e90a93a1a6df77c9830a2622b341255991e8c0b1121",
+              "nr:4e5c4ee83387e5f2851d022d490e33d40fd13a6fc5a99fbb1564a8963dcbaef0",
+              "nr:e7c16232e79b335c127bd6cd01eb0276c36266553d1cc26bce6ab14940cfb485",
+              "segment:67df185d9ff2191e54f4e562e5981634bd4fa5f9097809e201da31900cb59c0f",
+              "flow:5663cc0e5be17f4c532177ffc5e41953086a21a2f9c7b1764d2edd9bd679156a"
+            ]
+          }
+        },
+        "focus": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "relation_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "nr:4e5c4ee83387e5f2851d022d490e33d40fd13a6fc5a99fbb1564a8963dcbaef0",
+              "nr:e7c16232e79b335c127bd6cd01eb0276c36266553d1cc26bce6ab14940cfb485",
+              "segment:67df185d9ff2191e54f4e562e5981634bd4fa5f9097809e201da31900cb59c0f",
+              "flow:5663cc0e5be17f4c532177ffc5e41953086a21a2f9c7b1764d2edd9bd679156a"
+            ]
+          }
+        }
+      },
+      "required": [
+        "text",
+        "evidence_ids",
+        "focus",
+        "relation_ids"
+      ]
+    },
+    "request_revision": "fa8590078a938b51e4efa05f1b4b1792285b99c026947d818a07df9bc8c0b0bc",
+    "status": "returned",
+    "raw_text": "{\n  \"text\": \"음식점과 카페가 밀집한 성내천로를 따라 걸었다. 근린공원 근처를 지나며 산책을 마무리했다.\",\n  \"evidence_ids\": [\n    \"nf:7ad8608d38b26c229f5fd6979b4eae5b88e4d8e1705395024340334857667790\",\n    \"nf:f589b7bcc296f750263859ceb55d564a2749686e0f0cef0baaf27e27446007e3\",\n    \"nf:be3a80eee455beb42a343794fade70a8e43ceb556873955d9b4985c114662344\"\n  ],\n  \"focus\": \"성내천로 주변의 상업 시설과 근린공원 인근에서의 산책 마무리\",\n  \"relation_ids\": [\n    \"nr:4e5c4ee83387e5f2851d022d490e33d40fd13a6fc5a99fbb1564a8963dcbaef0\",\n    \"nr:e7c16232e79b335c127bd6cd01eb0276c36266553d1cc26bce6ab14940cfb485\"\n  ]\n}",
+    "answer": {
+      "text": "음식점과 카페가 밀집한 성내천로를 따라 걸었다. 근린공원 근처를 지나며 산책을 마무리했다.",
+      "evidence_ids": [
+        "nf:7ad8608d38b26c229f5fd6979b4eae5b88e4d8e1705395024340334857667790",
+        "nf:f589b7bcc296f750263859ceb55d564a2749686e0f0cef0baaf27e27446007e3",
+        "nf:be3a80eee455beb42a343794fade70a8e43ceb556873955d9b4985c114662344"
+      ],
+      "focus": "성내천로 주변의 상업 시설과 근린공원 인근에서의 산책 마무리",
+      "relation_ids": [
+        "nr:4e5c4ee83387e5f2851d022d490e33d40fd13a6fc5a99fbb1564a8963dcbaef0",
+        "nr:e7c16232e79b335c127bd6cd01eb0276c36266553d1cc26bce6ab14940cfb485"
+      ]
+    }
+  },
+  {
+    "scene_id": "stamp:bd9787700079949f6a0a2ea820c60d225bd0ab3ed4e5aad7745855af76320b33",
+    "stage": "action",
+    "request": {
+      "version": "action-writing-brief-v1",
+      "part": "action",
+      "style": {
+        "language": "ko",
+        "tense": "past",
+        "genre": "walk_diary"
+      },
+      "citation_ids": [
+        "event:320cf9590f36e9ee39cbfcc94278f0244b3513e5d9e3bb6f0a0c52b4171632a8",
+        "nf:7ad8608d38b26c229f5fd6979b4eae5b88e4d8e1705395024340334857667790",
+        "nf:a220f691338cbe92410ad81677209cffbe6c541720b5cbc00d6f84b5325b74fa",
+        "motion:ef0c77af14022aaa5b68252b1e19127369b3a73d4bb14c817523a1baeb947690"
+      ],
+      "walk": {
+        "started_at": "2026-09-08T06:00:00+00:00",
+        "ended_at": "2026-09-08T06:15:00+00:00",
+        "selected_scene_count": 5
+      },
+      "position": {
+        "scene_id": "stamp:bd9787700079949f6a0a2ea820c60d225bd0ab3ed4e5aad7745855af76320b33",
+        "selected_scene_number": 4,
+        "recorded_at": "2026-09-08T06:13:00+00:00",
+        "phase": "closing",
+        "seconds_since_start": 780.0
+      },
+      "required_event": {
+        "id": "event:320cf9590f36e9ee39cbfcc94278f0244b3513e5d9e3bb6f0a0c52b4171632a8",
+        "scene_id": "stamp:bd9787700079949f6a0a2ea820c60d225bd0ab3ed4e5aad7745855af76320b33",
+        "actor": {
+          "entity_type": "dog",
+          "pet_id": "same-area-dog",
+          "name": "보리"
+        },
+        "behavior": "sniffing",
+        "anchor": {
+          "event_at": "2026-09-08T06:13:00+00:00",
+          "time_basis": "event_time",
+          "position_basis": "observed",
+          "accuracy_m": 5.0
+        }
+      },
+      "required_evidence_ids": [
+        "event:320cf9590f36e9ee39cbfcc94278f0244b3513e5d9e3bb6f0a0c52b4171632a8"
+      ],
+      "context_options": [
+        {
+          "for_event_id": "event:320cf9590f36e9ee39cbfcc94278f0244b3513e5d9e3bb6f0a0c52b4171632a8",
+          "kind": "space",
+          "evidence": {
+            "id": "nf:7ad8608d38b26c229f5fd6979b4eae5b88e4d8e1705395024340334857667790",
+            "scene_id": "stamp:bd9787700079949f6a0a2ea820c60d225bd0ab3ed4e5aad7745855af76320b33",
+            "meaning": {
+              "kind": "road",
+              "name": "성내천로"
+            },
+            "scope": {
+              "kind": "address_reference"
+            }
+          }
+        },
+        {
+          "for_event_id": "event:320cf9590f36e9ee39cbfcc94278f0244b3513e5d9e3bb6f0a0c52b4171632a8",
+          "kind": "space",
+          "evidence": {
+            "id": "nf:a220f691338cbe92410ad81677209cffbe6c541720b5cbc00d6f84b5325b74fa",
+            "scene_id": "stamp:bd9787700079949f6a0a2ea820c60d225bd0ab3ed4e5aad7745855af76320b33",
+            "meaning": {
+              "kind": "land_cover",
+              "label": "상업·업무시설"
+            },
+            "scope": {
+              "kind": "point_land_cover"
+            }
+          }
+        },
+        {
+          "for_event_id": "event:320cf9590f36e9ee39cbfcc94278f0244b3513e5d9e3bb6f0a0c52b4171632a8",
+          "kind": "current_shape",
+          "evidence": {
+            "id": "motion:ef0c77af14022aaa5b68252b1e19127369b3a73d4bb14c817523a1baeb947690",
+            "meaning": "대체로 곧게 이동",
+            "relative_to_event": {
+              "start_seconds": -10.0,
+              "end_seconds": 60.0
+            },
+            "relationship": "walk_movement_coincident_with_event"
+          }
+        }
+      ]
+    },
+    "response_schema": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 220
+        },
+        "evidence_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "event:320cf9590f36e9ee39cbfcc94278f0244b3513e5d9e3bb6f0a0c52b4171632a8",
+              "nf:7ad8608d38b26c229f5fd6979b4eae5b88e4d8e1705395024340334857667790",
+              "nf:a220f691338cbe92410ad81677209cffbe6c541720b5cbc00d6f84b5325b74fa",
+              "motion:ef0c77af14022aaa5b68252b1e19127369b3a73d4bb14c817523a1baeb947690"
+            ]
+          }
+        }
+      },
+      "required": [
+        "text",
+        "evidence_ids"
+      ]
+    },
+    "request_revision": "adeed9e8e60bca440aa53482ebf4fd15fa754c773d7896259236a33c5085d409",
+    "status": "returned",
+    "raw_text": "{\n  \"text\": \"성내천로 상업 시설 근처를 곧게 걸어가던 보리가 잠시 멈춰 서서 냄새를 맡았다.\",\n  \"evidence_ids\": [\n    \"event:320cf9590f36e9ee39cbfcc94278f0244b3513e5d9e3bb6f0a0c52b4171632a8\",\n    \"nf:7ad8608d38b26c229f5fd6979b4eae5b88e4d8e1705395024340334857667790\",\n    \"nf:a220f691338cbe92410ad81677209cffbe6c541720b5cbc00d6f84b5325b74fa\",\n    \"motion:ef0c77af14022aaa5b68252b1e19127369b3a73d4bb14c817523a1baeb947690\"\n  ]\n}",
+    "answer": {
+      "text": "성내천로 상업 시설 근처를 곧게 걸어가던 보리가 잠시 멈춰 서서 냄새를 맡았다.",
+      "evidence_ids": [
+        "event:320cf9590f36e9ee39cbfcc94278f0244b3513e5d9e3bb6f0a0c52b4171632a8",
+        "nf:7ad8608d38b26c229f5fd6979b4eae5b88e4d8e1705395024340334857667790",
+        "nf:a220f691338cbe92410ad81677209cffbe6c541720b5cbc00d6f84b5325b74fa",
+        "motion:ef0c77af14022aaa5b68252b1e19127369b3a73d4bb14c817523a1baeb947690"
+      ]
+    }
+  },
+  {
+    "scene_id": "stamp:ba650fbb13e14c9266f6833b59a3ef0caa3a04765adc7f67c5858c1ef956bbff",
+    "stage": "space",
+    "request": {
+      "version": "space-writing-brief-v1",
+      "part": "space",
+      "style": {
+        "language": "ko",
+        "tense": "past",
+        "genre": "walk_diary"
+      },
+      "citation_ids": [
+        "nf:7ad8608d38b26c229f5fd6979b4eae5b88e4d8e1705395024340334857667790",
+        "nf:f589b7bcc296f750263859ceb55d564a2749686e0f0cef0baaf27e27446007e3",
+        "nf:a220f691338cbe92410ad81677209cffbe6c541720b5cbc00d6f84b5325b74fa",
+        "nf:be3a80eee455beb42a343794fade70a8e43ceb556873955d9b4985c114662344",
+        "nf:3abcda3522efe78fff93c460715bf358308da9b7d994da705f3d87940bb91779",
+        "nf:e4516a4433d9125ee94f0a9ca47b77dc1a1ad6fbfc56bb4c6ed81f34ae7db447",
+        "nf:b9ddd6f0fabe4c58c5e4ba6f2d34239411bfcb78e54c2b39e60d5258a6a7239c",
+        "nf:764517b737eaa3d00ba7929ce86e2d7136a7d99962d3e92ccb898073f8626628",
+        "journey:2edb30537effd2c8386f5f6fa1ac6ee22066e56efb4d999d58a254ea5d3ee7d6",
+        "nr:983610effcaca96f8837a379a62bd18138d861eb8e5c3a3101b2781951f2c390",
+        "nr:e52e13ecb1a677f39689728cda1483352e032dbbef1f761df102ae4aa4982177",
+        "segment:5aa9ba2b4080cf0cc60bed2ee13ba93cd77a3334ffffa9f1ce060f9319cdf332",
+        "segment:6cf9ac1c15759561d3a46d89c0d9249a688833df0e17bf1a055300e3faa94b51",
+        "flow:8df0da55ce5dd7497ddabcd03fa9df86b90292438e15f22b40d03541f135f814"
+      ],
+      "walk": {
+        "started_at": "2026-09-08T06:00:00+00:00",
+        "ended_at": "2026-09-08T06:15:00+00:00",
+        "selected_scene_count": 5
+      },
+      "current": {
+        "position": {
+          "scene_id": "stamp:ba650fbb13e14c9266f6833b59a3ef0caa3a04765adc7f67c5858c1ef956bbff",
+          "selected_scene_number": 5,
+          "recorded_at": "2026-09-08T06:15:00+00:00",
+          "phase": "closing",
+          "seconds_since_start": 900.0
+        },
+        "position_basis": "observed",
+        "accuracy_m": 5.0
+      },
+      "available_facts": [
+        {
+          "id": "nf:7ad8608d38b26c229f5fd6979b4eae5b88e4d8e1705395024340334857667790",
+          "scene_id": "stamp:bd9787700079949f6a0a2ea820c60d225bd0ab3ed4e5aad7745855af76320b33",
+          "meaning": {
+            "kind": "road",
+            "name": "성내천로"
+          },
+          "scope": {
+            "kind": "address_reference"
+          }
+        },
+        {
+          "id": "nf:f589b7bcc296f750263859ceb55d564a2749686e0f0cef0baaf27e27446007e3",
+          "scene_id": "stamp:bd9787700079949f6a0a2ea820c60d225bd0ab3ed4e5aad7745855af76320b33",
+          "meaning": {
+            "kind": "area_context",
+            "business_mix": "음식점·카페 중심",
+            "spatial_distribution": "clustered",
+            "radius_m": 1000.0
+          },
+          "scope": {
+            "kind": "surrounding_area",
+            "distribution_of": "business_locations"
+          }
+        },
+        {
+          "id": "nf:a220f691338cbe92410ad81677209cffbe6c541720b5cbc00d6f84b5325b74fa",
+          "scene_id": "stamp:bd9787700079949f6a0a2ea820c60d225bd0ab3ed4e5aad7745855af76320b33",
+          "meaning": {
+            "kind": "land_cover",
+            "label": "상업·업무시설"
+          },
+          "scope": {
+            "kind": "point_land_cover"
+          }
+        },
+        {
+          "id": "nf:be3a80eee455beb42a343794fade70a8e43ceb556873955d9b4985c114662344",
+          "scene_id": "stamp:bd9787700079949f6a0a2ea820c60d225bd0ab3ed4e5aad7745855af76320b33",
+          "meaning": {
+            "kind": "surrounding_object",
+            "name": "공원 1",
+            "park_type": "근린공원",
+            "distance_m": 98.488,
+            "area_m2": 4500.0
+          },
+          "scope": {
+            "kind": "object_reference_point"
+          }
+        },
+        {
+          "id": "nf:3abcda3522efe78fff93c460715bf358308da9b7d994da705f3d87940bb91779",
+          "scene_id": "stamp:ba650fbb13e14c9266f6833b59a3ef0caa3a04765adc7f67c5858c1ef956bbff",
+          "meaning": {
+            "kind": "road",
+            "name": "성내천로"
+          },
+          "scope": {
+            "kind": "address_reference"
+          }
+        },
+        {
+          "id": "nf:e4516a4433d9125ee94f0a9ca47b77dc1a1ad6fbfc56bb4c6ed81f34ae7db447",
+          "scene_id": "stamp:ba650fbb13e14c9266f6833b59a3ef0caa3a04765adc7f67c5858c1ef956bbff",
+          "meaning": {
+            "kind": "area_context",
+            "business_mix": "음식점·카페 중심",
+            "spatial_distribution": "clustered",
+            "radius_m": 1000.0
+          },
+          "scope": {
+            "kind": "surrounding_area",
+            "distribution_of": "business_locations"
+          }
+        },
+        {
+          "id": "nf:b9ddd6f0fabe4c58c5e4ba6f2d34239411bfcb78e54c2b39e60d5258a6a7239c",
+          "scene_id": "stamp:ba650fbb13e14c9266f6833b59a3ef0caa3a04765adc7f67c5858c1ef956bbff",
+          "meaning": {
+            "kind": "surrounding_object",
+            "name": "공원 1",
+            "park_type": "근린공원",
+            "distance_m": 213.776,
+            "area_m2": 4500.0
+          },
+          "scope": {
+            "kind": "object_reference_point"
+          }
+        },
+        {
+          "id": "nf:764517b737eaa3d00ba7929ce86e2d7136a7d99962d3e92ccb898073f8626628",
+          "scene_id": "stamp:ba650fbb13e14c9266f6833b59a3ef0caa3a04765adc7f67c5858c1ef956bbff",
+          "meaning": {
+            "kind": "land_cover",
+            "label": "상업·업무시설"
+          },
+          "scope": {
+            "kind": "point_land_cover"
+          }
+        }
+      ],
+      "relation_ids": [
+        "nr:983610effcaca96f8837a379a62bd18138d861eb8e5c3a3101b2781951f2c390",
+        "nr:e52e13ecb1a677f39689728cda1483352e032dbbef1f761df102ae4aa4982177",
+        "segment:5aa9ba2b4080cf0cc60bed2ee13ba93cd77a3334ffffa9f1ce060f9319cdf332",
+        "segment:6cf9ac1c15759561d3a46d89c0d9249a688833df0e17bf1a055300e3faa94b51",
+        "flow:8df0da55ce5dd7497ddabcd03fa9df86b90292438e15f22b40d03541f135f814"
+      ],
+      "earlier": {
+        "position": {
+          "scene_id": "stamp:bd9787700079949f6a0a2ea820c60d225bd0ab3ed4e5aad7745855af76320b33",
+          "selected_scene_number": 4,
+          "recorded_at": "2026-09-08T06:13:00+00:00",
+          "phase": "closing",
+          "seconds_since_start": 780.0
+        },
+        "position_basis": "observed",
+        "accuracy_m": 5.0
+      },
+      "connection": {
+        "earlier_scene_id": "stamp:bd9787700079949f6a0a2ea820c60d225bd0ab3ed4e5aad7745855af76320b33",
+        "current_scene_id": "stamp:ba650fbb13e14c9266f6833b59a3ef0caa3a04765adc7f67c5858c1ef956bbff",
+        "elapsed_seconds": 120.0,
+        "route_evidence_ids": [
+          "journey:2edb30537effd2c8386f5f6fa1ac6ee22066e56efb4d999d58a254ea5d3ee7d6"
+        ]
+      },
+      "route": {
+        "id": "journey:2edb30537effd2c8386f5f6fa1ac6ee22066e56efb4d999d58a254ea5d3ee7d6",
+        "status": "connected",
+        "started_at": "2026-09-08T06:13:00+00:00",
+        "ended_at": "2026-09-08T06:15:00+00:00",
+        "elapsed_seconds": 120.0,
+        "covered_seconds": 120.0,
+        "distance_m": 120.0,
+        "moving_distance_m": 120.0,
+        "gaps": [],
+        "scope": {
+          "kind": "walk_interval",
+          "spatial_support": "endpoints"
+        }
+      },
+      "relation_slots": {
+        "background": [
+          {
+            "id": "nr:983610effcaca96f8837a379a62bd18138d861eb8e5c3a3101b2781951f2c390",
+            "family": "road",
+            "axis": "record_location",
+            "earlier_evidence_ids": [
+              "nf:7ad8608d38b26c229f5fd6979b4eae5b88e4d8e1705395024340334857667790"
+            ],
+            "current_evidence_ids": [
+              "nf:3abcda3522efe78fff93c460715bf358308da9b7d994da705f3d87940bb91779"
+            ],
+            "scope": {
+              "kind": "endpoint_comparison"
+            },
+            "relationship": "shared_background"
+          },
+          {
+            "id": "nr:e52e13ecb1a677f39689728cda1483352e032dbbef1f761df102ae4aa4982177",
+            "family": "land_cover",
+            "axis": "record_location",
+            "earlier_evidence_ids": [
+              "nf:a220f691338cbe92410ad81677209cffbe6c541720b5cbc00d6f84b5325b74fa"
+            ],
+            "current_evidence_ids": [
+              "nf:764517b737eaa3d00ba7929ce86e2d7136a7d99962d3e92ccb898073f8626628"
+            ],
+            "scope": {
+              "kind": "endpoint_comparison"
+            },
+            "relationship": "shared_background"
+          }
+        ]
+      },
+      "journey_relations": [
+        {
+          "id": "segment:5aa9ba2b4080cf0cc60bed2ee13ba93cd77a3334ffffa9f1ce060f9319cdf332",
+          "relationship": "carrying_on_straight",
+          "interval": {
+            "started_at": "2026-09-08T06:08:00+00:00",
+            "ended_at": "2026-09-08T06:15:00+00:00"
+          },
+          "support_started_at": "2026-09-08T06:08:00+00:00",
+          "support_ended_at": "2026-09-08T06:15:00+00:00",
+          "certainty": "inferred",
+          "scope": {
+            "kind": "walk_movement_support_interval"
+          }
+        },
+        {
+          "id": "segment:6cf9ac1c15759561d3a46d89c0d9249a688833df0e17bf1a055300e3faa94b51",
+          "relationship": "coming_back",
+          "interval": {
+            "started_at": "2026-09-08T06:00:00+00:00",
+            "ended_at": "2026-09-08T06:15:00+00:00"
+          },
+          "start": {
+            "event_at": "2026-09-08T06:00:00+00:00",
+            "time_basis": "walk_time",
+            "position_basis": "observed",
+            "accuracy_m": 5.0
+          },
+          "end": {
+            "event_at": "2026-09-08T06:15:00+00:00",
+            "time_basis": "walk_time",
+            "position_basis": "observed",
+            "accuracy_m": 5.0
+          },
+          "distance_m": 0.0,
+          "tolerance_m": 10.0,
+          "scope": {
+            "kind": "session_endpoints"
+          }
+        },
+        {
+          "id": "flow:8df0da55ce5dd7497ddabcd03fa9df86b90292438e15f22b40d03541f135f814",
+          "relationship": "leaving_behind",
+          "interval": {
+            "started_at": "2026-09-08T06:13:00+00:00",
+            "ended_at": "2026-09-08T06:15:00+00:00"
+          },
+          "target": {
+            "name": "공원 1",
+            "scope": "reference_point"
+          },
+          "distance_profile": [
+            {
+              "at": "2026-09-08T06:13:00+00:00",
+              "meters": 98.488,
+              "accuracy_m": 5.0
+            },
+            {
+              "at": "2026-09-08T06:15:00+00:00",
+              "meters": 213.775,
+              "accuracy_m": 5.0
+            }
+          ],
+          "sample_count": 25
+        }
+      ],
+      "delivery_memory": [
+        {
+          "selected_in_scene": "stamp:4191e7707d2e40f82af36ea591420a1a4c58a84a821a744689ce44d7d798e389",
+          "at": {
+            "position": {
+              "scene_id": "stamp:4191e7707d2e40f82af36ea591420a1a4c58a84a821a744689ce44d7d798e389",
+              "selected_scene_number": 3,
+              "recorded_at": "2026-09-08T06:08:00+00:00",
+              "phase": "in_progress",
+              "seconds_since_start": 480.0
+            },
+            "position_basis": "observed",
+            "accuracy_m": 5.0
+          },
+          "selected_facts": [
+            {
+              "id": "nf:86398f121495d5693998627c5d578f3a7f776b807480c74bc4b7ff585e9466bb",
+              "scene_id": "stamp:4191e7707d2e40f82af36ea591420a1a4c58a84a821a744689ce44d7d798e389",
+              "meaning": {
+                "kind": "road",
+                "name": "성내천로"
+              },
+              "scope": {
+                "kind": "address_reference"
+              }
+            },
+            {
+              "id": "nf:57f0bddb47fc089baafecaadd8abb809386e2a35c7d92b43f594742703520b9f",
+              "scene_id": "stamp:4191e7707d2e40f82af36ea591420a1a4c58a84a821a744689ce44d7d798e389",
+              "meaning": {
+                "kind": "land_cover",
+                "label": "상업·업무시설"
+              },
+              "scope": {
+                "kind": "point_land_cover"
+              }
+            },
+            {
+              "id": "nf:56cd16e9bba5e195ec1b7a3c437ab806e7f83d926de6a721977cdeb69f803860",
+              "scene_id": "stamp:4191e7707d2e40f82af36ea591420a1a4c58a84a821a744689ce44d7d798e389",
+              "meaning": {
+                "kind": "area_context",
+                "business_mix": "음식점·카페 중심",
+                "spatial_distribution": "clustered",
+                "radius_m": 1000.0
+              },
+              "scope": {
+                "kind": "surrounding_area",
+                "distribution_of": "business_locations"
+              }
+            },
+            {
+              "id": "nf:501c36c2d1f48bb1fbceaab945d315bba024cdaf28ed8109b123401c9a479bb5",
+              "scene_id": "stamp:4191e7707d2e40f82af36ea591420a1a4c58a84a821a744689ce44d7d798e389",
+              "meaning": {
+                "kind": "surrounding_object",
+                "name": "공원 1",
+                "park_type": "근린공원",
+                "distance_m": 184.39,
+                "area_m2": 4500.0
+              },
+              "scope": {
+                "kind": "object_reference_point"
+              }
+            }
+          ],
+          "selected_spatial_relations": [
+            {
+              "id": "nr:7339bc609dcb5fbfdec313751308806e18ea7827b7ac4cb180e611c728e22b95",
+              "family": "road",
+              "axis": "record_location",
+              "earlier_evidence_ids": [
+                "nf:4cf7daaa03ea3f61b3ae9494eb7adcf8de35683da6d770431863c5afecbbaff9"
+              ],
+              "current_evidence_ids": [
+                "nf:86398f121495d5693998627c5d578f3a7f776b807480c74bc4b7ff585e9466bb"
+              ],
+              "scope": {
+                "kind": "endpoint_comparison"
+              },
+              "relationship": "shared_background"
+            },
+            {
+              "id": "nr:8f8a3a9b58636a43eefe8c6b703318ad753fb6edf0cceb36aa3a638d1253bce5",
+              "family": "land_cover",
+              "axis": "record_location",
+              "earlier_evidence_ids": [
+                "nf:914930e9f766d6919ae1cc4ecec4627efbb4794e37bfe1a101da9d0fd823ed9c"
+              ],
+              "current_evidence_ids": [
+                "nf:57f0bddb47fc089baafecaadd8abb809386e2a35c7d92b43f594742703520b9f"
+              ],
+              "scope": {
+                "kind": "endpoint_comparison"
+              },
+              "relationship": "shared_background"
+            }
+          ],
+          "selected_interval_relations": [
+            {
+              "id": "flow:4f319ee53b23bf59fede82ba9ff8777dc33cc8dd260b71eb329512be1b55ef58",
+              "relationship": "drawing_closer_then_away",
+              "interval": {
+                "started_at": "2026-09-08T06:00:00+00:00",
+                "ended_at": "2026-09-08T06:04:15+00:00"
+              },
+              "target": {
+                "name": "공원 1",
+                "scope": "reference_point"
+              },
+              "distance_profile": [
+                {
+                  "at": "2026-09-08T06:00:00+00:00",
+                  "meters": 213.775,
+                  "accuracy_m": 5.0
+                },
+                {
+                  "at": "2026-09-08T06:03:30+00:00",
+                  "meters": 39.999,
+                  "accuracy_m": 5.0
+                },
+                {
+                  "at": "2026-09-08T06:04:15+00:00",
+                  "meters": 60.207,
+                  "accuracy_m": 5.0
+                }
+              ],
+              "sample_count": 52
+            }
+          ]
+        },
+        {
+          "selected_in_scene": "stamp:bd9787700079949f6a0a2ea820c60d225bd0ab3ed4e5aad7745855af76320b33",
+          "at": {
+            "position": {
+              "scene_id": "stamp:bd9787700079949f6a0a2ea820c60d225bd0ab3ed4e5aad7745855af76320b33",
+              "selected_scene_number": 4,
+              "recorded_at": "2026-09-08T06:13:00+00:00",
+              "phase": "closing",
+              "seconds_since_start": 780.0
+            },
+            "position_basis": "observed",
+            "accuracy_m": 5.0
+          },
+          "selected_facts": [
+            {
+              "id": "nf:7ad8608d38b26c229f5fd6979b4eae5b88e4d8e1705395024340334857667790",
+              "scene_id": "stamp:bd9787700079949f6a0a2ea820c60d225bd0ab3ed4e5aad7745855af76320b33",
+              "meaning": {
+                "kind": "road",
+                "name": "성내천로"
+              },
+              "scope": {
+                "kind": "address_reference"
+              }
+            },
+            {
+              "id": "nf:f589b7bcc296f750263859ceb55d564a2749686e0f0cef0baaf27e27446007e3",
+              "scene_id": "stamp:bd9787700079949f6a0a2ea820c60d225bd0ab3ed4e5aad7745855af76320b33",
+              "meaning": {
+                "kind": "area_context",
+                "business_mix": "음식점·카페 중심",
+                "spatial_distribution": "clustered",
+                "radius_m": 1000.0
+              },
+              "scope": {
+                "kind": "surrounding_area",
+                "distribution_of": "business_locations"
+              }
+            },
+            {
+              "id": "nf:be3a80eee455beb42a343794fade70a8e43ceb556873955d9b4985c114662344",
+              "scene_id": "stamp:bd9787700079949f6a0a2ea820c60d225bd0ab3ed4e5aad7745855af76320b33",
+              "meaning": {
+                "kind": "surrounding_object",
+                "name": "공원 1",
+                "park_type": "근린공원",
+                "distance_m": 98.488,
+                "area_m2": 4500.0
+              },
+              "scope": {
+                "kind": "object_reference_point"
+              }
+            }
+          ],
+          "selected_spatial_relations": [
+            {
+              "id": "nr:4e5c4ee83387e5f2851d022d490e33d40fd13a6fc5a99fbb1564a8963dcbaef0",
+              "family": "road",
+              "axis": "record_location",
+              "earlier_evidence_ids": [
+                "nf:86398f121495d5693998627c5d578f3a7f776b807480c74bc4b7ff585e9466bb"
+              ],
+              "current_evidence_ids": [
+                "nf:7ad8608d38b26c229f5fd6979b4eae5b88e4d8e1705395024340334857667790"
+              ],
+              "scope": {
+                "kind": "endpoint_comparison"
+              },
+              "relationship": "shared_background"
+            },
+            {
+              "id": "nr:e7c16232e79b335c127bd6cd01eb0276c36266553d1cc26bce6ab14940cfb485",
+              "family": "land_cover",
+              "axis": "record_location",
+              "earlier_evidence_ids": [
+                "nf:57f0bddb47fc089baafecaadd8abb809386e2a35c7d92b43f594742703520b9f"
+              ],
+              "current_evidence_ids": [
+                "nf:a220f691338cbe92410ad81677209cffbe6c541720b5cbc00d6f84b5325b74fa"
+              ],
+              "scope": {
+                "kind": "endpoint_comparison"
+              },
+              "relationship": "shared_background"
+            }
+          ]
+        }
+      ]
+    },
+    "response_schema": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 220
+        },
+        "evidence_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "nf:7ad8608d38b26c229f5fd6979b4eae5b88e4d8e1705395024340334857667790",
+              "nf:f589b7bcc296f750263859ceb55d564a2749686e0f0cef0baaf27e27446007e3",
+              "nf:a220f691338cbe92410ad81677209cffbe6c541720b5cbc00d6f84b5325b74fa",
+              "nf:be3a80eee455beb42a343794fade70a8e43ceb556873955d9b4985c114662344",
+              "nf:3abcda3522efe78fff93c460715bf358308da9b7d994da705f3d87940bb91779",
+              "nf:e4516a4433d9125ee94f0a9ca47b77dc1a1ad6fbfc56bb4c6ed81f34ae7db447",
+              "nf:b9ddd6f0fabe4c58c5e4ba6f2d34239411bfcb78e54c2b39e60d5258a6a7239c",
+              "nf:764517b737eaa3d00ba7929ce86e2d7136a7d99962d3e92ccb898073f8626628",
+              "journey:2edb30537effd2c8386f5f6fa1ac6ee22066e56efb4d999d58a254ea5d3ee7d6",
+              "nr:983610effcaca96f8837a379a62bd18138d861eb8e5c3a3101b2781951f2c390",
+              "nr:e52e13ecb1a677f39689728cda1483352e032dbbef1f761df102ae4aa4982177",
+              "segment:5aa9ba2b4080cf0cc60bed2ee13ba93cd77a3334ffffa9f1ce060f9319cdf332",
+              "segment:6cf9ac1c15759561d3a46d89c0d9249a688833df0e17bf1a055300e3faa94b51",
+              "flow:8df0da55ce5dd7497ddabcd03fa9df86b90292438e15f22b40d03541f135f814"
+            ]
+          }
+        },
+        "focus": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "relation_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "nr:983610effcaca96f8837a379a62bd18138d861eb8e5c3a3101b2781951f2c390",
+              "nr:e52e13ecb1a677f39689728cda1483352e032dbbef1f761df102ae4aa4982177",
+              "segment:5aa9ba2b4080cf0cc60bed2ee13ba93cd77a3334ffffa9f1ce060f9319cdf332",
+              "segment:6cf9ac1c15759561d3a46d89c0d9249a688833df0e17bf1a055300e3faa94b51",
+              "flow:8df0da55ce5dd7497ddabcd03fa9df86b90292438e15f22b40d03541f135f814"
+            ]
+          }
+        }
+      },
+      "required": [
+        "text",
+        "evidence_ids",
+        "focus",
+        "relation_ids"
+      ]
+    },
+    "request_revision": "6e359e0a57d88092fe2efa3c41c58769f2dacacb9c63d3ecb7d62e1578dc957d",
+    "status": "returned",
+    "raw_text": "{\n  \"text\": \"성내천로를 따라 상업 시설이 밀집한 거리를 지나왔다. 근린공원과 멀어지며 산책을 마무리했다.\",\n  \"evidence_ids\": [\n    \"nf:3abcda3522efe78fff93c460715bf358308da9b7d994da705f3d87940bb91779\",\n    \"nf:e4516a4433d9125ee94f0a9ca47b77dc1a1ad6fbfc56bb4c6ed81f34ae7db447\",\n    \"nf:b9ddd6f0fabe4c58c5e4ba6f2d34239411bfcb78e54c2b39e60d5258a6a7239c\",\n    \"nf:764517b737eaa3d00ba7929ce86e2d7136a7d99962d3e92ccb898073f8626628\"\n  ],\n  \"focus\": \"성내천로 주변의 상업 시설과 공원으로부터 멀어지는 산책의 마지막 구간\",\n  \"relation_ids\": [\n    \"nr:983610effcaca96f8837a379a62bd18138d861eb8e5c3a3101b2781951f2c390\",\n    \"nr:e52e13ecb1a677f39689728cda1483352e032dbbef1f761df102ae4aa4982177\",\n    \"flow:8df0da55ce5dd7497ddabcd03fa9df86b90292438e15f22b40d03541f135f814\"\n  ]\n}",
+    "answer": {
+      "text": "성내천로를 따라 상업 시설이 밀집한 거리를 지나왔다. 근린공원과 멀어지며 산책을 마무리했다.",
+      "evidence_ids": [
+        "nf:3abcda3522efe78fff93c460715bf358308da9b7d994da705f3d87940bb91779",
+        "nf:e4516a4433d9125ee94f0a9ca47b77dc1a1ad6fbfc56bb4c6ed81f34ae7db447",
+        "nf:b9ddd6f0fabe4c58c5e4ba6f2d34239411bfcb78e54c2b39e60d5258a6a7239c",
+        "nf:764517b737eaa3d00ba7929ce86e2d7136a7d99962d3e92ccb898073f8626628"
+      ],
+      "focus": "성내천로 주변의 상업 시설과 공원으로부터 멀어지는 산책의 마지막 구간",
+      "relation_ids": [
+        "nr:983610effcaca96f8837a379a62bd18138d861eb8e5c3a3101b2781951f2c390",
+        "nr:e52e13ecb1a677f39689728cda1483352e032dbbef1f761df102ae4aa4982177",
+        "flow:8df0da55ce5dd7497ddabcd03fa9df86b90292438e15f22b40d03541f135f814"
+      ]
+    }
+  }
+]

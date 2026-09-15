@@ -235,6 +235,6 @@ async def test_same_meaning_is_suppressed_or_recovered_in_real_sequence(
     )
     assert len(space_calls) == (2 if first_fails else 1)
     if first_fails:
-        assert not space_calls[1]["delivery_memory"]
+        assert "delivery_memory" not in space_calls[1]
         assert result.prepared["snapshot"]["plans"][1]["state_transition"] == "recover_introduction"
     assert result.receipt["cards"][-1]["parts"]["space"]["status"] == "not_requested"

@@ -5,7 +5,7 @@
     uv run python tools/cardgen_compare.py --engine gemini --photos ... --out ../cardimage/out/_cardgen/gemini
 
 결과: `<out>/<사진>_<달>_s<seed>.png` 와 `<out>/results.jsonl` 한 줄씩 — 닮음·글자·아바타(검수),
-틀 밀림(`drift`), 제목판 어긋남(`plate_shift`), 걸린 시간(`seconds`, 서비스 쪽은 `service.seconds`).
+틀 밀림(`drift`), 제목판 어긋남(`plate_shift`, 못 재면 null), 걸린 시간(`seconds`, 서비스 쪽은 `service.seconds`).
 재시도는 하지 않는다(`judge_min=1`) — 한 장 한 장이 비교 표본이다.
 
 ⚠ 돈이 나간다: gemini 엔진 장당 약 $0.10, 검수 장당 몇 원, cardgen 은 Cloud Run L4 가 떠 있는 시간.

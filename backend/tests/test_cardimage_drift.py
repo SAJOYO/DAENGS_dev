@@ -32,3 +32,9 @@ def test_plate_shift_is_zero_on_template_and_follows_offset() -> None:
     tpl = Image.open(catalog.template_path(4, settings.cardimage_dir)).convert("RGB")
     assert plate_shift(tpl, card.plate) == 0
     assert plate_shift(ImageChops.offset(tpl, 0, 5), card.plate) == 5
+
+
+def test_plate_shift_is_none_when_plate_cannot_be_found() -> None:
+    card = catalog.get(4)
+    blank = Image.new("RGB", (994, 1582), (240, 240, 240))
+    assert plate_shift(blank, card.plate) is None

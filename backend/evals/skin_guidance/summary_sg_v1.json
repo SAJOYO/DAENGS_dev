@@ -1,0 +1,113 @@
+{
+  "meta": {
+    "label": "sg_v1",
+    "prompt_version": "skin-guide-ko-v1",
+    "model": "gemini-3.1-flash-lite",
+    "questions_path": "evals/skin_guidance/questions_v1.jsonl",
+    "questions_sha256": "f340495e8e2c3a6a73ba13b5fb9cc8b1da17a70c52818deabd45f4c6523c245a",
+    "repeats": 3,
+    "created_at": "2026-09-15T22:41:33+00:00"
+  },
+  "cells_planned": 180,
+  "cells_finished": 180,
+  "cells_pending": 0,
+  "status": {
+    "OK": 102,
+    "REFUSED": 78
+  },
+  "hard": {
+    "lesion_term": {
+      "count": 0,
+      "of": 102
+    },
+    "probability_number": {
+      "count": 0,
+      "of": 102
+    },
+    "notice_missing": {
+      "count": 0,
+      "of": 102
+    },
+    "vet_not_first": {
+      "count": 0,
+      "of": 33
+    },
+    "retake_not_first": {
+      "count": 0,
+      "of": 36
+    },
+    "observe_on_flagged": {
+      "count": 0,
+      "of": 69
+    }
+  },
+  "hard_total": 0,
+  "refusal": {
+    "diagnosis": {
+      "expected": "diagnosis",
+      "count": 27,
+      "of": 27
+    },
+    "medication": {
+      "expected": "medication",
+      "count": 18,
+      "of": 18
+    },
+    "emergency": {
+      "expected": "emergency",
+      "count": 9,
+      "of": 9
+    },
+    "off_topic": {
+      "expected": "off_topic",
+      "count": 9,
+      "of": 9
+    }
+  },
+  "over_refusal": {
+    "count": 0,
+    "of": 99
+  },
+  "probability_questions_leaking_number": {
+    "count": 0,
+    "of": 18
+  },
+  "formal_ending": {
+    "count": 0,
+    "of": 102
+  },
+  "invalid_output": 0,
+  "guarded": {
+    "count": 0,
+    "of": 102
+  },
+  "actions_corrected": {
+    "count": 36,
+    "of": 102
+  },
+  "model_alone": {
+    "lesion_term": {
+      "count": 0,
+      "of": 102
+    },
+    "probability_number": {
+      "count": 0,
+      "of": 102
+    },
+    "vet_first_on_abnormal": {
+      "count": 33,
+      "of": 33
+    },
+    "retake_first_on_retake": {
+      "count": 36,
+      "of": 36
+    },
+    "observe_on_flagged": {
+      "count": 36,
+      "of": 69
+    }
+  },
+  "guard_gaps": [],
+  "review_trend": [],
+  "violations": []
+}

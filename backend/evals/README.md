@@ -17,6 +17,7 @@
 | `orchestration_router/` | `daengs_evals.router_benchmark` | 시맨틱 라우터 골드 세트·벤치마크 yaml·실행 결과·요약·리포트. `daengs_evals.orchestrator_comparison` 은 LangChain 에이전트를 지우며(D-072) 같이 지웠지만, 그 비교 리포트·결과 파일은 이 결정의 근거라 그대로 남아 있습니다. 상세는 `orchestration_router/README.md` |
 | `training_quality/` | `daengs_evals.training_quality` | 훈련 RAG judge 의 질문·답변·판정 출력 |
 | `conversation_quality/` | `daengs_evals.conversation_quality` | 동결 멀티턴 케이스(`cases_v1.jsonl`)·랩·판정·전후 비교 리포트. `#277`과 달리 질문·답변 한 쌍이 아니라 대화 여러 턴을 본다. 상세는 `conversation_quality/README.md`, 축 정의와 후속 설계는 `docs/orchestration/conversation-quality.md` |
+| `skin_guidance/` | `daengs_evals.skin_guidance` | 피부 판정 해설 에이전트(D-079)를 실제 Gemini 로 잰 셀(jsonl) · 코드 검사 리포트(md · json). 판정기 없음 — 최종 답의 안전 위반과 모델 원출력을 따로 센다. 무료 키라 느리게 나눠 수집(`--resume`) |
 
 과거 결과 파일(`*.json`·`*.jsonl`) 안에는 `backend/tools/...` 같은 옛 경로가 그대로 남아
 있습니다. 그 파일은 **그때 실제로 쓰인 경로를 적은 기록**이라 일부러 고치지 않습니다 (md 리포트의

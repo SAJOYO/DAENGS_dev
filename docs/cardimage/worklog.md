@@ -3,6 +3,16 @@
 세션이 끝날 때마다 한 절씩 위에 추가한다 (최신이 위). 무엇을 했고, 무엇을 정했고, 무엇을
 다음 세션에 넘기는지. 조사 내용 자체는 `research-*.md` 에, 요약·현재 상태는 `README.md` 에.
 
+## 2026-09-15 밤 — #544 GPU 서비스 Task 7: Qwen-Image-Edit-2511 nf4 on L4 (잰 값만)
+
+- **가중치**: 잡 `cardgen-weights-7czsf` 성공 31분 3초(다운로드 30분 43초), 33파일 57.72GB(최대 9.99GB transformer 샤드), incomplete 0, 심볼릭 링크 33개 정상.
+- **1차 서비스** (이미지 `c917c96`, rev `00001-6dz`): Ready 25초, 로드 **1145.8초**(재시작·메모리 초과 없음). 카드 1장 → 확산 40/40 11분 19초(17s/step) 뒤 **CUDA OOM** — `autoencoder_kl_qwenimage` 정규화에서 612MiB 요청, GPU 22.03GiB 중 25MiB 남음, PyTorch 19.80GiB 할당·1.97GiB 예약만 됨. (처음엔 proxy 가 끊은 500 으로 추정했으나 서비스 Traceback 으로 반증.)
+- **수정**: `QwenModel.load` 에 `vae.enable_tiling()`(diffusers 0.40.0 에 있음을 임시 env 로 먼저 확인), Dockerfile `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True`, 테스트 1개(`96b5e6bf`). 이미지 재빌드 12분 54초 → `90a42ef`.
+- **2차 서비스** (rev `00002-zf2`): 새 이미지 첫 import 로 Ready 296초, 로드 **1237.8초**. 카드 1장 → 확산 11분 34초, 디코딩 ~4초, **200 OK (OOM 해결)**, 서비스 711.6초.
+  결과가 **깨짐**: 검수 닮음 2 · 글자 실패. 눈으로 보면 **틀의 갈색 푸들 그대로 + 화면 전체 고른 노이즈** — 강아지·아바타 교체가 일어나지 않았다(klein 은 교체됨). `cardimage/out/_cardgen/smoke-qwen/`.
+  원인은 가르지 못함(추정): text_encoder nf4 로 참조 이해 붕괴 / transformer nf4 로 디노이즈 붕괴 / VAE tiling. L4 에선 양자화를 빼면 메모리가 모자라 이 자리에서 싸게 가를 방법이 없다.
+- **판정**: L4 + nf4 로는 Qwen 비교 표본을 못 얻었다. 서빙 관점에서도 로드 ~20분·장당 ~12분이라 어렵다.
+
 ## 2026-09-15 오후 — #544 GPU 서비스 Task 6: klein 4B 배포·첫 카드 (잰 값만)
 
 계획 `plan-2026-09-15-cardgen-gpu.md` Task 1~5(코드) 뒤 첫 유료 단계. 사용자 승인 뒤 진행.

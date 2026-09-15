@@ -22,3 +22,11 @@ def test_cardimage_months_parses_csv(monkeypatch):
     monkeypatch.setenv("DAENGS_CARDIMAGE_MONTHS", "4, 9,12")
     s = Settings(_env_file=None)
     assert s.cardimage_months == frozenset({4, 9, 12})
+
+
+def test_cardgen_defaults_keep_gemini_path(monkeypatch):
+    for k in ("DAENGS_CARDGEN_URL", "DAENGS_CARDGEN_TIMEOUT_S"):
+        monkeypatch.delenv(k, raising=False)
+    s = Settings(_env_file=None)
+    assert s.cardgen_url == ""          # 비어 있으면 Nano Banana 2 (D-074) 그대로
+    assert s.cardgen_timeout_s == 900.0  # 콜드 스타트(가중치 로드) + 생성

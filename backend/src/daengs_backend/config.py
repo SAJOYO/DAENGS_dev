@@ -258,6 +258,13 @@ class Settings(BaseSettings):
     # 서버 전체 동시 생성 수. backend 프로세스 안 백그라운드 작업이라 스레드를 씁니다 (D-076).
     cardimage_concurrency: int = Field(default=2, ge=1, validation_alias=AliasChoices("DAENGS_CARDIMAGE_CONCURRENCY"))
 
+    # GPU 카드 생성 서비스(D-078, Cloud Run asia-southeast1 L4). **비어 있으면 Nano Banana 2(D-074)
+    # 그대로** — 되돌리기가 이 한 줄이다. ⚠ 앱 경로(`/app/ai-cards`)의 정리 기준은 아직
+    # `cardimage_timeout_ms` 만 보므로 콜드 스타트(가중치 로드 수 분)를 모른다 — #544 에서는 VM 에 넣지 않는다.
+    cardgen_url: str = Field(default="", validation_alias=AliasChoices("DAENGS_CARDGEN_URL"))
+    # 콜드 스타트 + 생성. `infra/gcp/cardgen.sh` 의 `--timeout=900` 과 맞춘다.
+    cardgen_timeout_s: float = Field(default=900.0, gt=0, validation_alias=AliasChoices("DAENGS_CARDGEN_TIMEOUT_S"))
+
     @field_validator("cardimage_months", mode="before")
     @classmethod
     def _parse_months(cls, v):

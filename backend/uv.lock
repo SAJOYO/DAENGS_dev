@@ -372,6 +372,10 @@ place = [
 ]
 
 [package.dev-dependencies]
+cardgen = [
+    { name = "fastapi", extra = ["standard"] },
+    { name = "pillow" },
+]
 dev = [
     { name = "numpy" },
     { name = "pytest" },
@@ -462,6 +466,10 @@ requires-dist = [
 provides-extras = ["place"]
 
 [package.metadata.requires-dev]
+cardgen = [
+    { name = "fastapi", extras = ["standard"], specifier = ">=0.141.1" },
+    { name = "pillow", specifier = ">=10.2" },
+]
 dev = [
     { name = "numpy", specifier = ">=2.5.2" },
     { name = "pytest", specifier = ">=9.1.1" },

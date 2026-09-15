@@ -118,6 +118,7 @@ build-backend = "uv_build"
 [tool.uv.build-backend]
 module-name = [
     "daengs_backend",
+    "daengs_cardgen",
     "daengs_cardimage",
     "daengs_evals",
     "daengs_gait",
@@ -246,6 +247,15 @@ realtime = [
     "pyyaml>=6.0.3",
     "redis>=6.0",
     "tzdata>=2026.3",
+]
+# 도감 카드 생성 GPU 서비스(D-078)가 받는 것 전부. **base 의존성을 안 받는다** —
+# `docker/cardgen/Dockerfile` 이 `uv sync --frozen --only-group cardgen --no-install-project` 로 깐다
+# (`realtime` 그룹과 같은 이유). torch 는 여기서도 리눅스 CPU 판으로 잠기고, CUDA 판은 Dockerfile 이
+# 덮어쓴다 — `[tool.uv.sources]` 를 풀지 말 것.
+# ⚠ 이름을 바꾸면 `docker/cardgen/Dockerfile` 의 `--only-group` 인자도 같이 고쳐라.
+cardgen = [
+    "fastapi[standard]>=0.141.1",
+    "pillow>=10.2",
 ]
 
 [tool.ruff]

@@ -18,6 +18,11 @@
 | 공개 요청 / 응답 | `walk-relational-diary-v1` / `walk-relational-diary-response-v1` |
 | DB 저장 봉투 | `walk-relational-diary-storage-v1` |
 
+행정주소 헤더 보완(#546, 앱 연결 DAENGS_APP#425): 기존 SGIS 적합 근거의
+`sido / sigungu / dong / address_type`을 `header.administrative_address`에 함께 보존한다.
+서로 다른 주소의 구성요소는 합치지 않는다. 기존 `dong` 필드는 유지하며, 확장 주소가 없는
+과거 영수증은 추가 필드 없이 그대로 직렬화·조회한다. 주소는 공간·행동·제목 작성 입력에 넣지 않는다.
+
 공간은 앞선 위치와 현재 위치의 차이·관계로 작성하고, 행동은 현재 핀과 현재 배경으로
 작성한다. 핀 시점의 속도·동선 모양은 함께한 산책의 이동 맥락으로 사용할 수 있다.
 다만 그것만으로 행동의 원인이나 지속시간을 만들지 않는다. 동·날씨는 카드 헤더에 두고,

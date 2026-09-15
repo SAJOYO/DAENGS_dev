@@ -339,6 +339,120 @@ async def test_부적격_연결은_409_로_나간다(store: Store, invited):
     assert shared.identity_id is None
 
 
+# ── 연결 대상에 공동 보호자가 있을 때 (2026-09-15 결정: 현행 차단 정책 명문화) ──────────
+#
+# 공동 보호자가 있는 강아지는 다른 논리 강아지와 **연결하지 않는다.** 기존 보호자를 새 그룹에
+# 자동 편입하지도 자동 제거하지도 않는다. 막는 기준은 **실제로 연결 대상으로 고른 강아지**다 —
+# 받는 사람이 주보호자라는 이유만으로, 또는 연결하지 않을 다른 강아지에 돌보미가 있다는 이유로
+# 초대 자체를 막지 않는다. 연결 없이 참여는 늘 열려 있다 (docs/co-care.md 「연결 차단」).
+
+CARER = uuid.uuid4()  # B 의 강아지 b 를 돌보는 C
+
+
+def _add_carer_user(store: Store) -> None:
+    store.add_app_user(FakeAppUser(kakao_id=4003, id=CARER, nickname="이모"))
+
+
+def _join_b_as_carer(store: Store, b: FakePet) -> None:
+    """C 가 **B 가 만든 초대를 실제 수락 경로로** 받아 b 의 공동 보호자가 된다."""
+    res = client_as(GUEST).post("/app/pet-invites", json={"pet_ids": [str(b.id)]})
+    assert res.status_code == 201, res.text
+    assert accept(CARER, res.json()["token"]).status_code == 200
+    assert (b.id, CARER) in store.pet_members
+
+
+async def test_초대를_받은_뒤_연결_대상에_공동_보호자가_생기면_연결은_409_이고_아무것도_안_바뀐다(
+    store: Store, invited
+):
+    """A 가 초대를 만든 **뒤에** C 가 b 의 돌보미가 됐다. B 가 b 를 연결하려 하면 막힌다."""
+    _add_carer_user(store)
+    b = FakePet(app_user_id=GUEST, name="비", breed="믹스")
+    store.pets.append(b)
+    token = issue([invited[0].id])
+    _join_b_as_carer(store, b)
+    members_before = list(store.pet_members)
+
+    res = accept(GUEST, token, [{"pet_id": str(invited[0].id), "link_to_pet_id": str(b.id)}])
+
+    assert res.status_code == 409
+    assert res.json()["detail"]["reason"] == "has_other_carers"
+    assert b.identity_id is None and invited[0].identity_id is None
+    assert store.pet_members == members_before
+    assert store.pet_invites[0].accepted_by is None
+    # C 는 A 의 강아지에 아무 권한도 얻지 않았다.
+    assert client_as(CARER).get(f"/app/pets/{invited[0].id}/members").status_code == 404
+
+
+async def test_같은_상황에서_연결_없이_참여하면_된다_기존_보호자는_새_그룹에_안_들어간다(
+    store: Store, invited
+):
+    _add_carer_user(store)
+    b = FakePet(app_user_id=GUEST, name="비", breed="믹스")
+    store.pets.append(b)
+    token = issue([invited[0].id])
+    _join_b_as_carer(store, b)
+
+    res = accept(GUEST, token, [{"pet_id": str(invited[0].id), "link_to_pet_id": None}])
+
+    assert res.status_code == 200
+    assert res.json()["pets"][0]["result"] == "joined"
+    assert (invited[0].id, GUEST) in store.pet_members
+    # 자동 편입 없음 · 자동 제거 없음 · 연결 없음.
+    assert (invited[0].id, CARER) not in store.pet_members
+    assert (b.id, CARER) in store.pet_members
+    assert b.identity_id is None
+    assert client_as(CARER).get(f"/app/pets/{invited[0].id}/members").status_code == 404
+
+
+async def test_연결하지_않을_다른_강아지에_돌보미가_있어도_고른_강아지는_연결된다(store: Store, invited):
+    """막는 기준은 **실제로 고른 연결 대상**이다 — 받는 사람의 다른 강아지 사정으로 막지 않는다."""
+    _add_carer_user(store)
+    shared = FakePet(app_user_id=GUEST, name="돌보미있음", breed="믹스")
+    clean = FakePet(app_user_id=GUEST, name="혼자돌봄", breed="믹스")
+    store.pets += [shared, clean]
+    _join_b_as_carer(store, shared)
+
+    res = accept(
+        GUEST,
+        issue([invited[0].id]),
+        [{"pet_id": str(invited[0].id), "link_to_pet_id": str(clean.id)}],
+    )
+
+    assert res.status_code == 200
+    assert res.json()["pets"][0]["result"] == "linked"
+    assert clean.identity_id is not None and clean.identity_id == invited[0].identity_id
+    assert shared.identity_id is None
+    assert (invited[0].id, CARER) not in store.pet_members
+
+
+async def test_연결_전에_B_가_만든_초대를_연결_뒤_C_가_쓰면_미리보기와_수락이_410이다(store: Store, invited):
+    """B 가 b 로 초대를 만들어 두고 **아직 C 가 받기 전에** b 를 A 의 강아지와 연결했다.
+
+    연결 뒤 b 의 그룹 주보호자는 A 라서, B 가 보낸 초대는 무효다 — C 가 그 토큰으로 A 의
+    그룹에 들어오면 안 된다 (`preview_invite`·`accept_invite` 의 초대자 = 그룹 주보호자 검사).
+    """
+    _add_carer_user(store)
+    b = FakePet(app_user_id=GUEST, name="비", breed="믹스")
+    store.pets.append(b)
+    res = client_as(GUEST).post("/app/pet-invites", json={"pet_ids": [str(b.id)]})
+    assert res.status_code == 201, res.text
+    b_token = res.json()["token"]
+
+    linked = accept(
+        GUEST,
+        issue([invited[0].id]),
+        [{"pet_id": str(invited[0].id), "link_to_pet_id": str(b.id)}],
+    )
+    assert linked.status_code == 200
+    assert b.identity_id is not None
+
+    assert client_as(CARER).post("/app/pet-invites/preview", json={"token": b_token}).status_code == 410
+    assert accept(CARER, b_token).status_code == 410
+    assert (b.id, CARER) not in store.pet_members
+    assert (invited[0].id, CARER) not in store.pet_members
+    assert client_as(CARER).get(f"/app/pets/{invited[0].id}/members").status_code == 404
+
+
 # ── 멱등 영수증 ────────────────────────────────────────────────────────────
 
 

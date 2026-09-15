@@ -66,9 +66,9 @@ if [ "${STEP}" = all ] || [ "${STEP}" = weights ]; then
   echo "== 가중치 받기 잡 (CPU, 한 번)"
   # HF_XET_CACHE 를 /tmp 로 뺀다 — 안 그러면 hf_xet 의 청크 캐시가 HF_HOME(=FUSE 버킷)에 작은 객체를 잔뜩 쓴다.
   gcloud run jobs deploy cardgen-weights --region="${GPU_REGION}" --image="${IMAGE}" \
-    --service-account="${SA_EMAIL}" --cpu=4 --memory=16Gi --task-timeout=3h --max-retries=0 \
+    --service-account="${SA_EMAIL}" --cpu=8 --memory=32Gi --task-timeout=3h --max-retries=0 \
     --command=/opt/venv/bin/python --args=-m,daengs_cardgen.fetch,"${MODEL_NAME}" \
-    --set-env-vars=HF_XET_CACHE=/tmp/xet \
+    --set-env-vars=HF_HUB_DISABLE_XET=1 \
     --add-volume=name=weights,type=cloud-storage,bucket="${BUCKET}" \
     --add-volume-mount=volume=weights,mount-path=/models
   gcloud run jobs execute cardgen-weights --region="${GPU_REGION}" --wait \

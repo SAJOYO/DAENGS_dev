@@ -16,7 +16,8 @@ def test_fetch_downloads_only_pipeline_files(monkeypatch: pytest.MonkeyPatch) ->
 
     monkeypatch.setattr(huggingface_hub, "snapshot_download", fake_snapshot_download)
     assert fetch.main(["klein-4b"]) == 0
-    assert calls == [(MODEL_REPOS["klein-4b"], {"allow_patterns": ["model_index.json", "*/*"]})]
+    # 한 번에 한 파일 — FUSE 가 쓰는 파일을 메모리에 스테이징하므로 병렬이면 잡 메모리를 넘는다.
+    assert calls == [(MODEL_REPOS["klein-4b"], {"allow_patterns": ["model_index.json", "*/*"], "max_workers": 1})]
 
 
 def test_fetch_rejects_unknown_model() -> None:

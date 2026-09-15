@@ -21,7 +21,9 @@ def main(argv: list[str] | None = None) -> int:
 
     for name in names:
         # 파이프라인이 읽는 것은 model_index.json 과 하위 폴더(transformer/·vae/…)뿐 — 루트의 단일 파일 가중치·샘플 이미지는 받지 않는다.
-        path = snapshot_download(MODEL_REPOS[name], allow_patterns=["model_index.json", "*/*"])
+        # max_workers=1: GCS FUSE 는 쓰는 파일을 닫을 때까지 로컬(Cloud Run 에선 메모리)에 둔다. 큰 파일 여럿을
+        # 병렬로 받으면 합이 메모리를 넘는다 — 2026-09-15 klein 잡이 16Gi 에서 그렇게 죽었다(#544 Task 6).
+        path = snapshot_download(MODEL_REPOS[name], allow_patterns=["model_index.json", "*/*"], max_workers=1)
         print(f"fetched {name} -> {path}", flush=True)
     return 0
 

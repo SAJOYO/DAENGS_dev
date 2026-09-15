@@ -258,6 +258,9 @@ class Store:
         #: 서버가 만든 AI 도감 카드 (#537, D-076). id 는 **서버가 만듭니다** (dog_cards 와 반대).
         self.ai_cards: list = []
 
+        #: AI 카드 사용 기록 (#543, D-077). 카드를 지워도 남습니다 — 가짜 `ai_card_delete` 는 이것을 안 건드립니다.
+        self.ai_card_usage: list = []
+
         #: 대화 세션·turn·저장된 요약. 정렬은 가짜 리포지토리가 실제 기준을 따릅니다.
         self.chat_sessions: list[FakeChatSession] = []
         self.chat_turns: list[FakeChatTurn] = []
@@ -1882,12 +1885,21 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
     async def ai_card_has_generating(session, app_user_id):
         return any(c.app_user_id == app_user_id and c.status == "generating" for c in store.ai_cards)
 
-    async def ai_card_count_ready_since(session, app_user_id, since):
-        return sum(
-            1
+    async def ai_card_has_month_card(session, app_user_id, dog_id, month):
+        return any(
+            c.app_user_id == app_user_id
+            and c.dog_id == dog_id
+            and c.month == month
+            and c.status in ("generating", "ready")
             for c in store.ai_cards
-            if c.app_user_id == app_user_id and c.status == "ready" and c.created_at >= since
         )
+
+    def ai_card_add_usage(session, usage):
+        store.ai_card_usage.append(usage)
+        return usage
+
+    async def ai_card_count_usage_since(session, app_user_id, since):
+        return sum(1 for u in store.ai_card_usage if u.app_user_id == app_user_id and u.used_at >= since)
 
     async def ai_card_count_failed_since(session, app_user_id, since, codes):
         return sum(
@@ -1925,12 +1937,20 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
         store.ai_cards = [c for c in store.ai_cards if c.app_user_id != app_user_id]
         return len(mine)
 
+    async def ai_card_delete_usage_for_owner(session, app_user_id, *, before):
+        gone = [u for u in store.ai_card_usage if u.app_user_id == app_user_id and u.used_at < before]
+        store.ai_card_usage = [u for u in store.ai_card_usage if u not in gone]
+        return len(gone)
+
     monkeypatch.setattr(ai_card_repo, "add", ai_card_add)
     monkeypatch.setattr(ai_card_repo, "get_owned", ai_card_get_owned)
     monkeypatch.setattr(ai_card_repo, "get_for_update", ai_card_get_for_update)
     monkeypatch.setattr(ai_card_repo, "list_for_owner", ai_card_list_for_owner)
     monkeypatch.setattr(ai_card_repo, "has_generating", ai_card_has_generating)
-    monkeypatch.setattr(ai_card_repo, "count_ready_since", ai_card_count_ready_since)
+    monkeypatch.setattr(ai_card_repo, "has_month_card", ai_card_has_month_card)
+    monkeypatch.setattr(ai_card_repo, "add_usage", ai_card_add_usage)
+    monkeypatch.setattr(ai_card_repo, "count_usage_since", ai_card_count_usage_since)
+    monkeypatch.setattr(ai_card_repo, "delete_usage_for_owner", ai_card_delete_usage_for_owner)
     monkeypatch.setattr(ai_card_repo, "count_failed_since", ai_card_count_failed_since)
     monkeypatch.setattr(ai_card_repo, "expire_generating", ai_card_expire_generating)
     monkeypatch.setattr(ai_card_repo, "find_ready_by_storage_key", ai_card_find_ready_by_storage_key)

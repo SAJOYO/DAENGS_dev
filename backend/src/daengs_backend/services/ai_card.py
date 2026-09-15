@@ -5,7 +5,8 @@
 POST 는 토큰만 확인하고(`CurrentAppMemberTokenOnly`) **사진을 다 받은 뒤** `start` 가 사용자 행을
 잠급니다 — 잠금 → 한도 → INSERT → commit 이 짧은 한 트랜잭션입니다. 생성은 같은
 backend 프로세스 안의 백그라운드 작업(`_run`)이 하고, 끝나면 **새 세션으로** 행을 `ready`/`failed`
-로 바꿉니다.
+로 바꿉니다. 한도 규칙은 `services/ai_card_quota.py` 가 정하고(D-077), 여기서는 카드가 `ready` 가
+되는 같은 트랜잭션에서 사용 기록(`ai_card_usage`)을 남깁니다.
 
 ⚠️ **백그라운드는 요청 세션을 쓰지 않습니다** — 요청이 끝나면 그 세션은 닫힙니다.
 ⚠️ **배포 재시작과 겹친 작업은 사라집니다.** 행은 `stale_after()` 가 지난 뒤 조회에서
@@ -40,12 +41,18 @@ from daengs_backend.core.storage import (
     build_ai_card_key,
     get_storage,
 )
-from daengs_backend.models import AiCard
+from daengs_backend.models import AiCard, AiCardUsage
 from daengs_backend.repositories import ai_card as ai_card_repo
 from daengs_backend.repositories import app_user as app_user_repo
 from daengs_backend.repositories import pet as pet_repo
 from daengs_backend.services import ai_card_engine
-from daengs_backend.services.ai_card_quota import AiCardBusyError, check_quota, stale_after
+from daengs_backend.services.ai_card_quota import (
+    AiCardBusyError,
+    check_quota,
+    daily_remaining,
+    kst_day_start,
+    stale_after,
+)
 from daengs_cardimage import CardImageUnavailable, GeneratedCard
 from daengs_cardimage.engine import EngineError
 from daengs_cardimage.photo import prepare_photo
@@ -104,9 +111,12 @@ async def start(
     month: int,
     dog_name: str,
     dog_id: uuid.UUID | None,
+    title_name: str | None = None,
     now: datetime | None = None,
 ) -> AiCard:
     name = " ".join(dog_name.split())
+    # 제목에만 쓰는 이름 (#543). 비면 `dog_name` 그대로 — `dog_name` 은 늘 그대로 저장합니다.
+    title_source = " ".join((title_name or "").split()) or name
     # ── DB 전: 설정·사진. 여기서 걸리면 잠금도 연결도 안 잡습니다.
     meta = ai_card_engine.ready_check(month)
     if isinstance(get_storage(), NotConfiguredStorage):
@@ -121,7 +131,9 @@ async def start(
         raise AiCardNotFoundError
 
     now = now or datetime.now(UTC)
-    await check_quota(session, app_user_id, now=now, daily_limit=settings.cardimage_daily_limit)
+    await check_quota(
+        session, app_user_id, now=now, daily_limit=settings.cardimage_daily_limit, dog_id=dog_id, month=month
+    )
 
     card = AiCard(
         id=uuid.uuid4(),
@@ -130,7 +142,7 @@ async def start(
         month=month,
         dog_name=name,
         # `str.upper()` 는 글자 수를 늘릴 수 있습니다(ß → SS) — 40자 이름도 80자를 넘길 수 있어 자릅니다.
-        title=title_text(meta.card_name, name)[:_TITLE_MAX],
+        title=title_text(meta.card_name, title_source)[:_TITLE_MAX],
         status="generating",
         created_at=now,
         updated_at=now,
@@ -146,7 +158,7 @@ async def start(
             raise AiCardBusyError from None
         raise
 
-    _spawn(_run(card.id, app_user_id, photo_jpeg, month, name))
+    _spawn(_run(card.id, app_user_id, photo_jpeg, month, title_source))
     return card
 
 
@@ -193,7 +205,7 @@ async def _claim_slot(card_id: uuid.UUID) -> bool:
         return True
 
 
-async def _run(card_id: uuid.UUID, app_user_id: uuid.UUID, photo_jpeg: bytes, month: int, dog_name: str) -> None:
+async def _run(card_id: uuid.UUID, app_user_id: uuid.UUID, photo_jpeg: bytes, month: int, title_name: str) -> None:
     """백그라운드 한 건. **예외를 밖으로 내지 않습니다** — 낼 곳이 없고, 행에 결과를 남깁니다."""
     try:
         async with _slot():
@@ -206,7 +218,8 @@ async def _run(card_id: uuid.UUID, app_user_id: uuid.UUID, photo_jpeg: bytes, mo
                     photo=photo_jpeg,
                     content_type="image/jpeg",
                     month=month,
-                    dog_name=dog_name,
+                    # `generate_card` 는 이 이름을 그림 제목에만 쓴다 — `ai_cards.title` 과 같은 글자여야 한다 (#543).
+                    dog_name=title_name,
                     engine=ai_card_engine.default_engine(),
                     judge=ai_card_engine.default_judge(),
                 )
@@ -258,7 +271,11 @@ async def _finish_ready(card_id: uuid.UUID, key: str, stored: StoredObject, gene
         card.width, card.height = width, height
         card.likeness = generated.judge.likeness if generated.judge else None
         card.attempts = generated.attempts
-        card.updated_at = datetime.now(UTC)
+        now = datetime.now(UTC)
+        card.updated_at = now
+        # **같은 트랜잭션에서** 사용 기록을 남깁니다 (#543, D-077). 카드를 지워도 이 줄은 남아 하루 한도가
+        # 돌아오지 않습니다. ready 가 못 된 카드(실패·중간 삭제)는 여기까지 안 오므로 세지 않습니다.
+        ai_card_repo.add_usage(session, AiCardUsage(card_id=card.id, app_user_id=card.app_user_id, used_at=now))
         await session.commit()
 
 
@@ -283,6 +300,15 @@ async def list_cards(session: AsyncSession, app_user_id: uuid.UUID, *, now: date
     """내 카드 전부, 최근 것부터. **이미지 주소는 안 싣습니다** — N 장마다 저장소를 두드리게 됩니다."""
     await _expire_stale(session, app_user_id, now or datetime.now(UTC))
     return await ai_card_repo.list_for_owner(session, app_user_id)
+
+
+async def daily_status(
+    session: AsyncSession, app_user_id: uuid.UUID, *, now: datetime | None = None
+) -> tuple[int | None, int | None]:
+    """`(daily_limit, daily_remaining)`. 무제한이면 `(None, None)` — 앱이 막을지 정하는 값입니다."""
+    limit = settings.cardimage_daily_limit
+    remaining = await daily_remaining(session, app_user_id, now=now or datetime.now(UTC), daily_limit=limit)
+    return (limit or None, remaining)
 
 
 async def get_card(
@@ -315,10 +341,12 @@ async def delete_card(session: AsyncSession, app_user_id: uuid.UUID, card_id: uu
     await session.commit()
 
 
-async def cleanup_for_owner(session: AsyncSession, app_user_id: uuid.UUID) -> int:
+async def cleanup_for_owner(session: AsyncSession, app_user_id: uuid.UUID, *, now: datetime | None = None) -> int:
     """탈퇴가 부릅니다. 커밋은 탈퇴 트랜잭션이 합니다.
 
     지울 객체가 없으면 저장소를 안 건드립니다 — 저장소가 꺼져 있다고 탈퇴가 막히면 안 됩니다.
+    사용 기록은 **KST 오늘 00:00 이전 것만** 지웁니다 (D-077) — 같은 카카오 계정으로 재로그인하면 같은
+    `app_user_id` 라, 오늘 기록을 지우면 그날 하루 한도가 초기화됩니다.
     """
     cards = await ai_card_repo.list_for_owner_for_update(session, app_user_id)
     keys = [c.storage_key for c in cards if c.storage_key]
@@ -326,4 +354,9 @@ async def cleanup_for_owner(session: AsyncSession, app_user_id: uuid.UUID) -> in
         storage = get_storage()
         for key in keys:
             storage.delete(key)
-    return await ai_card_repo.delete_all_for_owner(session, app_user_id)
+    deleted = await ai_card_repo.delete_all_for_owner(session, app_user_id)
+    # 사용 기록도 명시로 지웁니다 — 카드와 FK 로 안 묶였고, app_users CASCADE 는 탈퇴에서 안 돕니다.
+    # 오늘 것은 남깁니다: 재로그인(같은 app_user_id)으로 그날 한도가 초기화되면 안 됩니다.
+    day_start = kst_day_start(now or datetime.now(UTC))
+    await ai_card_repo.delete_usage_for_owner(session, app_user_id, before=day_start)
+    return deleted

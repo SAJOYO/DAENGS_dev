@@ -5,21 +5,33 @@ from copy import deepcopy
 from daengs_walk.diary.relational.assembly import assemble_receipt
 from daengs_walk.diary.relational.comparison_writing import comparison_input
 from daengs_walk.diary.relational.contracts import writer_task
-from daengs_walk.diary.relational.delivery import DeliveryState, advance_delivery, context_signature
+from daengs_walk.diary.relational.delivery import (
+    DELIVERY_POLICY,
+    DeliveryState,
+    advance_delivery,
+    context_signature,
+)
 from daengs_walk.value_contracts import digest
 
 
 async def write_comparison_sequence(prepared, *, enabled, send, review, model):
     from daengs_backend.services.walk_diary.writing.relational import (
+        _validate_plans,
+        _write_validated_tasks,
         validate_prepared,
-        write_relational_diary,
     )
 
-    snapshot = deepcopy(prepared["snapshot"])
+    # Validate an isolated copy before the first await. Neither callers nor model
+    # senders receive this owned source bundle; only copied task payloads leave it.
+    frozen = deepcopy(prepared)
+    validate_prepared(frozen)
+    snapshot = frozen["snapshot"]
+    snapshot["delivery_policy"] = DELIVERY_POLICY
     frames = snapshot["frames"]
+    positions = {f["scene_id"]: i for i, f in enumerate(frames)}
     results, memory, last = [], DeliveryState(), {}
     for plan in snapshot["plans"]:
-        index = next(i for i, f in enumerate(frames) if f["scene_id"] == plan["scene_id"])
+        index = positions[plan["scene_id"]]
         frame, previous = frames[index], frames[index - 1] if index else None
         signature = context_signature(frame)
         delivered = memory.active_introduction
@@ -31,9 +43,10 @@ async def write_comparison_sequence(prepared, *, enabled, send, review, model):
             )
             plan["memory_recovery"] = "current_context_not_delivered"
         plan["revision"] = digest({k: v for k, v in plan.items() if k != "revision"})
-        partial = {**snapshot, "plans": [deepcopy(plan)]}
-        last = await write_relational_diary(
-            {"snapshot": partial, "revision": digest(partial)},
+        tasks = _validate_plans(snapshot, [plan], frame_positions=positions)
+        last = await _write_validated_tasks(
+            tasks,
+            snapshot_revision=frozen["revision"],
             send=send,
             review=review,
             model=model,
@@ -51,5 +64,5 @@ async def write_comparison_sequence(prepared, *, enabled, send, review, model):
         "short_memory_enabled": enabled,
         "memory_strategy": "adjacent_source_snapshots_with_intro_recovery",
     }
-    validate_prepared(final)
+    _validate_plans(snapshot, frame_positions=positions)
     return {"prepared": final, "receipt": assemble_receipt(final, written)}

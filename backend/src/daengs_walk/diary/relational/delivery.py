@@ -5,8 +5,12 @@ from typing import Literal
 
 from pydantic import Field
 
+from daengs_walk.diary.relational.point_meaning import POINT_ATTRIBUTES, point_meaning
 from daengs_walk.diary.relational.scene_comparison_contracts import SpaceComparisonAnswer
 from daengs_walk.value_contracts import ValueContract, digest
+
+DELIVERY_POLICY = "point-meaning-v2"
+LEGACY_DELIVERY_POLICY = "source-identity-v1"
 
 
 class DeliveredSelection(ValueContract):
@@ -25,9 +29,17 @@ class DeliveryState(ValueContract):
     all_context_facts_delivered: Literal[False] = False
 
 
-def context_signature(frame):
+def context_signature(frame, *, policy=DELIVERY_POLICY):
+    if policy not in {DELIVERY_POLICY, LEGACY_DELIVERY_POLICY}:
+        raise ValueError("unsupported delivery policy")
     meanings = []
     for fact in frame["scene_snapshot"]["facts"]:
+        if policy == DELIVERY_POLICY and fact["family"] in POINT_ATTRIBUTES:
+            meaning = [fact["family"], point_meaning(fact["family"], fact["value"])]
+            # Several source objects can describe the same point background.
+            if meaning not in meanings:
+                meanings.append(meaning)
+            continue
         value = deepcopy(fact["value"])
         for key in ("reference_dates", "reference_month", "classification_policy", "source_hash"):
             value.pop(key, None)
@@ -45,9 +57,9 @@ def context_signature(frame):
     return digest(sorted(meanings, key=digest)) if meanings else None
 
 
-def advance_delivery(state, frame, task, result):
+def advance_delivery(state, frame, task, result, *, policy=DELIVERY_POLICY):
     state = DeliveryState.model_validate(state)
-    signature = context_signature(frame)
+    signature = context_signature(frame, policy=policy)
     active = state.active_introduction
     if active and active.context_signature != signature:
         active = None

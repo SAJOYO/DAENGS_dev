@@ -3,6 +3,7 @@
 import asyncio
 import json
 from dataclasses import replace
+from itertools import pairwise
 from unittest.mock import AsyncMock
 
 import pytest
@@ -75,6 +76,16 @@ async def test_default_service_factory_uses_our_preparation_and_receipt(base, pr
 
     monkeypatch.setattr(diary, "DiaryOrchestrationService", forbidden)
     monkeypatch.setattr(assembly, "complete_cards", forbidden)
+    from daengs_backend.services.walk_diary.preparation import scene_snapshot
+
+    validate_sources = scene_snapshot.validate_scene_snapshot_bindings
+    source_checks = []
+
+    def counted_sources(snapshot):
+        source_checks.append(len(snapshot["frames"]))
+        return validate_sources(snapshot)
+
+    monkeypatch.setattr(scene_snapshot, "validate_scene_snapshot_bindings", counted_sources)
     collector = AsyncMock(side_effect=prepare)
     monkeypatch.setattr(relational, "configured_relational_preparation", collector)
     seen = []
@@ -93,9 +104,14 @@ async def test_default_service_factory_uses_our_preparation_and_receipt(base, pr
     assert seen[-2][0] == "title" and seen[-1][0] == "review"
     assert all(r["status"] == "returned" for r in result.receipt["writing"]["results"])
     assert len(seen) == result.receipt["execution"]["model_call_attempts"]
-    assert result.receipt["execution"]["policy"]["generation_timeout_s"] == 180
+    assert (
+        result.receipt["execution"]["policy"]["generation_timeout_s"]
+        == result.receipt["execution"]["total_timeout_s"]
+    )
+    assert result.receipt["execution"]["total_timeout_s"] >= 180
     assert "originals" not in json.dumps(seen) and "card_header" not in json.dumps(seen)
     collector.assert_awaited_once()
+    assert source_checks == [len(result.prepared["snapshot"]["frames"])]
 
 
 async def test_source_mismatch_fails_before_acquisition(base):
@@ -251,11 +267,13 @@ async def test_current_action_goes_through_same_service(prepare):
     from tests.walk.diary.test_diary_activity import prepared
 
     base, _ = prepared()
-    seen = []
+    seen, reviewed = [], []
 
     async def model(stage, payload, schema):
         if stage == "action":
             seen.append(payload)
+        if stage == "review" and payload["part"] == "action":
+            reviewed.append(payload["evidence"])
         return await send(stage, payload, schema)
 
     result = await write_relational_board(
@@ -264,3 +282,99 @@ async def test_current_action_goes_through_same_service(prepare):
     assert seen and seen[0]["current_gait"]
     assert "earlier" not in seen[0] and "relation_slots" not in seen[0]
     assert any(c["parts"]["action"]["status"] == "returned" for c in result.receipt["cards"])
+
+    assert len(reviewed) == len(seen)
+    frames = {f["anchor"]["event_at"]: f for f in result.prepared["snapshot"]["frames"]}
+    for request in seen:
+        assert request["current_space"]
+        facts = {
+            "space:" + fact["id"]: fact
+            for fact in frames[request["pin_at"]]["scene_snapshot"]["facts"]
+            if fact["family"] == "land_cover"
+        }
+        for background in request["current_space"]:
+            source_meaning = facts[background["id"]]["time_meaning"]
+            assert source_meaning
+            assert background["time_meaning"] == source_meaning
+        review_input = next(r for r in reviewed if r["pin_at"] == request["pin_at"])
+        assert review_input == request
+
+
+@pytest.mark.parametrize(
+    "review,scenes,actions,calls,seconds",
+    [
+        (True, 3, 1, 10, 255),
+        (True, 12, 0, 26, 655),
+        (False, 12, 0, 13, 330),
+        (True, 12, 12, 50, 1255),
+    ],
+)
+def test_auto_budget_includes_writing_review_title_and_completion_gaps(
+    review, scenes, actions, calls, seconds
+):
+    policy = RelationalExecutionPolicy(semantic_review=review)
+    resolved = policy.resolve(scenes, actions)
+    assert resolved.call_budget(scenes, actions) == calls
+    assert resolved.generation_timeout_s == seconds
+    assert resolved.minimum_interval_s == 10
+    assert policy.generation_timeout_s is None
+
+
+def test_explicit_deadline_and_call_cap_are_preserved():
+    policy = RelationalExecutionPolicy(generation_timeout_s=7, max_calls=4)
+    assert policy.resolve(12, 12) is policy
+    assert policy.call_budget(12, 12) == 4
+    assert RelationalExecutionPolicy(max_calls=4).resolve(12, 12).generation_timeout_s == 180
+
+
+async def test_twelve_scenes_can_finish_with_pacing_and_review_without_real_waiting():
+    policy = RelationalExecutionPolicy().resolve(12, 0)
+    now, started = [0.0], []
+
+    async def sleep(seconds):
+        now[0] += seconds
+
+    async def model(*args):
+        started.append(now[0])
+        now[0] += 14  # Within each 15-second allowance.
+        return "{}"
+
+    count = policy.call_budget(12, 0)
+    coordinator = CallCoordinator(
+        model,
+        clock=lambda: now[0],
+        sleep=sleep,
+        minimum_interval_s=policy.minimum_interval_s,
+        max_calls=count,
+        call_timeout_s=policy.call_timeout_s,
+        total_timeout_s=policy.generation_timeout_s,
+    )
+    for stage in ["space", "review"] * 12 + ["title", "review"]:
+        await coordinator(stage, {}, {})
+    assert len(started) == 26 and not coordinator.deadline_reached
+    assert all(b - a >= 24 for a, b in pairwise(started))
+    assert now[0] < policy.generation_timeout_s
+
+
+@pytest.mark.parametrize("total_limit", [False, True])
+async def test_expired_timeout_rejects_swallowed_cancellation_even_with_frozen_clock(total_limit):
+    async def swallow(*args):
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            return "must not publish"
+
+    coordinator = CallCoordinator(
+        swallow,
+        clock=lambda: 0.0,
+        call_timeout_s=1.0 if total_limit else 0.001,
+        total_timeout_s=0.001 if total_limit else None,
+    )
+    with pytest.raises(TimeoutError):
+        await coordinator("space", {}, {})
+    assert coordinator.trace[0]["status"] == "failed"
+    assert coordinator.deadline_reached == total_limit
+    if total_limit:
+        with pytest.raises(CallsStopped):
+            await coordinator("action", {}, {})
+        assert coordinator.calls == 1

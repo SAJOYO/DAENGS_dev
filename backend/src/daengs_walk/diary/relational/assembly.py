@@ -4,7 +4,11 @@ from copy import deepcopy
 
 from daengs_walk.diary.relational.comparison_writing import comparison_input
 from daengs_walk.diary.relational.contracts import VERSION
-from daengs_walk.diary.relational.delivery import DeliveryState, advance_delivery
+from daengs_walk.diary.relational.delivery import (
+    LEGACY_DELIVERY_POLICY,
+    DeliveryState,
+    advance_delivery,
+)
 from daengs_walk.diary.relational.publication import (
     PUBLICATION_VERSION,
     ComparisonPublication,
@@ -74,7 +78,13 @@ def assemble_receipt(prepared, written):
             task = plan["space_task"]
             result = results[task["id"]] if task else None
             selected = result.get("answer") if result and result["status"] == "returned" else None
-            after = advance_delivery(memory, frame, task, result)
+            after = advance_delivery(
+                memory,
+                frame,
+                task,
+                result,
+                policy=prepared["snapshot"].get("delivery_policy", LEGACY_DELIVERY_POLICY),
+            )
             for key, state in (("delivery_before", memory), ("delivery_after", after)):
                 if key in plan and plan[key] != state.model_dump(mode="json"):
                     raise ValueError("planned delivery differs from accepted results")
@@ -100,5 +110,7 @@ def assemble_receipt(prepared, written):
         "meaning_delivery": "not_inferred_from_reference_ids",
     }
     if comparison:
+        if "delivery_policy" in prepared["snapshot"]:
+            receipt["delivery_policy"] = prepared["snapshot"]["delivery_policy"]
         validate_publication(receipt)
     return receipt

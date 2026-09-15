@@ -33,7 +33,12 @@ class CallCoordinator:
         clock=time.monotonic,
         sleep=asyncio.sleep,
     ):
-        if not isfinite(minimum_interval_s) or minimum_interval_s < 0 or max_calls < 0:
+        if (
+            not isfinite(minimum_interval_s)
+            or minimum_interval_s < 0
+            or type(max_calls) is not int
+            or max_calls < 0
+        ):
             raise ValueError("invalid call policy")
         for timeout in (call_timeout_s, total_timeout_s):
             if timeout is not None and (not isfinite(timeout) or timeout <= 0):
@@ -52,6 +57,8 @@ class CallCoordinator:
         self.deadline_reached = False
 
     def remaining(self):
+        if self.deadline_reached:
+            raise CallsStopped("diary execution deadline reached")
         remaining = None if self.deadline is None else self.deadline - self.clock()
         if remaining is not None and remaining <= 0:
             self.deadline_reached = True
@@ -78,8 +85,18 @@ class CallCoordinator:
             self.trace.append(entry)
             try:
                 limits = [n for n in (remaining, self.call_timeout_s) if n is not None]
-                async with asyncio.timeout(min(limits) if limits else None):
-                    result = await self.send(stage, payload, schema)
+                timeout = asyncio.timeout(min(limits) if limits else None)
+                total_is_limit = remaining is not None and (
+                    self.call_timeout_s is None or remaining <= self.call_timeout_s
+                )
+                try:
+                    async with timeout:
+                        result = await self.send(stage, payload, schema)
+                finally:
+                    if timeout.expired() and total_is_limit:
+                        self.deadline_reached = True
+                if timeout.expired():
+                    raise TimeoutError("provider suppressed timeout cancellation")
                 # A provider may suppress timeout cancellation and return a late candidate.
                 self.remaining()
                 if (

@@ -59,7 +59,6 @@ def reviewed_roles(task, result):
 
 
 async def write_with_short_memory(prepared, *, enabled=True, send=None, review=True, model=None):
-    validate_prepared(prepared)
     if prepared["snapshot"].get("scene_comparison_version") == "scene-comparison-v1":
         from daengs_backend.services.walk_diary.writing.comparison_sequence import (
             write_comparison_sequence,
@@ -68,6 +67,7 @@ async def write_with_short_memory(prepared, *, enabled=True, send=None, review=T
         return await write_comparison_sequence(
             prepared, enabled=enabled, send=send, review=review, model=model
         )
+    validate_prepared(prepared)
     snapshot = deepcopy(prepared["snapshot"])
     frames = {f["scene_id"]: f for f in snapshot["frames"]}
     times = [aware_time(p["anchor"]["event_at"]) for p in snapshot["plans"]]

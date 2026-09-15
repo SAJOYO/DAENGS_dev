@@ -47,7 +47,7 @@ class ComparisonPublication(ValueContract):
 
 def validate_publication(receipt):
     """Only saved values: no preparation, network, writer or latest data lookup."""
-    from daengs_walk.diary.relational.delivery import advance_delivery
+    from daengs_walk.diary.relational.delivery import LEGACY_DELIVERY_POLICY, advance_delivery
 
     memory = DeliveryState()
     results = {r["task_id"]: r for r in receipt["writing"]["results"]}
@@ -100,6 +100,7 @@ def validate_publication(receipt):
             },
             {"id": part["task_id"]},
             result,
+            policy=receipt.get("delivery_policy", LEGACY_DELIVERY_POLICY),
         )
         if pub.delivery_after != memory:
             raise ValueError("published memory differs from accepted results")

@@ -194,3 +194,47 @@ def test_reviewed_current_introduction_uses_reviewed_citations(prepared):  # noq
     assert state.active_introduction is None and len(state.recent_deliveries) == 1
     result["semantic_review"]["assessment"]["used_evidence_ids"] = ["e2"]
     assert advance_delivery(DeliveryState(), frame, task, result).active_introduction is not None
+
+
+@pytest.mark.parametrize("family", ["road", "land_cover", "surrounding_object"])
+def test_delivery_identity_preserves_family_meaning(prepared, family):  # noqa: F811
+    from daengs_walk.diary.relational.comparison_writing import should_write_space
+    from daengs_walk.diary.relational.delivery import context_signature
+    from daengs_walk.diary.relational.relations.registry import collect_spatial_comparisons
+
+    a = deepcopy(prepared["snapshot"]["frames"][0])
+    a["scene_snapshot"]["facts"] = [
+        f for f in a["scene_snapshot"]["facts"] if f["family"] == family
+    ]
+    b = deepcopy(a)
+    b["scene_snapshot"]["scene_id"] += ":next"
+    fact = b["scene_snapshot"]["facts"][0]
+    fact["subject_key"] = "different-source-object"
+    fact["id"] += ":new"
+    b["spatial_comparison_slots"] = collect_spatial_comparisons(
+        b["scene_snapshot"], a["scene_snapshot"]
+    )
+    changed = family == "surrounding_object"
+    assert (context_signature(a) != context_signature(b)) == changed
+    assert should_write_space(b, a) == changed
+    if family != "surrounding_object":
+        key = "name" if family == "road" else "classification"
+        fact["value"][key] = "another-background"
+        b["spatial_comparison_slots"] = collect_spatial_comparisons(
+            b["scene_snapshot"], a["scene_snapshot"]
+        )
+        assert context_signature(a) != context_signature(b)
+        assert should_write_space(b, a)
+
+
+async def test_v7_legacy_delivery_still_reads(prepared, tmp_path):  # noqa: F811
+    from daengs_backend.services.walk_diary.writing.relational import write_relational_diary
+    from daengs_walk.diary.relational.assembly import assemble_receipt
+
+    # A pre-policy v7 result is assembled and checked with the old signature.
+    written = await write_relational_diary(prepared, send=sender, review=False)
+    receipt = assemble_receipt(prepared, written)
+    assert "delivery_policy" not in receipt
+    path = tmp_path / "legacy-v7.json"
+    save_skeleton(path, {"prepared": prepared, "receipt": receipt})
+    assert read_skeleton(path) == receipt

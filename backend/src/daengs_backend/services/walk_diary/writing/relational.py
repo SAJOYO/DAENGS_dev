@@ -138,20 +138,32 @@ def validate_prepared(prepared):
     if len(frames) != len(snapshot["frames"]):
         raise ValueError("duplicate frames")
     validate_scene_snapshot_bindings(snapshot)
-    if len({p["scene_id"] for p in snapshot["plans"]}) != len(snapshot["plans"]):
+    return _validate_plans(snapshot)
+
+
+def _validate_plans(snapshot, plans=None, *, frame_positions=None):
+    """Check mutable plans against an owned, already source-validated snapshot.
+
+    Internal sequence boundary only. Public callers must use validate_prepared.
+    """
+    plans = snapshot["plans"] if plans is None else plans
+    frame_positions = (
+        {f["scene_id"]: i for i, f in enumerate(snapshot["frames"])}
+        if frame_positions is None
+        else frame_positions
+    )
+    if len({p["scene_id"] for p in plans}) != len(plans):
         raise ValueError("duplicate scene plans")
     if snapshot.get("scene_comparison_version") == "scene-comparison-v1":
-        times = [aware_time(p["anchor"]["event_at"]) for p in snapshot["plans"]]
+        times = [aware_time(p["anchor"]["event_at"]) for p in plans]
         if any(t is None for t in times) or any(a > b for a, b in pairwise(times)):
             raise ValueError("comparison plans must be in chronological order")
     tasks = []
-    for plan in snapshot["plans"]:
+    for plan in plans:
         if digest({k: v for k, v in plan.items() if k != "revision"}) != plan["revision"]:
             raise ValueError("scene plan changed")
-        frame = frames[plan["scene_id"]]
-        index = next(
-            i for i, f in enumerate(snapshot["frames"]) if f["scene_id"] == frame["scene_id"]
-        )
+        index = frame_positions[plan["scene_id"]]
+        frame = snapshot["frames"][index]
         previous = snapshot["frames"][index - 1] if index else None
         direct_comparison = frame.get("planning_contract") == "scene-comparison-plan-v1"
         if direct_comparison:
@@ -347,6 +359,17 @@ def failure_record(record, exc, phase):
 async def write_relational_diary(prepared, *, send=None, review=True, model=None):
     frozen = deepcopy(prepared)
     tasks = validate_prepared(frozen)
+    return await _write_validated_tasks(
+        tasks,
+        snapshot_revision=frozen["revision"],
+        send=send,
+        review=review,
+        model=model,
+    )
+
+
+async def _write_validated_tasks(tasks, *, snapshot_revision, send=None, review=True, model=None):
+    """Execute locally validated tasks, without owning or copying the source bundle."""
     if send is None:
         model = MODEL
         send = generate_relation_part
@@ -465,7 +488,7 @@ async def write_relational_diary(prepared, *, send=None, review=True, model=None
 
     results = await asyncio.gather(*(run(t) for t in tasks))
     return {
-        "snapshot_revision": frozen["revision"],
+        "snapshot_revision": snapshot_revision,
         "model": model,
         "policy": POLICY,
         "prompt_revision": digest([PROMPTS, COMPARISON_PROMPT]),

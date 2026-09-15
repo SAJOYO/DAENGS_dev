@@ -1,6 +1,7 @@
 """Authenticated HTTP -> real relational orchestration -> saved receipt -> GET."""
 
 from copy import deepcopy
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -10,7 +11,6 @@ from daengs_backend.schemas.walk_relational_diary import RELATIONAL_FORMAT, RELA
 from daengs_backend.services.walk_diary.lifecycle import relational
 from daengs_backend.services.walk_diary.runtime import write_relational_board
 from tests.walk.diary.test_relational_orchestration import (
-    execution,
     prepare,  # noqa: F401 -- fixture registration
     public_collector,  # noqa: F401 -- fixture registration
     send,
@@ -49,7 +49,7 @@ def relational_api(api, prepare, monkeypatch):  # noqa: F811
                 base,
                 prepare=prepare,
                 send=send,
-                execution_policy=execution(),
+                execution_policy=replace(kwargs["execution_policy"], minimum_interval_s=0),
             )
         except Exception as exc:
             state.relational_failure = str(exc)
@@ -126,7 +126,15 @@ def test_reservation_survives_old_60_second_lease_and_get_expiry_writes_no_prose
     async def inspect():
         row = state.row
         assert relational.active(row, row.updated_at + timedelta(seconds=70))
-        assert not relational.active(row, row.updated_at + timedelta(seconds=210))
+        deadline = datetime.fromisoformat(row.bundle["deadline_at"])
+        assert not relational.active(row, deadline)
+        assert relational.active(row, deadline - timedelta(seconds=1))
+        limits = row.bundle["execution_limits"]
+        assert (
+            limits["generation_seconds"]
+            >= limits["max_model_calls"] * 15 + max(0, limits["max_model_calls"] - 1) * 10
+        )
+        assert (deadline - row.updated_at).total_seconds() == limits["generation_seconds"] + 12 + 15
 
     state.relational_hook = inspect
     assert client.post(PATH, json=spec(state)).json()["status"] == "ready"

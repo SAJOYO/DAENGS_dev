@@ -142,6 +142,11 @@ async def generate_relational(session, owner, walk_id, request, *, writer=None, 
         await session.commit()
         return value
     base = assemble_relational_base(assembled, target)
+    records = [getattr(scene.core, "record", None) for scene in base.board.scenes]
+    action_count = sum(
+        r is not None and not r.deleted and r.content.kind == "behavior" for r in records
+    )
+    policy = policy.resolve(len(base.board.scenes), action_count)
     revision = value.input_revision
     # Writing includes pacing/reviews. Publication gets a short separate completion margin.
     execution_s = policy.preparation_timeout_s + policy.generation_timeout_s
@@ -153,6 +158,7 @@ async def generate_relational(session, owner, walk_id, request, *, writer=None, 
         "target": target,
         "execution_limits": {
             "generation_seconds": policy.generation_timeout_s,
+            "max_model_calls": policy.call_budget(len(base.board.scenes), action_count),
             "minimum_call_interval_seconds": policy.minimum_interval_s,
         },
     }
@@ -160,12 +166,14 @@ async def generate_relational(session, owner, walk_id, request, *, writer=None, 
     await session.commit()  # No source/Walk lock survives provider or LLM I/O.
     bundle, failure = None, None
     try:
-        async with asyncio.timeout(execution_s):
+        async with asyncio.timeout(execution_s) as execution_timeout:
             output = await (writer or write_relational_board)(
                 assembled.source,
                 base,
                 execution_policy=policy,
             )
+        if execution_timeout.expired():
+            raise TimeoutError("relational writer exceeded execution deadline")
         bundle = store_result(output, base, revision=revision, generation=generation, target=target)
     except asyncio.CancelledError:
         raise  # Frozen pending deadline remains; GET never publishes replacement prose.

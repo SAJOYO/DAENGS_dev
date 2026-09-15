@@ -47,6 +47,7 @@ def current_background(snapshot):
             "role": "point_land_cover",
             "material": {"피복": fact["value"]["피복"]},
             "relation": fact["scope"]["description"],
+            "time_meaning": fact["time_meaning"],
         }
         for fact in snapshot["facts"]
         if fact["family"] == "land_cover"

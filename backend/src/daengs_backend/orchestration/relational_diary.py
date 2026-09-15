@@ -134,7 +134,6 @@ class RelationalDiaryOrchestrationService:
 
     async def run(self, source, base, *, scene_ids=None):
         from daengs_backend.config import settings
-        from daengs_backend.services.walk_diary.writing.relational import validate_prepared
         from daengs_walk.diary.relational.assembly import assemble_receipt
 
         if self.send is None and not settings.gemini_api_key.get_secret_value().strip():
@@ -171,27 +170,26 @@ class RelationalDiaryOrchestrationService:
             )
         ):
             raise ValueError("collector returned a different relational preparation")
-        validate_prepared(prepared)
-        # Every scene may need introduction recovery; reserve one title plus its review.
-        writers = len(snapshot["frames"]) + sum(bool(p["action_task"]) for p in snapshot["plans"])
-        call_limit = min(
-            self.policy.max_calls, (writers + 1) * (2 if self.policy.semantic_review else 1)
-        )
+        # The writing entrypoint isolates and validates the complete sources
+        # before its first provider call; do not repeat that reconstruction here.
+        action_count = sum(bool(p["action_task"]) for p in snapshot["plans"])
+        policy = self.policy.resolve(len(snapshot["frames"]), action_count)
+        call_limit = policy.call_budget(len(snapshot["frames"]), action_count)
         generated = await generate_prepared_relational_diary(
             prepared,
             send=self.send,
-            review=self.policy.semantic_review,
+            review=policy.semantic_review,
             model=MODEL if self.send is None else "injected_sender; model_not_reported",
-            minimum_interval_s=self.policy.minimum_interval_s,
+            minimum_interval_s=policy.minimum_interval_s,
             max_calls=call_limit,
-            call_timeout_s=self.policy.call_timeout_s,
-            total_timeout_s=self.policy.generation_timeout_s,
+            call_timeout_s=policy.call_timeout_s,
+            total_timeout_s=policy.generation_timeout_s,
         )
         # Keep actual accepted results, including failures and intentional omissions.
         expected = assemble_receipt(generated["prepared"], generated["receipt"]["writing"])
         if any(generated["receipt"].get(k) != v for k, v in expected.items()):
             raise ValueError("relational receipt changed after writing")
-        generated["receipt"]["execution"]["policy"] = asdict(self.policy)
+        generated["receipt"]["execution"]["policy"] = asdict(policy)
         return RelationalDiaryResult(
             input_revision=revision,
             board_revision=board_revision,

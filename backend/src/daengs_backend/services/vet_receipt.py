@@ -34,7 +34,7 @@ from daengs_backend.orchestration.semantic import (
 log = logging.getLogger(__name__)
 
 VET_RECEIPT_MODEL_ID = "gemini-3.1-flash-lite"
-VET_RECEIPT_PROMPT_VERSION = "vet-receipt-extract-v1"
+VET_RECEIPT_PROMPT_VERSION = "vet-receipt-extract-v2"
 #: 한국 전화번호 모양. **네 묶음이 안 맞는 것이 요점** — 카드번호가 이 칸에 못 앉습니다.
 PHONE_PATTERN = r"^[0-9]{2,4}(-[0-9]{3,4}){1,2}$"
 #: 답 문장 몇 개 + JSON 봉투. 항목이 최대 40개까지 실릴 수 있어 general 보다 넉넉히 둔다.
@@ -79,6 +79,11 @@ class ReceiptItem(BaseModel):
     model_config = ConfigDict(extra="forbid")
     name: str = Field(max_length=40)
     amount_krw: int = Field(ge=0, le=100_000_000)
+    #: 이 항목이 몇 번째 `동물명` 블록에 있었나 (0부터). 블록이 하나뿐이거나 구분이
+    #: 안 보이면 `null` 이다. **이름이 아니라 인덱스인 것이 요점이다** — 환자명을 담을
+    #: 칸을 만들면 "개인정보는 칸이 없어서 안 나온다"(docs §2)가 그 자리에서 깨지고,
+    #: `scrub_items` 는 **항목명만** 훑어서 그 칸으로 들어온 보호자 이름을 못 잡는다.
+    patient_index: int | None = Field(default=None, ge=0, le=19)
 
 
 class ReceiptExtraction(BaseModel):
@@ -94,6 +99,10 @@ class ReceiptExtraction(BaseModel):
     items: list[ReceiptItem] = Field(default_factory=list, max_length=40)
     suggested_reason_code: VetReasonCode | None = None
     is_emergency: bool = False
+    #: `동물명` 블록이 몇 개인가. 한 장에 여러 아이가 찍힌 영수증을 가른다 (docs §2 다견).
+    #: **`is_emergency` 와 같은 결이다** — 임상 판단이 아니라 **인쇄된 글자를 세는 값**이라
+    #: 모델이 잘한다. 1 이 기본이고, 2 이상이면 확인 화면이 금액을 나누게 한다.
+    patient_count: int = Field(default=1, ge=1, le=20)
 
     @model_validator(mode="after")
     def shape_matches_status(self) -> "ReceiptExtraction":
@@ -119,6 +128,10 @@ class ReceiptExtraction(BaseModel):
             or self.visited_on is not None
             or self.suggested_reason_code is not None
             or self.is_emergency
+            # 새 칸을 여기 빠뜨리면 계약에 구멍이 난다 — `unreadable` 이 값을 들고
+            # 지나간다. 대신 `_normalize_unreadable_extras` 가 검증 **전에** 눕히므로
+            # 실제 모델 출력 때문에 여기서 터지지는 않는다 (그 함수 주석 참고).
+            or self.patient_count != 1
         ):
             raise ValueError("an unreadable extraction carries nothing else")
         return self
@@ -136,7 +149,7 @@ def scrub_items(items: list[ReceiptItem]) -> list[ReceiptItem]:
 
 # 프롬프트 규칙(docs/vet-visits.md §2 "프롬프트 규칙")을 영문 한 문단으로 옮긴 것이다 —
 # `_CARE_LOG_RULE`(#344)과 같은 결. 애매한 자리 넷의 판정 규칙까지 여기 담는다.
-_RECEIPT_RULE = """You read a Korean veterinary clinic receipt photo. Only transcribe what is actually printed on the receipt — never invent a value that is not there. total_krw comes only from a printed total line on the receipt — 합계, 총액, 청구금액, 받을금액, or the like — and never from anywhere else. Never compute total_krw: do not add up the line items, and do not derive it by any other arithmetic. A sum you calculated is not a total you read, even when it happens to match one. If no such printed total line is visible on the receipt — including when the photo is cropped or cut off before reaching it — output status="unreadable" with unreadable_reason="no_amount", even when every individual item's amount_krw was legible. Never write the payer's name, a personal phone number, a card number, or a business registration number anywhere in the output, including inside item names — if such a string appears next to an item, drop that part and keep only the item description. Amounts are integers in Korean won; strip commas and the "원" suffix, digits only. When a receipt breaks the amount into quantity / discount / amount columns plus a discount-total line, total_krw and every item's amount_krw are the post-discount amount column — never the discount column; the discount itself has no field and must not be captured anywhere. When the printed date is a range such as "2019-05-17 ~ 2019-05-17", visited_on is the start date of the range, even for a hospitalization stay where the two ends differ. hospital_phone is the clinic's own front-desk number, not the payer's — digits and hyphens only. suggested_reason_code must be one of the listed codes or null: when the items alone do not clearly point to one reason, output null (this leaves the confirmation screen with nothing pre-selected, which is the point) — reserve "other" for when the reason is clear but not in the list. Preventive care wins over the body system it happens to target: when an item is a vaccination or a preventive medication, use the matching preventive code even if the item also targets a body system — a ringworm vaccine that treats the skin is still "vaccination", not "skin", because owners ask "how much on prevention" and "how much because it was sick" as two separate questions. When a preventive act has no matching preventive code, fall back to the body-system code instead — a routine dental scaling is preventive but fits none of "vaccination" / "parasite_prevention" / "checkup" / "neuter", so it becomes "dental". Set is_emergency to true only when a line item such as a night-treatment fee, an emergency-treatment fee, or a holiday surcharge is actually printed — never because the treatment merely sounds urgent; this field records printed text, not judgment. When a checkup produced a targeted treatment or test on the same receipt, the body-system code wins over "checkup" — "checkup" is only for a checkup that is not followed by anything. When one visit lists several problems for an older dog, pick the single body system with the largest cost. At the mouth boundary, teeth and gums are "dental" while anything at or below the esophagus is "digestive". At the ear boundary, the outer ear and ear canal are "ear" while the inner ear and vestibular system are "neurologic". Heartworm prevention medication is "parasite_prevention" while treatment of an active heartworm infection is "cardiac" — an instance of the preventive-wins rule above. Neuter surgery and pyometra treatment open the same organs and look alike on a receipt — the diagnostic and procedure line items decide which. If the image is not a receipt, or blurry, output status="unreadable" with the matching reason instead."""
+_RECEIPT_RULE = """You read a Korean veterinary clinic receipt photo. Only transcribe what is actually printed on the receipt — never invent a value that is not there. total_krw comes only from a printed total line on the receipt — 합계, 총액, 청구금액, 받을금액, or the like — and never from anywhere else. Never compute total_krw: do not add up the line items, and do not derive it by any other arithmetic. A sum you calculated is not a total you read, even when it happens to match one. If no such printed total line is visible on the receipt — including when the photo is cropped or cut off before reaching it — output status="unreadable" with unreadable_reason="no_amount", even when every individual item's amount_krw was legible. Never write the payer's name, a personal phone number, a card number, or a business registration number anywhere in the output, including inside item names — if such a string appears next to an item, drop that part and keep only the item description. Amounts are integers in Korean won; strip commas and the "원" suffix, digits only. When a receipt breaks the amount into quantity / discount / amount columns plus a discount-total line, total_krw and every item's amount_krw are the post-discount amount column — never the discount column; the discount itself has no field and must not be captured anywhere. When the printed date is a range such as "2019-05-17 ~ 2019-05-17", visited_on is the start date of the range, even for a hospitalization stay where the two ends differ. hospital_phone is the clinic's own front-desk number, not the payer's — digits and hyphens only. suggested_reason_code must be one of the listed codes or null: when the items alone do not clearly point to one reason, output null (this leaves the confirmation screen with nothing pre-selected, which is the point) — reserve "other" for when the reason is clear but not in the list. Preventive care wins over the body system it happens to target: when an item is a vaccination or a preventive medication, use the matching preventive code even if the item also targets a body system — a ringworm vaccine that treats the skin is still "vaccination", not "skin", because owners ask "how much on prevention" and "how much because it was sick" as two separate questions. When a preventive act has no matching preventive code, fall back to the body-system code instead — a routine dental scaling is preventive but fits none of "vaccination" / "parasite_prevention" / "checkup" / "neuter", so it becomes "dental". Set is_emergency to true only when a line item such as a night-treatment fee, an emergency-treatment fee, or a holiday surcharge is actually printed — never because the treatment merely sounds urgent; this field records printed text, not judgment. When a checkup produced a targeted treatment or test on the same receipt, the body-system code wins over "checkup" — "checkup" is only for a checkup that is not followed by anything. When one visit lists several problems for an older dog, pick the single body system with the largest cost. At the mouth boundary, teeth and gums are "dental" while anything at or below the esophagus is "digestive". At the ear boundary, the outer ear and ear canal are "ear" while the inner ear and vestibular system are "neurologic". Heartworm prevention medication is "parasite_prevention" while treatment of an active heartworm infection is "cardiac" — an instance of the preventive-wins rule above. Neuter surgery and pyometra treatment open the same organs and look alike on a receipt — the diagnostic and procedure line items decide which. A Korean veterinary receipt may cover several animals on one page: it prints a section header naming the patient — "동물명", "환자명", or the like, sometimes bracketed — and the line items for that animal follow underneath, then the next header begins the next animal. patient_count is how many such patient headers are printed, counted in printed order, and every item's patient_index is the 0-based position of the header it sits under. Count only headers that name the animal: "보호자", "고객", "담당", and a veterinarian's name are not patients. When the receipt prints no patient header at all, or only one, patient_count is 1 and every patient_index is null. When a header is present but you cannot tell which header an item belongs to, leave that item's patient_index null rather than guessing. When it is genuinely unclear whether a second header names another animal, prefer the higher patient_count — a confirmation screen that asks one extra question costs far less than a bill silently attributed to the wrong dog. Never output the patient names themselves, anywhere, including inside item names — the count and the index are the whole output. Do not produce a per-patient total: patient_index is something you read off the page, not something you calculate, and the rule above against computing totals applies here too. total_krw remains the single printed total for the whole receipt even when several animals share it. If the image is not a receipt, or blurry, output status="unreadable" with the matching reason instead."""
 
 
 def build_receipt_prompt() -> str:
@@ -208,6 +221,36 @@ def _normalize_ok_without_total(parsed: object) -> object:
     return normalized
 
 
+def _normalize_unreadable_extras(parsed: object) -> object:
+    """`unreadable` 인데 다견 칸이 실려 온 것을 **검증 전에** 눕힌다.
+
+    `shape_matches_status` 는 `blurry`·`not_a_receipt` 가 아무것도 안 들고 오기를
+    요구하는데, 모델은 사진을 못 읽으면서도 `patient_count` 를 2 로 낼 수 있다.
+    그대로 검증에 넣으면 `ValidationError` → `_validate_extraction` 이 `None` →
+    `ReceiptExtractionFailed` → **`status="failed"`** 가 된다.
+
+    **`failed` 는 `unreadable/blurry` 보다 나쁘다.** `extract_draft` 는 failed 를
+    저장하지 않고 돌아가므로 `extracted_at` 이 안 찍히고, 멱등 ③ 이 안 걸려 유저가
+    다시 누를 때마다 **Gemini 를 또 부른다.** 흐린 사진은 계속 흐리므로 같은 자리를
+    맴돈다. 화면 문구도 "사진이 흐려요"가 아니라 "우리 쪽 문제"가 된다.
+
+    그래서 계약(위 검증기)은 그대로 지키되, 실제 출력이 거기서 터지지 않게 여기서
+    눕힌다 — `_normalize_ok_without_total` 과 같은 자리·같은 이유다.
+    """
+    if not isinstance(parsed, dict):
+        return parsed
+    if parsed.get("status") != "unreadable":
+        return parsed
+    if parsed.get("unreadable_reason") == "no_amount":
+        # `no_amount` 는 "읽었지만 합계가 없다" 라 나머지 칸을 들고 와도 된다.
+        return parsed
+    if parsed.get("patient_count", 1) == 1:
+        return parsed
+    normalized = dict(parsed)
+    normalized["patient_count"] = 1
+    return normalized
+
+
 def _validate_extraction(raw: object) -> ReceiptExtraction | None:
     parsed: object = raw
     if isinstance(raw, str):
@@ -218,6 +261,7 @@ def _validate_extraction(raw: object) -> ReceiptExtraction | None:
     if isinstance(parsed, ReceiptExtraction):
         return parsed
     parsed = _normalize_ok_without_total(parsed)
+    parsed = _normalize_unreadable_extras(parsed)
     try:
         return ReceiptExtraction.model_validate(parsed)
     except Exception:  # noqa: BLE001 - invalid model output is never surfaced

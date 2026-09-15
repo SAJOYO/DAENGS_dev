@@ -6,10 +6,16 @@ from dataclasses import dataclass
 from pydantic import Field
 
 from daengs_backend.services.walk_diary.model_materials import location, material
+from daengs_walk.diary.board.action_context import require_action
 from daengs_walk.diary.board.activity import activity_projection
+from daengs_walk.diary.board.narration import narration_context
+from daengs_walk.diary.board.space_scene import project_scene
 from daengs_walk.diary.contracts.input import DiaryContract
 
-VERSION = "diary-prose-input-v3"
+LEGACY_VERSION = "diary-prose-input-v6"
+NARRATION_INPUT_VERSION = "diary-prose-input-v7"
+VERSION = "diary-prose-input-v8"
+READABLE_INPUT_VERSIONS = (LEGACY_VERSION, NARRATION_INPUT_VERSION, VERSION)
 
 
 class SpaceAnswer(DiaryContract):
@@ -122,7 +128,14 @@ class ModelRequest:
                     **result,
                     "action_id": action["id"] if action else None,
                     "text": answer.text,
-                    "movement_ids": [self.references[k] for k in answer.evidence_ids if k != "a1"],
+                    "movement_ids": sorted(
+                        {
+                            ref
+                            for k in answer.evidence_ids
+                            if k != "a1"
+                            for ref in self.references[k]
+                        }
+                    ),
                 }
             answer = ActionAnswer.model_validate(raw)
             return {**result, "action_id": self.internal["action"]["id"], "text": answer.text}
@@ -151,7 +164,12 @@ def normalize(stage, request):
             references[key] = item["id"]
             materials.append({"id": key, **projected})
         payload = {"materials": materials}
+        if "space_scene" in request:
+            payload["space_scene"] = project_scene(
+                request["materials"], request["space_scene"], {v: k for k, v in references.items()}
+            )
     elif stage == "action":
+        require_action(request)
         if request.get("movement"):
             payload, references = activity_projection(request)
         else:
@@ -209,4 +227,8 @@ def normalize(stage, request):
         payload = {"scenes": scenes}
     else:
         raise ValueError("unsupported diary writer stage")
+    if stage in {"space", "action"}:
+        context = narration_context(request.get("walk_context"))
+        if context is not None:
+            payload["narration"] = context
     return ModelRequest(stage, payload, request, references)

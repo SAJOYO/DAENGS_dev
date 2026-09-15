@@ -5,6 +5,7 @@ from datetime import datetime
 from itertools import groupby, pairwise
 
 from daengs_walk.diary.contracts.input import digest
+from daengs_walk.diary.route.movement_geometry import SHAPE_MEANINGS, movement_shapes
 from daengs_walk.diary.route.patterns import RoutePatternBindingPolicy
 from daengs_walk.route.nodes import route_nodes
 from daengs_walk.route.pace import session_speed_baseline
@@ -70,14 +71,13 @@ def pace_claims(nodes, baseline, policy, source_revision):
 
 def prepare_movement(source, route, policy, pattern_policy=None):
     from daengs_walk.diary.route.binding import verified_route
-    from daengs_walk.diary.route.patterns import normalize_route_patterns
 
     if route is None:
         return None
     # The existing preparation checks source route identity and canonical quality.
     _, _, route_revision = verified_route(source, route)
     binding = pattern_policy or RoutePatternBindingPolicy()
-    patterns = normalize_route_patterns(route.evidence, route_revision, binding.geometry)
+    shapes, shape_audit, shape_policy = movement_shapes(route.evidence, binding.geometry)
     nodes = route_nodes(route.evidence)
     origin = route.evidence.facts.started_at
     baseline = session_speed_baseline(nodes, minimum_speed=0.5, minimum_samples=5)
@@ -94,15 +94,17 @@ def prepare_movement(source, route, policy, pattern_policy=None):
     }
     policies = {
         "movement": policy.model_dump(mode="json"),
-        "geometry": patterns.policy.model_dump(mode="json"),
-        "geometry_dictionary": patterns.dictionary_version,
+        "geometry": binding.geometry.model_dump(mode="json"),
+        "shape_analysis": shape_policy.model_dump(mode="json"),
+        "geometry_dictionary": digest(SHAPE_MEANINGS),
     }
-    revision = digest([patterns.source_revision, policies])
+    revision = digest([route_revision, policies])
+    audit["shape_quality"] = shape_audit
     claims = pace_claims(nodes, baseline, policy, revision)
     blocks = {block: list(group) for block, group in groupby(nodes, key=lambda n: n["block"])}
-    for item in patterns.materials:
-        start = (datetime.fromisoformat(item.support["started_at"]) - origin).total_seconds()
-        end = (datetime.fromisoformat(item.support["ended_at"]) - origin).total_seconds()
+    for item in shapes:
+        start = (datetime.fromisoformat(item["support"]["started_at"]) - origin).total_seconds()
+        end = (datetime.fromisoformat(item["support"]["ended_at"]) - origin).total_seconds()
         matches = [
             block
             for block, points in blocks.items()
@@ -112,23 +114,23 @@ def prepare_movement(source, route, policy, pattern_policy=None):
             continue
         claims.append(
             {
-                "id": item.id,
+                "id": "movement-shape:" + digest([revision, item]),
                 "kind": "path",
-                "meaning": item.case_id,
+                "meaning": item["meaning"],
                 "start_s": start,
                 "end_s": end,
                 "block": matches[0],
                 **(
                     {
                         "event_s": (
-                            datetime.fromisoformat(item.anchor["at"]) - origin
+                            datetime.fromisoformat(item["anchor"]["at"]) - origin
                         ).total_seconds()
                     }
-                    if item.case_id.startswith("turn_")
+                    if item["is_event"]
                     else {}
                 ),
                 # Shape proof remains internal, including retrace correspondence and pivot.
-                "proof": item.model_dump(mode="json"),
+                "proof": item,
             }
         )
     return MovementCatalog(revision, origin, tuple(nodes), tuple(claims), audit, policies)
@@ -138,7 +140,12 @@ def phases_for(claims, start, end):
     """A phase contains only claims valid across its whole interval."""
     selected = [c for c in claims if c["start_s"] < end and c["end_s"] > start]
     cuts = sorted(
-        {start, end, *(max(start, min(end, c[k])) for c in selected for k in ("start_s", "end_s"))}
+        {
+            start,
+            end,
+            *(max(start, min(end, c[k])) for c in selected for k in ("start_s", "end_s")),
+            *(c["event_s"] for c in selected if "event_s" in c and start < c["event_s"] < end),
+        }
     )
     phases = []
     for left, right in pairwise(cuts):

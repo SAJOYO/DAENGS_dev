@@ -3,13 +3,9 @@
 from daengs_walk.diary.contracts.slots import PartStamp, SlotDecision
 
 
-def admit(scene_id, candidates, decisions, policy):
-    """Rebuild slots from applicable materials; fewer materials is a valid result.
-
-    Total capacity is round-robin over each part's ranked queue (space/env/motion).
-    This is a visible budget tie-break, not a required mix or cross-part score.
-    """
-    from daengs_walk.diary.slots.claims import SPATIAL_ORDER, resolve_claims, spatial_order
+def eligible_candidates(candidates, decisions, policy):
+    """Resolve meaning and scope before any writing capacity is applied."""
+    from daengs_walk.diary.slots.claims import SPATIAL_ORDER, resolve_claims
 
     candidates = resolve_claims(candidates, decisions)
     applicable = []
@@ -45,7 +41,16 @@ def admit(scene_id, candidates, decisions, policy):
             )
         else:
             applicable.append(item)
-    candidates = applicable
+    return applicable
+
+
+def admit(scene_id, candidates, decisions, policy, *, eligible_out=None):
+    """Apply the existing budgets; optionally retain the complete eligible frame."""
+    from daengs_walk.diary.slots.claims import spatial_order
+
+    candidates = eligible_candidates(candidates, decisions, policy)
+    if eligible_out is not None:
+        eligible_out.extend(candidates)
     # Display metadata is independent of prose capacity. Conflicts were resolved above.
     temperatures = sorted(
         (c for c in candidates if c.role == "grid_temperature_observation"),

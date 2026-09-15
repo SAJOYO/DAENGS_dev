@@ -13,7 +13,7 @@ from tests.walk.support.observations import stored, uploaded
 from tests.walk.support.route_patterns import scenarios
 
 
-def test_enabled_patterns_reach_writer_storage_and_reopen_without_regeneration(api, monkeypatch):
+def test_legacy_writer_omits_new_movement_and_reopens_without_regeneration(api, monkeypatch):
     client, state, _ = api
     state.walk, state.analysis, _ = stored(uploaded([(i * 10, i * 20) for i in range(30)]))
     monkeypatch.setattr(settings, "walk_diary_route_patterns_enabled", True)
@@ -29,9 +29,7 @@ def test_enabled_patterns_reach_writer_storage_and_reopen_without_regeneration(a
         for e in s["evidence"]
         if e["facts"].get("format") == "diary-movement-material-v1"
     ]
-    assert patterns and all(
-        {c["meaning"] for c in e["facts"]["claims"]} == {"straight_run"} for e in patterns
-    )
+    assert not patterns
     payload = state.provider.call_args.args[0]
     projected = [
         e["facts"]
@@ -39,7 +37,7 @@ def test_enabled_patterns_reach_writer_storage_and_reopen_without_regeneration(a
         for e in scene_materials(s)
         if "movement" in e["facts"]
     ]
-    assert projected and all(set(f) == {"movement", "subject", "action_meaning"} for f in projected)
+    assert not projected
     query = "?bundle_format=walk-diary-board-v1&target_scene_count=3"
     assert client.get(PATH + query).json() == result
     assert client.post(PATH, json=request).json() == result

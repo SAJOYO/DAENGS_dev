@@ -1,0 +1,255 @@
+{
+  "cards": [
+    {
+      "index": 1,
+      "label": "풀밭 배경",
+      "card": {
+        "id": "stamp:9e82be6f4ff6d65eb3d67647139cc351eff5446e36212071ff81b71a98d824bc",
+        "order": 1,
+        "core": {
+          "identity": "boundary:17d3324c4619032bd2d1cafa294c1ebdcc380677559f5598be3265f1fa769156",
+          "version": "bacb911cd48e0f97b0e94c62fbbd18dd96d32ce2250d3c13f7181d2eadd6a533"
+        },
+        "kind": "session_boundary",
+        "anchor": {
+          "event_at": "2026-09-14T01:04:20Z",
+          "time_basis": "route_observation",
+          "point": {
+            "lat": 37.470589119054424,
+            "lng": 127.03785721894909
+          },
+          "location_at": "2026-09-14T01:04:20Z",
+          "accuracy_m": 5.0,
+          "position_state": "resolved",
+          "method": "observed",
+          "source_fixes": [
+            {
+              "client_seq": 0,
+              "chain_index": 0,
+              "at": "2026-09-14T01:04:20Z"
+            }
+          ]
+        },
+        "title": "산책의 시작",
+        "body": "양재2동의 공원 옆 풀밭을 지나갔다.",
+        "user_record": null,
+        "observation": null,
+        "checkpoint": null,
+        "boundary": "start",
+        "place_reference": [
+          {
+            "id": "slot:e34f1614eb4078921823731a04721f97299a993f65784017ece38e37d7f7b173",
+            "background_id": "normalized:7dbd8166b702a2360ebda6a0f69b43fbe1176dff44906c1ddcbdd72a5f73ded1",
+            "kind": "place_reference",
+            "schema_version": "sgis-dong-v1",
+            "facts": {
+              "dong": "양재2동",
+              "sido": "서울특별시",
+              "sigungu": "서초구",
+              "address_type": "administrative_dong",
+              "source_ref": {
+                "source": "sgis",
+                "ref": "11:220:670"
+              },
+              "reference": "coordinate_reverse_geocoded_dong",
+              "position_method": "observed",
+              "location_basis": "original_location",
+              "temporal_basis": "lookup_snapshot",
+              "retrieved_at": "2026-09-14T03:06:26.921341+00:00"
+            }
+          }
+        ],
+        "writing": {
+          "format": "diary-card-narrative-v2",
+          "content_revision": "ae7f18c74c9d5180f225a839fde4a61e7a8146e9d79a3a6e356248397b64aae7",
+          "space": {
+            "text": "양재2동의 공원 옆 풀밭을 지나갔다.",
+            "origin": "generated",
+            "action_id": null,
+            "actor_id": null
+          },
+          "actions": [],
+          "original_text": null,
+          "title_origin": "fallback",
+          "title_based_on_content_revision": "ae7f18c74c9d5180f225a839fde4a61e7a8146e9d79a3a6e356248397b64aae7"
+        }
+      }
+    },
+    {
+      "index": 2,
+      "label": "길 배경",
+      "card": {
+        "id": "stamp:0a1a08f3801cbe9ef7550551e07ad2227b1f304c053601501653c9fb1c7b08bc",
+        "order": 2,
+        "core": {
+          "identity": "walk_entry:scenario-record-1",
+          "version": "9432ad2ef8da73cf70a24780ad06bcf3e3a95d6a3cfe0a49e473cfd3719e94c3"
+        },
+        "kind": "user_record",
+        "anchor": {
+          "event_at": "2026-09-14T01:10:00Z",
+          "time_basis": "recorded_at",
+          "point": {
+            "lat": 37.47333149207589,
+            "lng": 127.03729634665666
+          },
+          "location_at": "2026-09-14T01:10:00Z",
+          "accuracy_m": 5.0,
+          "position_state": "resolved",
+          "method": "observed",
+          "source_fixes": [
+            {
+              "client_seq": 34,
+              "chain_index": 0,
+              "at": "2026-09-14T01:10:00Z"
+            }
+          ]
+        },
+        "title": "킁킁",
+        "body": "양재2동의 길을 따라 걸었다. 근처에 공원이 자리했다.\n보리는 상대적으로 느린 걸음으로 곧게 이동하던 중 잠시 멈춰 서서 냄새를 맡았다.",
+        "user_record": {
+          "kind": "behavior",
+          "code": "sniffing",
+          "pet_id": "scenario-pet"
+        },
+        "observation": null,
+        "checkpoint": null,
+        "boundary": null,
+        "place_reference": [
+          {
+            "id": "slot:5148750eecec29c760d15e6f8134c38866e9eac25d7a86423663ee159a338110",
+            "background_id": "normalized:426cfe9a942deda5cf4ccad832aa0ee36544a104a2d30b1f1bee16b20a38efd3",
+            "kind": "place_reference",
+            "schema_version": "sgis-dong-v1",
+            "facts": {
+              "dong": "양재2동",
+              "sido": "서울특별시",
+              "sigungu": "서초구",
+              "address_type": "administrative_dong",
+              "source_ref": {
+                "source": "sgis",
+                "ref": "11:220:670"
+              },
+              "reference": "coordinate_reverse_geocoded_dong",
+              "position_method": "observed",
+              "location_basis": "original_location",
+              "temporal_basis": "lookup_snapshot",
+              "retrieved_at": "2026-09-14T03:06:27.035009+00:00"
+            }
+          }
+        ],
+        "writing": {
+          "format": "diary-card-narrative-v2",
+          "content_revision": "554f75f50df1c69ae20e109efb81284801a72147451afd552a3331bdb83dac83",
+          "space": {
+            "text": "양재2동의 길을 따라 걸었다. 근처에 공원이 자리했다.",
+            "origin": "generated",
+            "action_id": null,
+            "actor_id": null
+          },
+          "actions": [
+            {
+              "text": "보리는 상대적으로 느린 걸음으로 곧게 이동하던 중 잠시 멈춰 서서 냄새를 맡았다.",
+              "origin": "generated",
+              "action_id": "action:25422e04000b44bc68418cbcfdcd5cf508cbfdfa3853cd77cc87bdc7338892c1",
+              "actor_id": "scenario-pet",
+              "movement_ids": [
+                "movement-use:9add837274812f015d71707e79b19b60a4dec49553222c301abc65f1c84aeef9",
+                "movement-use:f65ff9fb71f0af8fcf0dc4f7027210de139026894654e1daba72db55d6c34dcb"
+              ]
+            }
+          ],
+          "original_text": null,
+          "title_origin": "fallback",
+          "title_based_on_content_revision": "554f75f50df1c69ae20e109efb81284801a72147451afd552a3331bdb83dac83"
+        }
+      }
+    },
+    {
+      "index": 3,
+      "label": "숲 배경",
+      "card": {
+        "id": "stamp:330bbd9b1be86ddf15657f4d2e04c4ad7fb6cfeb93d1f585ff5cb54e1a3bc927",
+        "order": 3,
+        "core": {
+          "identity": "checkpoint:2a3d1f813e11e569fcafa38c9f6102f81449133570dd4c244f4a81aaba6768e6",
+          "version": "f9277260e7453d95275288168135c4ac403e3fbb12db872435e9cc482d4b6434"
+        },
+        "kind": "route_checkpoint",
+        "anchor": {
+          "event_at": "2026-09-14T01:15:50Z",
+          "time_basis": "route_observation",
+          "point": {
+            "lat": 37.47385678898773,
+            "lng": 127.03468728149925
+          },
+          "location_at": "2026-09-14T01:15:50Z",
+          "accuracy_m": 5.0,
+          "position_state": "resolved",
+          "method": "observed",
+          "source_fixes": [
+            {
+              "client_seq": 69,
+              "chain_index": 0,
+              "at": "2026-09-14T01:15:50Z"
+            }
+          ]
+        },
+        "title": "산책길에서",
+        "body": "양재1동의 공원과 숲이 어우러진 길을 따라 걸었다.",
+        "user_record": null,
+        "observation": null,
+        "checkpoint": {
+          "analysis_id": "simulated-tmap-route",
+          "block": 0,
+          "route_m": 644.5826381817194
+        },
+        "boundary": null,
+        "place_reference": [
+          {
+            "id": "slot:037cce047758942ce82c7c5438094988af711644c1fd27a4e1a7499d897220b8",
+            "background_id": "normalized:93b3360fbeacca626c6e673a018d33572c6ac497afd88794ca330b96a720b536",
+            "kind": "place_reference",
+            "schema_version": "sgis-dong-v1",
+            "facts": {
+              "dong": "양재1동",
+              "sido": "서울특별시",
+              "sigungu": "서초구",
+              "address_type": "administrative_dong",
+              "source_ref": {
+                "source": "sgis",
+                "ref": "11:220:660"
+              },
+              "reference": "coordinate_reverse_geocoded_dong",
+              "position_method": "observed",
+              "location_basis": "original_location",
+              "temporal_basis": "lookup_snapshot",
+              "retrieved_at": "2026-09-14T03:06:28.276574+00:00"
+            }
+          }
+        ],
+        "writing": {
+          "format": "diary-card-narrative-v2",
+          "content_revision": "48059af84d14eff3e0d6488b70636f9f4d47c112eb3c65f2fa6088eb7b800267",
+          "space": {
+            "text": "양재1동의 공원과 숲이 어우러진 길을 따라 걸었다.",
+            "origin": "generated",
+            "action_id": null,
+            "actor_id": null
+          },
+          "actions": [],
+          "original_text": null,
+          "title_origin": "fallback",
+          "title_based_on_content_revision": "48059af84d14eff3e0d6488b70636f9f4d47c112eb3c65f2fa6088eb7b800267"
+        }
+      }
+    }
+  ],
+  "new_model_requests": 1,
+  "new_space_requests": 0,
+  "new_title_requests": 0,
+  "new_public_api_calls": 0,
+  "generated_actions": 1,
+  "reused_spaces": 3,
+  "action_status": "accepted"
+}

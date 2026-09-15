@@ -48,17 +48,60 @@ def test_real_public_materials_keep_meaning_and_drop_all_provenance():
         "coordinates",
     ):
         assert key not in text
-    assert "24.2" in text and "격자" in text and "토지피복" in text and "등록 지점" in text
+    assert "24.2" in text and "격자" in text and "배경 유형" in text and "근처에 공원" in text
     for source, sent in zip(job["request"]["materials"], values, strict=True):
         if "material" in source["facts"]:
             if sent["role"] == "area_statistics":
                 assert sent["material"]["업종구성"] == source["facts"]["material"]["업종구성"]
                 assert "구간" not in str(sent["material"])
                 assert "조회영역_등록분포" in sent["material"]
+            elif (
+                source["facts"].get("relation", {}).get("kind") == "registered_park_point_distance"
+            ):
+                assert sent["material"] == {"배경": "공원"}
             else:
                 assert sent["material"] == source["facts"]["material"]
     assert job == before
     assert len(text.encode()) < len(json.dumps(job["request"], ensure_ascii=False).encode()) / 2
+
+
+@pytest.mark.parametrize("legacy", [False, True])
+def test_park_name_type_and_distance_stay_internal_but_citation_survives(legacy):
+    facts = (
+        {
+            "name": "긴고유명공원",
+            "park_kind": "근린공원",
+            "distance_m": 42,
+            "reference": "registered_park_point",
+        }
+        if legacy
+        else {
+            "material": {"공원명": "긴고유명공원", "공원종류": "근린공원"},
+            "relation": {"kind": "registered_park_point_distance", "distance_m": 42},
+        }
+    )
+    request = {
+        "card_id": "card",
+        "request_revision": "r",
+        "materials": [
+            {
+                "id": "original-park-evidence",
+                "role": "scene_registered_point_distance",
+                "facts": facts,
+            }
+        ],
+    }
+    before = deepcopy(request)
+    model = normalize("space", request)
+    sent = model.payload["materials"][0]
+    assert sent["material"] == {"배경": "공원"}
+    assert "근처" in sent["relation"] and "방문 여부는 미확인" in sent["relation"]
+    text = json.dumps(model.payload, ensure_ascii=False)
+    assert all(value not in text for value in ("긴고유명", "근린공원", "42", "distance_m"))
+    assert model.restore({"text": "근처에 공원이 있었다.", "evidence_ids": ["m1"]})[
+        "evidence_ids"
+    ] == ["original-park-evidence"]
+    assert request == before
 
 
 def test_future_metadata_is_not_implicitly_promoted_to_prose():
@@ -159,24 +202,34 @@ def test_legacy_relations_are_kept_without_provider_objects(role, facts, meaning
 
 async def test_sdk_gets_the_recorded_normalized_request(monkeypatch):
     from google import genai
+    from google.genai import types
 
     from daengs_backend.config import settings
 
     sent = []
 
     async def generate_content(*, model, contents, config):
-        payload = json.loads(contents)
+        payload = json.loads(contents if isinstance(contents, str) else contents[0].parts[0].text)
         stage = (
             "title"
             if "cards" in payload
             else "action"
-            if {"actor", "movement"} & payload.keys()
+            if {"actor", "recorded_action"} & payload.keys()
             else "space"
         )
         sent.append(payload)
         assert not {"card_id", "request_revision", "anchor", "evidence"} & payload.keys()
         assert "request_revision" not in json.dumps(config.response_json_schema)
-        return SimpleNamespace(text=json.dumps(await prose(stage, payload, {})))
+        text = json.dumps(await prose(stage, payload, {}))
+        if stage == "space":
+            return types.GenerateContentResponse(
+                candidates=[
+                    types.Candidate(
+                        content=types.Content(role="model", parts=[types.Part(text=text)])
+                    )
+                ]
+            )
+        return SimpleNamespace(text=text)
 
     class Client:
         def __init__(self, **_):
@@ -194,7 +247,9 @@ async def test_sdk_gets_the_recorded_normalized_request(monkeypatch):
     base = prepared()
     result = await writing.write_cards(base.input.source, base, collector=collect_with_sgis)
     assert all(j.failure_code is None for j in result.jobs)
-    assert sorted(map(str, sent)) == sorted(str(j.llm_request) for j in result.jobs)
+    assert sorted(map(str, sent)) == sorted(
+        str(j.tool_trace["initial_input"] if j.tool_trace else j.llm_request) for j in result.jobs
+    )
     for job in result.jobs:
         if job.stage == "space" and job.accepted["evidence_ids"]:
             assert all(key in job.evidence for key in job.accepted["evidence_ids"])

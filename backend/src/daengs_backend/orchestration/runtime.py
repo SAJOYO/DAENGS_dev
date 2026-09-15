@@ -76,4 +76,20 @@ def build_diary_orchestrator(*, generate, collector=None):
     return DiaryOrchestrationService(generate=generate, collector=collector)
 
 
-__all__ = ["Orchestrator", "build_diary_orchestrator", "build_orchestrator"]
+def build_relational_diary_orchestrator(*, prepare=None, send=None, execution_policy=None):
+    """Our relational service contract; never adapt through the old card graph."""
+    from daengs_backend.orchestration.relational_diary import RelationalDiaryOrchestrationService
+
+    return RelationalDiaryOrchestrationService(
+        prepare=prepare,
+        send=send,
+        execution_policy=execution_policy,
+    )
+
+
+__all__ = [
+    "Orchestrator",
+    "build_diary_orchestrator",
+    "build_orchestrator",
+    "build_relational_diary_orchestrator",
+]

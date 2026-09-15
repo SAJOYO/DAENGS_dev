@@ -1,0 +1,575 @@
+{
+  "status": "accepted",
+  "stage": "action",
+  "requests": [
+    {
+      "status": "returned",
+      "usage": {
+        "candidates_token_count": 53,
+        "prompt_token_count": 588,
+        "prompt_tokens_details": [
+          {
+            "modality": "TEXT",
+            "token_count": 588
+          }
+        ],
+        "total_token_count": 641
+      },
+      "answer_text": "{\n  \"text\": \"산책 걸음이 비교적 느렸던 때, 보리가 냄새를 맡았다.\",\n  \"evidence_ids\": [\n    \"a1\",\n    \"m1\"\n  ]\n}",
+      "elapsed_s": 1.187
+    }
+  ],
+  "input": {
+    "recorded_action": {
+      "id": "a1",
+      "actor": "보리",
+      "action": "냄새 맡기"
+    },
+    "narration": {
+      "narrator": "이 산책을 기록한 보호자(나)",
+      "companions": [
+        {
+          "name": "보리"
+        }
+      ],
+      "scope": "현재 장면"
+    },
+    "movement_context": {
+      "id": "m1",
+      "meaning": "대체로 곧게 이동. 그 시각의 걸음은 이번 산책의 다른 이동 구간보다 상대적으로 느린 걸음",
+      "relation": "행동이 기록된 시각의 산책 이동. 행동의 지속 구간이나 원인은 아님"
+    }
+  },
+  "answer": "{\n  \"text\": \"산책 걸음이 비교적 느렸던 때, 보리가 냄새를 맡았다.\",\n  \"evidence_ids\": [\n    \"a1\",\n    \"m1\"\n  ]\n}",
+  "elapsed_s": 1.219,
+  "job": {
+    "stage": "action",
+    "request_revision": "e807ef56a81c9cfa55791deb96bc7db1859ebf6abd1a4610ebced83db0c8fe46",
+    "request": {
+      "card_id": "stamp:0a1a08f3801cbe9ef7550551e07ad2227b1f304c053601501653c9fb1c7b08bc",
+      "event_at": "2026-09-14T01:10:00+00:00",
+      "walk_context": {
+        "narration_version": "guardian-walk-context-v1",
+        "record_kind": "guardian_walk_diary",
+        "companions": [
+          {
+            "id": "scenario-pet",
+            "name": "보리"
+          }
+        ]
+      },
+      "action": {
+        "id": "action:25422e04000b44bc68418cbcfdcd5cf508cbfdfa3853cd77cc87bdc7338892c1",
+        "kind": "sniffing",
+        "material": {
+          "무엇을": "냄새 맡기"
+        },
+        "actor": {
+          "id": "scenario-pet",
+          "name": "보리"
+        }
+      },
+      "movement": [
+        {
+          "id": "slot:b82e22d3271263e9778a6464d88a2ee181958028aee895fe00f105effc443a45",
+          "facts": {
+            "format": "diary-movement-material-v1",
+            "subject": "recording_device",
+            "action_meaning": "not_inferred",
+            "scene_at_s": 340.0,
+            "window": {
+              "start_s": 170.0,
+              "end_s": 515.0
+            },
+            "phases": [
+              {
+                "start_s": 330.0,
+                "end_s": 390.0,
+                "claims": [
+                  "movement-claim:ce24a06be985788df2d0bd5aa2096b20c71db7e1aa47e31711932dbd4cf43384",
+                  "movement-shape:97cb8122c70faa55d2869f7531746ab044b0c3d4e75215a11f7c93cc5b4b970d"
+                ]
+              }
+            ],
+            "claims": [
+              {
+                "id": "movement-claim:ce24a06be985788df2d0bd5aa2096b20c71db7e1aa47e31711932dbd4cf43384",
+                "kind": "pace",
+                "meaning": "relative_slow",
+                "block": 0,
+                "start_s": 230.0,
+                "end_s": 450.0,
+                "mean_mps": 0.5462620603786177,
+                "baseline_mps": 1.149998134796999
+              },
+              {
+                "id": "movement-shape:97cb8122c70faa55d2869f7531746ab044b0c3d4e75215a11f7c93cc5b4b970d",
+                "kind": "path",
+                "meaning": "straight_run",
+                "start_s": 320.0,
+                "end_s": 460.0,
+                "block": 0,
+                "proof": {
+                  "axis": "route_pattern",
+                  "kind": "path",
+                  "status": "candidate",
+                  "subject": "recording_device",
+                  "support": {
+                    "chain_index": 0,
+                    "pattern_run_index": 0,
+                    "from_seq": 32,
+                    "to_seq": 46,
+                    "started_at": "2026-09-14T01:09:40+00:00",
+                    "ended_at": "2026-09-14T01:12:00+00:00",
+                    "window_s": 140.0,
+                    "time_meaning": "observed_support_window"
+                  },
+                  "anchor": {
+                    "client_seq": 32,
+                    "at": "2026-09-14T01:09:40+00:00",
+                    "lat": 37.47328114653986,
+                    "lng": 127.03737532960702,
+                    "route_offset_m": 312.537
+                  },
+                  "metrics": {
+                    "max_deviation_m": 5.054276010901515
+                  },
+                  "quality": {
+                    "fix_count": 15,
+                    "accuracy_p50_m": 5.0,
+                    "unknown_accuracy_count": 0
+                  },
+                  "meaning": "straight_run",
+                  "is_event": false
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "request_revision": "e807ef56a81c9cfa55791deb96bc7db1859ebf6abd1a4610ebced83db0c8fe46"
+    },
+    "llm_request": {
+      "recorded_action": {
+        "id": "a1",
+        "actor": "보리",
+        "action": "냄새 맡기"
+      },
+      "narration": {
+        "narrator": "이 산책을 기록한 보호자(나)",
+        "companions": [
+          {
+            "name": "보리"
+          }
+        ],
+        "scope": "현재 장면"
+      },
+      "movement_context": {
+        "id": "m1",
+        "meaning": "대체로 곧게 이동. 그 시각의 걸음은 이번 산책의 다른 이동 구간보다 상대적으로 느린 걸음",
+        "relation": "행동이 기록된 시각의 산책 이동. 행동의 지속 구간이나 원인은 아님"
+      }
+    },
+    "evidence": {
+      "slot:b82e22d3271263e9778a6464d88a2ee181958028aee895fe00f105effc443a45": {
+        "id": "slot:b82e22d3271263e9778a6464d88a2ee181958028aee895fe00f105effc443a45",
+        "part": "motion",
+        "role": "scene_movement",
+        "source_id": "movement:a7cb7dd8b9516b5cc351074fdbbf533012cfb6b52261d5033febe852e9a4ef8b",
+        "source_version": "a7cb7dd8b9516b5cc351074fdbbf533012cfb6b52261d5033febe852e9a4ef8b",
+        "entity_key": "9da3845a602240d41d0c4f8f4883114881a395cd8427cca7244d614063648112",
+        "claim_scope": "eb5c9e45ad66c4ded08a25ac7c2c578f7e70a6f836228ad144670c75e000a5e1",
+        "claim_key": "a1aaf2e1e7f1db992de1b095497521dfe648eee57b53130a4624ea6bbca9efbc",
+        "sources": [
+          {
+            "source_id": "movement:a7cb7dd8b9516b5cc351074fdbbf533012cfb6b52261d5033febe852e9a4ef8b",
+            "source_version": "a7cb7dd8b9516b5cc351074fdbbf533012cfb6b52261d5033febe852e9a4ef8b"
+          }
+        ],
+        "facts": {
+          "format": "diary-movement-material-v1",
+          "subject": "recording_device",
+          "action_meaning": "not_inferred",
+          "scene_at_s": 340.0,
+          "window": {
+            "start_s": 170.0,
+            "end_s": 515.0
+          },
+          "phases": [
+            {
+              "start_s": 170.0,
+              "end_s": 230.0,
+              "claims": [
+                "movement-shape:f140a273587b4441900464fe5d570551b30a22a27fc612473bda80c78968c77f"
+              ]
+            },
+            {
+              "start_s": 230.0,
+              "end_s": 270.0,
+              "claims": [
+                "movement-claim:ce24a06be985788df2d0bd5aa2096b20c71db7e1aa47e31711932dbd4cf43384",
+                "movement-shape:f140a273587b4441900464fe5d570551b30a22a27fc612473bda80c78968c77f"
+              ]
+            },
+            {
+              "start_s": 270.0,
+              "end_s": 320.0,
+              "claims": [
+                "movement-claim:ce24a06be985788df2d0bd5aa2096b20c71db7e1aa47e31711932dbd4cf43384",
+                "movement-shape:f140a273587b4441900464fe5d570551b30a22a27fc612473bda80c78968c77f"
+              ]
+            },
+            {
+              "start_s": 320.0,
+              "end_s": 330.0,
+              "claims": [
+                "movement-claim:ce24a06be985788df2d0bd5aa2096b20c71db7e1aa47e31711932dbd4cf43384",
+                "movement-shape:97cb8122c70faa55d2869f7531746ab044b0c3d4e75215a11f7c93cc5b4b970d"
+              ]
+            },
+            {
+              "start_s": 330.0,
+              "end_s": 390.0,
+              "claims": [
+                "movement-claim:ce24a06be985788df2d0bd5aa2096b20c71db7e1aa47e31711932dbd4cf43384",
+                "movement-shape:2d1d87971f442c40b59355540a9aff9408432921dc2270e170922e70b1ef333c",
+                "movement-shape:97cb8122c70faa55d2869f7531746ab044b0c3d4e75215a11f7c93cc5b4b970d"
+              ]
+            },
+            {
+              "start_s": 390.0,
+              "end_s": 450.0,
+              "claims": [
+                "movement-claim:ce24a06be985788df2d0bd5aa2096b20c71db7e1aa47e31711932dbd4cf43384",
+                "movement-shape:97cb8122c70faa55d2869f7531746ab044b0c3d4e75215a11f7c93cc5b4b970d"
+              ]
+            },
+            {
+              "start_s": 450.0,
+              "end_s": 460.0,
+              "claims": [
+                "movement-shape:97cb8122c70faa55d2869f7531746ab044b0c3d4e75215a11f7c93cc5b4b970d",
+                "movement-shape:c719b322ac5cae4a216764e930c2114b747cf3b09e46e95172a073eaa0af751d"
+              ]
+            },
+            {
+              "start_s": 460.0,
+              "end_s": 510.0,
+              "claims": [
+                "movement-shape:25bd9e39db3570ef8cd27b75830e4373e0115b966d0aacb00f159c6cae1deb1a"
+              ]
+            }
+          ],
+          "claims": [
+            {
+              "id": "movement-claim:ce24a06be985788df2d0bd5aa2096b20c71db7e1aa47e31711932dbd4cf43384",
+              "kind": "pace",
+              "meaning": "relative_slow",
+              "block": 0,
+              "start_s": 230.0,
+              "end_s": 450.0,
+              "mean_mps": 0.5462620603786177,
+              "baseline_mps": 1.149998134796999
+            },
+            {
+              "id": "movement-shape:25bd9e39db3570ef8cd27b75830e4373e0115b966d0aacb00f159c6cae1deb1a",
+              "kind": "path",
+              "meaning": "straight_run",
+              "start_s": 460.0,
+              "end_s": 510.0,
+              "block": 0,
+              "proof": {
+                "axis": "route_pattern",
+                "kind": "path",
+                "status": "candidate",
+                "subject": "recording_device",
+                "support": {
+                  "chain_index": 0,
+                  "pattern_run_index": 0,
+                  "from_seq": 46,
+                  "to_seq": 51,
+                  "started_at": "2026-09-14T01:12:00+00:00",
+                  "ended_at": "2026-09-14T01:12:50+00:00",
+                  "window_s": 50.0,
+                  "time_meaning": "observed_support_window"
+                },
+                "anchor": {
+                  "client_seq": 46,
+                  "at": "2026-09-14T01:12:00+00:00",
+                  "lat": 37.47338185441697,
+                  "lng": 127.03648795413169,
+                  "route_offset_m": 389.921
+                },
+                "metrics": {
+                  "max_deviation_m": 1.6520992193428874
+                },
+                "quality": {
+                  "fix_count": 6,
+                  "accuracy_p50_m": 5.0,
+                  "unknown_accuracy_count": 0
+                },
+                "meaning": "straight_run",
+                "is_event": false
+              }
+            },
+            {
+              "id": "movement-shape:2d1d87971f442c40b59355540a9aff9408432921dc2270e170922e70b1ef333c",
+              "kind": "path",
+              "meaning": "turn_left",
+              "start_s": 270.0,
+              "end_s": 390.0,
+              "block": 0,
+              "event_s": 330.0,
+              "proof": {
+                "axis": "route_pattern",
+                "kind": "path",
+                "status": "candidate",
+                "subject": "recording_device",
+                "support": {
+                  "chain_index": 0,
+                  "pattern_run_index": 0,
+                  "from_seq": 27,
+                  "to_seq": 39,
+                  "started_at": "2026-09-14T01:08:50+00:00",
+                  "ended_at": "2026-09-14T01:10:50+00:00",
+                  "window_s": 120.0,
+                  "time_meaning": "observed_support_window"
+                },
+                "anchor": {
+                  "client_seq": 33,
+                  "at": "2026-09-14T01:09:50+00:00",
+                  "lat": 37.47332112683454,
+                  "lng": 127.03735714768744,
+                  "route_offset_m": 312.537
+                },
+                "metrics": {
+                  "signed_angle_deg": 72.46077630467234,
+                  "absolute_rotation_deg": 72.46077630467234,
+                  "peak_rotation_ratio": 1.0,
+                  "heading_leg_m": 30,
+                  "original_fix_count": 13,
+                  "stable_before": true,
+                  "stable_after": true
+                },
+                "quality": {
+                  "fix_count": 13,
+                  "accuracy_p50_m": 5.0,
+                  "unknown_accuracy_count": 0
+                },
+                "meaning": "turn_left",
+                "is_event": true
+              }
+            },
+            {
+              "id": "movement-shape:97cb8122c70faa55d2869f7531746ab044b0c3d4e75215a11f7c93cc5b4b970d",
+              "kind": "path",
+              "meaning": "straight_run",
+              "start_s": 320.0,
+              "end_s": 460.0,
+              "block": 0,
+              "proof": {
+                "axis": "route_pattern",
+                "kind": "path",
+                "status": "candidate",
+                "subject": "recording_device",
+                "support": {
+                  "chain_index": 0,
+                  "pattern_run_index": 0,
+                  "from_seq": 32,
+                  "to_seq": 46,
+                  "started_at": "2026-09-14T01:09:40+00:00",
+                  "ended_at": "2026-09-14T01:12:00+00:00",
+                  "window_s": 140.0,
+                  "time_meaning": "observed_support_window"
+                },
+                "anchor": {
+                  "client_seq": 32,
+                  "at": "2026-09-14T01:09:40+00:00",
+                  "lat": 37.47328114653986,
+                  "lng": 127.03737532960702,
+                  "route_offset_m": 312.537
+                },
+                "metrics": {
+                  "max_deviation_m": 5.054276010901515
+                },
+                "quality": {
+                  "fix_count": 15,
+                  "accuracy_p50_m": 5.0,
+                  "unknown_accuracy_count": 0
+                },
+                "meaning": "straight_run",
+                "is_event": false
+              }
+            },
+            {
+              "id": "movement-shape:c719b322ac5cae4a216764e930c2114b747cf3b09e46e95172a073eaa0af751d",
+              "kind": "path",
+              "meaning": "turn_right",
+              "start_s": 390.0,
+              "end_s": 530.0,
+              "block": 0,
+              "event_s": 450.0,
+              "proof": {
+                "axis": "route_pattern",
+                "kind": "path",
+                "status": "candidate",
+                "subject": "recording_device",
+                "support": {
+                  "chain_index": 0,
+                  "pattern_run_index": 0,
+                  "from_seq": 39,
+                  "to_seq": 53,
+                  "started_at": "2026-09-14T01:10:50+00:00",
+                  "ended_at": "2026-09-14T01:13:10+00:00",
+                  "window_s": 140.0,
+                  "time_meaning": "observed_support_window"
+                },
+                "anchor": {
+                  "client_seq": 45,
+                  "at": "2026-09-14T01:11:50+00:00",
+                  "lat": 37.47339432656584,
+                  "lng": 127.03661618398661,
+                  "route_offset_m": 378.52
+                },
+                "metrics": {
+                  "signed_angle_deg": -98.981531282396,
+                  "absolute_rotation_deg": 98.981531282396,
+                  "peak_rotation_ratio": 0.5106785864214752,
+                  "heading_leg_m": 30,
+                  "original_fix_count": 15,
+                  "stable_before": true,
+                  "stable_after": true
+                },
+                "quality": {
+                  "fix_count": 15,
+                  "accuracy_p50_m": 5.0,
+                  "unknown_accuracy_count": 0
+                },
+                "meaning": "turn_right",
+                "is_event": true
+              }
+            },
+            {
+              "id": "movement-shape:f140a273587b4441900464fe5d570551b30a22a27fc612473bda80c78968c77f",
+              "kind": "path",
+              "meaning": "straight_run",
+              "start_s": 0.0,
+              "end_s": 320.0,
+              "block": 0,
+              "proof": {
+                "axis": "route_pattern",
+                "kind": "path",
+                "status": "candidate",
+                "subject": "recording_device",
+                "support": {
+                  "chain_index": 0,
+                  "pattern_run_index": 0,
+                  "from_seq": 0,
+                  "to_seq": 32,
+                  "started_at": "2026-09-14T01:04:20+00:00",
+                  "ended_at": "2026-09-14T01:09:40+00:00",
+                  "window_s": 320.0,
+                  "time_meaning": "observed_support_window"
+                },
+                "anchor": {
+                  "client_seq": 0,
+                  "at": "2026-09-14T01:04:20+00:00",
+                  "lat": 37.470589119054424,
+                  "lng": 127.03785721894909,
+                  "route_offset_m": 0.0
+                },
+                "metrics": {
+                  "max_deviation_m": 7.9084636740168825
+                },
+                "quality": {
+                  "fix_count": 33,
+                  "accuracy_p50_m": 5.0,
+                  "unknown_accuracy_count": 0
+                },
+                "meaning": "straight_run",
+                "is_event": false
+              }
+            }
+          ]
+        },
+        "diagnostics": {
+          "baseline": {
+            "policy": "session-median-ge-0.5-min-5-v1",
+            "available": true,
+            "baseline_mps": 1.149998134796999,
+            "included_seconds": 1810.0,
+            "excluded_seconds": 80.0,
+            "included_segments": 181,
+            "excluded_segments": [
+              33,
+              100,
+              101,
+              102,
+              103,
+              104,
+              105,
+              106
+            ],
+            "shape_quality": []
+          },
+          "policies": {
+            "movement": {
+              "version": "diary-movement-v1",
+              "slow_ratio": 0.5,
+              "fast_ratio": 1.5,
+              "minimum_seconds": 10.0,
+              "baseline": "session-median-ge-0.5-min-5-v1",
+              "binding": "scene-time-midpoints-v1"
+            },
+            "geometry": {
+              "version": "route-pattern-geometry-v1",
+              "max_accuracy_m": 20.0,
+              "max_speed_mps": 4.0,
+              "simplify_m": 8.0,
+              "stay_diameter_m": 20.0,
+              "stay_min_s": 30.0,
+              "stay_min_fixes": 5,
+              "stay_progress_step_s": 10.0,
+              "stay_progress_max_mps": 0.4,
+              "straight_min_m": 40.0,
+              "turn_leg_min_m": 30.0,
+              "turn_min_deg": 45.0,
+              "reversal_min_deg": 150.0,
+              "retrace_tolerance_m": 10.0,
+              "retrace_min_m": 40.0
+            },
+            "shape_analysis": {
+              "version": "observed-distance-shapes-v1",
+              "heading_leg_m": 30.0,
+              "accuracy_multiplier": 4.0,
+              "change_deg": 8.0,
+              "minimum_change_deg": 20.0,
+              "curve_minimum_deg": 30.0,
+              "curve_max_peak_ratio": 0.6,
+              "reverse_deg": 160.0,
+              "sharp_deg": 135.0,
+              "retrace_heading_deg": 30.0,
+              "retrace_lookback_m": 500.0,
+              "retrace_step_m": 15.0
+            },
+            "geometry_dictionary": "fb16de41c137539e4f44ef93c039df8a2130e73fdd9b1cac32dc30bb458f83df"
+          }
+        },
+        "rank": [
+          0.0
+        ]
+      }
+    },
+    "accepted": {
+      "card_id": "stamp:0a1a08f3801cbe9ef7550551e07ad2227b1f304c053601501653c9fb1c7b08bc",
+      "request_revision": "e807ef56a81c9cfa55791deb96bc7db1859ebf6abd1a4610ebced83db0c8fe46",
+      "text": "산책 걸음이 비교적 느렸던 때, 보리가 냄새를 맡았다.",
+      "action_id": "action:25422e04000b44bc68418cbcfdcd5cf508cbfdfa3853cd77cc87bdc7338892c1",
+      "movement_ids": [
+        "movement-use:9add837274812f015d71707e79b19b60a4dec49553222c301abc65f1c84aeef9",
+        "movement-use:f65ff9fb71f0af8fcf0dc4f7027210de139026894654e1daba72db55d6c34dcb"
+      ]
+    },
+    "failure_code": null
+  }
+}

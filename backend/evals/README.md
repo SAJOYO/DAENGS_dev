@@ -8,6 +8,7 @@
 
 | 폴더 | 읽고 쓰는 패키지 | 안에 있는 것 |
 | --- | --- | --- |
+| [relational_diary/](relational_diary/review-consistency-20260915/README.md) | 관계 일기 서비스 작성·검수·발행 경로 | 실제 모델 요청·후보·검수·고정 발행본, HTTP/Postgres 실험 및 리뷰 정합성 수정 결과 |
 | [diary_route_scenario/](diary_route_scenario/README.md) | tools/run_diary_route_scenario.py · tools/run_diary_public_scenario.py · tools/run_diary_final_titles.py | 실제 양재 경로 위의 가상 산책 8장면, 공공자료 5종의 실제 수집·선정·모델 입력·인용 비교, 장면 제목 갱신과 지도 뷰어 |
 | `diary_slots/` | `tools/run_diary_slots.py` · `daengs_evals.diary_slots_demo` | 파트 슬롯 미리보기·서비스 writer의 합성 입력 기반 Gemini 실제 문장·근거·정책 버전, 실제 기온 수집 시도와 알려진 한계 |
 | [place_conversation/](place_conversation/README.md) | `daengs_evals.place_conversation` | 시설 검색 대화 23개 명세·실제 출력·구조 비교·검토 기록 |

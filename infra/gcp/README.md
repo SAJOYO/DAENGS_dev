@@ -282,6 +282,7 @@ DAENGS_CORPUS_JOB=corpus-refresh
 | `hf download --include` | 값을 하나만 받는다. gcloud `--args` 는 목록 안 같은 플래그 두 번을 거부 | 잡 command 를 `/bin/sh -c "set -f; exec hf download ... --include a --include b"`(`^@^` 구분자) — 지금은 `fetch.py` 가 같은 조건이라 필요 없음 |
 | 로그 조회 | PowerShell 에서 `labels."run.googleapis.com/execution_name"` 필터 따옴표가 깨짐 | `gcloud logging read` 는 Bash 로 |
 | 새 리비전 전 호출 | 새 리비전 Ready 전에 `/health` 를 부르면 옛 리비전 인스턴스가 떠 로드가 헛돈다 | `latestReadyRevisionName` 이 새 이름이 된 뒤에 호출 |
+| 이미지가 빌드마다 8GB | 서비스 `c917c96`·잡 `90a42ef` 가 레이어를 공유하지 않아 16GB(09-16 조회: 저장소 28.2GB vs 이미지 합 28.4GB). Dockerfile 앞쪽 `ENV` 가 바뀌면 뒤 설치 레이어가 전부 새로 생긴다 | 새로 빌드하면 서비스·잡을 **같은 태그로 함께** 배포하고, 서비스 확인 뒤 옛 태그 삭제(`gcloud artifacts docker images delete ...@sha256:... --delete-tags`) |
 
 - **돈이 나간다.** Cloud Build(CUDA 이미지), 가중치 받기 잡, 떠 있는 L4 시간. 요청 뒤에도 인스턴스가
   내려가기 전까지 과금된다(인스턴스 기반 과금 필수). 돌리기 전에 사람 승인.

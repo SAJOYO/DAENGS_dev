@@ -4,6 +4,7 @@ from copy import deepcopy
 
 from .relation_vocabulary import FLOW_WORDS
 from .writer_meaning import present
+from .writer_time import local_writer_times
 
 DELIVERY_POLICY = "relation-delivery-v1"
 
@@ -71,4 +72,4 @@ def deliver_relations(brief, selection, *, memory=()):
     request.pop("delivery_memory", None)
     if memory:
         request["delivery_memory"] = deepcopy(list(memory))
-    return request
+    return local_writer_times(request)

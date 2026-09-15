@@ -14,8 +14,9 @@ from daengs_walk.diary.relational.writer_meaning import (
     route_view,
     walk_view,
 )
+from daengs_walk.diary.relational.writer_time import DIARY_TIMEZONE, local_writer_times
 
-WRITER_POLICY = "single-writing-brief-v4"
+WRITER_POLICY = "single-writing-brief-v5"
 
 
 def memory_view(selection, *, legacy_v2=False):
@@ -50,7 +51,7 @@ def memory_view(selection, *, legacy_v2=False):
     )
 
 
-def writer_view(brief, *, legacy_v2=False):
+def _writer_view(brief, *, legacy_v2=False):
     common = {
         "version": brief.version,
         "part": brief.part,
@@ -94,19 +95,27 @@ def writer_view(brief, *, legacy_v2=False):
     }
 
 
+def writer_view(brief, *, legacy_v2=False):
+    view = local_writer_times(_writer_view(brief, legacy_v2=legacy_v2))
+    view["timezone"] = DIARY_TIMEZONE
+    return view
+
+
 def publication_writer_view(brief, policy):
     """Historical contexts without interval material retain the identical projection."""
     if policy == WRITER_POLICY:
         return writer_view(brief)
+    if policy == "single-writing-brief-v4":
+        return _writer_view(brief)
     if getattr(brief, "context", None) and any(
         context.interval_relations is not None
         for context in (brief.context, *(m.context for m in brief.delivery.recent))
     ):
         raise ValueError("interval material requires writer policy v4")
     if policy == "single-writing-brief-v3":
-        return writer_view(brief)
+        return _writer_view(brief)
     if policy == "single-writing-brief-v2":
-        return writer_view(brief, legacy_v2=True)
+        return _writer_view(brief, legacy_v2=True)
     if policy == "single-writing-brief-v1":
         from .legacy_writer_view import brief_writer_view
 

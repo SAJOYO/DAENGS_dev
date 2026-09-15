@@ -2,7 +2,7 @@
 
 import json
 from copy import deepcopy
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 import pytest
 
@@ -126,7 +126,8 @@ def test_current_dog_event_keeps_time_shape_and_pace_without_source_actor():
     }
     assert request["required_event"]["behavior"] == "sniffing"
     event = request["required_event"]["anchor"]
-    assert event["event_at"] == action.required_event.anchor.event_at.isoformat()
+    assert datetime.fromisoformat(event["event_at"]) == action.required_event.anchor.event_at
+    assert event["event_at"].endswith("+09:00")
     assert event["position_basis"] == action.required_event.anchor.method
     gait = request["context_options"][-1]
     assert gait["for_event_id"] == request["required_event"]["id"]
@@ -303,7 +304,7 @@ async def test_production_dispatch_and_saved_v2_keep_their_own_vocabulary(distan
 
     result = await write_brief_task(task, send=send)
     assert result["status"] == "returned"
-    assert result["policy"] == "single-writing-brief-v4"
+    assert result["policy"] == "single-writing-brief-v5"
     assert validate_brief_result(task, result)
     request = seen[0]
     assert request["relation_slots"]["proximity"][0]["relationship"] == word
@@ -313,6 +314,7 @@ async def test_production_dispatch_and_saved_v2_keep_their_own_vocabulary(distan
 
     old = deepcopy(result)
     old["policy"] = "single-writing-brief-v3"
+    old["request"] = publication_writer_view(brief, old["policy"])
     old["request_revision"] = brief_request_revision(
         old["policy"], old["prompt_revision"], old["request"], old["response_schema"]
     )

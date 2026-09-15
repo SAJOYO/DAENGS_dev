@@ -4,7 +4,7 @@ from copy import deepcopy
 
 from .relation_vocabulary import FLOW_WORDS
 from .writer_meaning import present
-from .writer_view import writer_view
+from .writer_time import local_writer_times
 
 DELIVERY_POLICY = "relation-delivery-v1"
 
@@ -44,6 +44,8 @@ def flow_view(flow):
 
 
 def deliver_relations(brief, selection, *, memory=()):
+    from .writer_view import writer_view
+
     if brief.context.current.position.scene_id != selection.scene_id:
         raise ValueError("selection belongs to another scene")
     request = writer_view(brief)
@@ -70,4 +72,4 @@ def deliver_relations(brief, selection, *, memory=()):
     request.pop("delivery_memory", None)
     if memory:
         request["delivery_memory"] = deepcopy(list(memory))
-    return request
+    return local_writer_times(request)

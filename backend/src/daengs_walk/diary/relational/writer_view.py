@@ -1,6 +1,7 @@
 """Single model-facing boundary for current briefs and accepted spatial memory."""
 
 from daengs_walk.diary.relational.brief_contracts import ActionWritingBrief
+from daengs_walk.diary.relational.relation_delivery import flow_view
 from daengs_walk.diary.relational.writer_meaning import (
     anchor_view,
     connection_view,
@@ -13,8 +14,9 @@ from daengs_walk.diary.relational.writer_meaning import (
     route_view,
     walk_view,
 )
+from daengs_walk.diary.relational.writer_time import DIARY_TIMEZONE, local_writer_times
 
-WRITER_POLICY = "single-writing-brief-v3"
+WRITER_POLICY = "single-writing-brief-v5"
 
 
 def memory_view(selection, *, legacy_v2=False):
@@ -39,10 +41,17 @@ def memory_view(selection, *, legacy_v2=False):
         selected_route=route_view(context.route)
         if context.route and context.route.id in ids
         else None,
+        selected_journey_relations=[
+            flow_view(f)
+            for f in context.interval_relations.flows
+            if f.id in ids or f.id in selection.relation_ids
+        ]
+        if context.interval_relations
+        else None,
     )
 
 
-def writer_view(brief, *, legacy_v2=False):
+def _writer_view(brief, *, legacy_v2=False):
     common = {
         "version": brief.version,
         "part": brief.part,
@@ -71,23 +80,42 @@ def writer_view(brief, *, legacy_v2=False):
                 name: [
                     relation_view(r, legacy_v2=legacy_v2)
                     for r in getattr(context.relation_slots, name)
+                    if r.id in brief.relation_ids
                 ]
                 for name in ("background", "proximity", "area_context")
-                if getattr(context.relation_slots, name)
+                if any(r.id in brief.relation_ids for r in getattr(context.relation_slots, name))
             },
             connection=connection_view(context.connection),
             route=route_view(context.route),
+            journey_relations=[flow_view(f) for f in context.interval_relations.flows]
+            if context.interval_relations
+            else None,
             delivery_memory=[memory_view(m, legacy_v2=legacy_v2) for m in brief.delivery.recent],
         ),
     }
 
 
+def writer_view(brief, *, legacy_v2=False):
+    view = local_writer_times(_writer_view(brief, legacy_v2=legacy_v2))
+    view["timezone"] = DIARY_TIMEZONE
+    return view
+
+
 def publication_writer_view(brief, policy):
-    """Historical validation is explicitly versioned; new generation always uses v3."""
+    """Historical contexts without interval material retain the identical projection."""
     if policy == WRITER_POLICY:
         return writer_view(brief)
+    if policy == "single-writing-brief-v4":
+        return _writer_view(brief)
+    if getattr(brief, "context", None) and any(
+        context.interval_relations is not None
+        for context in (brief.context, *(m.context for m in brief.delivery.recent))
+    ):
+        raise ValueError("interval material requires writer policy v4")
+    if policy == "single-writing-brief-v3":
+        return _writer_view(brief)
     if policy == "single-writing-brief-v2":
-        return writer_view(brief, legacy_v2=True)
+        return _writer_view(brief, legacy_v2=True)
     if policy == "single-writing-brief-v1":
         from .legacy_writer_view import brief_writer_view
 

@@ -1,20 +1,23 @@
-"""Plans from narrative context and accepted delivery, without legacy slot admission."""
+"""Assemble scene requests and their frozen publication record, not prose strategy.
+
+The persisted plan keys/version remain unchanged for v8 storage compatibility.
+Preparation supplies empty delivery; execution supplies accepted prior selections.
+"""
 
 from copy import deepcopy
 
-from daengs_walk.diary.relational.brief_contracts import ActionWritingBrief, NarrativeSpaceContext
+from daengs_walk.diary.relational.brief_contracts import ActionWritingBrief, SpaceWritingBrief
 from daengs_walk.diary.relational.contracts import VERSION, writer_task
 from daengs_walk.diary.relational.relations import movement, route_revisit
-from daengs_walk.diary.relational.writing_brief import build_space_brief, space_work_reason
+from daengs_walk.diary.relational.writing_brief import space_work_reason
 from daengs_walk.value_contracts import digest
 
 BRIEF_PREPARATION = "writing-brief-preparation-v1"
 BRIEF_PLAN = "writing-brief-plan-v1"
 
 
-def make_brief_plan(frame, previous=None, delivery=None):
-    context = NarrativeSpaceContext.model_validate(frame["narrative_context"])
-    brief = build_space_brief(context, delivery)
+def assemble_scene_requests(frame, brief: SpaceWritingBrief, previous=None):
+    context = brief.context
     reason = space_work_reason(brief)
     action = (
         ActionWritingBrief.model_validate(frame["action_brief"]) if frame["action_brief"] else None
@@ -33,6 +36,11 @@ def make_brief_plan(frame, previous=None, delivery=None):
             "spatial_comparison": context.relation_slots.model_dump(mode="json"),
             "movement": motion,
             "route_revisit": revisit,
+            **(
+                {"interval": context.model_dump(mode="json")["interval_relations"]}
+                if context.interval_relations is not None
+                else {}
+            ),
         },
         "relation_selection": {
             "space": [],

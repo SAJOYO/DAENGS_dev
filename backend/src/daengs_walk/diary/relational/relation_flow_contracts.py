@@ -46,10 +46,10 @@ class DistanceTrack:
 @dataclass(frozen=True)
 class FlowPolicy:
     version: str = "relation-flow-analysis-v1"
-    minimum_change_m: float = 20
-    max_gap_seconds: float = 30
-    minimum_duration_s: float = 10
-    alongside_limit_m: float = 50
+    minimum_change_m: float = 20.0
+    max_gap_seconds: float = 30.0
+    minimum_duration_s: float = 10.0
+    alongside_limit_m: float = 50.0
 
     def __post_init__(self):
         from math import isfinite

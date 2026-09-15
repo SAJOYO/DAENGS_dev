@@ -61,7 +61,7 @@ def test_v8_json_and_db_envelope_read_without_current_planning(
     from daengs_backend.services.walk_diary.writing import brief_prompts, relational
     from daengs_walk.diary.relational import (
         brief_binding,
-        brief_planning,
+        scene_requests,
         comparison_writing,
         narrative_space,
     )
@@ -78,7 +78,7 @@ def test_v8_json_and_db_envelope_read_without_current_planning(
     for module, name in (
         (relational, "validate_prepared"),
         (relational, "generate_relation_part"),
-        (brief_planning, "make_brief_plan"),
+        (scene_requests, "assemble_scene_requests"),
         (brief_binding, "validate_brief_plans"),
         (comparison_writing, "comparison_input"),
         (narrative_space, "build_space_context"),

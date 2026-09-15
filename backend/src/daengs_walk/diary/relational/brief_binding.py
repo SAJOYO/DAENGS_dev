@@ -1,11 +1,11 @@
 """Reconstruct brief facts from frozen sources once; validate small plans separately."""
 
 from daengs_walk.diary.contracts.input import UserRecord
-from daengs_walk.diary.relational.brief_contracts import BriefDeliveryState
-from daengs_walk.diary.relational.brief_planning import (
+from daengs_walk.diary.relational.brief_contracts import BriefDeliveryState, SpaceWritingBrief
+from daengs_walk.diary.relational.scene_requests import (
     BRIEF_PLAN,
     BRIEF_PREPARATION,
-    make_brief_plan,
+    assemble_scene_requests,
 )
 from daengs_walk.diary.relational.comparison import aware_time
 from daengs_walk.diary.relational.comparison_writing import comparison_input
@@ -81,7 +81,8 @@ def validate_brief_plans(snapshot, plans=None, *, frame_positions=None):
         ):
             raise ValueError("brief plan changed")
         state = BriefDeliveryState.model_validate(plan["delivery_before"])
-        expected = make_brief_plan(frame, previous, state)
+        brief = SpaceWritingBrief(context=frame["narrative_context"], delivery=state)
+        expected = assemble_scene_requests(frame, brief, previous)
         supplied = {k: v for k, v in plan.items() if k not in {"revision", "delivery_after"}}
         if supplied != {k: v for k, v in expected.items() if k != "revision"}:
             raise ValueError("brief plan does not match its source context and delivery")

@@ -18,8 +18,9 @@ def evaluate(frame, previous):
         "recorded_action": deepcopy(action["recorded_action"]),
         "current_space": deepcopy(facts),
         "movement_context": deepcopy(action.get("movement_context")),
-        "current_gait": deepcopy(action.get('current_gait', [])),
-        "current_shape": deepcopy(action.get('current_shape', [])),
+        **{
+            key: deepcopy(action[key]) for key in ("current_gait", "current_shape") if key in action
+        },
         "source_ids": [frame["scene_id"] + ":" + action["recorded_action"]["id"]]
         + [frame["scene_id"] + ":" + m["id"] for m in facts],
         "scope": "Current pin and its attached context only; device movement is not action duration or cause",

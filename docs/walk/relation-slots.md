@@ -1,5 +1,40 @@
 # 관계 모듈과 결과 칸 — v6
 
+## 서비스 오케스트레이션 연결 (2026-09-15)
+
+새 서비스 호출 경로는 다음과 같다.
+
+```text
+runtime.write_relational_board(source, base)
+  → orchestration.runtime.build_relational_diary_orchestrator
+  → RelationalDiaryOrchestrationService.run
+  → configured_relational_preparation (공간·동·도로명 수집과 새 준비)
+  → generate_prepared_relational_diary (공간·현재 행동·검수·제목)
+  → RelationalDiaryResult (고정 준비 입력 + v7 발행본)
+```
+
+구형 `DiaryOrchestrationService`, `CardWritingResult`, `complete_cards`는 이 경로에서
+실행하지 않는다. 수집기가 반환한 원본·장면 집합·계획을 작성 전에 확인하고, 입력은
+외부 호출 전에 복사한다. 기존 API의 `write_board`는 이전 계약으로 남아 있으며 새
+결과를 그 응답형으로 억지 변환하지 않는다. 다음 단계에서 DB 발행·GET·공개 응답을
+연결해야 실제 HTTP 요청이 새 서비스로 들어온다.
+
+`RelationalExecutionPolicy`가 실행 정책을 소유한다. 기본값은 준비 12초, 작성 전체
+180초, 호출당 15초, 응답 종료 후 최소 10초 간격, 의미 검수 사용이다. 호출 예산은
+장면별 소개 복구·행동·제목·검수를 포함한 상한과 지정된 max_calls 중 작은 값이다.
+순차 전송·429 후 중단·자동 재시도 0회를 유지한다. 이 간격은 현재 실행별이며 여러
+동시 산책의 계정 공용 한도 조절은 아직 별도다. DB 임대 시간도 다음 연결 단계에서
+이 정책에 맞춰야 한다. 현재 180초로 끝까지 처리하기 어려운 많은 장면은 미완료
+부분을 실패로 남길 수 있으며 구형 기본 문장으로 대체하지 않는다.
+
+마감 때문에 다음 호출을 시작할 수 없으면 간격을 줄이지 않고 중단한다. 호출 중
+시간 제한과 취소를 처리하며, 시간 제한 취소를 삼키고 늦게 반환한 후보도 채택하지
+않는다. 먼저 채택된 본문은 보존한다. 준비 단계 실패는 모델 호출 전에 종료한다.
+과거 v6 입력에 없던 빈 gait/shape 필드는 관계 재생에 강제로 추가하지 않는다.
+
+이번 단계는 서비스 함수부터 발행본 반환까지의 연결이다. 새 LLM 원문 실험,
+최신 DEV 전체 통합, API·DB·APP 활성화 완료를 뜻하지 않는다.
+
 ## DEV 통합 준비: 구형 의존성과 실제 수집 연결 (2026-09-15)
 
 체크포인트 `4b35fc9f` 이후 새 준비 입력은 `planning_contract=scene-comparison-plan-v1`을

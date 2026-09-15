@@ -1,8 +1,15 @@
 """One opt-in path: prepare -> delivery-aware separate writers -> review -> receipt."""
 
+import asyncio
 import json
 from copy import deepcopy
+from dataclasses import asdict
 
+from daengs_backend.services.walk_diary.relational_execution import (
+    MODEL,
+    RelationalDiaryResult,
+    RelationalExecutionPolicy,
+)
 from daengs_backend.services.walk_diary.writing.relational import (
     FAILURES,
     PROMPTS,
@@ -16,7 +23,15 @@ from daengs_walk.value_contracts import digest
 
 
 async def generate_prepared_relational_diary(
-    prepared, *, send=None, review=True, model=None, minimum_interval_s=None, max_calls=64
+    prepared,
+    *,
+    send=None,
+    review=True,
+    model=None,
+    minimum_interval_s=None,
+    max_calls=64,
+    call_timeout_s=None,
+    total_timeout_s=None,
 ):
     """Replay and normal preparation meet at this exact production-independent boundary.
 
@@ -24,13 +39,15 @@ async def generate_prepared_relational_diary(
     No API/DB default is switched by this module.
     """
     if send is None:
-        from daengs_backend.services.walk_diary.writing import policy
-
-        model = policy.MODEL
+        model = MODEL
     model = model or "injected_sender; model_not_reported"
     interval = (10.0 if send is None else 0.0) if minimum_interval_s is None else minimum_interval_s
     coordinator = CallCoordinator(
-        send or generate_relation_part, minimum_interval_s=interval, max_calls=max_calls
+        send or generate_relation_part,
+        minimum_interval_s=interval,
+        max_calls=max_calls,
+        call_timeout_s=call_timeout_s,
+        total_timeout_s=total_timeout_s,
     )
     result = await write_with_short_memory(prepared, send=coordinator, review=review, model=model)
     receipt = result["receipt"]
@@ -89,12 +106,93 @@ async def generate_prepared_relational_diary(
         "max_model_calls": max_calls,
         "minimum_interval_s": interval,
         "stopped_on_rate_limit": coordinator.stopped,
+        "stopped_on_deadline": coordinator.deadline_reached,
+        "call_timeout_s": call_timeout_s,
+        "total_timeout_s": total_timeout_s,
         "calls": coordinator.trace,
         "automatic_retries": 0,
         "semantic_review_enabled": review,
         "sender_kind": "configured_provider" if send is None else "injected_sender",
     }
     return result
+
+
+class RelationalDiaryOrchestrationService:
+    """Service orchestration over our contracts, without old graph/jobs/assembly or DB writes."""
+
+    def __init__(self, *, prepare=None, send=None, execution_policy=None):
+        if prepare is None:
+            from daengs_backend.services.walk_diary.collection.relational import (
+                configured_relational_preparation,
+            )
+
+            prepare = configured_relational_preparation
+        self.prepare = prepare
+        self.send = send
+        self.policy = execution_policy or RelationalExecutionPolicy()
+
+    async def run(self, source, base, *, scene_ids=None):
+        from daengs_backend.services.walk_diary.writing.relational import validate_prepared
+        from daengs_walk.diary.relational.assembly import assemble_receipt
+
+        revision = source.revision()
+        if (
+            revision != base.input.source.revision()
+            or revision != base.board.input_revision
+            or base.board.plan_revision != base.plan.revision()
+        ):
+            raise ValueError("relational writer requires its prepared source and board")
+        selected = (
+            tuple(scene_ids) if scene_ids is not None else tuple(s.id for s in base.board.scenes)
+        )
+        if len(set(selected)) != len(selected) or not set(selected) <= {
+            s.id for s in base.board.scenes
+        }:
+            raise ValueError("invalid relational scene selection")
+        frozen = deepcopy(base)
+        board_revision = frozen.board.plan_revision
+        async with asyncio.timeout(self.policy.preparation_timeout_s):
+            prepared = await self.prepare(frozen, scene_ids=selected)
+        prepared = deepcopy(prepared)
+        snapshot = prepared["snapshot"]
+        if (
+            snapshot["input_revision"] != revision
+            or snapshot["board_revision"] != board_revision
+            or snapshot.get("scene_comparison_version") != "scene-comparison-v1"
+            or {f["scene_id"] for f in snapshot["frames"]} != set(selected)
+            or {p["scene_id"] for p in snapshot["plans"]} != set(selected)
+            or any(
+                f.get("planning_contract") != "scene-comparison-plan-v1" for f in snapshot["frames"]
+            )
+        ):
+            raise ValueError("collector returned a different relational preparation")
+        validate_prepared(prepared)
+        # Every scene may need introduction recovery; reserve one title plus its review.
+        writers = len(snapshot["frames"]) + sum(bool(p["action_task"]) for p in snapshot["plans"])
+        call_limit = min(
+            self.policy.max_calls, (writers + 1) * (2 if self.policy.semantic_review else 1)
+        )
+        generated = await generate_prepared_relational_diary(
+            prepared,
+            send=self.send,
+            review=self.policy.semantic_review,
+            model=MODEL if self.send is None else "injected_sender; model_not_reported",
+            minimum_interval_s=self.policy.minimum_interval_s,
+            max_calls=call_limit,
+            call_timeout_s=self.policy.call_timeout_s,
+            total_timeout_s=self.policy.generation_timeout_s,
+        )
+        # Keep actual accepted results, including failures and intentional omissions.
+        expected = assemble_receipt(generated["prepared"], generated["receipt"]["writing"])
+        if any(generated["receipt"].get(k) != v for k, v in expected.items()):
+            raise ValueError("relational receipt changed after writing")
+        generated["receipt"]["execution"]["policy"] = asdict(self.policy)
+        return RelationalDiaryResult(
+            input_revision=revision,
+            board_revision=board_revision,
+            prepared=generated["prepared"],
+            receipt=generated["receipt"],
+        )
 
 
 async def generate_relational_skeleton(

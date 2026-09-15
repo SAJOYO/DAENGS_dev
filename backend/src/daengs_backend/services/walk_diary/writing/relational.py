@@ -8,6 +8,7 @@ from itertools import pairwise
 
 import httpx
 
+from daengs_backend.services.walk_diary.relational_execution import MODEL
 from daengs_backend.services.walk_diary.writing.relational_transport import (
     CallBudgetExceeded,
     CallsStopped,
@@ -97,7 +98,6 @@ async def generate_relation_part(stage, payload, schema):
     from google.genai.errors import APIError
 
     from daengs_backend.config import settings
-    from daengs_backend.services.walk_diary.writing import policy
 
     try:
         async with genai.Client(
@@ -107,7 +107,7 @@ async def generate_relation_part(stage, payload, schema):
             ),
         ).aio as client:
             response = await client.models.generate_content(
-                model=policy.MODEL,
+                model=MODEL,
                 contents=json.dumps(payload, ensure_ascii=False),
                 config=types.GenerateContentConfig(
                     system_instruction=writing_prompt(stage, payload),
@@ -348,9 +348,7 @@ async def write_relational_diary(prepared, *, send=None, review=True, model=None
     frozen = deepcopy(prepared)
     tasks = validate_prepared(frozen)
     if send is None:
-        from daengs_backend.services.walk_diary.writing import policy
-
-        model = policy.MODEL
+        model = MODEL
         send = generate_relation_part
     model = model or "injected_sender; model_not_reported"
     semaphore = asyncio.Semaphore(4)

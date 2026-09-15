@@ -260,6 +260,20 @@ DAENGS_CORPUS_JOB=corpus-refresh
    (`corpus-pipeline@...`)은 코퍼스 파이프라인과 공유하므로 지우지 않는다 — 정말 지우려면
    `pipeline-teardown.sh` 를 보고 사람이 판단한다.
 
+## `cardgen.sh` — 도감 카드 생성 GPU 서비스 (D-078, #544)
+
+모델마다 Cloud Run **서비스** 하나(`daengs-cardgen-klein` · `daengs-cardgen-qwen`), 싱가포르 L4,
+`min 0 · max 1`. 코드는 `docker/cardgen/`, 가중치는 버킷 `daengs-cardgen-weights` 를 `/models` 로 마운트.
+
+- **돈이 나간다.** Cloud Build(CUDA 이미지), 가중치 받기 잡, 떠 있는 L4 시간. 요청 뒤에도 인스턴스가
+  내려가기 전까지 과금된다(인스턴스 기반 과금 필수). 돌리기 전에 사람 승인.
+- **부르는 법** — 개발 PC 의 `gcloud auth print-identity-token` 은 이 서비스에서 미인증으로 취급된다
+  (realtime 절 3번). 대신 `gcloud run services proxy daengs-cardgen-klein --region=asia-southeast1 --port=8091`
+  을 켜 두고 `http://127.0.0.1:8091` 을 부른다. `INVOKER` 로 준 계정에 `run.invoker` 가 걸려 있어야 한다.
+- **VM backend 에 연결하지 않는다** — `DAENGS_CARDGEN_URL` 을 VM 에 넣으면 앱 경로가 GPU 서비스를 쓰는데,
+  앱 경로 정리 기준이 콜드 스타트를 모른다(#544 남은 것).
+- **지울 때** — `PROJECT=daengs bash infra/gcp/cardgen-teardown.sh`. 서비스 둘·잡·가중치 버킷·이미지 태그.
+
 ## 자주 걸리는 것
 
 ### Windows 에서 gcloud 에 인자를 넘기는 법 — 셋 다 2026-09-11 에 물렸다

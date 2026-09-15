@@ -1,8 +1,8 @@
-# 도감 카드 생성 GPU 서비스 — Qwen-Image-Edit-2511 · FLUX.2 klein 4B 비교 구현 계획
+# 도감 카드 생성 GPU 서비스 — Qwen-Image-Edit-2511 · FLUX.2-klein-4B 비교 구현 계획
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 오픈 가중치 편집 모델 둘(Qwen-Image-Edit-2511 · FLUX.2 klein 4B)을 diffusers 로 Cloud Run GPU 서비스에 올리고, 지금의 Nano Banana 2(D-074)와 같은 사진·틀·seed 로 비교해 품질(닮음·틀 밀림·제목판)과 서빙 가능성(콜드 스타트·과금 시간)을 잰다.
+**Goal:** 오픈 가중치 편집 모델 둘(Qwen-Image-Edit-2511 · FLUX.2-klein-4B)을 diffusers 로 Cloud Run GPU 서비스에 올리고, 지금의 Nano Banana 2(D-074)와 같은 사진·틀·seed 로 비교해 품질(닮음·틀 밀림·제목판)과 서빙 가능성(콜드 스타트·과금 시간)을 잰다.
 
 **Architecture:** 새 패키지 `backend/src/daengs_cardgen/` 가 GPU 서비스(FastAPI, `POST /generate`)이고 전용 그룹 `cardgen` 만 설치한 CUDA 이미지로 Cloud Run(asia-southeast1 L4, min 0 · max 1)에 모델마다 서비스 하나씩 뜬다. backend 쪽은 `daengs_cardimage.engine.HttpCardImageEngine` 이 그 서비스를 부르고, `services/ai_card_engine.py` 가 `DAENGS_CARDGEN_URL` 이 비어 있으면 지금의 Gemini 엔진을 그대로 고른다. 비교는 `backend/tools/cardgen_compare.py` 가 개발 PC 에서 `gcloud run services proxy` 로 연 로컬 포트를 불러 수행한다.
 
@@ -418,7 +418,7 @@ git commit -m "카드 생성 GPU 서비스 패키지의 뼈대와 HTTP 계약을
 
 ---
 
-### Task 2: diffusers 모델 두 개 — klein 4B · Qwen 2511(nf4) · 가중치 받기
+### Task 2: diffusers 모델 두 개 — FLUX.2-klein-4B · Qwen 2511(nf4) · 가중치 받기
 
 **Files:**
 - Create: `backend/src/daengs_cardgen/diffusion.py`
@@ -524,7 +524,7 @@ Expected: FAIL — `ModuleNotFoundError: No module named 'daengs_cardgen.diffusi
 
 Qwen-Image-Edit-2511 은 bf16 가 약 40GB(transformer 20B + Qwen2.5-VL 7B)라 L4(24GB)에 그대로 안 들어간다.
 기본은 transformer·text_encoder 를 bitsandbytes nf4 로 올린다(`CARDGEN_QWEN_QUANT=nf4`). `none` 은
-96GB GPU(RTX PRO 6000)에서 bf16 으로 비교할 때만 쓴다. klein 4B 는 약 13GB 라 bf16 그대로다.
+96GB GPU(RTX PRO 6000)에서 bf16 으로 비교할 때만 쓴다. FLUX.2-klein-4B 는 약 13GB 라 bf16 그대로다.
 """
 
 from __future__ import annotations
@@ -680,7 +680,7 @@ Expected: `모르는 모델 ['joyai'] …` 와 `exit=2`
 
 ```powershell
 git add backend/src/daengs_cardgen backend/tests/test_cardgen_diffusion.py backend/tests/test_cardgen_boundary.py backend/pyproject.toml backend/uv.lock
-git commit -m "Qwen-Image-Edit-2511 과 FLUX.2 klein 4B 파이프라인과 가중치 받기를 붙인다`n`nCo-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
+git commit -m "Qwen-Image-Edit-2511 과 FLUX.2-klein-4B 파이프라인과 가중치 받기를 붙인다`n`nCo-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 ```
 
 ---
@@ -1568,7 +1568,7 @@ Run: `gcloud run services describe daengs-cardgen-klein --region=asia-southeast1
 
 ```powershell
 git add docs/cardimage/worklog.md
-git commit -m "klein 4B 서비스를 처음 띄워 콜드 스타트와 한 장 시간을 잰다`n`nCo-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
+git commit -m "FLUX.2-klein-4B 서비스를 처음 띄워 콜드 스타트와 한 장 시간을 잰다`n`nCo-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 ```
 
 ---
@@ -1638,7 +1638,7 @@ Expected: 각 `results.jsonl` 12줄.
 
 ```powershell
 git add docs/cardimage/compare-2026-09-15-cardgen.md docs/cardimage/worklog.md
-git commit -m "klein 4B · Qwen 2511 · Nano Banana 2 를 같은 조건으로 비교한 결과를 적는다`n`nCo-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
+git commit -m "FLUX.2-klein-4B · Qwen 2511 · Nano Banana 2 를 같은 조건으로 비교한 결과를 적는다`n`nCo-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 ```
 
 ---
@@ -1660,7 +1660,7 @@ git commit -m "klein 4B · Qwen 2511 · Nano Banana 2 를 같은 조건으로 �
 `docs/cardimage/README.md` 「지금 상태」 맨 위에 이 카드의 한 문단(무엇이 떠 있고 무엇을 쟀는지, 결과 문서 링크, 11-17 전에 teardown), 「파일 위치」 표에 `backend/src/daengs_cardgen/` · `docker/cardgen/` · `infra/gcp/cardgen*.sh` · `backend/tools/cardgen_compare.py` · `cardimage/out/_cardgen/`(미추적) 행, 「정해진 것」에 후보 둘·실행 자리·diffusers 행. `CLAUDE.md` 폴더 표의 `backend/src/daengs_cardimage/` 행 아래에:
 
 ```markdown
-| `backend/src/daengs_cardgen/` | 도감 카드 생성 **GPU 서비스**(diffusers — Qwen-Image-Edit-2511 · FLUX.2 klein 4B). backend 가 import 하지 않고 HTTP 로만 부른다(`DAENGS_CARDGEN_URL`, 비면 Nano Banana 2 그대로). 전용 그룹 `cardgen` + `docker/cardgen/` CUDA 이미지로 Cloud Run L4(asia-southeast1)에서만 돈다 — D-078. 11-17 전에 `infra/gcp/cardgen-teardown.sh` |
+| `backend/src/daengs_cardgen/` | 도감 카드 생성 **GPU 서비스**(diffusers — Qwen-Image-Edit-2511 · FLUX.2-klein-4B). backend 가 import 하지 않고 HTTP 로만 부른다(`DAENGS_CARDGEN_URL`, 비면 Nano Banana 2 그대로). 전용 그룹 `cardgen` + `docker/cardgen/` CUDA 이미지로 Cloud Run L4(asia-southeast1)에서만 돈다 — D-078. 11-17 전에 `infra/gcp/cardgen-teardown.sh` |
 ```
 
 - [ ] **Step 3: 전체 검사 (컨트롤러)**

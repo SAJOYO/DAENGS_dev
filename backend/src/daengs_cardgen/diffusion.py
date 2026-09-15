@@ -84,7 +84,7 @@ class QwenModel:
                 components_to_quantize=["transformer", "text_encoder"],
             )
         self._pipe = QwenImageEditPlusPipeline.from_pretrained(MODEL_REPOS[self.name], **kwargs).to("cuda")
-        # VAE 디코딩을 타일로 나눈다 — 2026-09-15 L4(22GiB) 에서 40 step 확산은 들어갔지만 1024×1632 디코딩이
+        # VAE 디코딩을 타일로 나눈다 — 2026-09-15 L4(24GB, 실사용 22GiB) 에서 40 step 확산은 들어갔지만 1024×1632 디코딩이
         # 612MiB 를 더 달라다 CUDA OOM 으로 죽었다(#544 Task 7, `autoencoder_kl_qwenimage` normalize).
         self._pipe.vae.enable_tiling()
 

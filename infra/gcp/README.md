@@ -262,8 +262,26 @@ DAENGS_CORPUS_JOB=corpus-refresh
 
 ## `cardgen.sh` — 도감 카드 생성 GPU 서비스 (D-078, #544)
 
-모델마다 Cloud Run **서비스** 하나(`daengs-cardgen-klein` · `daengs-cardgen-qwen`), 싱가포르 L4,
-`min 0 · max 1`. 코드는 `docker/cardgen/`, 가중치는 버킷 `daengs-cardgen-weights` 를 `/models` 로 마운트.
+모델마다 Cloud Run **서비스** 하나, 싱가포르 L4, `min 0 · max 1`. 코드는 `docker/cardgen/`, 가중치는 버킷
+`daengs-cardgen-weights` 를 `/models` 로 마운트. **2026-09-16 기준 남아 있는 것:** 서비스 `daengs-cardgen-klein`(이미지
+`c917c96`), 잡 `cardgen-weights`(이미지 `90a42ef`, `python -m daengs_cardgen.fetch klein-4b` 로 되돌려 둠), 버킷의 FLUX.2-klein-4B
+가중치 14.88GiB. Qwen 서비스·가중치는 09-15 결과가 깨져 지웠다(D-078).
+
+**실측 (09-15, #544 worklog):** 이미지 빌드 13~16분 · FLUX.2-klein-4B 가중치 받기 9분 · 서비스 기동→포트 10초 · 모델 로드 425~430초 ·
+장당 18~26초 · 요청 뒤 유휴 약 10분 뒤 종료. 새 이미지를 싱가포르에서 처음 가져오면 5분이 붙는다.
+
+**⚠ 09-15 에 실제로 물린 것 (배포 전에 읽을 것):**
+
+| 무엇 | 증상 | 답 |
+| --- | --- | --- |
+| 가중치 잡 메모리 | 4CPU/16Gi 에서 "The configured memory limit was reached" — 큰 파일 여럿이 동시에 `.incomplete` | 한 파일씩(`max_workers=1`) + `HF_HUB_DISABLE_XET=1` + 8CPU/32Gi (Cloud Run 은 24GiB 넘으면 8 vCPU 필요) |
+| Git Bash 경로 변환 | `--set-env-vars=HF_XET_CACHE=/tmp/xet` 가 `C:/Users/.../Temp/xet` 로 저장 | `MSYS2_ARG_CONV_EXCL` 에 `--set-env-vars` 까지. 배포 뒤 **`jobs describe`·`services describe` 로 저장값 확인** |
+| PowerShell 쉼표 | `--add-volume=name=...,type=...` 가 배열로 쪼개져 "Key [type] required" | PowerShell 에서는 쉼표 든 인자(`--add-volume` · `--add-volume-mount` · `--set-env-vars` · `--args`)를 **따옴표로** |
+| 이미지 태그 재계산 | `STEP=deploy` 가 파일 해시로 태그를 다시 계산 — 빌드 뒤 파일을 고치면 **없는 태그**를 배포 | 빌드한 태그를 확인해 직접 `gcloud run deploy --image=...:<태그>` 로 |
+| `gcloud run services proxy` | `cloud-run-proxy` 컴포넌트가 필요한데 SDK 가 Program Files 라 일반 권한 설치 실패 | 관리자 권한 cmd 에서 `gcloud components install cloud-run-proxy` (한 번) |
+| `hf download --include` | 값을 하나만 받는다. gcloud `--args` 는 목록 안 같은 플래그 두 번을 거부 | 잡 command 를 `/bin/sh -c "set -f; exec hf download ... --include a --include b"`(`^@^` 구분자) — 지금은 `fetch.py` 가 같은 조건이라 필요 없음 |
+| 로그 조회 | PowerShell 에서 `labels."run.googleapis.com/execution_name"` 필터 따옴표가 깨짐 | `gcloud logging read` 는 Bash 로 |
+| 새 리비전 전 호출 | 새 리비전 Ready 전에 `/health` 를 부르면 옛 리비전 인스턴스가 떠 로드가 헛돈다 | `latestReadyRevisionName` 이 새 이름이 된 뒤에 호출 |
 
 - **돈이 나간다.** Cloud Build(CUDA 이미지), 가중치 받기 잡, 떠 있는 L4 시간. 요청 뒤에도 인스턴스가
   내려가기 전까지 과금된다(인스턴스 기반 과금 필수). 돌리기 전에 사람 승인.

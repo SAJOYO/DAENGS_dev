@@ -64,7 +64,9 @@ if [ "${STEP}" = all ] || [ "${STEP}" = weights ]; then
   gcloud storage buckets add-iam-policy-binding "gs://${BUCKET}" \
     --member="serviceAccount:${SA_EMAIL}" --role=roles/storage.objectAdmin >/dev/null
   echo "== 가중치 받기 잡 (CPU, 한 번)"
-  # HF_XET_CACHE 를 /tmp 로 뺀다 — 안 그러면 hf_xet 의 청크 캐시가 HF_HOME(=FUSE 버킷)에 작은 객체를 잔뜩 쓴다.
+  # xet 를 끈다(HF_HUB_DISABLE_XET=1) — 켜 두면 hf_xet 청크 캐시가 FUSE 버킷이나 메모리(/tmp)를 먹는다. 2026-09-15 16Gi 잡이
+  # 병렬 다운로드 + /tmp xet 캐시로 메모리 한도에 걸려 죽었다. 파일은 fetch.py 가 한 개씩(max_workers=1) 받는다
+  # — ⚠ 이 조합(fetch.py 경로)은 실제 잡으로 아직 안 돌려 봤다(09-15 성공은 명령을 hf download 로 덮어쓴 실행).
   gcloud run jobs deploy cardgen-weights --region="${GPU_REGION}" --image="${IMAGE}" \
     --service-account="${SA_EMAIL}" --cpu=8 --memory=32Gi --task-timeout=3h --max-retries=0 \
     --command=/opt/venv/bin/python --args=-m,daengs_cardgen.fetch,"${MODEL_NAME}" \

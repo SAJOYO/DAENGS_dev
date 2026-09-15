@@ -4772,3 +4772,52 @@ DAENGS_APP 쪽 결정이다.
 
 되돌리기: 규칙은 여전히 `services/ai_card_quota.py::check_quota` 한 곳이다. 표를 버리려면 `check_quota` 를
 `ai_cards` 로 되돌리고 `_finish_ready` 의 기록 한 줄을 지운다.
+
+## D-078
+### 도감 카드 생성에 오픈 모델 GPU 서비스(`daengs_cardgen`, Cloud Run L4)를 붙이고, Nano Banana 2 와 FLUX.2-klein-4B 를 둘 다 유지
+
+2026-09-15, #544. 계획 `docs/cardimage/plan-2026-09-15-cardgen-gpu.md`, 조사 `research-2026-09-15.md`, 비교
+`compare-2026-09-15-cardgen.md`, 실측 경위 `worklog.md` 09-15 오후·밤, 다음 단계 `roadmap.md`.
+
+**경계.** GPU 추론은 새 패키지 `backend/src/daengs_cardgen/`(FastAPI `POST /generate` · `/health`)가 전용 의존성 그룹
+`cardgen` 과 `docker/cardgen/` CUDA 이미지로 Cloud Run 에서만 돈다. `daengs_backend`·`daengs_cardimage` 는 이 패키지를
+import 하지 않고 HTTP 로만 닿는다(`daengs_cardimage.engine.HttpCardImageEngine`). 컨테이너가 둘인 것은 VM(e2)에 GPU 가
+없어서 이미 정해졌고, 패키지를 나눈 것은 torch·diffusers 가 backend 이미지로 새지 않게 하려는 것이다 —
+`daengs_gait` + `gait` 그룹과 같은 모양. `daengs_cardimage` 에 두는 안은 D-076 의 "순수 로직" 경계에 FastAPI·torch 가
+섞여 기각했다.
+
+**의존성.** diffusers 0.40 은 `huggingface-hub>=1.23` 을, `ml` 그룹(sentence-transformers → `transformers<5`)은 `<1` 을
+요구해 한 해석에 못 들어간다. `[tool.uv] conflicts` 로 `ml`·`cardgen` 을 배타 그룹으로 선언했다 — lock 은 하나(D-039)로
+두고 두 그룹을 한 venv·이미지에 같이 까는 곳이 없다. lock 의 리눅스 torch 는 CPU 인덱스 고정 그대로, CUDA 판(torch ·
+torchvision)은 Dockerfile 에서 `+cu126` 로 덮어쓰고 빌드 때 `torch.version.cuda` 로 검증한다.
+
+**실행 자리는 Cloud Run 서비스**(job 아님) — 카드 생성은 결국 backend 가 HTTP 로 부르는 모양이다. asia-southeast1 L4
+(서울에 Cloud Run GPU 없음), `min 0 · max 1`. GPU 서비스도 0대로 내려가지만 인스턴스 기반 과금이라 떠 있는 동안(요청 뒤
+유휴 포함) 전부 과금된다. Cloud Run 시작 프로브 상한 240초 때문에 **포트를 먼저 열고 모델은 백그라운드에서 올린다**
+(로드 중 요청은 최대 840초 기다리고, 로드 실패는 `load_failed`). 가중치는 버킷 `daengs-cardgen-weights` 를 `/models` 로
+마운트한다(컨테이너 파일 시스템은 메모리라 거기 받으면 죽는다).
+
+**diffusers 로 직접**(ComfyUI 아님) — 서비스로 띄울 때 우리 FastAPI 하나이고, 파이썬이라 리뷰·테스트가 되며, 모델 교체가
+파이프라인 클래스 교체다.
+
+**갈림길.** `DAENGS_CARDGEN_URL` 이 비어 있으면 backend 는 D-074 그대로 Nano Banana 2 다. #544 에서는 VM 에 값을 넣지
+않았다 — 앱 경로(`/app/ai-cards`)의 정리 기준이 콜드 스타트를 모른다.
+
+**후보와 결과 (실측, 2026-09-15).**
+
+| 엔진 | 결과 |
+| --- | --- |
+| Nano Banana 2 | 12장 닮음 평균 4.42 · 목줄 0/6 · 문구 깨짐 0 · 장당 34초 · ₩140 |
+| FLUX.2-klein-4B (L4 bf16) | 12장 닮음 평균 3.17(정면 사진 4장은 모두 5, 엎드린 옆모습은 1·1·3·1) · 목줄 2/6 · 문구 깨짐 3(전부 4월·seed 1) · 장당 18초. 콜드 스타트 로드 425~430초, 요청 뒤 유휴 약 10분. 12장을 몰면 장당 약 ₩43, 한 장씩이면 약 ₩400(둘 다 추정 — 서비스 GPU 단가 미확인) |
+| Qwen-Image-Edit-2511 (L4 nf4) | **제외.** 로드는 들어갔지만(1145.8·1237.8초) 1차는 VAE 디코딩 CUDA OOM, 2차(VAE 타일링 + expandable_segments)는 끝까지 돌았으나 강아지 교체 없이 노이즈로 깨졌다. 장당 확산만 11분+. 원인(nf4 추정)은 가르지 못함. 서비스·가중치 삭제(사용자 결정) |
+| JoyAI-Image-Edit-Plus · HunyuanImage 3.0 Instruct · FLUX.2-klein-9B · FLUX.2-dev | 조사 단계 제외 — 사용자 제외 / 라이선스가 한국을 사용 지역에서 제외 / 비상업 |
+
+**결정 (사용자, 2026-09-15).** Nano Banana 2 와 FLUX.2-klein-4B **둘 다 유지.** FLUX.2-klein-4B 은 "여러 장(예: 4장) 뽑아 사용자가 고르는"
+개인화 경로 후보로 실험을 이어 간다 — 하루 1회 한도는 Nano Banana 2 의 장당 과금 때문이었으므로 FLUX.2-klein-4B 경로에서는 다시
+설계한다. 과일·채소 카드도 이 경로로 넓힐 후보다. 운영 seed 는 장마다 다르게 두고 쓴 값을 저장한다(실험은 고정).
+다음 카드 순서와 실험 항목은 `docs/cardimage/roadmap.md`. FLUX.2-klein-4B 서비스·가중치·이미지는 남겨 둔다(크레딧 만료 2026-11-17 전에
+`infra/gcp/cardgen-teardown.sh` 여부를 다시 정한다).
+
+되돌리기: `DAENGS_CARDGEN_URL` 을 비우면 backend 는 Nano Banana 2 만 쓴다. GCP 쪽은 `cardgen-teardown.sh`(서비스·잡·가중치
+버킷·이미지 태그). 패키지·그룹을 없애려면 `daengs_cardgen`·`cardgen` 그룹·`conflicts` 선언·`docker/cardgen`·
+`HttpCardImageEngine`·`ai_card_engine` 갈림길을 함께 지운다.

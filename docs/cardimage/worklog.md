@@ -3,19 +3,26 @@
 세션이 끝날 때마다 한 절씩 위에 추가한다 (최신이 위). 무엇을 했고, 무엇을 정했고, 무엇을
 다음 세션에 넘기는지. 조사 내용 자체는 `research-*.md` 에, 요약·현재 상태는 `README.md` 에.
 
+## 2026-09-16 — #544 마무리: Task 8 비교 · 둘 다 유지 결정 · 로드맵
+
+- **Task 8** (FLUX.2-klein-4B vs Nano Banana 2, 사진 3 × 4·9월 × seed 2 = 엔진당 12장): 결과는 `compare-2026-09-15-cardgen.md`. Nano Banana 2 닮음 4.42 · 결함 0, FLUX.2-klein-4B 닮음 3.17(정면만 5) · 목줄 2/6 · 문구 깨짐 3(전부 4월·seed 1) · 장당 18초. FLUX.2-klein-4B 12장 배치 과금 구간 22분 26초(깨움 14:18:53Z → 종료 14:41:19Z) → 장당 약 ₩43 추정.
+- **검수 함정**: 제목에 한글 이름("테스트")이 들어가면 검수가 깨진 글자로 판정한다(Nano Banana 2 1건). 실험은 영문 이름으로.
+- **사용자 결정**: Nano Banana 2 · FLUX.2-klein-4B **둘 다 유지.** FLUX.2-klein-4B 은 "4장 뽑아 고르기"·과일·채소 개인화 경로 후보. 하루 1회 한도는 Nano Banana 2 장당 과금 때문이었으니 FLUX.2-klein-4B 경로에선 다시 설계. seed 는 운영에서 장마다 다르게 + 저장, 실험은 고정. 운영 경로(11-17 이후) 결정은 지금 중요하지 않다고 봄 — 보류.
+- **정리**: D-078 기록, `roadmap.md`(2번 실험 카드 자세히 · 3·4번 간단히), `CLAUDE.md` 폴더 표, `infra/gcp/README.md` cardgen 절(실측·함정 표). FLUX.2-klein-4B 서비스·가중치·이미지는 남김. 가중치 잡은 `90a42ef` + `python -m daengs_cardgen.fetch klein-4b` 로 되돌림(실행 안 함).
+
 ## 2026-09-15 밤 — #544 GPU 서비스 Task 7: Qwen-Image-Edit-2511 nf4 on L4 (잰 값만)
 
 - **가중치**: 잡 `cardgen-weights-7czsf` 성공 31분 3초(다운로드 30분 43초), 33파일 57.72GB(최대 9.99GB transformer 샤드), incomplete 0, 심볼릭 링크 33개 정상.
 - **1차 서비스** (이미지 `c917c96`, rev `00001-6dz`): Ready 25초, 로드 **1145.8초**(재시작·메모리 초과 없음). 카드 1장 → 확산 40/40 11분 19초(17s/step) 뒤 **CUDA OOM** — `autoencoder_kl_qwenimage` 정규화에서 612MiB 요청, GPU 22.03GiB 중 25MiB 남음, PyTorch 19.80GiB 할당·1.97GiB 예약만 됨. (처음엔 proxy 가 끊은 500 으로 추정했으나 서비스 Traceback 으로 반증.)
 - **수정**: `QwenModel.load` 에 `vae.enable_tiling()`(diffusers 0.40.0 에 있음을 임시 env 로 먼저 확인), Dockerfile `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True`, 테스트 1개(`96b5e6bf`). 이미지 재빌드 12분 54초 → `90a42ef`.
 - **2차 서비스** (rev `00002-zf2`): 새 이미지 첫 import 로 Ready 296초, 로드 **1237.8초**. 카드 1장 → 확산 11분 34초, 디코딩 ~4초, **200 OK (OOM 해결)**, 서비스 711.6초.
-  결과가 **깨짐**: 검수 닮음 2 · 글자 실패. 눈으로 보면 **틀의 갈색 푸들 그대로 + 화면 전체 고른 노이즈** — 강아지·아바타 교체가 일어나지 않았다(klein 은 교체됨). `cardimage/out/_cardgen/smoke-qwen/`.
+  결과가 **깨짐**: 검수 닮음 2 · 글자 실패. 눈으로 보면 **틀의 갈색 푸들 그대로 + 화면 전체 고른 노이즈** — 강아지·아바타 교체가 일어나지 않았다(FLUX.2-klein-4B 은 교체됨). `cardimage/out/_cardgen/smoke-qwen/`.
   원인은 가르지 못함(추정): text_encoder nf4 로 참조 이해 붕괴 / transformer nf4 로 디노이즈 붕괴 / VAE tiling. L4 에선 양자화를 빼면 메모리가 모자라 이 자리에서 싸게 가를 방법이 없다.
 - **판정**: L4 + nf4 로는 Qwen 비교 표본을 못 얻었다. 서빙 관점에서도 로드 ~20분·장당 ~12분이라 어렵다.
-- **비교 이미지**: `cardimage/out/_cardgen/compare_4_template_nanobanana_klein_qwen.png` (틀 · Nano Banana 2 09-14 `service_check_1.png` · klein · Qwen, 같은 사진 `_03`·4월). 눈으로: Nano Banana 2 는 교체·무대·글자 모두 깨끗, klein 은 교체·무대는 근접하나 목줄 추가·`PETL PPAUSE`, Qwen 은 교체 없음 + 노이즈.
-- **정리 (사용자 결정 "둘 다 지우자")**: 서비스 `daengs-cardgen-qwen` 삭제, 버킷 `hub/models--Qwen--Qwen-Image-Edit-2511/`(53.75GiB)·`hub/.locks/models--Qwen--…` 삭제, 로컬 proxy 8092 종료. klein 서비스·가중치(14.88GiB)는 남김. **Task 8 은 klein vs Nano Banana 2 만.**
+- **비교 이미지**: `cardimage/out/_cardgen/compare_4_template_nanobanana_klein_qwen.png` (틀 · Nano Banana 2 09-14 `service_check_1.png` · FLUX.2-klein-4B · Qwen, 같은 사진 `_03`·4월). 눈으로: Nano Banana 2 는 교체·무대·글자 모두 깨끗, FLUX.2-klein-4B 은 교체·무대는 근접하나 목줄 추가·`PETL PPAUSE`, Qwen 은 교체 없음 + 노이즈.
+- **정리 (사용자 결정 "둘 다 지우자")**: 서비스 `daengs-cardgen-qwen` 삭제, 버킷 `hub/models--Qwen--Qwen-Image-Edit-2511/`(53.75GiB)·`hub/.locks/models--Qwen--…` 삭제, 로컬 proxy 8092 종료. FLUX.2-klein-4B 서비스·가중치(14.88GiB)는 남김. **Task 8 은 FLUX.2-klein-4B vs Nano Banana 2 만.**
 
-## 2026-09-15 오후 — #544 GPU 서비스 Task 6: klein 4B 배포·첫 카드 (잰 값만)
+## 2026-09-15 오후 — #544 GPU 서비스 Task 6: FLUX.2-klein-4B 배포·첫 카드 (잰 값만)
 
 계획 `plan-2026-09-15-cardgen-gpu.md` Task 1~5(코드) 뒤 첫 유료 단계. 사용자 승인 뒤 진행.
 

@@ -263,9 +263,10 @@ DAENGS_CORPUS_JOB=corpus-refresh
 ## `cardgen.sh` — 도감 카드 생성 GPU 서비스 (D-078, #544)
 
 모델마다 Cloud Run **서비스** 하나, 싱가포르 L4, `min 0 · max 1`. 코드는 `docker/cardgen/`, 가중치는 버킷
-`daengs-cardgen-weights` 를 `/models` 로 마운트. **2026-09-16 기준 남아 있는 것:** 서비스 `daengs-cardgen-klein`(이미지
-`c917c96`), 잡 `cardgen-weights`(이미지 `90a42ef`, `python -m daengs_cardgen.fetch klein-4b` 로 되돌려 둠), 버킷의 FLUX.2-klein-4B
-가중치 14.88GiB. Qwen 서비스·가중치는 09-15 결과가 깨져 지웠다(D-078).
+`daengs-cardgen-weights` 를 `/models` 로 마운트. **2026-09-16 기준 남아 있는 것:** 서비스 `daengs-cardgen-klein`과 잡
+`cardgen-weights` 가 **같은 이미지 `07e7a55` 하나**를 쓴다(잡은 `python -m daengs_cardgen.fetch klein-4b`, 실행 안 함). 옛 이미지
+`c917c96`·`90a42ef` 와 옛 리비전은 지웠다(#557). 버킷의 FLUX.2-klein-4B 가중치 14.88GiB. Qwen 서비스·가중치는 09-15 결과가 깨져
+지웠고, 코드(`QwenModel`·`MODEL=qwen`)도 #557 에서 걷어냈다(D-078). `/generate` 는 `count`(1~4)로 한 요청에 여러 장을 뽑는다.
 
 **실측 (09-15, #544 worklog):** 이미지 빌드 13~16분 · FLUX.2-klein-4B 가중치 받기 9분 · 서비스 기동→포트 10초 · 모델 로드 425~430초 ·
 장당 18~26초 · 요청 뒤 유휴 약 10분 뒤 종료. 새 이미지를 싱가포르에서 처음 가져오면 5분이 붙는다.
@@ -282,7 +283,8 @@ DAENGS_CORPUS_JOB=corpus-refresh
 | `hf download --include` | 값을 하나만 받는다. gcloud `--args` 는 목록 안 같은 플래그 두 번을 거부 | 잡 command 를 `/bin/sh -c "set -f; exec hf download ... --include a --include b"`(`^@^` 구분자) — 지금은 `fetch.py` 가 같은 조건이라 필요 없음 |
 | 로그 조회 | PowerShell 에서 `labels."run.googleapis.com/execution_name"` 필터 따옴표가 깨짐 | `gcloud logging read` 는 Bash 로 |
 | 새 리비전 전 호출 | 새 리비전 Ready 전에 `/health` 를 부르면 옛 리비전 인스턴스가 떠 로드가 헛돈다 | `latestReadyRevisionName` 이 새 이름이 된 뒤에 호출 |
-| 이미지가 빌드마다 8GB | 서비스 `c917c96`·잡 `90a42ef` 가 레이어를 공유하지 않아 16GB(09-16 조회: 저장소 28.2GB vs 이미지 합 28.4GB). Dockerfile 앞쪽 `ENV` 가 바뀌면 뒤 설치 레이어가 전부 새로 생긴다 | 새로 빌드하면 서비스·잡을 **같은 태그로 함께** 배포하고, 서비스 확인 뒤 옛 태그 삭제(`gcloud artifacts docker images delete ...@sha256:... --delete-tags`) |
+| 이미지가 빌드마다 8GB | 서비스 `c917c96`·잡 `90a42ef` 가 레이어를 공유하지 않아 16GB(09-16 조회: 저장소 28.2GB vs 이미지 합 28.4GB). Dockerfile 앞쪽 `ENV` 가 바뀌면 뒤 설치 레이어가 전부 새로 생긴다 | 새로 빌드하면 서비스·잡을 **같은 태그로 함께** 배포하고, 서비스 확인 뒤 옛 태그 삭제(`gcloud artifacts docker images delete ...@sha256:... --delete-tags`). 09-16 에 `07e7a55` 하나로 맞췄다 |
+| 배포하면 인스턴스가 바로 뜬다 | `gcloud run deploy`/`services update` 로 새 리비전을 만들면 요청이 없어도 인스턴스가 떠서(로그 `Starting new instance. Reason: DEPLOYMENT_ROLLOUT`) 모델을 올린다 — 09-16 실측 시작 17:23:16Z → ready 383초. **배포 한 번 = L4 약 7분 로드 + 유휴 약 10분 과금** | 배포를 몰아서 한다. 설정만 바꿔 보는 실험도 배포마다 이 비용이 붙는다 |
 
 **Artifact Registry 정리 정책(cleanup policy)은 일부러 안 건다 (09-16).** 빌드가 드물어 손으로 지우는 것으로 충분하고,
 저장소 `daengs` 는 cardgen·pipeline·realtime 이 같이 쓴다 — 특히 `pipeline` 은 `cpu-*`(매일 04:00 `corpus-refresh`)와
@@ -296,7 +298,7 @@ DAENGS_CORPUS_JOB=corpus-refresh
   을 켜 두고 `http://127.0.0.1:8091` 을 부른다. `INVOKER` 로 준 계정에 `run.invoker` 가 걸려 있어야 한다.
 - **VM backend 에 연결하지 않는다** — `DAENGS_CARDGEN_URL` 을 VM 에 넣으면 앱 경로가 GPU 서비스를 쓰는데,
   앱 경로 정리 기준이 콜드 스타트를 모른다(#544 남은 것).
-- **지울 때** — `PROJECT=daengs bash infra/gcp/cardgen-teardown.sh`. 서비스 둘·잡·가중치 버킷·이미지 태그.
+- **지울 때** — `PROJECT=daengs bash infra/gcp/cardgen-teardown.sh`. 서비스(`daengs-cardgen-klein`)·잡·가중치 버킷·이미지 태그.
 
 ## 자주 걸리는 것
 

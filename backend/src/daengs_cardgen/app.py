@@ -1,7 +1,7 @@
 """GPU 서비스 HTTP 앱. 모델은 기동 때 한 번 올리고, 요청은 한 번에 하나씩 처리한다.
 
 **포트는 곧바로 열린다** — 모델은 lifespan 이 띄운 백그라운드 스레드가 올린다. Cloud Run 의 시작
-프로브는 240초가 상한인데 Qwen(약 58GB, GCS FUSE + nf4)은 그 안에 못 올라오기 때문이다.
+프로브는 240초가 상한인데 FLUX.2-klein-4B 도 GCS FUSE 에서 425~430초 걸린다(09-15 실측).
 올리는 동안 들어온 `/generate` 는 `ready_timeout_s`(Cloud Run 요청 타임아웃 900초보다 짧게)까지
 기다렸다가 처리한다 — 그래서 콜드 스타트 요청은 여전히 503 이 아니라 **느리게 성공**한다.
 올린 시간은 `/health` 의 `load_seconds`, 올리다 실패하면 `error` 에 남고 `/generate` 는 503 `load_failed`.

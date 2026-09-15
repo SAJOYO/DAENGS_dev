@@ -14,6 +14,7 @@
 | 행동 작성 입력 | `ActionInput`: 현재 핀·현재 공간·현재 이동 맥락. 공간의 `time_meaning` 보존 |
 | 발행 영수증 / 카드 비교 발행 | `relational-diary-skeleton-v7` / `scene-comparison-publication-v1` |
 | 전달 이력 판정 | `point-meaning-v2`; 정책이 없는 과거 발행본은 `source-identity-v1`로 검증 |
+| 전체 제목 입력 | `relational-title-readmodel-v1`: 채택된 장면별 공간·행동·이동 관측과 원래 ID·시각·순서 |
 | 공개 요청 / 응답 | `walk-relational-diary-v1` / `walk-relational-diary-response-v1` |
 | DB 저장 봉투 | `walk-relational-diary-storage-v1` |
 
@@ -50,6 +51,31 @@ HTTP 예약 만료와 storyboard 프록시 제한도 이 예산에 맞췄다. �
 남았다. 실행 정합성 수정과 서술·검수 품질 완료는 구분한다.
 [수정 범위·원문·남은 문제](../../backend/evals/relational_diary/review-consistency-20260915/README.md)에 기록했다.
 이번 브랜치에서 실제 Postgres·APP·nginx 런타임 검증이나 배포를 다시 수행하지 않았다.
+
+## 전체 제목 readmodel 연결 (2026-09-15)
+
+`daengs_walk/diary/relational/title_context.py`가 제목 입력 계약과 순수 변환을 소유한다.
+장면마다 원래 `scene_id`, 발행 순서 `order`, `recorded_at`, 채택된 `space`·`action`,
+그 장면의 `movement_observations`를 묶는다. 본문과 관측이 모두 없는 장면은 제외하지만
+남은 장면을 새 번호로 재명명하지 않는다. 미채택 후보·미사용 공간 원자료·동·날씨·원문은 넣지 않는다.
+동일한 시각의 별개 장면은 보존하고 시간 역전·중복 장면·추가 필드는 거절한다.
+
+오케스트레이터는 본문 확정 후 `writing/relational_title.py`의 `write_relational_title`을
+호출한다. 제목 작성과 의미 검수는 같은 readmodel을 읽고, 인용 ID는 실제 장면 ID다.
+기존 `CallCoordinator`를 사용하므로 모델·호출 수·응답 후 간격·429 중단 정책은 그대로다.
+추가 작명 에이전트나 재작성 루프는 없다. 제목·검수 프롬프트는 이번에 변경하지 않았다.
+
+영수증에 `title_contract`와 실제 요청·본문 revision·프롬프트 revision·응답 스키마·원문·검수를
+저장한다. 저장/조회 시 동일한 순수 변환으로 제목 입력과 채택 본문을 대조하고, 반환 제목과 후보,
+검수가 읽은 입력/후보 및 통과 상태가 일치하는지 검사한다. 생성 시 이미 확정한 내용에서 다시
+투영할 뿐, 최신 자료를 수집하거나 LLM을 호출하지 않는다. 과거 표식 없는 제목은 기존 계약으로 읽는다.
+DB 테이블과 APP 공개 응답 계약은 바꾸지 않았다.
+
+코드 검사 63개 통과 후 검수 상태 우회 방지 항목을 추가하여 제목 파일 20개를 재확인했다.
+실제 고정 본문 비교는 작성·검수 총 4회 모두 반환했다. 기존 제목은 “매헌로와 강남대로, 마방 공원 산책”,
+새 제목은 “매헌로와 강남대로를 걷던 기록”이었다. 입력 구조 보존은 확인했지만 제목 품질 우위는
+이 한 표본으로 확정하지 않는다. 원래 본문의 이동 과장도 제목 입력에 남아 있으므로 별도 문제다.
+[요청·출력·비교 조건](../../backend/evals/relational_diary/title-readmodel-20260915/README.md)을 보존했다.
 
 ## 현재 연결 상태: HTTP·Postgres 발행 (2026-09-15)
 

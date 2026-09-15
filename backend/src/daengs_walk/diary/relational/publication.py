@@ -10,6 +10,7 @@ from daengs_walk.diary.relational.scene_comparison_contracts import (
     SpaceComparisonAnswer,
     SpaceComparisonInput,
 )
+from daengs_walk.diary.relational.title_context import validate_title_publication
 from daengs_walk.value_contracts import ValueContract, digest
 
 PUBLICATION_VERSION = "relational-diary-skeleton-v7"
@@ -119,3 +120,4 @@ def validate_publication(receipt):
             raise ValueError("published body changed")
     if used_tasks != results.keys():
         raise ValueError("unexpected saved writer result")
+    validate_title_publication(receipt)

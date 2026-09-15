@@ -483,6 +483,39 @@ def test_long_uppercased_title_name_is_clamped(store, jobs) -> None:
     assert len(_start(title_name="ß" * 40).title) <= 80
 
 
+def _spy_generate(recorded: dict, monkeypatch: pytest.MonkeyPatch) -> None:
+    """`ai_card_engine.generate` 를 가로채 `dog_name` 인자와 실제로 그려진 제목을 기록한다.
+    `_run` 이 `ai_card_engine.generate` 를 속성으로 부르므로(모듈째 import) 여기서 바꿔치기가 먹는다."""
+    original = ai_card_engine.generate
+
+    def spy(**kw):
+        recorded["dog_name"] = kw["dog_name"]
+        generated = original(**kw)
+        recorded["title"] = generated.title
+        return generated
+
+    monkeypatch.setattr(ai_card_engine, "generate", spy)
+
+
+def test_title_name_reaches_generation(store, jobs, monkeypatch) -> None:
+    """`title_name` 이 그림 제목에도 넘어가야 한다 — 저장된 `title` 과 그림에 그려진 제목이 같아야 한다."""
+    recorded: dict = {}
+    _spy_generate(recorded, monkeypatch)
+    card = _start(title_name="kong")
+    _run_all(jobs)
+    assert recorded["dog_name"] == "kong"
+    assert recorded["title"] == card.title
+
+
+def test_no_title_name_generates_with_dog_name(store, jobs, monkeypatch) -> None:
+    """`title_name` 이 없으면 `dog_name`(정규화된 값)이 그림 제목에도 그대로 간다."""
+    recorded: dict = {}
+    _spy_generate(recorded, monkeypatch)
+    _start()
+    _run_all(jobs)
+    assert recorded["dog_name"] == "네오"
+
+
 def test_daily_status(store, jobs, monkeypatch) -> None:
     assert asyncio.run(service.daily_status(FakeSession(), OWNER)) == (1, 1)
     _start()

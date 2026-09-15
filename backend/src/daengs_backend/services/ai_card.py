@@ -157,7 +157,7 @@ async def start(
             raise AiCardBusyError from None
         raise
 
-    _spawn(_run(card.id, app_user_id, photo_jpeg, month, name))
+    _spawn(_run(card.id, app_user_id, photo_jpeg, month, title_source))
     return card
 
 
@@ -204,7 +204,7 @@ async def _claim_slot(card_id: uuid.UUID) -> bool:
         return True
 
 
-async def _run(card_id: uuid.UUID, app_user_id: uuid.UUID, photo_jpeg: bytes, month: int, dog_name: str) -> None:
+async def _run(card_id: uuid.UUID, app_user_id: uuid.UUID, photo_jpeg: bytes, month: int, title_name: str) -> None:
     """백그라운드 한 건. **예외를 밖으로 내지 않습니다** — 낼 곳이 없고, 행에 결과를 남깁니다."""
     try:
         async with _slot():
@@ -217,7 +217,8 @@ async def _run(card_id: uuid.UUID, app_user_id: uuid.UUID, photo_jpeg: bytes, mo
                     photo=photo_jpeg,
                     content_type="image/jpeg",
                     month=month,
-                    dog_name=dog_name,
+                    # `generate_card` 는 이 이름을 그림 제목에만 쓴다 — `ai_cards.title` 과 같은 글자여야 한다 (#543).
+                    dog_name=title_name,
                     engine=ai_card_engine.default_engine(),
                     judge=ai_card_engine.default_judge(),
                 )

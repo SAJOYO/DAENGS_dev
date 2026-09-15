@@ -40,7 +40,7 @@ def test_posts_template_then_photo_and_fits_card_size() -> None:
     assert (body["seed"], body["prompt"], body["width"], body["height"]) == (11, "P", 1024, 1632)
     assert base64.b64decode(body["images_b64"][0]) == template
     assert base64.b64decode(body["images_b64"][1]) == b"jpeg-bytes"
-    assert engine.last_meta == {"seed": 11, "seconds": "3.2", "model": "fake"}
+    assert engine.last_meta == {"seed": 11, "seconds": "3.2", "model": "fake", "size": "1024x1632"}
 
 
 def test_without_auth_sends_no_authorization_header() -> None:
@@ -96,3 +96,18 @@ def test_non_image_body_is_no_image() -> None:
     with pytest.raises(EngineError) as info:
         engine.generate(template_png=png(), photo_jpeg=b"j", prompt="P")
     assert info.value.code == "no_image"
+
+
+def test_gen_size_is_sent_and_result_still_fits_card() -> None:
+    seen: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["body"] = json.loads(request.content)
+        return httpx.Response(200, content=png(1280, 2048))
+
+    engine = _engine(handler, gen_size=(1280, 2048))
+    out = engine.generate(template_png=png(), photo_jpeg=b"j", prompt="P")
+
+    assert (seen["body"]["width"], seen["body"]["height"]) == (1280, 2048)
+    assert Image.open(io.BytesIO(out)).size == (994, 1582)
+    assert engine.last_meta["size"] == "1280x2048"

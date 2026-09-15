@@ -150,14 +150,18 @@ class HttpCardImageEngine:
     인증은 `auth(audience) -> ID 토큰` 을 주입받는다 — 이 패키지는 backend 를 import 하지 않으므로
     토큰 발급(메타데이터 서버)은 backend 가 넘긴다. `auth=None` 이면 헤더 없이 부른다
     (`gcloud run services proxy` 로 연 로컬 포트 — 비교 도구가 쓴다).
-    `seed=None` 이면 호출마다 무작위. 마지막 호출의 seed·서비스 시간·모델은 `last_meta` 에 남긴다.
+    `seed=None` 이면 호출마다 무작위. 마지막 호출의 seed·서비스 시간·모델·보낸 크기는 `last_meta` 에 남긴다.
+    `gen_size` 는 서비스에 요청하는 생성 크기다(기본 `GEN_SIZE`). 결과는 크기와 상관없이 `CARD_SIZE` 로 줄인다 —
+    #557 E1 이 1280×2048 을 비교한다.
     """
 
     def __init__(self, *, base_url: str, timeout_s: float, seed: int | None = None,
+                 gen_size: tuple[int, int] = GEN_SIZE,
                  auth: Callable[[str], str] | None = None,
                  transport: httpx.BaseTransport | None = None) -> None:
         self._base = base_url.strip().rstrip("/")
         self._timeout_s, self._seed, self._auth, self._transport = timeout_s, seed, auth, transport
+        self._gen_size = gen_size
         self.last_meta: dict | None = None
 
     def generate(self, *, template_png: bytes, photo_jpeg: bytes, prompt: str) -> bytes:
@@ -166,7 +170,7 @@ class HttpCardImageEngine:
         seed = self._seed if self._seed is not None else random.randrange(2**31)
         body = {
             "images_b64": [base64.b64encode(template_png).decode(), base64.b64encode(photo_jpeg).decode()],
-            "prompt": prompt, "seed": seed, "width": GEN_SIZE[0], "height": GEN_SIZE[1],
+            "prompt": prompt, "seed": seed, "width": self._gen_size[0], "height": self._gen_size[1],
         }
         try:
             headers = {"Authorization": f"Bearer {self._auth(self._base)}"} if self._auth else {}
@@ -177,5 +181,6 @@ class HttpCardImageEngine:
         if resp.status_code != 200:
             raise EngineError("upstream", f"카드 생성 서비스가 {resp.status_code} 을 돌려줬습니다: {resp.text[:200]!r}")
         self.last_meta = {"seed": seed, "seconds": resp.headers.get("X-Cardgen-Seconds"),
-                          "model": resp.headers.get("X-Cardgen-Model")}
+                          "model": resp.headers.get("X-Cardgen-Model"),
+                          "size": f"{self._gen_size[0]}x{self._gen_size[1]}"}
         return _decode_and_fit(resp.content, pad=0, padded_width=CARD_SIZE[0])

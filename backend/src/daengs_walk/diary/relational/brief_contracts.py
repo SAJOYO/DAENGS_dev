@@ -6,6 +6,7 @@ from pydantic import Field, model_validator
 
 from daengs_walk.diary.contracts.input import Anchor, RecordRef
 from daengs_walk.diary.relational.contracts import CurrentMotion
+from daengs_walk.diary.relational.relation_flow_contracts import RelationSelection
 from daengs_walk.diary.relational.scene_comparison_contracts import FactScope, SceneConnection
 from daengs_walk.diary.relational.walk_phase import ScenePosition
 from daengs_walk.value_contracts import Instant, Point, ValueContract, digest
@@ -191,6 +192,20 @@ class NarrativeSpaceContext(ValueContract):
     source_bindings: dict[str, tuple[str, ...]]
     object_identities: dict[str, str] = Field(default_factory=dict)
     omitted_sources: dict[str, str] = Field(default_factory=dict)
+    # Absent on historical contexts: preserve their exact serialized receipts.
+    interval_relations: RelationSelection | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+
+    @property
+    def flow_ids(self):
+        return tuple(f.id for f in self.interval_relations.flows) if self.interval_relations else ()
+
+    @property
+    def selected_relation_ids(self):
+        if self.interval_relations:
+            return self.interval_relations.spatial_relation_ids + self.flow_ids
+        return tuple(r.id for r in self.relation_slots.all_relations())
 
     @property
     def current_facts(self):
@@ -216,6 +231,30 @@ class NarrativeSpaceContext(ValueContract):
 
     @model_validator(mode="after")
     def references(self):
+        if self.interval_relations:
+            selected = self.interval_relations
+            base_ids = {r.id for r in self.relation_slots.all_relations()}
+            retained, replaced = (
+                set(selected.spatial_relation_ids),
+                set(selected.replaced_relation_ids),
+            )
+            if (
+                selected.scene_id != self.current.position.scene_id
+                or retained & replaced
+                or retained | replaced != base_ids
+                or len(retained) != len(selected.spatial_relation_ids)
+                or len(replaced) != len(selected.replaced_relation_ids)
+                or selected.policy != "relation-injection-v1"
+            ):
+                raise ValueError("interval relation selection differs from context")
+            if any(
+                f.started_at > f.ended_at
+                or f.ended_at > self.current.position.recorded_at
+                or f.started_at < self.current.position.timeline.started_at
+                or not f.source_ids
+                for f in selected.flows
+            ):
+                raise ValueError("interval relation exceeds available walk observations")
         current = self.current.position
         earlier = self.earlier.position if self.earlier else None
         if earlier:
@@ -243,6 +282,7 @@ class NarrativeSpaceContext(ValueContract):
             [f.id for f in self.facts]
             + [r.id for r in relations]
             + ([self.route.id] if self.route else [])
+            + list(self.flow_ids)
         )
         route_ids = self.connection.route_evidence_ids if self.connection else ()
         if route_ids != ((self.route.id,) if self.route else ()):
@@ -254,7 +294,10 @@ class NarrativeSpaceContext(ValueContract):
             or self.route.status != self.connection.route_status
         ):
             raise ValueError("route belongs to a different scene interval")
-        if len(ids) != len(set(ids)) or set(ids) != self.source_bindings.keys():
+        if (
+            len(ids) != len(set(ids))
+            or set(ids) - set(self.flow_ids) != self.source_bindings.keys()
+        ):
             raise ValueError("narrative IDs and source bindings must agree uniquely")
         if any(not refs for refs in self.source_bindings.values()):
             raise ValueError("narrative meaning has no source binding")
@@ -363,9 +406,10 @@ class DeliveredMeaning(ValueContract):
     @model_validator(mode="after")
     def known_selection(self):
         evidence = {f.id for f in self.context.facts}
+        evidence.update(self.context.flow_ids)
         if self.context.route:
             evidence.add(self.context.route.id)
-        relations = {r.id for r in self.context.relation_slots.all_relations()}
+        relations = set(self.context.selected_relation_ids)
         if not set(self.evidence_ids) <= evidence or not set(self.relation_ids) <= relations:
             raise ValueError("delivery cites unknown narrative meaning")
         if len(set(self.evidence_ids)) != len(self.evidence_ids) or len(
@@ -390,13 +434,15 @@ class SpaceWritingBrief(ValueContract):
 
     @property
     def citation_ids(self):
-        return tuple(f.id for f in self.context.facts) + (
-            (self.context.route.id,) if self.context.route else ()
+        return (
+            tuple(f.id for f in self.context.facts)
+            + ((self.context.route.id,) if self.context.route else ())
+            + self.context.flow_ids
         )
 
     @property
     def relation_ids(self):
-        return tuple(r.id for r in self.context.relation_slots.all_relations())
+        return self.context.selected_relation_ids
 
     @model_validator(mode="after")
     def memory_is_prior_space(self):

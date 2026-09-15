@@ -7,7 +7,7 @@ from pydantic import Field, field_validator, model_validator
 
 from daengs_walk.diary.relational.contracts import SemanticReview
 from daengs_walk.diary.relational.title_writer_view import (
-    TITLE_WRITER_POLICY,
+    TITLE_WRITER_POLICIES,
     title_publication_view,
 )
 from daengs_walk.value_contracts import Instant, ValueContract, digest
@@ -114,7 +114,7 @@ def validate_title_publication(receipt):
     title = receipt.get("title", {})
     contract = receipt.get("title_contract")
     if contract is None:
-        if title.get("request", {}).get("version") in {TITLE_CONTRACT, TITLE_WRITER_POLICY}:
+        if title.get("request", {}).get("version") in {TITLE_CONTRACT, *TITLE_WRITER_POLICIES}:
             raise ValueError("missing title contract marker")
         return  # Historical publications retain their original title contract.
     if contract != TITLE_CONTRACT:

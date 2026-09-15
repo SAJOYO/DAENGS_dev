@@ -169,6 +169,19 @@ CREATE UNIQUE INDEX IF NOT EXISTS ai_cards_one_generating_idx ON ai_cards (app_u
 - 전체 지출의 바닥은 카드 생성 키의 **별도 GCP 프로젝트 지출 상한**이다(README 「정해진 것 · 키」).
 - 관리자 경로 `/admin/cardimage/generate` 는 한도를 받지 않는다(점검용, 저장 없음).
 
+### 2026-09-15 제품 규칙으로 교체 (#543, D-077)
+
+위 규칙은 테스트 단계용이었고 `check_quota` 를 통째로 바꿨다. 지금 규칙:
+
+- 동시 1장 → `409 already_generating` (그대로)
+- 같은 `app_user_id`·`dog_id`·`month` 에 `ready`/`generating` 카드가 있으면 `AiCardMonthTakenError` → `409 month_taken`
+  「{이름}은(는) 이미 {달}월 카드가 있어요.」. `dog_id` 가 없으면 안 본다. 동시 1장 다음·하루 한도 앞.
+- KST 오늘 **`ai_card_usage`** 줄 수 ≥ `daily_limit` 이면 `429 limit_reached`. 줄은 `_finish_ready` 가 `ready` 로 바꾸는
+  같은 트랜잭션에서 남기고, 카드를 지워도 남는다(`card_id` FK 없음). 표는 `db/init/39_ai_card_usage.sql`.
+- 돈 나간 실패 하루 5번 → `429` (그대로)
+- `POST` 쿼리 `title_name`(선택, 40자) — 제목에만. `GET /app/ai-cards` 에 `daily_limit`·`daily_remaining`(무제한이면 `null`).
+- 탈퇴 정리(`cleanup_for_owner`)가 사용 기록도 지운다.
+
 ## 6. 삭제·탈퇴
 
 - `DELETE`: `get_owned(for_update)` → `storage_key` 가 있으면 **객체 먼저** 지우고 행 삭제(dogcard 와 같은

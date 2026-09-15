@@ -40,7 +40,7 @@ from daengs_backend.core.storage import (
     build_ai_card_key,
     get_storage,
 )
-from daengs_backend.models import AiCard
+from daengs_backend.models import AiCard, AiCardUsage
 from daengs_backend.repositories import ai_card as ai_card_repo
 from daengs_backend.repositories import app_user as app_user_repo
 from daengs_backend.repositories import pet as pet_repo
@@ -121,7 +121,9 @@ async def start(
         raise AiCardNotFoundError
 
     now = now or datetime.now(UTC)
-    await check_quota(session, app_user_id, now=now, daily_limit=settings.cardimage_daily_limit)
+    await check_quota(
+        session, app_user_id, now=now, daily_limit=settings.cardimage_daily_limit, dog_id=dog_id, month=month
+    )
 
     card = AiCard(
         id=uuid.uuid4(),
@@ -258,7 +260,11 @@ async def _finish_ready(card_id: uuid.UUID, key: str, stored: StoredObject, gene
         card.width, card.height = width, height
         card.likeness = generated.judge.likeness if generated.judge else None
         card.attempts = generated.attempts
-        card.updated_at = datetime.now(UTC)
+        now = datetime.now(UTC)
+        card.updated_at = now
+        # **같은 트랜잭션에서** 사용 기록을 남깁니다 (#543, D-077). 카드를 지워도 이 줄은 남아 하루 한도가
+        # 돌아오지 않습니다. ready 가 못 된 카드(실패·중간 삭제)는 여기까지 안 오므로 세지 않습니다.
+        ai_card_repo.add_usage(session, AiCardUsage(card_id=card.id, app_user_id=card.app_user_id, used_at=now))
         await session.commit()
 
 

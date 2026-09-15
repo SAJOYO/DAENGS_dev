@@ -1,13 +1,18 @@
-"""앱 사용자 AI 카드 생성 한도 (#537, D-076).
+"""앱 사용자 AI 카드 생성 한도 (#537 · #543, D-076 · D-077).
 
-**지금 규칙은 테스트 단계용입니다** — 사용자별 동시 1장 + KST 하루 `ready` N장
-(`DAENGS_CARDIMAGE_DAILY_LIMIT`, 기본 1). 카드를 몇 장·어떤 조건으로 줄지(제품 규칙)가 정해지면
-**`check_quota` 를 통째로 바꿉니다.** 부르는 쪽(`services/ai_card.py`)은 두 예외만 압니다.
+**제품 규칙입니다** (사용자 결정 2026-09-15). 부르는 쪽(`services/ai_card.py`)은 세 예외만 압니다.
 
-실패(`failed`)는 하루 `ready` 한도에 세지 않습니다 — 한도가 1장이라 실패 한 번으로 그날 기회가
-사라지면 안 되고, 연타는 동시 1장이 막습니다. 다만 **모델 호출까지 간 실패**(`PAID_FAILURE_CODES`)는
-돈이 나갔으므로 따로 하루 `MAX_PAID_FAILURES_PER_DAY` 번까지만 받습니다. 전체 지출의 바닥은 카드
-생성 키의 별도 GCP 프로젝트 지출 상한입니다.
+- 사용자별 **동시 1장** — `AiCardBusyError` (409 `already_generating`)
+- **강아지마다 달마다 한 장**, 보호자마다 따로 — 같은 `dog_id`·`month` 의 `ready`/`generating` 카드가
+  있으면 `AiCardMonthTakenError` (409 `month_taken`). 그 카드를 지우면 그 달은 다시 열립니다.
+  `dog_id` 가 없으면 보지 않습니다.
+- KST **하루 N회** (`DAENGS_CARDIMAGE_DAILY_LIMIT`, 기본 1) — `AiCardLimitError` (429 `limit_reached`).
+  **`ai_card_usage`(카드가 ready 가 될 때 남는 기록)로 셉니다.** 그래서 카드를 지워도 횟수는 돌아오지
+  않고, 실패한 카드는 기록이 없어 세지 않습니다.
+
+실패를 하루 한도에 세지 않는 대신 **모델 호출까지 간 실패**(`PAID_FAILURE_CODES`)는 돈이 나갔으므로
+따로 하루 `MAX_PAID_FAILURES_PER_DAY` 번까지만 받습니다. 전체 지출의 바닥은 카드 생성 키의 별도 GCP
+프로젝트 지출 상한입니다.
 """
 
 from __future__ import annotations
@@ -23,8 +28,7 @@ from daengs_backend.repositories import ai_card as ai_card_repo
 
 KST = ZoneInfo("Asia/Seoul")
 
-# 모델 호출까지 가서(돈이 나간 뒤) 실패한 코드와 그 하루 상한. 테스트 단계 안전장치입니다 —
-# 제품 규칙이 정해지면 `check_quota` 와 같이 바뀝니다. 설정값으로 빼지 않습니다.
+# 모델 호출까지 가서(돈이 나간 뒤) 실패한 코드와 그 하루 상한. 설정값으로 빼지 않습니다.
 # `interrupted`·`internal`·`unavailable` 은 세지 않습니다.
 PAID_FAILURE_CODES = frozenset({"upstream", "no_image", "storage"})
 MAX_PAID_FAILURES_PER_DAY = 5
@@ -32,6 +36,10 @@ MAX_PAID_FAILURES_PER_DAY = 5
 
 class AiCardBusyError(Exception):
     """이미 만들고 있는 카드가 있습니다. 라우터가 409 `already_generating` 으로 바꿉니다."""
+
+
+class AiCardMonthTakenError(Exception):
+    """이 강아지의 이 달 카드가 이미 있습니다. 라우터가 409 `month_taken` 으로 바꿉니다."""
 
 
 class AiCardLimitError(Exception):
@@ -56,19 +64,43 @@ def kst_day_start(now: datetime) -> datetime:
 
 
 async def check_quota(
-    session: AsyncSession, app_user_id: uuid.UUID, *, now: datetime, daily_limit: int
+    session: AsyncSession,
+    app_user_id: uuid.UUID,
+    *,
+    now: datetime,
+    daily_limit: int,
+    dog_id: uuid.UUID | None,
+    month: int,
 ) -> None:
+    """돈이 나가기 전에 부릅니다. `dog_id`·`month` 는 **키워드 필수**입니다 — 빠뜨려서 달별 검사가
+    조용히 꺼지면 안 됩니다."""
     await ai_card_repo.expire_generating(
         session, app_user_id, stale_before=now - stale_after(), now=now
     )
     if await ai_card_repo.has_generating(session, app_user_id):
         raise AiCardBusyError
+    # 하루 한도보다 먼저 — 내일 다시 해도 안 되는 이유이기 때문입니다.
+    if dog_id is not None and await ai_card_repo.has_month_card(session, app_user_id, dog_id, month):
+        raise AiCardMonthTakenError
     day_start = kst_day_start(now)
-    if daily_limit and await ai_card_repo.count_ready_since(session, app_user_id, day_start) >= daily_limit:
+    if daily_limit and await ai_card_repo.count_usage_since(session, app_user_id, day_start) >= daily_limit:
         raise AiCardLimitError
-    # `daily_limit == 0`(무제한)이어도 적용합니다 — 실패는 완성 카드 한도와 따로 셉니다.
+    # `daily_limit == 0`(무제한)이어도 적용합니다 — 실패는 하루 한도와 따로 셉니다.
     if (
         await ai_card_repo.count_failed_since(session, app_user_id, day_start, PAID_FAILURE_CODES)
         >= MAX_PAID_FAILURES_PER_DAY
     ):
         raise AiCardLimitError
+
+
+async def daily_remaining(
+    session: AsyncSession, app_user_id: uuid.UUID, *, now: datetime, daily_limit: int
+) -> int | None:
+    """오늘 남은 횟수. 무제한(`daily_limit == 0`)이면 `None`. 앱이 「오늘 1번 남았어요」를 띄웁니다.
+
+    돈 나간 실패 상한은 여기 반영하지 않습니다 — 그것은 안전장치라 앱에 숫자로 보이지 않습니다.
+    """
+    if not daily_limit:
+        return None
+    used = await ai_card_repo.count_usage_since(session, app_user_id, kst_day_start(now))
+    return max(0, daily_limit - used)

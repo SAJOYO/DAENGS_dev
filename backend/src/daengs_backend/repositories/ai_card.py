@@ -9,7 +9,7 @@ from sqlalchemy import delete as sql_delete
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from daengs_backend.models import AiCard
+from daengs_backend.models import AiCard, AiCardUsage
 
 
 def add(session: AsyncSession, card: AiCard) -> AiCard:
@@ -47,9 +47,34 @@ async def has_generating(session: AsyncSession, app_user_id: uuid.UUID) -> bool:
     return await session.scalar(stmt) is not None
 
 
-async def count_ready_since(session: AsyncSession, app_user_id: uuid.UUID, since: datetime) -> int:
-    stmt = select(func.count()).where(
-        AiCard.app_user_id == app_user_id, AiCard.status == "ready", AiCard.created_at >= since
+async def has_month_card(session: AsyncSession, app_user_id: uuid.UUID, dog_id: uuid.UUID, month: int) -> bool:
+    """이 보호자가 이 강아지로 이 달 카드를 이미 갖고 있나 (`ready`·`generating`). **실패는 안 봅니다.**
+
+    보호자마다 따로 봅니다 — 같은 강아지라도 다른 보호자의 카드는 막지 않습니다 (D-077).
+    """
+    stmt = (
+        select(AiCard.id)
+        .where(
+            AiCard.app_user_id == app_user_id,
+            AiCard.dog_id == dog_id,
+            AiCard.month == month,
+            AiCard.status.in_(("generating", "ready")),
+        )
+        .limit(1)
+    )
+    return await session.scalar(stmt) is not None
+
+
+def add_usage(session: AsyncSession, usage: AiCardUsage) -> AiCardUsage:
+    """카드가 `ready` 가 된 기록. 커밋은 부르는 쪽(ready 로 바꾸는 같은 트랜잭션)이 합니다."""
+    session.add(usage)
+    return usage
+
+
+async def count_usage_since(session: AsyncSession, app_user_id: uuid.UUID, since: datetime) -> int:
+    """`since` 이후의 사용 기록 수. **지운 카드도 셉니다** — 기록은 카드와 따로 남습니다."""
+    stmt = select(func.count()).select_from(AiCardUsage).where(
+        AiCardUsage.app_user_id == app_user_id, AiCardUsage.used_at >= since
     )
     return int(await session.scalar(stmt) or 0)
 
@@ -108,4 +133,10 @@ async def delete(session: AsyncSession, card: AiCard) -> None:
 async def delete_all_for_owner(session: AsyncSession, app_user_id: uuid.UUID) -> int:
     """⚠️ `app_users` CASCADE 에 기대면 안 됩니다 — 탈퇴는 그 행을 남깁니다."""
     result = await session.execute(sql_delete(AiCard).where(AiCard.app_user_id == app_user_id))
+    return result.rowcount or 0
+
+
+async def delete_usage_for_owner(session: AsyncSession, app_user_id: uuid.UUID) -> int:
+    """탈퇴 정리. ⚠️ `app_users` CASCADE 에 기대면 안 됩니다 — 탈퇴는 그 행을 남깁니다."""
+    result = await session.execute(sql_delete(AiCardUsage).where(AiCardUsage.app_user_id == app_user_id))
     return result.rowcount or 0

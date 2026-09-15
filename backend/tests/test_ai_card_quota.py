@@ -1,7 +1,7 @@
-"""`services/ai_card_quota.py` — 앱 사용자 AI 카드 생성 한도 (#537, D-076).
+"""`services/ai_card_quota.py` — 앱 사용자 AI 카드 생성 한도 (#537 · #543, D-076 · D-077).
 
-지금 규칙은 테스트 단계용이다: 사용자별 동시 1장 + KST 하루 `ready` N장. 제품 규칙이 정해지면
-`check_quota` 하나를 통째로 바꾼다 — 이 파일도 같이 바뀐다.
+제품 규칙(사용자 결정 2026-09-15): 동시 1장 · KST 하루 N회(**사용 기록**으로 셈 — 지워도 안 돌아옴,
+실패는 안 셈) · 강아지마다 달마다 한 장(보호자마다 따로) · 돈 나간 실패 하루 5번.
 """
 
 import asyncio
@@ -12,12 +12,16 @@ import pytest
 from fakes import FakeAdmin, FakeAppUser, Store, install
 
 from daengs_backend.config import Settings, settings
-from daengs_backend.models import AiCard
+from daengs_backend.models import AiCard, AiCardUsage
 from daengs_backend.services import ai_card_quota as quota
 
 OWNER = uuid.uuid4()
 STRANGER = uuid.uuid4()
+DOG = uuid.uuid4()
+OTHER_DOG = uuid.uuid4()
 NOW = datetime(2026, 9, 14, 3, 0, tzinfo=UTC)  # KST 12:00
+KST_TODAY_START = datetime(2026, 9, 13, 15, 0, tzinfo=UTC)  # KST 14일 00:00
+KST_YESTERDAY_LAST = datetime(2026, 9, 13, 14, 59, tzinfo=UTC)  # KST 13일 23:59
 
 
 @pytest.fixture
@@ -35,16 +39,26 @@ def _card(
     *,
     updated_at: datetime | None = None,
     error_code: str = "upstream",
+    dog_id: uuid.UUID | None = None,
+    month: int = 4,
 ) -> AiCard:
     return AiCard(
-        id=uuid.uuid4(), app_user_id=owner, month=4, dog_name="네오", title="BLOSSOM 네오",
+        id=uuid.uuid4(), app_user_id=owner, dog_id=dog_id, month=month, dog_name="네오", title="BLOSSOM 네오",
         status=status, error_code=error_code if status == "failed" else None,
         created_at=created_at, updated_at=updated_at if updated_at is not None else created_at,
     )
 
 
-def _check(limit: int = 1) -> None:
-    asyncio.run(quota.check_quota(None, OWNER, now=NOW, daily_limit=limit))
+def _usage(used_at: datetime, owner: uuid.UUID = OWNER) -> AiCardUsage:
+    return AiCardUsage(card_id=uuid.uuid4(), app_user_id=owner, used_at=used_at)
+
+
+def _check(limit: int = 1, *, dog_id: uuid.UUID | None = None, month: int = 4) -> None:
+    asyncio.run(quota.check_quota(None, OWNER, now=NOW, daily_limit=limit, dog_id=dog_id, month=month))
+
+
+def _remaining(limit: int = 1) -> int | None:
+    return asyncio.run(quota.daily_remaining(None, OWNER, now=NOW, daily_limit=limit))
 
 
 def test_settings_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -61,11 +75,14 @@ def test_stale_after_covers_worst_case_retry(store: Store) -> None:
 
 
 def test_kst_day_start() -> None:
-    assert quota.kst_day_start(NOW) == datetime(2026, 9, 13, 15, 0, tzinfo=UTC)
+    assert quota.kst_day_start(NOW) == KST_TODAY_START
 
 
 def test_empty_is_allowed(store: Store) -> None:
     _check()
+
+
+# ── 동시 1장 ────────────────────────────────────────────────────────────
 
 
 def test_fresh_generating_is_busy(store: Store) -> None:
@@ -92,20 +109,44 @@ def test_old_created_at_but_fresh_updated_at_is_busy_not_expired(store: Store) -
         _check()
 
 
-def test_ready_today_hits_limit(store: Store) -> None:
-    store.ai_cards.append(_card("ready", datetime(2026, 9, 13, 15, 0, tzinfo=UTC)))  # KST 14일 00:00
+# ── 하루 한도 — 사용 기록으로 센다 ──────────────────────────────────────
+
+
+def test_usage_today_hits_limit(store: Store) -> None:
+    store.ai_card_usage.append(_usage(KST_TODAY_START))
     with pytest.raises(quota.AiCardLimitError):
         _check()
 
 
-def test_ready_yesterday_kst_does_not_count(store: Store) -> None:
-    store.ai_cards.append(_card("ready", datetime(2026, 9, 13, 14, 59, tzinfo=UTC)))  # KST 13일 23:59
+def test_usage_yesterday_kst_does_not_count(store: Store) -> None:
+    store.ai_card_usage.append(_usage(KST_YESTERDAY_LAST))
+    _check()
+
+
+def test_ready_row_without_usage_does_not_count(store: Store) -> None:
+    """세는 곳이 `ai_cards` 가 아니라 사용 기록이다 — 기록이 없는 ready 행은 한도에 안 걸린다."""
+    store.ai_cards.append(_card("ready", NOW - timedelta(hours=1)))
     _check()
 
 
 def test_failed_does_not_count(store: Store) -> None:
     store.ai_cards.append(_card("failed", NOW - timedelta(hours=1)))
     _check()
+
+
+def test_zero_limit_is_unlimited(store: Store) -> None:
+    for _ in range(5):
+        store.ai_card_usage.append(_usage(NOW - timedelta(hours=1)))
+    _check(limit=0)
+
+
+def test_other_users_rows_are_ignored(store: Store) -> None:
+    store.ai_cards.append(_card("generating", NOW, owner=STRANGER))
+    store.ai_card_usage.append(_usage(NOW, owner=STRANGER))
+    _check()
+
+
+# ── 돈 나간 실패 — 그대로 ───────────────────────────────────────────────
 
 
 def _failures(store: Store, n: int, code: str = "upstream", at: datetime = NOW - timedelta(hours=1)) -> None:
@@ -130,7 +171,7 @@ def test_interrupted_failures_do_not_count(store: Store) -> None:
 
 
 def test_paid_failures_yesterday_kst_do_not_count(store: Store) -> None:
-    _failures(store, quota.MAX_PAID_FAILURES_PER_DAY, at=datetime(2026, 9, 13, 14, 59, tzinfo=UTC))  # KST 13일 23:59
+    _failures(store, quota.MAX_PAID_FAILURES_PER_DAY, at=KST_YESTERDAY_LAST)
     _check()
 
 
@@ -140,13 +181,67 @@ def test_paid_failure_cap_applies_even_when_unlimited(store: Store) -> None:
         _check(limit=0)
 
 
-def test_zero_limit_is_unlimited(store: Store) -> None:
-    for _ in range(5):
-        store.ai_cards.append(_card("ready", NOW - timedelta(hours=1)))
-    _check(limit=0)
+# ── 강아지마다 달마다 한 장 ─────────────────────────────────────────────
 
 
-def test_other_users_rows_are_ignored(store: Store) -> None:
-    store.ai_cards.append(_card("generating", NOW, owner=STRANGER))
-    store.ai_cards.append(_card("ready", NOW, owner=STRANGER))
-    _check()
+def test_same_dog_same_month_ready_is_taken(store: Store) -> None:
+    store.ai_cards.append(_card("ready", NOW - timedelta(days=3), dog_id=DOG, month=4))
+    with pytest.raises(quota.AiCardMonthTakenError):
+        _check(limit=0, dog_id=DOG, month=4)
+
+
+def test_month_taken_is_checked_before_daily_limit(store: Store) -> None:
+    """둘 다 걸리면 달별이 먼저다 — 내일 다시 해도 안 되는 이유를 알려 준다."""
+    store.ai_cards.append(_card("ready", NOW - timedelta(hours=1), dog_id=DOG, month=4))
+    store.ai_card_usage.append(_usage(NOW - timedelta(hours=1)))
+    with pytest.raises(quota.AiCardMonthTakenError):
+        _check(dog_id=DOG, month=4)
+
+
+def test_same_dog_same_month_failed_is_not_taken(store: Store) -> None:
+    store.ai_cards.append(_card("failed", NOW - timedelta(days=3), dog_id=DOG, month=4))
+    _check(limit=0, dog_id=DOG, month=4)
+
+
+def test_same_dog_other_month_is_ok(store: Store) -> None:
+    store.ai_cards.append(_card("ready", NOW - timedelta(days=3), dog_id=DOG, month=4))
+    _check(limit=0, dog_id=DOG, month=9)
+
+
+def test_other_dog_same_month_is_ok(store: Store) -> None:
+    store.ai_cards.append(_card("ready", NOW - timedelta(days=3), dog_id=OTHER_DOG, month=4))
+    _check(limit=0, dog_id=DOG, month=4)
+
+
+def test_other_owner_same_dog_same_month_is_ok(store: Store) -> None:
+    """보호자마다 따로 센다(A안) — 공동 보호자가 같은 강아지로 만든 카드는 내 달을 막지 않는다."""
+    store.ai_cards.append(_card("ready", NOW - timedelta(days=3), owner=STRANGER, dog_id=DOG, month=4))
+    _check(limit=0, dog_id=DOG, month=4)
+
+
+def test_no_dog_id_skips_month_check(store: Store) -> None:
+    store.ai_cards.append(_card("ready", NOW - timedelta(days=3), dog_id=None, month=4))
+    _check(limit=0, dog_id=None, month=4)
+
+
+def test_month_args_are_required() -> None:
+    """빠뜨려서 달별 검사가 조용히 꺼지면 안 된다."""
+    with pytest.raises(TypeError):
+        asyncio.run(quota.check_quota(None, OWNER, now=NOW, daily_limit=1))  # type: ignore[call-arg]
+
+
+# ── 남은 횟수 ───────────────────────────────────────────────────────────
+
+
+def test_remaining_is_none_when_unlimited(store: Store) -> None:
+    assert _remaining(limit=0) is None
+
+
+def test_remaining_counts_down_and_clamps_at_zero(store: Store) -> None:
+    assert _remaining() == 1
+    store.ai_card_usage.append(_usage(NOW - timedelta(hours=1)))
+    assert _remaining() == 0
+    store.ai_card_usage.append(_usage(NOW - timedelta(minutes=30)))
+    assert _remaining() == 0
+    store.ai_card_usage.append(_usage(KST_YESTERDAY_LAST))
+    assert _remaining(limit=3) == 1

@@ -1937,10 +1937,10 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
         store.ai_cards = [c for c in store.ai_cards if c.app_user_id != app_user_id]
         return len(mine)
 
-    async def ai_card_delete_usage_for_owner(session, app_user_id):
-        mine = [u for u in store.ai_card_usage if u.app_user_id == app_user_id]
-        store.ai_card_usage = [u for u in store.ai_card_usage if u.app_user_id != app_user_id]
-        return len(mine)
+    async def ai_card_delete_usage_for_owner(session, app_user_id, *, before):
+        gone = [u for u in store.ai_card_usage if u.app_user_id == app_user_id and u.used_at < before]
+        store.ai_card_usage = [u for u in store.ai_card_usage if u not in gone]
+        return len(gone)
 
     monkeypatch.setattr(ai_card_repo, "add", ai_card_add)
     monkeypatch.setattr(ai_card_repo, "get_owned", ai_card_get_owned)

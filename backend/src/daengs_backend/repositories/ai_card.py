@@ -136,7 +136,12 @@ async def delete_all_for_owner(session: AsyncSession, app_user_id: uuid.UUID) ->
     return result.rowcount or 0
 
 
-async def delete_usage_for_owner(session: AsyncSession, app_user_id: uuid.UUID) -> int:
-    """탈퇴 정리. ⚠️ `app_users` CASCADE 에 기대면 안 됩니다 — 탈퇴는 그 행을 남깁니다."""
-    result = await session.execute(sql_delete(AiCardUsage).where(AiCardUsage.app_user_id == app_user_id))
+async def delete_usage_for_owner(session: AsyncSession, app_user_id: uuid.UUID, *, before: datetime) -> int:
+    """탈퇴 정리 — `before` **이전** 기록만 지웁니다. 어느 시각을 줄지는 서비스가 정합니다(KST 오늘 00:00).
+
+    ⚠️ `app_users` CASCADE 에 기대면 안 됩니다 — 탈퇴는 그 행을 남깁니다.
+    """
+    result = await session.execute(
+        sql_delete(AiCardUsage).where(AiCardUsage.app_user_id == app_user_id, AiCardUsage.used_at < before)
+    )
     return result.rowcount or 0

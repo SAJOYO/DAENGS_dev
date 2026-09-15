@@ -7,7 +7,8 @@
 --    돌아오지 않는다"(사용자 결정 2026-09-15). FK 를 걸면 CASCADE 는 횟수를 돌려주고,
 --    RESTRICT 는 카드 삭제를 막는다.
 -- ⚠️ **CASCADE 에 기대면 안 된다.** 탈퇴는 app_users 행을 남기므로 이 CASCADE 는 영영 안 돈다 —
---    탈퇴 경로(services/ai_card.py::cleanup_for_owner)가 명시로 지운다.
+--    탈퇴 경로(services/ai_card.py::cleanup_for_owner)가 명시로 지운다 — 단 KST 오늘 기록은 남긴다.
+--    같은 카카오 계정으로 재로그인하면 같은 app_user_id 라, 오늘 기록을 지우면 그날 한도가 초기화된다.
 -- 실패한 카드는 줄을 남기지 않는다 — 실패는 한도에 세지 않는다.
 
 CREATE TABLE IF NOT EXISTS ai_card_usage (

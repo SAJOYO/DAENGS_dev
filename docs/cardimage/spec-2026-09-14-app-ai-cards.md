@@ -182,7 +182,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS ai_cards_one_generating_idx ON ai_cards (app_u
   경계는 카드가 ready 가 된 시각(`used_at`)이다 — 23:59 에 시작해 00:01 에 끝난 카드는 다음 날로 센다.
 - 돈 나간 실패 하루 5번 → `429` (그대로)
 - `POST` 쿼리 `title_name`(선택, 40자) — 제목에만. `GET /app/ai-cards` 에 `daily_limit`·`daily_remaining`(무제한이면 `null`).
-- 탈퇴 정리(`cleanup_for_owner`)가 사용 기록도 지운다.
+- 탈퇴 정리(`cleanup_for_owner`)가 사용 기록 중 **KST 오늘 00:00 이전 것만** 지운다. 오늘 기록을 남겨 탈퇴 → 같은
+  카카오 계정 재로그인(같은 `app_user_id`)으로 그날 한도가 초기화되지 않게 한다.
 
 ## 6. 삭제·탈퇴
 

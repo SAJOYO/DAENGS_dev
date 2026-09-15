@@ -50,6 +50,7 @@ from daengs_backend.services.ai_card_quota import (
     AiCardBusyError,
     check_quota,
     daily_remaining,
+    kst_day_start,
     stale_after,
 )
 from daengs_cardimage import CardImageUnavailable, GeneratedCard
@@ -340,10 +341,12 @@ async def delete_card(session: AsyncSession, app_user_id: uuid.UUID, card_id: uu
     await session.commit()
 
 
-async def cleanup_for_owner(session: AsyncSession, app_user_id: uuid.UUID) -> int:
+async def cleanup_for_owner(session: AsyncSession, app_user_id: uuid.UUID, *, now: datetime | None = None) -> int:
     """탈퇴가 부릅니다. 커밋은 탈퇴 트랜잭션이 합니다.
 
     지울 객체가 없으면 저장소를 안 건드립니다 — 저장소가 꺼져 있다고 탈퇴가 막히면 안 됩니다.
+    사용 기록은 **KST 오늘 00:00 이전 것만** 지웁니다 (D-077) — 같은 카카오 계정으로 재로그인하면 같은
+    `app_user_id` 라, 오늘 기록을 지우면 그날 하루 한도가 초기화됩니다.
     """
     cards = await ai_card_repo.list_for_owner_for_update(session, app_user_id)
     keys = [c.storage_key for c in cards if c.storage_key]
@@ -353,5 +356,7 @@ async def cleanup_for_owner(session: AsyncSession, app_user_id: uuid.UUID) -> in
             storage.delete(key)
     deleted = await ai_card_repo.delete_all_for_owner(session, app_user_id)
     # 사용 기록도 명시로 지웁니다 — 카드와 FK 로 안 묶였고, app_users CASCADE 는 탈퇴에서 안 돕니다.
-    await ai_card_repo.delete_usage_for_owner(session, app_user_id)
+    # 오늘 것은 남깁니다: 재로그인(같은 app_user_id)으로 그날 한도가 초기화되면 안 됩니다.
+    day_start = kst_day_start(now or datetime.now(UTC))
+    await ai_card_repo.delete_usage_for_owner(session, app_user_id, before=day_start)
     return deleted

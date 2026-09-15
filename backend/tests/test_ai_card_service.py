@@ -525,10 +525,33 @@ def test_daily_status(store, jobs, monkeypatch) -> None:
     assert asyncio.run(service.daily_status(FakeSession(), OWNER)) == (None, None)
 
 
-def test_cleanup_for_owner_removes_usage(store, jobs) -> None:
+def test_cleanup_for_owner_keeps_only_todays_usage(store, jobs) -> None:
+    """탈퇴는 어제 이전 기록만 지운다 — 오늘(KST) 기록을 지우면 재로그인으로 하루 한도가 초기화된다."""
     card = _start()
     _run_all(jobs)
-    store.ai_card_usage.append(AiCardUsage(card_id=uuid.uuid4(), app_user_id=STRANGER, used_at=datetime.now(UTC)))
+    today = store.ai_card_usage[0]
+    old = AiCardUsage(card_id=uuid.uuid4(), app_user_id=OWNER, used_at=datetime.now(UTC) - timedelta(days=2))
+    stranger = AiCardUsage(card_id=uuid.uuid4(), app_user_id=STRANGER, used_at=datetime.now(UTC) - timedelta(days=2))
+    store.ai_card_usage.extend([old, stranger])
     assert asyncio.run(service.cleanup_for_owner(FakeSession(), OWNER)) == 1
-    assert [u.app_user_id for u in store.ai_card_usage] == [STRANGER]
+    assert store.ai_card_usage == [today, stranger]
     assert card not in store.ai_cards
+
+
+def test_withdraw_then_relogin_same_day_keeps_limit(store, jobs) -> None:
+    """같은 카카오 계정으로 다시 들어오면 같은 app_user_id 다 — 그날 한도는 그대로여야 한다."""
+    _start()
+    _run_all(jobs)
+    asyncio.run(service.cleanup_for_owner(FakeSession(), OWNER))
+    with pytest.raises(quota.AiCardLimitError):
+        _start()
+
+
+def test_cleanup_kst_boundary(store, jobs) -> None:
+    """경계는 KST 자정 — 탈퇴 시각의 KST 오늘 00:00 이전 기록만 지운다."""
+    now = datetime(2026, 9, 14, 3, 0, tzinfo=UTC)  # KST 12:00
+    before_midnight = AiCardUsage(card_id=uuid.uuid4(), app_user_id=OWNER, used_at=datetime(2026, 9, 13, 14, 59, tzinfo=UTC))
+    at_midnight = AiCardUsage(card_id=uuid.uuid4(), app_user_id=OWNER, used_at=datetime(2026, 9, 13, 15, 0, tzinfo=UTC))
+    store.ai_card_usage.extend([before_midnight, at_midnight])
+    asyncio.run(service.cleanup_for_owner(FakeSession(), OWNER, now=now))
+    assert store.ai_card_usage == [at_midnight]

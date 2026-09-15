@@ -1,117 +1,116 @@
-"""Separate narrative relationships from audit diffs, and events from viewpoint.
+"""Pure brief preparation and delivery; production execution is connected separately."""
 
-This projection consumes the experimental brief. It does not alter source facts,
-rank material families, generate prose, or enable a production execution strategy.
-"""
-
-from copy import deepcopy
-
-
-def _fact(statement):
-    result = deepcopy(statement)
-    if result['predicate'] != 'registered_business_composition':
-        return result
-    source = result['value']
-    composition = source['composition']
-    # Consume normalized meanings, not raw counters or acquisition differences.
-    mix = composition['업종구성']
-    distribution = composition['조회영역_등록분포']
-    mix = {'여러 업종 혼합': 'mixed_categories'}.get(mix, mix)
-    distribution = {
-        '등록 지점이 흩어져 있음': 'dispersed',
-        '등록 지점이 모여 있음': 'clustered',
-    }.get(distribution, distribution)
-    result['predicate'] = 'area_characteristics'
-    result['value'] = {'business_mix': mix, 'spatial_distribution': distribution}
-    result['scope'] = {
-        'kind': 'query_area',
-        'radius_m': source.get('query', {}).get('radius_m'),
-        'source_kind': 'business_catalog',
-        'applies_to': 'whole_query_area_not_point_view',
-        'does_not_establish': ['current_opening', 'visit', 'crowding'],
-    }
-    result['source_time'] = {
-        'reference_date': statement['source_time'].get('reference_date'),
-        'event_time_observation': False,
-    }
-    # Provider-qualified identity remains in the source archive, not authored content.
-    result.pop('object_identity', None)
-    return result
+from daengs_walk.diary.relational.brief_contracts import (
+    ActionWritingBrief,
+    BriefDeliveryState,
+    DeliveredMeaning,
+    SpaceWritingBrief,
+)
 
 
-def _relation(relation, facts):
-    if relation.get('family') != 'area_context':
-        return deepcopy(relation)
-    left, right = relation['earlier_evidence_ids'], relation['current_evidence_ids']
-    if not left or not right or not relation.get('comparison_basis', {}).get('statistics_comparable'):
-        return None
-    before = [facts[key]['value'] for key in left]
-    after = [facts[key]['value'] for key in right]
+def build_space_brief(context, delivery=None):
+    return SpaceWritingBrief(context=context, delivery=delivery or BriefDeliveryState())
+
+
+def space_work_reason(brief: SpaceWritingBrief):
+    """Planning consumes exactly the context that the writer and delivery will consume."""
+    context = brief.context
+    if not context.current_facts:
+        return "unavailable"
+    if context.earlier is None:
+        return "introduce"
+    if any(
+        r.result in {"different_characteristics", "nearer", "farther"}
+        for r in context.relation_slots.all_relations()
+    ):
+        return "compare"
+    earlier_signature = context.signature_for(context.earlier.position.scene_id)
+    if earlier_signature != context.signature:
+        # New current evidence can be described, but its arrival is not a spatial event.
+        return "current_context"
+    if brief.delivery.active_signature != context.signature:
+        return "recover_introduction"
+    return "maintain"
+
+
+def advance_brief_delivery(brief: SpaceWritingBrief, selection: DeliveredMeaning | None):
+    """Call only for an accepted selection; failure leaves no fabricated delivery."""
+    state, context = brief.delivery, brief.context
+    active = state.active_signature if state.active_signature == context.signature else None
+    recent = state.recent
+    if selection is not None:
+        if selection.context != context:
+            raise ValueError("accepted selection belongs to a different request")
+        cited = set(selection.evidence_ids)
+        for relation in context.relation_slots.all_relations():
+            if relation.id in selection.relation_ids:
+                cited.update(relation.current_evidence_ids)
+        if cited & {f.id for f in context.current_facts}:
+            active = context.signature
+        recent = (*recent, selection)[-2:]
+    return BriefDeliveryState(active_signature=active, recent=recent)
+
+
+def _anchor_view(anchor):
     return {
-        'id': relation['id'], 'family': 'area_context', 'axis': 'query_area',
-        'result': 'same_characteristics' if before == after else 'different_characteristics',
-        'earlier_evidence_ids': left, 'current_evidence_ids': right,
-        'earlier_characteristics': before, 'current_characteristics': after,
-        'scope': {
-            'comparison': 'two_query_areas',
-            'applies_to': 'normalized_area_characteristics_only',
-            'not_a_temporal_change': True,
-        },
+        **anchor.model_dump(mode="json", exclude={"position"}),
+        "position": anchor.position.writer_view(),
     }
 
 
-def project_space(brief):
-    result = deepcopy(brief)
-    result['available_statements'] = [_fact(item) for item in result['available_statements']]
-    facts = {item['id']: item for item in result['available_statements']}
-    usable = set()
-    for slot in result['relation_slots'].values():
-        converted = [_relation(item, facts) for item in slot['items']]
-        slot['items'] = [item for item in converted if item is not None]
-        usable.update(item['id'] for item in slot['items'])
-        # Acquisition/planner statuses are retained in the archived input.
-        for key in ('reason', 'policy_version', 'status'):
-            slot.pop(key, None)
-    result['relation_ids'] = [key for key in result['relation_ids'] if key in usable]
-    # Apply the same boundary to memory; otherwise old audit diffs leak back in.
-    for memory in result['delivery_memory']:
-        memory['selected_statements'] = [_fact(item) for item in memory['selected_statements']]
-        memory_facts = {item['id']: item for item in memory['selected_statements']}
-        memory['selected_relations'] = [
-            projected for item in memory['selected_relations']
-            if (projected := _relation(item, memory_facts)) is not None
-        ]
-    for anchor in result['anchors']:
-        anchor.pop('collection', None)
-    assert {item['id'] for item in result['available_statements']} == set(result['citation_ids'])
-    return result
-
-
-def project_action(brief):
-    current = brief['current_action']
-    event = {
-        'id': current['id'],
-        'actor': deepcopy(current['actor']),
-        'behavior': current['behavior'],
-        'recorded_at': current['recorded_at'],
-        'anchor_ref': current['anchor_ref'],
-    }
-    assert event['actor']['entity_type'] == 'dog'
-    result = {
-        'version': 'event-centered-brief-v1', 'part': 'action',
-        'scene_id': brief['scene_id'], 'scene_position': deepcopy(brief['scene_position']),
-        'required_event': event,
-        'context_options': [
-            {'for_event_id': event['id'], 'evidence': deepcopy(item)}
-            for item in brief['available_statements']
+def _memory_view(selection):
+    context = selection.context
+    relations = [
+        r for r in context.relation_slots.all_relations() if r.id in selection.relation_ids
+    ]
+    ids = set(selection.evidence_ids)
+    for relation in relations:
+        ids.update(relation.earlier_evidence_ids + relation.current_evidence_ids)
+    facts = [f for f in context.facts if f.id in ids]
+    scenes = {f.scene_id for f in facts}
+    return {
+        "selected_in_scene": context.current.position.scene_id,
+        "semantic_status": selection.semantic_status,
+        "anchors": [
+            _anchor_view(a)
+            for a in (context.earlier, context.current)
+            if a and a.position.scene_id in scenes
         ],
-        'style': {'language': 'ko', 'tense': 'past', 'genre': 'walk_diary'},
-        'required_evidence_ids': [event['id']],
-        'citation_ids': deepcopy(brief['citation_ids']),
+        "selected_facts": [f.model_dump(mode="json") for f in facts],
+        "selected_relations": [r.model_dump(mode="json") for r in relations],
+        "selected_route": context.route.model_dump(mode="json")
+        if context.route and context.route.id in ids
+        else None,
     }
-    assert {event['id'], *(item['evidence']['id'] for item in result['context_options'])} == set(result['citation_ids'])
-    return result
 
 
-def separate_writing_responsibilities(brief):
-    return project_space(brief) if brief['part'] == 'space' else project_action(brief)
+def brief_writer_view(brief: SpaceWritingBrief | ActionWritingBrief):
+    """Explicit allowlist: source bindings, registration counters, narrator lists stay internal."""
+    common = {
+        "version": brief.version,
+        "part": brief.part,
+        "style": {"language": "ko", "tense": "past", "genre": "walk_diary"},
+        "citation_ids": list(brief.citation_ids),
+    }
+    if isinstance(brief, ActionWritingBrief):
+        return {
+            **common,
+            "position": brief.position.writer_view(),
+            "required_event": brief.required_event.model_dump(
+                mode="json", exclude={"source_record"}
+            ),
+            "required_evidence_ids": [brief.required_event.id],
+            "context_options": [c.model_dump(mode="json") for c in brief.context_options],
+        }
+    context = brief.context
+    return {
+        **common,
+        "current": _anchor_view(context.current),
+        "earlier": _anchor_view(context.earlier) if context.earlier else None,
+        "available_facts": [f.model_dump(mode="json") for f in context.facts],
+        "relation_slots": context.relation_slots.model_dump(mode="json"),
+        "relation_ids": list(brief.relation_ids),
+        "connection": context.connection.model_dump(mode="json") if context.connection else None,
+        "route": context.route.model_dump(mode="json") if context.route else None,
+        "delivery_memory": [_memory_view(m) for m in brief.delivery.recent],
+    }

@@ -301,7 +301,7 @@ JSON text, evidence_ids를 반환하고 필수 사건 ID와 실제 사용한 맥
                 assert before==next(r['request'] for r in previous_preflight['results']
                     if r['scene_id']==task.scene_id and r['stage']==task.stage)
         if separated:
-            from daengs_walk.diary.relational.writing_brief import separate_writing_responsibilities
+            from writing_brief_experiment_projection import separate_writing_responsibilities
             brief=separate_writing_responsibilities(brief)
             if task.stage=='space':
                 assert 'changed_fields' not in json.dumps(brief['relation_slots'])

@@ -74,3 +74,67 @@ def current_action(scene, source, pet_names, evidence):
         },
         **current_motion({"movement": movement}),
     }
+
+
+def build_action_brief(scene, source, pet_names, evidence, context):
+    """Build from a live source pin; prior actions/narrator lists have no input field."""
+    from daengs_walk.diary.relational.brief_contracts import (
+        ActionWritingBrief,
+        CurrentDogEvent,
+        DogActor,
+        EventContext,
+    )
+    from daengs_walk.diary.relational.contracts import CurrentMotion
+    from daengs_walk.value_contracts import digest
+
+    record = getattr(scene.core, "record", None)
+    if record is None or record.deleted or record.content.kind != "behavior":
+        return None
+    position = context.current.position
+    if (
+        position.timeline.source_revision != source.revision()
+        or position.scene_id != scene.id
+        or position.recorded_at != scene.anchor.event_at
+        or scene.anchor != record.anchor
+        or context.current.point != scene.anchor.point
+        or context.current.position_basis != scene.anchor.method
+        or context.current.accuracy_m != scene.anchor.accuracy_m
+    ):
+        raise ValueError("current event does not match the source scene")
+    if record not in source.records:
+        raise ValueError("event is not the current source record version")
+    content = record.content
+    if content.pet_id is not None and content.pet_id not in source.pet_ids:
+        raise ValueError("action actor is outside this walk")
+    event = CurrentDogEvent(
+        id="event:" + digest(record.ref),
+        source_record=record.ref,
+        actor=DogActor(
+            pet_id=content.pet_id,
+            name=dict(pet_names).get(content.pet_id) if content.pet_id else None,
+        ),
+        behavior=content.code,
+        anchor=record.anchor,
+        scene_id=scene.id,
+    )
+    options = [
+        EventContext(for_event_id=event.id, evidence=fact, kind="space", subject="record_location")
+        for fact in context.current_facts
+        if fact.meaning.kind in {"road", "land_cover"}
+    ]
+    # The existing extraction already selects only the motion phase containing this pin.
+    motion = current_action(scene, source, pet_names, evidence)
+    for kind in ("current_gait", "current_shape"):
+        for item in motion[kind]:
+            item = {**item, "id": "motion:" + digest([event.id, kind, item])}
+            options.append(
+                EventContext(
+                    for_event_id=event.id,
+                    evidence=CurrentMotion(**item),
+                    kind=kind,
+                    subject="recording_device",
+                )
+            )
+    return ActionWritingBrief(
+        position=position, required_event=event, context_options=tuple(options)
+    )

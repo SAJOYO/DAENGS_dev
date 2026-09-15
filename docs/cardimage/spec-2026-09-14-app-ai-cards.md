@@ -175,9 +175,11 @@ CREATE UNIQUE INDEX IF NOT EXISTS ai_cards_one_generating_idx ON ai_cards (app_u
 
 - 동시 1장 → `409 already_generating` (그대로)
 - 같은 `app_user_id`·`dog_id`·`month` 에 `ready`/`generating` 카드가 있으면 `AiCardMonthTakenError` → `409 month_taken`
-  「{이름}은(는) 이미 {달}월 카드가 있어요.」. `dog_id` 가 없으면 안 본다. 동시 1장 다음·하루 한도 앞.
+  「{이름}{은/는} 이미 {달}월 카드가 있어요.」(마지막 글자가 한글이면 받침에 따라 은/는, 아니면 은(는)). `dog_id` 가
+  없으면 안 본다. 동시 1장 다음·하루 한도 앞.
 - KST 오늘 **`ai_card_usage`** 줄 수 ≥ `daily_limit` 이면 `429 limit_reached`. 줄은 `_finish_ready` 가 `ready` 로 바꾸는
-  같은 트랜잭션에서 남기고, 카드를 지워도 남는다(`card_id` FK 없음). 표는 `db/init/39_ai_card_usage.sql`.
+  같은 트랜잭션에서 남기고, 카드를 지워도 남는다(`card_id` FK 없음). 표는 `db/init/39_ai_card_usage.sql`. 하루의
+  경계는 카드가 ready 가 된 시각(`used_at`)이다 — 23:59 에 시작해 00:01 에 끝난 카드는 다음 날로 센다.
 - 돈 나간 실패 하루 5번 → `429` (그대로)
 - `POST` 쿼리 `title_name`(선택, 40자) — 제목에만. `GET /app/ai-cards` 에 `daily_limit`·`daily_remaining`(무제한이면 `null`).
 - 탈퇴 정리(`cleanup_for_owner`)가 사용 기록도 지운다.

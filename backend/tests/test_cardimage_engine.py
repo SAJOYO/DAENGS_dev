@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 from PIL import Image
 
-from daengs_backend.services.cardimage import engine
+from daengs_cardimage import engine
 
 
 def test_pad_to_2_3_adds_black_bars_symmetrically():
@@ -20,7 +20,7 @@ def test_fit_to_card_crops_bars_and_returns_card_size():
 
 
 def test_prompt_mentions_scene_badge_and_outfit():
-    from daengs_backend.services.cardimage.catalog import NO_OUTFIT
+    from daengs_cardimage.catalog import NO_OUTFIT
 
     p = engine.build_prompt(scene="the picnic blanket", badge="26APR", subtitle="APRIL SPECIAL", outfit=NO_OUTFIT)
     assert "the picnic blanket" in p and "26APR" in p and "APRIL SPECIAL" in p

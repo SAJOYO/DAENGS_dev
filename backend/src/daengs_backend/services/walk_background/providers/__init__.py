@@ -1,1 +1,1 @@
-"""Public data providers, independent of scene narration."""
+"""Bounded source adapters; consume contracts, never collection or entry state."""

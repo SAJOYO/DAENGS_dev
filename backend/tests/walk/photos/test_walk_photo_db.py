@@ -6,7 +6,7 @@ import uuid
 import pytest
 from sqlalchemy import text
 
-from daengs_backend.services import walk_photo as service
+from daengs_backend.services.walk_photos import api as service
 from tests.walk.support.entry_v2 import OWNER, WALK
 from tests.walk.support.photo_database import publish, request
 

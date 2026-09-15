@@ -11,10 +11,10 @@ from pathlib import Path
 from daengs_backend.schemas.walk import WalkPointUpload
 from daengs_backend.schemas.walk_motion import CHUNK_SIZE, MotionManifest, MotionObservation
 from daengs_backend.schemas.walk_precision import PrecisionManifest, PrecisionPoint
-from daengs_backend.services import walk_precision_contract as precision
-from daengs_backend.services.walk_finalize import walk_input_fingerprint
-from daengs_backend.services.walk_motion_contract import MotionConflict, manifest_digest
-from daengs_backend.services.walk_trajectory_shadow import backup_fingerprint, replay_shadow
+from daengs_backend.services.walk_metrics.trajectory_shadow import backup_fingerprint, replay_shadow
+from daengs_backend.services.walk_session import precision_contract as precision
+from daengs_backend.services.walk_session.finalize import walk_input_fingerprint
+from daengs_backend.services.walk_session.motion_contract import MotionConflict, manifest_digest
 
 
 def calculate_export(payload, *, step_batch_size=1):

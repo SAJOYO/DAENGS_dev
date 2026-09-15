@@ -14,12 +14,12 @@ from daengs_backend.core.deps import AppPrincipal, CurrentAppUser
 from daengs_backend.models import WalkCellophaneSheet
 from daengs_backend.repositories import walk_spatial_diary as diary_repo
 from daengs_backend.routers import walk_spatial_diary as diary_router
-from daengs_backend.services import walk_spatial_diary as diary_service
-from daengs_backend.services.walk_analysis import (
+from daengs_backend.services.walk_artifacts.cellophane import (
     CELLOPHANE_SHEET_SCHEMA_VERSION,
     cellophane_sheet_fingerprint,
     encode_cellophane,
 )
+from daengs_backend.services.walk_views import spatial_diary as diary_service
 from daengs_walk.capsule import ContextStatus, TrailContextSnapshot
 from daengs_walk.cellophane import CANONICAL_PAINT_SPEC, Cellophane, PaintSpec
 from daengs_walk.spatial_diary import (

@@ -10,6 +10,12 @@ from pydantic import Field
 from daengs_walk.trajectory import Contract, Identifier, IntervalLedger, SourceRange, SourceRef
 
 
+class SourceWallTime(Contract):
+    ref: SourceRef
+    # Descriptive original clock readings, never a duration or cross-epoch mapping.
+    original_wall_time_millis: int
+
+
 class TrajectoryLocation(Contract):
     ref: SourceRef
     lat: float = Field(ge=-90, le=90)

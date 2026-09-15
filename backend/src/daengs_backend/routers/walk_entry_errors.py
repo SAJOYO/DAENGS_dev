@@ -2,7 +2,7 @@
 
 from fastapi import HTTPException
 
-from daengs_backend.services.walk_entry_errors import (
+from daengs_backend.services.walk_records.errors import (
     EntryConflict,
     EntryInvalid,
     EntryNotFound,

@@ -18,8 +18,8 @@ from daengs_backend.models.walk_entry import WalkEntry
 from daengs_backend.models.walk_entry_v2 import WalkEntryMutation, WalkEntryPin
 from daengs_backend.routers import walk_entry, walk_entry_v2
 from daengs_backend.schemas.walk_entry_v2 import EntryWriteV2, Pin
-from daengs_backend.services import walk_entry_v2 as service
-from daengs_backend.services.walk_chunk import encode_chunk
+from daengs_backend.services.walk_records import v2 as service
+from daengs_backend.services.walk_session.chunk import encode_chunk
 from tests.walk.support.entry_v2 import (
     AT,
     ENTRY,
@@ -85,9 +85,7 @@ def api(monkeypatch):
     )
     monkeypatch.setattr(service.entries, "profile_walks", AsyncMock(return_value=[walk]))
     # 연결 안 된 아이는 자기 하나가 그룹입니다 (MVP 결정 §7).
-    monkeypatch.setattr(
-        service.entries, "pet_group_ids", AsyncMock(return_value=[PET])
-    )
+    monkeypatch.setattr(service.entries, "pet_group_ids", AsyncMock(return_value=[PET]))
     monkeypatch.setattr(
         service.entries,
         "pet_is_accessible",
@@ -496,7 +494,7 @@ def test_cached_fix_cannot_certify_a_located_pin_and_mixed_valid_fix_still_matte
 
 
 def test_verified_evidence_fingerprint_is_bound_to_the_frozen_pin_request(api):
-    from daengs_backend.services.walk_recording import recording_receipt
+    from daengs_backend.services.walk_session.recording import recording_receipt
 
     client, _ = api
     request = body()

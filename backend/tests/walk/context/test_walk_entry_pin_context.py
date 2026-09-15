@@ -9,8 +9,8 @@ import httpx
 import pytest
 
 from daengs_backend.repositories import walk_entry_v2 as pins
-from daengs_backend.services import walk_entry_context as service
 from daengs_backend.services import walk_entry_context_source as source
+from daengs_backend.services.walk_records import context as service
 from tests.walk.support.entry_context import CONTENT, body
 
 PIN = {

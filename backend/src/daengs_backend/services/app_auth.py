@@ -28,6 +28,7 @@ from daengs_backend.repositories import app_user as app_user_repo
 from daengs_backend.repositories import chat as chat_repo
 from daengs_backend.repositories import refresh_token as refresh_token_repo
 from daengs_backend.repositories import walk as walk_repo
+from daengs_backend.services import ai_card as ai_card_service
 from daengs_backend.services import dogcard as card_service
 from daengs_backend.services import pet as pet_service
 from daengs_backend.services import screening as screening_service
@@ -364,6 +365,10 @@ async def withdraw(session: AsyncSession, *, app_user_id: uuid.UUID) -> None:
         # 저장소에 있고 **저장소에는 FK 가 없어서** 아무도 안 치웁니다.
         deleted_cards = await card_service.cleanup_for_owner(session, user.id)
 
+        # AI 도감 카드도 **같은 이유로 명시 삭제**입니다 (#537) — 생성 중인 행도 지웁니다.
+        # 그 작업이 끝나면 행이 없는 것을 보고 방금 쓴 PNG 를 스스로 치웁니다.
+        deleted_ai_cards = await ai_card_service.cleanup_for_owner(session, user.id)
+
         user.status = "withdrawn"
         # 개인정보 파기. **암호문을 지우는 것으로 파기가 됩니다** — 평문은 어디에도 없습니다.
         user.email_enc = None
@@ -386,11 +391,12 @@ async def withdraw(session: AsyncSession, *, app_user_id: uuid.UUID) -> None:
         raise
     logger.info(
         "앱 회원 탈퇴 (app_user=%s, 강아지 %d마리, 산책 %d건, 피부 기록 %d건, "
-        "도감 카드 %d장, 끊은 세션 %d개)",
+        "도감 카드 %d장, AI 카드 %d장, 끊은 세션 %d개)",
         user.id,
         deleted_pets,
         deleted_walks,
         deleted_screenings,
         deleted_cards,
+        deleted_ai_cards,
         token_count,
     )

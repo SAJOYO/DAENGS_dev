@@ -5,9 +5,8 @@ from uuid import UUID
 
 from pydantic import Field
 
-from daengs_backend.schemas.walk_trajectory import SourceWallTime
 from daengs_walk.trajectory import Contract, LedgerMetrics, SourceRef
-from daengs_walk.trajectory_projection import TrajectoryBoundaries
+from daengs_walk.trajectory_projection import SourceWallTime, TrajectoryBoundaries
 from daengs_walk.trajectory_view import Digest, MeasurementRef
 
 VERSION = "walk-measurement-v1"

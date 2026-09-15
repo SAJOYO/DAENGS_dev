@@ -24,6 +24,7 @@ from pydantic import BaseModel, Field, ValidationError, model_validator
 
 from daengs_backend.config import settings
 from daengs_backend.orchestration.contracts import (
+    CareLogProposal,
     ContractModel,
     ConversationContext,
     ObservationAxis,
@@ -104,6 +105,14 @@ class PendingClarification(ContractModel):
     question: str
     missing: list[str] = Field(default_factory=list)
     missing_axes: list[ObservationAxis] = Field(default_factory=list)
+    #: **세 번째 부류** — 케어 기록 확인 (#331 후속, D-075). 위 표의 둘과 달리 이것은 후속
+    #: 답변을 무엇에 묶을지의 문제가 아니라, 후속 답변이 **DB 에 행을 남길지**의 문제다.
+    #:
+    #: 그래서 이 값은 Turn Resolver 를 **안 지난다**: `service._plan_and_execute` 가 모델보다
+    #: 먼저 `planner.resolve_care_log_write` 에 그대로 넘기고, 승낙 판정은 결정론 어휘가
+    #: 한다 (`orchestration/care_log.py`). 리졸버가 이어 주는 것은 "무슨 이야기였나" 이고,
+    #: 쓰기 승낙은 "예/아니오" 라 모델이 개입할 자리가 없다.
+    care_log: CareLogProposal | None = None
 
     @property
     def is_observation_ask(self) -> bool:

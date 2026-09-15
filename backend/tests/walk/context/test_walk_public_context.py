@@ -10,11 +10,15 @@ import pytest
 from pydantic import SecretStr
 
 from daengs_backend.config import settings
-from daengs_backend.services import walk_public_context as public
-from daengs_backend.services.walk_entry_context_source import collect
-from daengs_backend.services.walk_park_catalog import nearby_parks, read_catalog, refresh_catalog
-from daengs_backend.services.walk_public_http import PublicSourceError, get_json
-from daengs_backend.services.walk_sgis import SgisSource
+from daengs_backend.services.walk_background.catalogs.park import (
+    nearby_parks,
+    read_catalog,
+    refresh_catalog,
+)
+from daengs_backend.services.walk_background.collection import collect
+from daengs_backend.services.walk_background.http import PublicSourceError, get_json
+from daengs_backend.services.walk_background.providers import public
+from daengs_backend.services.walk_background.providers.sgis import SgisSource
 
 POINT = {"lat": 37.5, "lng": 127.0}
 DONG = {

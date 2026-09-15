@@ -3,7 +3,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-from daengs_backend.services.cardimage import catalog, title
+from daengs_cardimage import catalog, title
 
 CARDIMAGE = Path(__file__).resolve().parents[2] / "cardimage"
 FONT = CARDIMAGE / "fonts" / "NotoSerifKR.ttf"

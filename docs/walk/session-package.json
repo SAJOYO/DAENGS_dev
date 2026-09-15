@@ -1,0 +1,101 @@
+{
+  "baseline": "a8284218",
+  "compatibility": {
+    "walk": {
+      "encode_chunk": "daengs_backend.services.walk_session.chunk",
+      "PreparedWalkEvidence": "daengs_backend.services.walk_session.finalize",
+      "prepare_finalized_walk": "daengs_backend.services.walk_session.finalize",
+      "WalkNotFoundError": "daengs_backend.services.walk_session.errors",
+      "WalkStateConflictError": "daengs_backend.services.walk_session.errors",
+      "list_walks": "daengs_backend.services.walk_session.lifecycle",
+      "get_walk": "daengs_backend.services.walk_session.lifecycle",
+      "upload_walk": "daengs_backend.services.walk_session.lifecycle",
+      "append_points": "daengs_backend.services.walk_session.lifecycle",
+      "finalize_walk": "daengs_backend.services.walk_session.lifecycle"
+    },
+    "walk_chunk": {
+      "CHUNK_VERSION": "daengs_backend.services.walk_session.chunk",
+      "RECORDING_CHUNK_VERSION": "daengs_backend.services.walk_session.chunk",
+      "RECORDING_POLICY": "daengs_backend.services.walk_session.chunk",
+      "CHUNK_COLUMNS": "daengs_backend.services.walk_session.chunk",
+      "encode_chunk": "daengs_backend.services.walk_session.chunk",
+      "decode_chunk": "daengs_backend.services.walk_session.chunk"
+    },
+    "walk_finalize": {
+      "decode_chunk": "daengs_backend.services.walk_session.chunk",
+      "INPUT_FINGERPRINT_VERSION": "daengs_backend.services.walk_session.finalize",
+      "FinalizeInputErrorCode": "daengs_backend.services.walk_session.finalize",
+      "StoredWalkPointChunk": "daengs_backend.services.walk_session.finalize",
+      "FinalizeInputError": "daengs_backend.services.walk_session.finalize",
+      "PreparedWalkEvidence": "daengs_backend.services.walk_session.finalize",
+      "prepare_finalized_walk": "daengs_backend.services.walk_session.finalize",
+      "walk_input_fingerprint": "daengs_backend.services.walk_session.finalize"
+    },
+    "walk_recording": {
+      "RECORDING_POLICY": "daengs_backend.services.walk_session.chunk",
+      "decode_chunk": "daengs_backend.services.walk_session.chunk",
+      "encode_chunk": "daengs_backend.services.walk_session.chunk",
+      "walk_input_fingerprint": "daengs_backend.services.walk_session.finalize",
+      "RecordingConflict": "daengs_backend.services.walk_session.recording",
+      "recording_receipt": "daengs_backend.services.walk_session.recording",
+      "merge_recording_points": "daengs_backend.services.walk_session.recording",
+      "repair_recording": "daengs_backend.services.walk_session.recording"
+    },
+    "walk_upload_receipt": {
+      "WalkNotFoundError": "daengs_backend.services.walk_session.errors",
+      "WalkStateConflictError": "daengs_backend.services.walk_session.errors",
+      "decode_chunk": "daengs_backend.services.walk_session.chunk",
+      "encode_chunk": "daengs_backend.services.walk_session.chunk",
+      "upload_walk": "daengs_backend.services.walk_session.upload_receipt",
+      "append_points": "daengs_backend.services.walk_session.upload_receipt"
+    },
+    "walk_motion": {
+      "WalkNotFoundError": "daengs_backend.services.walk_session.errors",
+      "decode_chunk": "daengs_backend.services.walk_session.chunk",
+      "walk_input_fingerprint": "daengs_backend.services.walk_session.finalize",
+      "MotionConflict": "daengs_backend.services.walk_session.motion_contract",
+      "chunk_digest": "daengs_backend.services.walk_session.motion_contract",
+      "evidence_digest": "daengs_backend.services.walk_session.motion_contract",
+      "manifest_digest": "daengs_backend.services.walk_session.motion_contract",
+      "validate_manifest": "daengs_backend.services.walk_session.motion_contract",
+      "validate_observations": "daengs_backend.services.walk_session.motion_contract",
+      "MotionUnavailable": "daengs_backend.services.walk_session.motion",
+      "begin": "daengs_backend.services.walk_session.motion",
+      "upload_chunk": "daengs_backend.services.walk_session.motion",
+      "completed_input": "daengs_backend.services.walk_session.motion",
+      "complete": "daengs_backend.services.walk_session.motion",
+      "read": "daengs_backend.services.walk_session.motion"
+    },
+    "walk_precision": {
+      "WalkNotFoundError": "daengs_backend.services.walk_session.errors",
+      "decode_chunk": "daengs_backend.services.walk_session.chunk",
+      "MotionConflict": "daengs_backend.services.walk_session.motion_contract",
+      "chunk_digest": "daengs_backend.services.walk_session.precision_contract",
+      "evidence_digest": "daengs_backend.services.walk_session.precision_contract",
+      "manifest_digest": "daengs_backend.services.walk_session.precision_contract",
+      "refine_points": "daengs_backend.services.walk_session.precision_contract",
+      "begin": "daengs_backend.services.walk_session.precision",
+      "upload": "daengs_backend.services.walk_session.precision",
+      "complete": "daengs_backend.services.walk_session.precision",
+      "refine_completed": "daengs_backend.services.walk_session.precision",
+      "read": "daengs_backend.services.walk_session.precision"
+    },
+    "walk_motion_contract": {
+      "MotionConflict": "daengs_backend.services.walk_session.motion_contract",
+      "digest": "daengs_backend.services.walk_session.motion_contract",
+      "manifest_digest": "daengs_backend.services.walk_session.motion_contract",
+      "chunk_digest": "daengs_backend.services.walk_session.motion_contract",
+      "evidence_digest": "daengs_backend.services.walk_session.motion_contract",
+      "validate_manifest": "daengs_backend.services.walk_session.motion_contract",
+      "validate_observations": "daengs_backend.services.walk_session.motion_contract"
+    },
+    "walk_precision_contract": {
+      "MotionConflict": "daengs_backend.services.walk_session.motion_contract",
+      "digest": "daengs_backend.services.walk_session.motion_contract",
+      "manifest_digest": "daengs_backend.services.walk_session.precision_contract",
+      "chunk_digest": "daengs_backend.services.walk_session.precision_contract",
+      "evidence_digest": "daengs_backend.services.walk_session.precision_contract",
+      "refine_points": "daengs_backend.services.walk_session.precision_contract"
+    }
+  }
+}

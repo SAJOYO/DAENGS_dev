@@ -19,7 +19,7 @@ from daengs_backend.schemas.walk_spatial_diary import (
     WalkRecordSheetsRequest,
     WalkRecordSheetsResponse,
 )
-from daengs_backend.services import walk_spatial_diary as diary_service
+from daengs_backend.services.walk_views import spatial_diary as diary_service
 from daengs_walk.spatial_diary import (
     DuplicateWalkInViewError,
     MixedPaintGenerationError,

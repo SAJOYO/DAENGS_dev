@@ -13,56 +13,20 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
-from daengs_backend.config import settings
 from daengs_backend.core.deps import Perm, Principal, require
+from daengs_backend.routers.raw_body import read_limited_body
 from daengs_backend.schemas.cardimage import CardImageResponse, JudgeOut
-from daengs_backend.services.cardimage import (
-    CardImageUnavailable,
-    default_engine,
-    default_judge,
-    generate_card,
-)
-from daengs_backend.services.cardimage.catalog import MonthNotOpenError
-from daengs_backend.services.cardimage.engine import EngineError
-from daengs_backend.services.cardimage.photo import MAX_PHOTO_BYTES, PhotoError
+from daengs_backend.services import ai_card_engine
+from daengs_backend.services.ai_card_engine import default_engine, default_judge
+from daengs_cardimage import CardImageUnavailable
+from daengs_cardimage.catalog import MonthNotOpenError
+from daengs_cardimage.engine import EngineError
+from daengs_cardimage.photo import MAX_PHOTO_BYTES, PhotoError
 
 router = APIRouter(prefix="/admin/cardimage", tags=["admin-cardimage"])
 # `require(...)` 는 부를 때마다 새 함수를 만든다 — 라우터와 테스트가 같은 dependency_overrides
 # 키를 쓰려면 상수 하나로 고정해야 한다 (tests/test_admin_audit_view.py 와 같은 방식).
 _INSPECT = require(Perm.SEARCH_INSPECT)
-
-
-def _too_large() -> HTTPException:
-    return HTTPException(
-        status.HTTP_413_CONTENT_TOO_LARGE, detail={"code": "too_large", "message": "사진이 너무 큽니다"}
-    )
-
-
-async def _read_body(request: Request) -> bytes:
-    """사진 바이트를 스트리밍으로 받는다 (`routers/gait.py::_bridge_upload` 와 같은 방식).
-
-    `Content-Length` 를 먼저 보고 넘으면 즉시 끊는다 — 다만 그 헤더는 클라이언트가 주는
-    값이라 **믿지 않고**, 청크마다 누적 크기를 다시 검사해 본문을 끝까지 받기 전에도
-    413 으로 끊는다. `await request.body()` 로 통째로 받았다가 검사하면 큰 업로드가
-    메모리를 다 채운 뒤에야 거절된다.
-    """
-    declared = request.headers.get("content-length")
-    if declared is not None:
-        try:
-            declared_size = int(declared)
-        except ValueError:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST, detail={"code": "bad_length", "message": "Content-Length가 올바르지 않습니다"}
-            ) from None
-        if declared_size > MAX_PHOTO_BYTES:
-            raise _too_large()
-
-    body = bytearray()
-    async for chunk in request.stream():
-        body.extend(chunk)
-        if len(body) > MAX_PHOTO_BYTES:
-            raise _too_large()
-    return bytes(body)
 
 
 @router.post("/generate", response_model=CardImageResponse)
@@ -76,7 +40,7 @@ async def generate(
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST, detail={"code": "bad_name", "message": "강아지 이름이 비어 있습니다"}
         )
-    body = await _read_body(request)
+    body = await read_limited_body(request, MAX_PHOTO_BYTES)
     # 헤더가 없으면 빈 문자열을 그대로 넘긴다 — `prepare_photo` 가 허용 MIME 밖으로 보고
     # `PhotoError("bad_mime")` 를 내면 아래에서 400 으로 바뀐다. `ALLOWED_MIME` 이 소문자
     # 집합이라(`image/jpeg` 등) `.lower()` 없이는 `Image/JPEG` 같은 값이 그냥 걸러진다.
@@ -86,16 +50,13 @@ async def generate(
         # Gemini SDK 는 동기 호출이라(20~60초) 이벤트 루프를 막지 않도록 스레드로 뺀다
         # (services/chat_summary.py 의 `_call` 과 같은 방식).
         card = await asyncio.to_thread(
-            generate_card,
+            ai_card_engine.generate,
             photo=body,
             content_type=content_type,
             month=month,
             dog_name=dog_name,
             engine=default_engine(),
             judge=default_judge(),
-            base_dir=settings.cardimage_dir,
-            open_months=settings.cardimage_months,
-            judge_min=settings.cardimage_judge_min,
         )
     except PhotoError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, detail={"code": exc.code, "message": exc.detail}) from None

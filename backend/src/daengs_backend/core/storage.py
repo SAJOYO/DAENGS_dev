@@ -221,6 +221,11 @@ def build_card_face_key(app_user_id: uuid.UUID, card_id: uuid.UUID) -> str:
     return f"cards/{app_user_id}/{card_id}/face.png"
 
 
+def build_ai_card_key(app_user_id: uuid.UUID, card_id: uuid.UUID) -> str:
+    """서버가 만든 AI 도감 카드 한 장 (#537). 사용자 폴더 아래라 탈퇴 정리를 접두사로도 할 수 있다."""
+    return f"ai-cards/{app_user_id}/{card_id}.png"
+
+
 # ── none: 미설정 ────────────────────────────────────────────────────────
 class NotConfiguredStorage:
     """자리 지킴이 — 모든 호출이 명확하게 실패합니다. 조용히 no-op 하지 않습니다."""

@@ -11,9 +11,9 @@
 
 import uuid
 from datetime import date, datetime
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, PrivateAttr, model_validator
 
 from daengs_backend.models import VET_REASON_CODES
 
@@ -98,14 +98,55 @@ class VetVisitDraftResponse(BaseModel):
     reason_options: list[VetVisitReasonOptionOut]
 
 
-class VetVisitConfirmRequest(BaseModel):
-    """확정 한 번. **라벨만이 아니라 병원 이름·주소·전화번호도 여기로 고친다**
-    (docs "확인 화면에서 고칠 수 있는 것") — 제안값이 저장소로 새는 다른 경로는 없다.
+#: 구 모양(평평한 본문)에서 `splits` 한 칸으로 접히는 필드들. 호환 껍데기가 지워질 때
+#: 이 튜플과 `_fold_legacy_shape` 가 같이 지워진다.
+_LEGACY_SPLIT_FIELDS = (
+    "client_event_id",
+    "reason_code",
+    "reason_detail",
+    "total_krw",
+    "is_emergency",
+    "is_oncology",
+)
+
+
+class VetVisitSplitIn(BaseModel):
+    """확정될 행 하나 = 아이 하나 (docs §2 다견).
+
+    **`client_event_id` 가 행마다 하나씩**인 이유는 `vet_visits` 의 UNIQUE 가
+    `(app_user_id, client_event_id)` 라 행 단위이기 때문이다. `pet_id` 를 안 보내면
+    초안의 강아지다 — 한 마리 확정과 구 모양 호환이 그 자리다.
     """
 
     client_event_id: uuid.UUID
+    pet_id: uuid.UUID | None = None
     reason_code: VetVisitReasonCode
     reason_detail: str | None = Field(default=None, max_length=60)
+    #: 이 아이 몫. 합이 영수증 총액과 다르면 422 다.
+    total_krw: int = Field(ge=0, le=100_000_000)
+    is_emergency: bool = False
+    #: 영수증에 찍힌 글자가 아니라 임상 판단이라 **유저만** 켠다 (docs §1).
+    is_oncology: bool = False
+    #: 몇 번째 `동물명` 블록인가 — `raw_ocr_items` 를 자르는 데만 쓰고 저장하지 않는다.
+    patient_index: int | None = Field(default=None, ge=0, le=19)
+
+
+class VetVisitConfirmRequest(BaseModel):
+    """확정 한 번. **라벨만이 아니라 병원 이름·주소·전화번호도 여기로 고친다**
+    (docs "확인 화면에서 고칠 수 있는 것") — 제안값이 저장소로 새는 다른 경로는 없다.
+
+    **`splits` 는 언제나 있고 길이가 1 이상이다.** 한 마리는 특수 케이스가 아니라
+    `len(splits) == 1` 이다 — 그래야 소유권 검사도 금액 검산도 항목 자르기도 서비스
+    안쪽에 한 벌만 존재하고, 대다수인 한 마리 경로가 그 한 벌을 매일 밟는다.
+
+    `visited_on` · `hospital_*` · `total_krw` 는 **영수증 단위**다. `total_krw` 는
+    영수증에 찍힌 총액이고 `splits` 의 합과 대조된다.
+
+    ⚠️ **아래 `_fold_legacy_shape` 는 한시적이다.** 앱이 새 버전으로 깔리면 그 검증기와
+    `_LEGACY_SPLIT_FIELDS`, 그리고 `_from_legacy_shape` 를 읽는 라우터의 응답 분기가
+    **한꺼번에** 지워진다. 그때부터 요청도 응답도 언제나 리스트다.
+    """
+
     visited_on: date
     total_krw: int = Field(ge=0, le=100_000_000)
     hospital_name: str | None = Field(default=None, max_length=60)
@@ -115,9 +156,36 @@ class VetVisitConfirmRequest(BaseModel):
     hospital_phone: str | None = Field(
         default=None, max_length=32, pattern=VET_VISIT_PHONE_PATTERN
     )
-    is_emergency: bool = False
-    #: 영수증에 찍힌 글자가 아니라 임상 판단이라 **유저만** 켠다 (docs §1).
-    is_oncology: bool = False
+    splits: list[VetVisitSplitIn] = Field(min_length=1, max_length=20)
+
+    #: 구 모양으로 들어왔나. **OpenAPI 에 안 뜬다** — 앱이 보내는 값이 아니라 응답
+    #: 모양을 고르려고 경계가 자기에게 남기는 표시다.
+    _from_legacy_shape: bool = PrivateAttr(default=False)
+
+    @model_validator(mode="wrap")
+    @classmethod
+    def _fold_legacy_shape(cls, data: Any, handler: Any) -> "VetVisitConfirmRequest":
+        """평평한 구 본문을 1개짜리 `splits` 로 접는다. **호환은 여기 한 곳뿐이다.**
+
+        앱은 스토어를 거쳐 깔리므로 구버전이 한동안 남는다. 그 두 모양이 서비스
+        안쪽까지 들어오면 소유권 검사·금액 검산·항목 자르기가 전부 두 벌이 되고,
+        `db/init/25_vet_visits.sql` 이 경계한 "한쪽만 고치는 날"이 온다.
+
+        `mode="wrap"` 인 이유는 **원본 입력과 만들어진 인스턴스를 둘 다 봐야** 하기
+        때문이다 — 어느 모양으로 들어왔는지는 접고 나면 사라지는데, 라우터가 응답
+        모양을 고를 때 그것이 필요하다.
+        """
+        legacy = (
+            isinstance(data, dict) and "splits" not in data and "client_event_id" in data
+        )
+        if legacy:
+            folded = {k: v for k, v in data.items() if k not in _LEGACY_SPLIT_FIELDS}
+            folded["total_krw"] = data.get("total_krw")
+            folded["splits"] = [{k: data[k] for k in _LEGACY_SPLIT_FIELDS if k in data}]
+            data = folded
+        model = handler(data)
+        model._from_legacy_shape = legacy
+        return model
 
 
 class VetVisitResponse(BaseModel):
@@ -146,6 +214,9 @@ class VetVisitListResponse(BaseModel):
     start: date
     end: date
     visits: list[VetVisitResponse]
+    #: `start` 보다 오래된 기록 수. 0 이 아니면 앱이 "`start` 이후만 보입니다" 를
+    #: 띄우고 날짜를 고르게 한다 — 창 밖의 기록이 사라진 것처럼 보이지 않게.
+    older_count: int
 
 
 __all__ = [
@@ -158,6 +229,7 @@ __all__ = [
     "VetVisitReasonOptionOut",
     "VetVisitReceiptItemOut",
     "VetVisitResponse",
+    "VetVisitSplitIn",
     "VetVisitStartRequest",
     "VetVisitTicketResponse",
 ]

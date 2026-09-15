@@ -6,7 +6,7 @@ import io
 
 from PIL import Image
 
-from daengs_backend.services.cardimage.judge import JudgeResult
+from daengs_cardimage.judge import JudgeResult
 
 
 def png(w: int = 994, h: int = 1582, color=(10, 200, 10)) -> bytes:

@@ -22,7 +22,7 @@ from daengs_backend.repositories import walk as repo
 from daengs_backend.routers import walk as router
 from daengs_backend.schemas.walk import WalkUpload
 from daengs_backend.services import activity
-from daengs_backend.services import walk as service
+from daengs_backend.services.walk_session import lifecycle as service
 from tests.territory.support.ownership import begin
 
 

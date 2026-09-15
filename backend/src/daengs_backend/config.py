@@ -185,6 +185,21 @@ class Settings(BaseSettings):
     # = None` 으로 오늘처럼 진행합니다 — 이력 이어짐이 없어질 뿐 답은 그대로 나갑니다.
     turn_resolver: bool = Field(default=True, validation_alias=AliasChoices("DAENGS_TURN_RESOLVER"))
 
+    # ── 채팅에서 케어 기록 쓰기 (#331 후속, D-075) ──────────────────────
+    # `general_fallback` 과 같은 기본값(꺼짐)이고 같은 이유입니다 — **켜기 전까지 운영은
+    # 지금과 같습니다.** 다만 여기서 "지금과 같다" 가 뜻하는 것이 하나 더 있습니다:
+    # 꺼져 있어도 `"방금 밥 먹였어"` 는 **기록 화면 HANDOFF** 로 답합니다. 그것이
+    # `docs/care-events.md` 가 적어 둔 순서의 가운데 칸이고, 플래그가 가르는 것은
+    # 그 뒤(확인 되묻기 → 실제 쓰기)뿐입니다.
+    #
+    # ⚠ 이 플래그 하나로는 안 켜집니다. `routers/assistant.py` 가 요청마다
+    # `CareLogCapabilityAdapter` 를 엔진에 넣고 `context["care_log_writable"]` 를 세울 때만
+    # 제안이 나가므로(앱 회원 + 활성 강아지), 관리자 토큰·무상태 점검 요청은 이 값이
+    # 켜져 있어도 HANDOFF 로 떨어집니다.
+    care_log_write: bool = Field(
+        default=False, validation_alias=AliasChoices("DAENGS_CARE_LOG_WRITE")
+    )
+
     # ── 의미 라우터 (D-041) ───────────────────────────────────────────
     # backend/.env 에 이미 있는 GEMINI_API_KEY / GEMINI_TIMEOUT_MS 를 접두사 없이
     # 그대로 읽습니다. `daengs_life.rag` 의 Settings 와 같은 env 를 각자 읽는
@@ -236,6 +251,11 @@ class Settings(BaseSettings):
     cardimage_judge_model: str = Field(default="gemini-3.1-flash-lite", validation_alias=AliasChoices("DAENGS_CARDIMAGE_JUDGE_MODEL"))
     # 1~5 중 이 값 미만이면 한 번 다시 만듭니다. 실험에서 정면 사진은 6장 중 1장이 어긋났습니다.
     cardimage_judge_min: int = Field(default=3, ge=1, le=5, validation_alias=AliasChoices("DAENGS_CARDIMAGE_JUDGE_MIN"))
+    # 앱 사용자 하루 생성 한도 (KST 하루, `ready` 만 셈). 0 이면 한도 없음. 테스트 단계라 1 이고,
+    # 제품 규칙이 정해지면 `services/ai_card_quota.py` 의 함수를 통째로 바꿉니다 (D-076).
+    cardimage_daily_limit: int = Field(default=1, ge=0, validation_alias=AliasChoices("DAENGS_CARDIMAGE_DAILY_LIMIT"))
+    # 서버 전체 동시 생성 수. backend 프로세스 안 백그라운드 작업이라 스레드를 씁니다 (D-076).
+    cardimage_concurrency: int = Field(default=2, ge=1, validation_alias=AliasChoices("DAENGS_CARDIMAGE_CONCURRENCY"))
 
     @field_validator("cardimage_months", mode="before")
     @classmethod

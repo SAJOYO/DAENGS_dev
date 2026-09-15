@@ -26,8 +26,8 @@ from daengs_backend.repositories import activity as repo
 from daengs_backend.repositories import walk as walk_repo
 from daengs_backend.schemas.walk import WalkFinalizeRequest, WalkPointUpload, WalkUpload
 from daengs_backend.services import activity, activity_game, territory_owner
-from daengs_backend.services import walk as walks
 from daengs_backend.services.activity_core import game_policy as policy
+from daengs_backend.services.walk_session import lifecycle as walks
 from tests.activity.support.actions import certify, mark, season
 from tests.territory.support import ownership as base
 

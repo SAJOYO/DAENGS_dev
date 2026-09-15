@@ -8,7 +8,7 @@ import time
 from collections import OrderedDict
 from datetime import UTC, datetime
 
-from daengs_backend.services.walk_public_http import PublicSourceError, get_json
+from daengs_backend.services.walk_background.http import PublicSourceError, get_json
 from daengs_walk.diary.space.road import road_name
 
 BASE = "https://sgisapi.mods.go.kr/OpenAPI3"

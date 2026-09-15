@@ -118,6 +118,7 @@ build-backend = "uv_build"
 [tool.uv.build-backend]
 module-name = [
     "daengs_backend",
+    "daengs_cardimage",
     "daengs_evals",
     "daengs_gait",
     "daengs_journey",

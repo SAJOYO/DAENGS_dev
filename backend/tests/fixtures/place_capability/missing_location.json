@@ -10,7 +10,8 @@
       "location.lat",
       "location.lon"
     ],
-    "missing_axes": []
+    "missing_axes": [],
+    "care_log": null
   },
   "route": null
 }

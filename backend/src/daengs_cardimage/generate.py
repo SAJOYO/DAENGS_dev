@@ -9,19 +9,16 @@ from pathlib import Path
 
 from PIL import Image
 
-from daengs_backend.config import settings
-from daengs_backend.services.cardimage import catalog
-from daengs_backend.services.cardimage import photo as photo_mod
-from daengs_backend.services.cardimage import title as title_mod
-from daengs_backend.services.cardimage.engine import (
+from daengs_cardimage import catalog
+from daengs_cardimage import photo as photo_mod
+from daengs_cardimage import title as title_mod
+from daengs_cardimage.engine import (
     CardImageEngine,
     EngineError,
-    GeminiCardImageEngine,
     build_prompt,
 )
-from daengs_backend.services.cardimage.judge import (
+from daengs_cardimage.judge import (
     CardJudge,
-    GeminiCardJudge,
     JudgeError,
     JudgeResult,
 )
@@ -40,22 +37,6 @@ class GeneratedCard:
     attempts: int
     month: int
     title: str
-
-
-def default_engine() -> CardImageEngine:
-    """설정에서 실제 엔진을 만든다. 전역 `settings.gemini_api_key` 로 대체하지 않는다 —
-    카드 생성 키는 `DAENGS_CARDIMAGE_GEMINI_API_KEY` 하나뿐이다."""
-    return GeminiCardImageEngine(
-        api_key=settings.cardimage_gemini_api_key.get_secret_value(), model=settings.cardimage_model,
-        size=settings.cardimage_size, timeout_ms=settings.cardimage_timeout_ms,
-    )
-
-
-def default_judge() -> CardJudge:
-    return GeminiCardJudge(
-        api_key=settings.cardimage_gemini_api_key.get_secret_value(), model=settings.cardimage_judge_model,
-        timeout_ms=settings.cardimage_timeout_ms,
-    )
 
 
 def _load_template(month: int, base_dir: Path) -> bytes:

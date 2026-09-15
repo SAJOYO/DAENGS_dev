@@ -5,10 +5,10 @@ import pytest
 from cardimage_fakes import FakeEngine, FakeJudge, png
 from PIL import Image
 
-from daengs_backend.services.cardimage import catalog, generate
-from daengs_backend.services.cardimage import judge as judge_mod
-from daengs_backend.services.cardimage import photo as photo_mod
-from daengs_backend.services.cardimage.engine import EngineError
+from daengs_cardimage import catalog, generate
+from daengs_cardimage import judge as judge_mod
+from daengs_cardimage import photo as photo_mod
+from daengs_cardimage.engine import EngineError
 
 CARDIMAGE = Path(__file__).resolve().parents[2] / "cardimage"
 

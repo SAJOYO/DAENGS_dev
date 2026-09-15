@@ -1,6 +1,6 @@
 """채택한 틀 위에 제목 `BLOSSOM <이름>` 을 얹어 실제 카드와 나란히 비교하는 실험 도구 (#496, docs/cardimage/).
 
-그리는 로직·상수(잰 값)는 `daengs_backend.services.cardimage.title` 로 옮겼다 — 여기는 CLI 로 그 함수를
+그리는 로직·상수(잰 값)는 `daengs_cardimage.title` 로 옮겼다 — 여기는 CLI 로 그 함수를
 부르고 원본과 나란히 놓는 머리띠 비교표를 만드는 것만 남는다. 값의 원본과 실험 근거는 그 모듈의
 docstring 과 worklog 09-14 를 보라.
 
@@ -21,8 +21,8 @@ from pathlib import Path
 
 from PIL import Image
 
-from daengs_backend.services.cardimage import catalog
-from daengs_backend.services.cardimage.title import draw_title, title_text
+from daengs_cardimage import catalog
+from daengs_cardimage.title import draw_title, title_text
 
 ROOT = Path(__file__).resolve().parents[2]
 CARDIMAGE = ROOT / "cardimage"

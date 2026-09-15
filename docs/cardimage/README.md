@@ -20,7 +20,14 @@
 - 앱에 이미 있는 사진 카드 경로(폰 안 누끼로 강아지를 오려 카드 얼굴창에 끼우는 것 — `DAENGS_APP` `ui/dogcard/Cutout.kt`, `docs/card-holes.md`)는 **그대로 두고**, 이것은 별도 경로다.
 - 엔진은 ComfyUI 로 못 박지 않는다. 브랜치 이름에 comfyui 가 남아 있는 것은 카드를 열 때의 짐작이다.
 
-## 지금 상태 (2026-09-14, 1단계 구현 완료 + 9월 추가)
+## 지금 상태 (2026-09-14, 앱 경로 #537 + 1단계 + 9월)
+
+**앱 사용자 경로 (09-14, #537 · D-076).** 앱이 `POST /app/ai-cards?month=&dog_name=&dog_id=`(본문 사진)로
+카드 만들기를 시작하면 202 + `status: generating` 을 받고, `GET /app/ai-cards/{id}` 가 `ready` +
+`image_url`(994×1582) 을 줄 때까지 다시 조회한다. 서버는 표 `ai_cards` 에 행을 먼저 남기고 backend 프로세스
+안 백그라운드에서 만든다. 한도는 사용자별 동시 1장 + 하루 완성 1장(`DAENGS_CARDIMAGE_DAILY_LIMIT`). 생성
+로직은 `backend/src/daengs_cardimage/` 로 옮겼다. 설계 `spec-2026-09-14-app-ai-cards.md`, 계획
+`plan-2026-09-14-app-ai-cards.md`. **배포 전에** `db/migrations/2026-09-14_ai_cards.sql` 을 개발서버·GCP DB 에 적용한다.
 
 **9월 카드 추가 (09-14 오후, 사용자가 콘솔 확인 뒤 요청).** 열린 달이 **4월(BLOSSOM)·9월(CHUSEOK)** 둘이다
 (`cardimage_months` 기본값 `4,9`). 달마다 다른 것 세 가지를 `catalog.MonthCard` 필드로 뺐다 — ① `subtitle`
@@ -31,8 +38,8 @@
 (`<select>`)가 붙었다. 실호출 1회: `_03` 사진, 이름 "네오" → 유사도 5/5, 29.8초
 (`cardimage/out/_service_check/service_check_sep_1.png`). 콘솔의 PNG 저장 버튼과 제목 x=252 도 같은 날.
 
-**1단계 서비스 구현 완료 (09-14, 에이전트 실행 Task 1~9·11).** `backend/src/daengs_backend/services/cardimage/`
-(catalog · photo · title · engine · judge · generate) 가 파이프라인을 갖췄고, `POST
+**1단계 서비스 구현 완료 (09-14, 에이전트 실행 Task 1~9·11).** `backend/src/daengs_cardimage/`(#537 에서
+`daengs_backend/services/cardimage/` 에서 옮김) (catalog · photo · title · engine · judge · generate) 가 파이프라인을 갖췄고, `POST
 /admin/cardimage/generate`(search:inspect) 로 열렸다. 콘솔 「기능 / 검색 점검」에 「도감 카드
 생성」 갈래가 붙었다(`/console/search` 탭 5). 설정은 `DAENGS_CARDIMAGE_*`(`config.py`), compose 가
 `cardimage/` 를 컨테이너에 마운트한다. 엔진 결정은 `docs/decisions.md` D-074.
@@ -67,7 +74,8 @@ backend`(의존성·마운트 변경이라 재생성 필요). nginx 는 `locatio
 | `cardimage/test/*.jpg` | 실제 강아지 사진 13장 (3000×4000, 4~6MB, 카카오톡 원본). **일부러 원본 화질** — 사용자가 폰 원본을 그대로 넣는 상황 | 폴더만 커밋(`.gitkeep`), 내용은 `.gitignore`. 실제 개 사진이라 커밋 금지 |
 | `cardimage/out/` | 실험 산출물. 결과 PNG 옆에 같은 이름 `.json`(모델·크기·프롬프트), 모델 원출력 `_raw.png` | 폴더만 커밋, 내용은 `.gitignore` |
 | `backend/tools/cardimage_try.py` | 0단계 실험 스크립트 (full 모드만). `uv run --with pillow python tools/cardimage_try.py` | 커밋 |
-| `backend/src/daengs_backend/services/cardimage/` | **1단계 서비스** — catalog(틀·무대)·photo(검증·리사이즈)·title(Pillow 제목)·engine(Nano Banana 2 어댑터)·judge(닮음 검수)·generate(파이프라인). 라우터는 `POST /admin/cardimage/generate` | 커밋 |
+| `backend/src/daengs_cardimage/` | **생성 로직 패키지** (#537 에서 `daengs_backend/services/cardimage/` 에서 옮김) — catalog(틀·무대)·photo(검증·리사이즈)·title(Pillow 제목)·engine(Nano Banana 2 어댑터)·judge(닮음 검수)·generate(파이프라인). backend 를 import 하지 않는다 | 커밋 |
+| `backend/src/daengs_backend/services/ai_card_engine.py` · `ai_card.py` · `ai_card_quota.py` · `routers/ai_card.py` · `routers/admin_cardimage.py` | backend 쪽 — 설정으로 엔진 만들기(유일한 호출 자리) · 앱 경로 서비스 · 한도 · `/app/ai-cards` · `/admin/cardimage/generate` | 커밋 |
 | `docs/cardimage/plan-2026-09-14-phase1.md` | 1단계 구현 계획 (Task 1~11) | 커밋 |
 | `docs/cardimage/` | 이 폴더 | 커밋 |
 
@@ -90,11 +98,13 @@ backend`(의존성·마운트 변경이라 재생성 필요). nginx 는 `locatio
 | 틀 | `cardimage/N_<이름>_template.webp` 12장 채택. 배지 `26JAN`…`26DEC` 는 틀에 구워 둠(연도 고정) | 사용자 결정 09-14 — "내년까지 생각 안 해도 됨", "11장은 그대로 쓴다". 원본 `N_<이름>.webp` 도 그대로 둔다 |
 | 키 | 카드 생성용 Gemini 키는 채팅용과 **다른 GCP 프로젝트**, 결제 계정은 하나 | 프로젝트 단위로 지출 상한·사용량이 갈리기 때문 (research §결제) |
 | 이름 | `NEO` 를 코드·변수·문서 이름에 쓰지 않는다 | 네오는 참조 카드 강아지 이름 |
+| 앱 경로 | `/app/ai-cards` 비동기(202 → 조회), backend 프로세스 안 백그라운드, 994×1582 그대로, 사용자별 동시 1장 + 하루 완성 1장 — **D-076** | 사용자 결정 09-14 (#537) |
 
 ## 안 정해진 것
 
 - ~~입력 사진을 줄여 보낼지~~ → 실험 1·2 로 **1600px 로 줄여도 닮음 차이 없음** 확인 (09-13). 서비스는 앱이 하듯 1600 으로 보낸다.
-- **출력을 앱 도감에 어떻게 얹을지.** 기존 카드 캔버스는 1080×1440(3:4), 참조 카드는 994×1582(약 5:8). 기존 얼굴창 방식이 아니라 카드 한 장 통째 이미지가 되므로 앱 쪽 표시 계약이 새로 필요하다. 1단계 설계 항목.
+- **앱에서 AI 카드를 어떻게 보여 줄지.** 서버는 994×1582(5:8) 를 그대로 주기로 했다(D-076) — 기존 3:4 카드와 섞을지·탭을 나눌지는 DAENGS_APP 쪽 결정.
+- **제품 규칙** — 카드를 몇 장·어떤 조건(달마다 한 장, 활동 보상, 유료 등)으로 줄지. 지금 한도는 테스트 단계용이고 `services/ai_card_quota.py::check_quota` 를 통째로 바꾼다.
 - **Qwen 을 어디서 돌릴지.** 실험은 fal 호스팅으로, 서비스·포트폴리오용은 diffusers 로 직접 돌리는 경로가 후보 (research §서빙).
 - ~~엔진 최종 결정 → `docs/decisions.md` 에 번호로.~~ → **D-074 로 확정 (09-14, Nano Banana 2)**
 

@@ -239,6 +239,21 @@ GAIT_RECORDS_POSE_MODEL_ROWS = (
 # **모듈 수준에 둔다** — `coverage_checks()` 가 "등록됐나"를 이 목록에서 읽는다. 함수 안에
 # 있으면 그 검사가 소스를 정규식으로 긁어야 하고, 그러면 목록을 고칠 때마다 정규식이 낡는다.
 CHECKS = (
+        ('2026-09-14', 'ai_cards', APP_USERS + PETS_ONLY + SET_UPDATED_AT, 'ai_cards', [
+            'ALTER TABLE ai_cards DROP COLUMN status CASCADE',
+            'ALTER TABLE ai_cards ALTER COLUMN dog_name TYPE varchar(80)',
+            'ALTER TABLE ai_cards ALTER COLUMN dog_id SET NOT NULL',
+            'ALTER TABLE ai_cards DROP CONSTRAINT ai_cards_status',
+            'ALTER TABLE ai_cards DROP CONSTRAINT ai_cards_ready_set',
+            'ALTER TABLE ai_cards DROP CONSTRAINT ai_cards_failed_code',
+            # **FK 삭제 동작을 뒤바꾸는 변조.** SET NULL → CASCADE 면 강아지를 지울 때 카드가 같이 사라진다.
+            'ALTER TABLE ai_cards DROP CONSTRAINT ai_cards_dog_id_fkey;'
+            ' ALTER TABLE ai_cards ADD FOREIGN KEY(dog_id) REFERENCES pets(id) ON DELETE CASCADE',
+            # 부분 조건을 잃는 변조 — 카드를 평생 한 장밖에 못 만든다
+            'DROP INDEX idx_ai_cards_one_generating;'
+            ' CREATE UNIQUE INDEX idx_ai_cards_one_generating ON ai_cards (app_user_id)',
+            'DROP TRIGGER trg_ai_cards_updated_at ON ai_cards',
+        ]),
         ('2026-09-13', 'walk_measurements', 'CREATE TABLE walks(id uuid PRIMARY KEY);', 'walk_measurements', [
             'ALTER TABLE walk_measurement_chunks DROP COLUMN walk_id CASCADE',
             'ALTER TABLE walk_measurement_chunks DROP COLUMN measurement_id CASCADE',

@@ -75,6 +75,7 @@
 | [D-070](#d-070) | 실시간 산책·날씨는 Cloud Run 서비스로 뗀다 — 상태는 VM 의 Redis 에 둔다 | 2026-09-11 |
 | [D-073](#d-073) | 못 재는 이유를 말한다 - 기록된 산책과 `unmeasured` 고지 | 2026-09-12 |
 | [D-074](#d-074) | 도감 카드 AI 생성 엔진은 Nano Banana 2, 카드 통째 2K, 글자는 Pillow | 2026-09-14 |
+| [D-076](#d-076) | 도감 카드 생성 로직은 `daengs_cardimage` 로 떼고, 앱 경로는 backend 프로세스 안 비동기로 | 2026-09-14 |
 
 ---
 
@@ -4695,3 +4696,39 @@ DB 에 남습니다** — `evals/conversation_quality` 에 기록 진술·걱정
 카드가 그 셋을 같이 고쳤습니다. **같은 문장을 세 곳에 둔 것이 이 카드에서 가장 비쌌던
 부분입니다** — 하나를 고치고 둘을 잊으면 다음 사람이 안 하기로 한 일을 이미 한 코드를 읽게
 됩니다.
+
+## D-076
+### 도감 카드 생성 로직은 `daengs_cardimage` 로 떼고, 앱 경로는 backend 프로세스 안 비동기로
+
+2026-09-14, #537. 설계는 `docs/cardimage/spec-2026-09-14-app-ai-cards.md`.
+
+**경계.** 사진 → 카드 PNG 를 만드는 로직(`catalog·photo·title·engine·judge·generate`)만
+`backend/src/daengs_cardimage/` 로 뗐다. 이 패키지는 `daengs_backend`·웹·DB 를 import 하지 않는다
+(`tests/test_cardimage_boundary.py`). 사용자·표 `ai_cards`·저장소·API 는 backend 에 남고, backend 가
+생성을 부르는 곳은 `services/ai_card_engine.py` 하나다. `daengs_walk`·`daengs_gait` 와 같은 모양이다 —
+**도메인 패키지는 순수 로직, backend 는 사람·저장·입구.** 라우터·모델까지 새 패키지에 넣는 screening
+방식은 기각했다(인증·저장소·세션을 거꾸로 끌어와 경계가 흐려지고 관례가 둘로 굳는다).
+
+이렇게 뗀 이유 중 하나는 나중에 생성만 Cloud Run 같은 별도 서비스로 옮길 가능성이다. 그날 할 일은
+패키지 앞에 HTTP 한 장, `ai_card_engine` 안에 URL 갈림길 — D-070 의 `DAENGS_REALTIME_URL` 과 같은
+모양이다. 지금 HTTP 경계를 미리 만들지는 않았다.
+
+**앱 계약은 비동기.** `POST /app/ai-cards` 는 행을 `generating` 으로 커밋하고 202 를 준다. 생성이
+30~60초 걸리는 유료 호출이라, 폰 연결 하나에 걸면 앱을 내리는 순간 돈만 쓰고 결과를 잃는다. 서버
+안에서 누가 만드는지가 바뀌어도 앱은 모른다.
+
+**실행은 backend 프로세스 안 백그라운드** (Celery 아님). 새 컨테이너·큐 없이 개발서버와 GCP 가 똑같이
+돈다. 생성 차례를 얻은 시각(`updated_at`)부터 `4 × cardimage_timeout_ms + 60초`(기본 9분)가 지나면
+조회 때 `failed`/`interrupted` 가 된다. 차례를 얻을 때 행을 다시 확인해, 그사이 지워졌거나 정리된
+카드에는 모델 호출을 하지 않는다. POST 는 토큰만 확인하고(`CurrentAppMemberTokenOnly`) 사진을 다 받은 뒤에 서비스가 사용자 행을 잠근다 — 20MB 업로드 동안 잠금·연결을 쥐지 않기 위해서다. **워커로 옮길 조건:** ⓐ `interrupted` 가 실제로 보일 때 ⓑ 동시
+생성이 backend 응답을 느리게 만들 때 ⓒ 서버가 자동 재시도해야 할 때.
+
+**한도는 테스트 단계용.** 사용자별 동시 1장(DB 부분 UNIQUE) + KST 하루 `ready` N장
+(`DAENGS_CARDIMAGE_DAILY_LIMIT`, 기본 1). 실패는 세지 않는다. 모델 호출까지 간 실패(upstream·no_image·storage)는 하루 5번까지만 받는다 — 한도가 완성 카드만 세서 실패가 무제한이던 구멍을 막는 테스트 단계 안전장치다. 카드를 몇 장·어떤 조건으로 줄지는 정하지
+않았고, 정해지면 `services/ai_card_quota.py::check_quota` 를 통째로 바꾼다.
+
+**이미지는 994×1582(5:8) 그대로** 주고 `width`·`height` 를 싣는다. 3:4 로 자르지 않는다 — 앱 표시는
+DAENGS_APP 쪽 결정이다.
+
+되돌리기: 실행 위치는 `services/ai_card.py` 의 `_spawn`·`_run` 안이라 워커로 옮겨도 API·표는 그대로다.
+패키지 경계는 되돌릴 이유가 없다.

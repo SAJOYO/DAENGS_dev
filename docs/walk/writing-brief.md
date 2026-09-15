@@ -11,8 +11,9 @@
 ```text
 SceneSnapshot + 검증된 SpatialComparisonSlots + ScenePosition
  → build_space_context → NarrativeSpaceContext
- → build_space_brief(context, accepted_delivery)
-    ├─ space_work_reason: 작업 여부·이유
+ → SpaceWritingBrief(context, delivery=accepted_delivery)
+    ├─ assemble_scene_requests: 작업·발행 연결 정보 조립
+    ├─ space_work_reason: 배경 상태 진단 (동일 배경도 작성)
     ├─ brief_writer_view: 실제 전송용 데이터
     └─ advance_brief_delivery: 채택된 선택으로 기억 갱신
 ```
@@ -58,11 +59,15 @@ pet_id가 미지정이면 이름으로 특정 강아지를 추정하지 않는�
 ## 실행 연결
 
 `configured_relational_preparation`은 새 준비 경로를 선택한다. 원본과 준비 입력의 결합을 모델
-호출 전에 한 번 확인하고, `brief_sequence`가 시간순으로 계획을 확정한다. `brief_writer`는
+호출 전에 한 번 확인하고, `brief_sequence`가 시간순으로 자료와 채택 기억을 묶는다.
+`scene_requests.assemble_scene_requests`는 그 입력으로 작업과 발행 연결 정보를 조립한다.
+준비 시점의 빈 기억과 실행 시점의 채택 기억은 구분하며, 실행에서 만든 공간 입력은 기억 갱신에도 재사용한다.
+저장된 `plans` 필드·버전과 상태 진단은 호환성을 위해 유지한다. 별도 서술 전략을 결정하지 않는다. `brief_writer`는
 같은 typed brief에서 전송 데이터·응답 스키마·허용 인용 목록을 만든다. 구 비교 ID로 역변환하지 않는다.
 
 공간 응답이 채택된 뒤에만 다음 장면의 전달 기억을 갱신한다. 최초 소개 실패 후 동일 배경이 나오면
-다시 소개하고, 소개가 성공한 동일 배경은 재호출하지 않는다. 행동은 현재 강아지 사건과 그 사건에
+다시 소개하고, #551부터 소개가 성공한 동일 배경도 공간 작성을 호출한다. 현재 공간 근거가 없는
+경우는 계속 생략한다. 행동은 현재 강아지 사건과 그 사건에
 연결된 현재 맥락만 사용한다. 제목은 채택된 본문을 기존 #545 readmodel로 읽어 한 번 작성한다.
 
 정상 오케스트레이션의 `semantic_review` 기본값은 false다. 공간·행동·제목의 상시 검수 호출이

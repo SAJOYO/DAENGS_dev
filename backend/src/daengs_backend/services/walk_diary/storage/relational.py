@@ -8,6 +8,7 @@ from tempfile import NamedTemporaryFile
 
 from daengs_walk.diary.relational.contracts import VERSION
 from daengs_walk.diary.relational.publication import PUBLICATION_VERSION, validate_publication
+from daengs_walk.diary.relational.title_context import validate_title_publication
 from daengs_walk.value_contracts import digest
 
 
@@ -24,6 +25,7 @@ def save_skeleton(path, result):
         expected = assemble_receipt(body["prepared"], body["receipt"]["writing"])
         if any(body["receipt"].get(k) != v for k, v in expected.items()):
             raise ValueError("receipt differs from frozen preparation and accepted writing")
+    validate_title_publication(body["receipt"])
     document = {"format": version, "payload": body, "digest": digest(body)}
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -70,4 +72,6 @@ def read_skeleton(path):
         raise ValueError("stored format differs from receipt version")
     if receipt["version"] == PUBLICATION_VERSION:
         validate_publication(receipt)
+    else:
+        validate_title_publication(receipt)
     return receipt

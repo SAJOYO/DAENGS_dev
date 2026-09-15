@@ -1,0 +1,88 @@
+[
+  {
+    "condition": "legacy",
+    "stage": "title",
+    "request": {
+      "scenes": [
+        {
+          "id": "scene:1",
+          "body": "매헌로의 풀밭을 지나 어느덧 강남대로의 길 위로 걸음을 옮겼고, 근처 마방 공원과의 거리도 조금 더 가까워졌다.\n보리가 강남대로 길 위에서 냄새를 맡았다."
+        }
+      ]
+    },
+    "raw_text": "{\"title\": \"매헌로와 강남대로, 마방 공원 산책\"}",
+    "elapsed_s": 1.891
+  },
+  {
+    "condition": "legacy",
+    "stage": "review",
+    "request": {
+      "part": "title",
+      "evidence": {
+        "scenes": [
+          {
+            "id": "scene:1",
+            "body": "매헌로의 풀밭을 지나 어느덧 강남대로의 길 위로 걸음을 옮겼고, 근처 마방 공원과의 거리도 조금 더 가까워졌다.\n보리가 강남대로 길 위에서 냄새를 맡았다."
+          }
+        ]
+      },
+      "candidate": {
+        "text": "매헌로와 강남대로, 마방 공원 산책",
+        "evidence_ids": [
+          "scene:1"
+        ]
+      },
+      "required_evidence_ids": []
+    },
+    "raw_text": "{\n  \"supported\": true,\n  \"preserves_subjects\": true,\n  \"preserves_relation_axis\": true,\n  \"preserves_scope\": true,\n  \"no_invented_experience\": true,\n  \"required_meanings_present\": true,\n  \"readable_as_diary\": true,\n  \"used_evidence_ids\": [\"scene:1\"],\n  \"issues\": []\n}",
+    "elapsed_s": 1.437
+  },
+  {
+    "condition": "readmodel",
+    "stage": "title",
+    "request": {
+      "version": "relational-title-readmodel-v1",
+      "scenes": [
+        {
+          "scene_id": "stamp:0a1a08f3801cbe9ef7550551e07ad2227b1f304c053601501653c9fb1c7b08bc",
+          "order": 2,
+          "recorded_at": "2026-09-14T01:10:00Z",
+          "space": "매헌로의 풀밭을 지나 어느덧 강남대로의 길 위로 걸음을 옮겼고, 근처 마방 공원과의 거리도 조금 더 가까워졌다.",
+          "action": "보리가 강남대로 길 위에서 냄새를 맡았다.",
+          "movement_observations": []
+        }
+      ]
+    },
+    "raw_text": "{\"title\": \"매헌로와 강남대로를 걷는 보리\"}",
+    "elapsed_s": 0.953
+  },
+  {
+    "condition": "readmodel",
+    "stage": "review",
+    "request": {
+      "part": "title",
+      "evidence": {
+        "version": "relational-title-readmodel-v1",
+        "scenes": [
+          {
+            "scene_id": "stamp:0a1a08f3801cbe9ef7550551e07ad2227b1f304c053601501653c9fb1c7b08bc",
+            "order": 2,
+            "recorded_at": "2026-09-14T01:10:00Z",
+            "space": "매헌로의 풀밭을 지나 어느덧 강남대로의 길 위로 걸음을 옮겼고, 근처 마방 공원과의 거리도 조금 더 가까워졌다.",
+            "action": "보리가 강남대로 길 위에서 냄새를 맡았다.",
+            "movement_observations": []
+          }
+        ]
+      },
+      "candidate": {
+        "text": "매헌로와 강남대로를 걷는 보리",
+        "evidence_ids": [
+          "stamp:0a1a08f3801cbe9ef7550551e07ad2227b1f304c053601501653c9fb1c7b08bc"
+        ]
+      },
+      "required_evidence_ids": []
+    },
+    "raw_text": "{\n  \"supported\": true,\n  \"preserves_subjects\": true,\n  \"preserves_relation_axis\": true,\n  \"preserves_scope\": true,\n  \"no_invented_experience\": true,\n  \"required_meanings_present\": true,\n  \"readable_as_diary\": true,\n  \"used_evidence_ids\": [\"stamp:0a1a08f3801cbe9ef7550551e07ad2227b1f304c053601501653c9fb1c7b08bc\"],\n  \"issues\": []\n}",
+    "elapsed_s": 1.266
+  }
+]

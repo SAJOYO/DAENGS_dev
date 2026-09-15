@@ -76,10 +76,14 @@ async def test_live_adapter_to_full_snapshot_without_old_planning(monkeypatch, p
             "area_context",
         }
         assert frame["card_header"]["dong"]
+        address = frame["card_header"]["administrative_address"]
+        assert address["sido"] and address["sigungu"]
+        assert address["dong"] == frame["card_header"]["dong"]
         plan = next(p for p in result["snapshot"]["plans"] if p["scene_id"] == frame["scene_id"])
         serialized = json.dumps(plan["space_task"], ensure_ascii=False)
         assert "bd_main_nm" not in serialized and "주소 123" not in serialized
         assert frame["card_header"]["dong"] not in serialized
+        assert "administrative_address" not in serialized
 
 
 async def test_address_types_share_transform_not_response_cache():

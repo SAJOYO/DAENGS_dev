@@ -1,0 +1,263 @@
+{
+  "legacy": {
+    "status": "returned",
+    "request": {
+      "scenes": [
+        {
+          "id": "scene:1",
+          "body": "매헌로의 풀밭을 지나 어느덧 강남대로의 길 위로 걸음을 옮겼고, 근처 마방 공원과의 거리도 조금 더 가까워졌다.\n보리가 강남대로 길 위에서 냄새를 맡았다."
+        }
+      ]
+    },
+    "raw_text": "{\"title\": \"매헌로와 강남대로, 마방 공원 산책\"}",
+    "candidate": "매헌로와 강남대로, 마방 공원 산책",
+    "semantic_review": {
+      "request": {
+        "part": "title",
+        "evidence": {
+          "scenes": [
+            {
+              "id": "scene:1",
+              "body": "매헌로의 풀밭을 지나 어느덧 강남대로의 길 위로 걸음을 옮겼고, 근처 마방 공원과의 거리도 조금 더 가까워졌다.\n보리가 강남대로 길 위에서 냄새를 맡았다."
+            }
+          ]
+        },
+        "candidate": {
+          "text": "매헌로와 강남대로, 마방 공원 산책",
+          "evidence_ids": [
+            "scene:1"
+          ]
+        },
+        "required_evidence_ids": []
+      },
+      "response_schema": {
+        "additionalProperties": false,
+        "description": "A model assessment, not a mathematical proof of natural-language truth.",
+        "properties": {
+          "supported": {
+            "title": "Supported",
+            "type": "boolean"
+          },
+          "preserves_subjects": {
+            "title": "Preserves Subjects",
+            "type": "boolean"
+          },
+          "preserves_relation_axis": {
+            "title": "Preserves Relation Axis",
+            "type": "boolean"
+          },
+          "preserves_scope": {
+            "title": "Preserves Scope",
+            "type": "boolean"
+          },
+          "no_invented_experience": {
+            "title": "No Invented Experience",
+            "type": "boolean"
+          },
+          "required_meanings_present": {
+            "title": "Required Meanings Present",
+            "type": "boolean"
+          },
+          "readable_as_diary": {
+            "title": "Readable As Diary",
+            "type": "boolean"
+          },
+          "used_evidence_ids": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "scene:1"
+              ]
+            },
+            "title": "Used Evidence Ids",
+            "type": "array"
+          },
+          "issues": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Issues",
+            "type": "array"
+          }
+        },
+        "required": [
+          "supported",
+          "preserves_subjects",
+          "preserves_relation_axis",
+          "preserves_scope",
+          "no_invented_experience",
+          "required_meanings_present",
+          "readable_as_diary",
+          "used_evidence_ids",
+          "issues"
+        ],
+        "title": "SemanticReview",
+        "type": "object"
+      },
+      "request_revision": "18538fb3b41d7db1fd6a0a83a35106dcba94792dfe9a06b8b4c357dd629b8d2f",
+      "raw_text": "{\n  \"supported\": true,\n  \"preserves_subjects\": true,\n  \"preserves_relation_axis\": true,\n  \"preserves_scope\": true,\n  \"no_invented_experience\": true,\n  \"required_meanings_present\": true,\n  \"readable_as_diary\": true,\n  \"used_evidence_ids\": [\"scene:1\"],\n  \"issues\": []\n}",
+      "assessment": {
+        "supported": true,
+        "preserves_subjects": true,
+        "preserves_relation_axis": true,
+        "preserves_scope": true,
+        "no_invented_experience": true,
+        "required_meanings_present": true,
+        "readable_as_diary": true,
+        "used_evidence_ids": [
+          "scene:1"
+        ],
+        "issues": []
+      },
+      "status": "passed",
+      "method": "model_review_not_proof"
+    },
+    "text": "매헌로와 강남대로, 마방 공원 산책"
+  },
+  "readmodel": {
+    "status": "returned",
+    "text": "매헌로와 강남대로를 걷는 보리",
+    "request": {
+      "version": "relational-title-readmodel-v1",
+      "scenes": [
+        {
+          "scene_id": "stamp:0a1a08f3801cbe9ef7550551e07ad2227b1f304c053601501653c9fb1c7b08bc",
+          "order": 2,
+          "recorded_at": "2026-09-14T01:10:00Z",
+          "space": "매헌로의 풀밭을 지나 어느덧 강남대로의 길 위로 걸음을 옮겼고, 근처 마방 공원과의 거리도 조금 더 가까워졌다.",
+          "action": "보리가 강남대로 길 위에서 냄새를 맡았다.",
+          "movement_observations": []
+        }
+      ]
+    },
+    "content_revision": "c24387ff028400cff94d8c3f2a28904b335fa0455acbd6c3e64ba321973bab09",
+    "response_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "title": {
+          "maxLength": 30,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "title"
+      ],
+      "title": "TitleAnswer",
+      "type": "object"
+    },
+    "prompt_revision": "e92d65342a14f6163fb320faa6e86002fc148efc5ca09085a077ed58ff2f7ddf",
+    "review_enabled": true,
+    "request_revision": "f2a675c9ce95b8b022bdcef9fe823d6f30709c70082040be4bddbca5a18a886d",
+    "raw_text": "{\"title\": \"매헌로와 강남대로를 걷는 보리\"}",
+    "candidate": "매헌로와 강남대로를 걷는 보리",
+    "semantic_review": {
+      "request": {
+        "part": "title",
+        "evidence": {
+          "version": "relational-title-readmodel-v1",
+          "scenes": [
+            {
+              "scene_id": "stamp:0a1a08f3801cbe9ef7550551e07ad2227b1f304c053601501653c9fb1c7b08bc",
+              "order": 2,
+              "recorded_at": "2026-09-14T01:10:00Z",
+              "space": "매헌로의 풀밭을 지나 어느덧 강남대로의 길 위로 걸음을 옮겼고, 근처 마방 공원과의 거리도 조금 더 가까워졌다.",
+              "action": "보리가 강남대로 길 위에서 냄새를 맡았다.",
+              "movement_observations": []
+            }
+          ]
+        },
+        "candidate": {
+          "text": "매헌로와 강남대로를 걷는 보리",
+          "evidence_ids": [
+            "stamp:0a1a08f3801cbe9ef7550551e07ad2227b1f304c053601501653c9fb1c7b08bc"
+          ]
+        },
+        "required_evidence_ids": []
+      },
+      "response_schema": {
+        "additionalProperties": false,
+        "description": "A model assessment, not a mathematical proof of natural-language truth.",
+        "properties": {
+          "supported": {
+            "title": "Supported",
+            "type": "boolean"
+          },
+          "preserves_subjects": {
+            "title": "Preserves Subjects",
+            "type": "boolean"
+          },
+          "preserves_relation_axis": {
+            "title": "Preserves Relation Axis",
+            "type": "boolean"
+          },
+          "preserves_scope": {
+            "title": "Preserves Scope",
+            "type": "boolean"
+          },
+          "no_invented_experience": {
+            "title": "No Invented Experience",
+            "type": "boolean"
+          },
+          "required_meanings_present": {
+            "title": "Required Meanings Present",
+            "type": "boolean"
+          },
+          "readable_as_diary": {
+            "title": "Readable As Diary",
+            "type": "boolean"
+          },
+          "used_evidence_ids": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "stamp:0a1a08f3801cbe9ef7550551e07ad2227b1f304c053601501653c9fb1c7b08bc"
+              ]
+            },
+            "title": "Used Evidence Ids",
+            "type": "array"
+          },
+          "issues": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Issues",
+            "type": "array"
+          }
+        },
+        "required": [
+          "supported",
+          "preserves_subjects",
+          "preserves_relation_axis",
+          "preserves_scope",
+          "no_invented_experience",
+          "required_meanings_present",
+          "readable_as_diary",
+          "used_evidence_ids",
+          "issues"
+        ],
+        "title": "SemanticReview",
+        "type": "object"
+      },
+      "request_revision": "95039021f75564b010dfc4f18611edc775973e92f5c4da425678bd25066f5f02",
+      "raw_text": "{\n  \"supported\": true,\n  \"preserves_subjects\": true,\n  \"preserves_relation_axis\": true,\n  \"preserves_scope\": true,\n  \"no_invented_experience\": true,\n  \"required_meanings_present\": true,\n  \"readable_as_diary\": true,\n  \"used_evidence_ids\": [\"stamp:0a1a08f3801cbe9ef7550551e07ad2227b1f304c053601501653c9fb1c7b08bc\"],\n  \"issues\": []\n}",
+      "assessment": {
+        "supported": true,
+        "preserves_subjects": true,
+        "preserves_relation_axis": true,
+        "preserves_scope": true,
+        "no_invented_experience": true,
+        "required_meanings_present": true,
+        "readable_as_diary": true,
+        "used_evidence_ids": [
+          "stamp:0a1a08f3801cbe9ef7550551e07ad2227b1f304c053601501653c9fb1c7b08bc"
+        ],
+        "issues": []
+      },
+      "status": "passed",
+      "method": "model_review_not_proof"
+    },
+    "semantic_status": "model_reviewed"
+  }
+}

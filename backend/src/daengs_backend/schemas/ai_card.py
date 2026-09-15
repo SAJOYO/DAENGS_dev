@@ -29,3 +29,7 @@ class AiCardResponse(BaseModel):
 
 class AiCardListResponse(BaseModel):
     cards: list[AiCardResponse]
+    #: 하루 한도와 오늘 남은 횟수 (#543, D-077). 무제한이면 둘 다 `null`. 앱이 「오늘 1번 남았어요」를 띄우고
+    #: 0 이면 막는다 — 이 칸이 없는 옛 서버에서는 앱이 막지 않고 서버 429/409 문장에 맡긴다.
+    daily_limit: int | None = None
+    daily_remaining: int | None = None

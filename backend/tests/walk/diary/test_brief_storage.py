@@ -61,9 +61,9 @@ def test_v8_json_and_db_envelope_read_without_current_planning(
     from daengs_backend.services.walk_diary.writing import brief_prompts, relational
     from daengs_walk.diary.relational import (
         brief_binding,
-        scene_requests,
         comparison_writing,
         narrative_space,
+        scene_requests,
     )
 
     raw = store(written, base)

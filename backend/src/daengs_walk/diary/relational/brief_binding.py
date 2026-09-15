@@ -2,11 +2,6 @@
 
 from daengs_walk.diary.contracts.input import UserRecord
 from daengs_walk.diary.relational.brief_contracts import BriefDeliveryState, SpaceWritingBrief
-from daengs_walk.diary.relational.scene_requests import (
-    BRIEF_PLAN,
-    BRIEF_PREPARATION,
-    assemble_scene_requests,
-)
 from daengs_walk.diary.relational.comparison import aware_time
 from daengs_walk.diary.relational.comparison_writing import comparison_input
 from daengs_walk.diary.relational.contracts import WriterTask
@@ -15,6 +10,11 @@ from daengs_walk.diary.relational.current_action import (
     motion_from_evidence,
 )
 from daengs_walk.diary.relational.narrative_space import build_space_context
+from daengs_walk.diary.relational.scene_requests import (
+    BRIEF_PLAN,
+    BRIEF_PREPARATION,
+    assemble_scene_requests,
+)
 from daengs_walk.diary.relational.walk_phase import ScenePosition
 from daengs_walk.value_contracts import digest
 

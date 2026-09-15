@@ -126,13 +126,13 @@ def prepare_relational_diary(base, *, scene_ids=None, road_snapshots=(), writing
         )
         if writing_briefs:
             from daengs_walk.diary.relational.brief_contracts import SpaceWritingBrief
+            from daengs_walk.diary.relational.comparison_writing import comparison_input
+            from daengs_walk.diary.relational.current_action import build_action_brief
+            from daengs_walk.diary.relational.narrative_space import build_space_context
             from daengs_walk.diary.relational.scene_requests import (
                 BRIEF_PLAN,
                 assemble_scene_requests,
             )
-            from daengs_walk.diary.relational.comparison_writing import comparison_input
-            from daengs_walk.diary.relational.current_action import build_action_brief
-            from daengs_walk.diary.relational.narrative_space import build_space_context
 
             context = build_space_context(comparison_input(frame, previous), positions)
             action_brief = build_action_brief(

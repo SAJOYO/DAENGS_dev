@@ -1,10 +1,10 @@
-# FLUX.2-klein-4B E1 글씨 유지 실험 구현 계획 (#557)
+# FLUX.2-klein-4B 실험 구현 계획 — E1 글씨 유지 · E2 4장 뽑기 · 이미지 하나로 맞추기 · E3 콜드 스타트 (#557)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** FLUX.2-klein-4B 카드의 아래 패널 문구 깨짐(09-15 `PETAL PAUSE` → `PETL PPAUSE`, 3/12)이 ① 프롬프트에 문구 명시 ② 생성 크기 1280×2048 ③ 둘 다 중 무엇으로 줄어드는지, 같은 사진·틀·seed 로 18장을 만들어 눈으로 판정한다.
+**Goal:** (E1) FLUX.2-klein-4B 카드의 아래 패널 문구 깨짐(09-15 `PETAL PAUSE` → `PETL PPAUSE`, 3/12)이 ① 프롬프트에 문구 명시 ② 생성 크기 1280×2048 ③ 둘 다 중 무엇으로 줄어드는지 18장으로 판정한다. (E2) 한 요청에 4장을 뽑을 때 순차 4회와 한 번에 4장을 비교하고 사진별 "쓸 만한 장" 수를 센다. (이미지) 서비스·잡을 새 이미지 한 태그로 맞추고 옛 cardgen 이미지 둘을 지운다. (E3) GCS FUSE 마운트 옵션으로 모델 로드 425~430초가 줄어드는지 잰다. E4(비용 실측)는 보류, E5 는 안 한다(사진 안내 문구로 대신 — 09-16 사용자).
 
-**Architecture:** 서비스(`daengs_cardgen`)와 제품 코드(앱 경로·`generate_card`·`catalog`)는 바꾸지 않는다. 클라이언트 쪽만 넓힌다 — `HttpCardImageEngine` 에 생성 크기 인자(기본값 그대로), 비교 도구 `tools/cardgen_compare.py` 에 `--gen-size`·`--panel-text`(엔진을 감싸 프롬프트 끝에 문구 문장을 붙인다)·영문 이름 기본값, 조건별 결과를 한 장에 모으는 `tools/cardgen_grid.py`. 유료 실행과 기록은 컨트롤러가 사람 승인 뒤 한다.
+**Architecture:** E1 은 클라이언트 쪽만 넓힌다 — `HttpCardImageEngine` 에 생성 크기 인자(기본값 그대로), 비교 도구 `tools/cardgen_compare.py` 에 `--gen-size`·`--panel-text`(엔진을 감싸 프롬프트 끝에 문구 문장을 붙인다)·영문 이름 기본값, 조건별 결과를 한 장에 모으는 `tools/cardgen_grid.py`. 그 뒤 서비스에서 Qwen 을 걷어내고 `/generate` 에 `count`(1~4, 기본 1 은 지금과 같은 PNG 응답)를 더해 이미지를 **한 번** 새로 굽고, 서비스·잡을 그 태그로 맞춘 다음 E2·E3 를 돈다. 유료 실행·배포·삭제와 기록은 컨트롤러가 한다.
 
 **Tech Stack:** Python 3.12 · httpx(MockTransport) · Pillow 12.3 · pytest · Cloud Run 서비스 `daengs-cardgen-klein`(asia-southeast1 L4) · `gcloud run services proxy`
 
@@ -25,6 +25,9 @@
 - **하위 에이전트는 커밋·stage·stash·push 를 하지 않는다.** 커밋은 컨트롤러가 한다. 에이전트는 자기 태스크 테스트만 돌린다(전체 `uv run pytest` 는 컨트롤러가 마지막에 한 번).
 - 커밋 메시지는 한글 서술형, 접두사 없음, 끝에 `Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>`.
 - 명령은 `backend/` 에서 `uv run …` 으로 부른다.
+- **밤새 무인 진행 규칙 (09-16 사용자 "E1,E2,E3,이미지 하나로 맞추기 쭉 진행"):** 비용은 크레딧이라 매 실행 승인 대신 아래 상한으로 대신한다 — L4 가 떠 있는 시간 **누적 3시간**을 넘기면 멈춘다. 같은 원인으로 **두 번** 실패하면 그 실험을 멈추고 원인을 확인/추정으로 적은 뒤 다음으로. 품질 판정은 컨트롤러가 잠정으로 하고 격자를 남긴다 — 3번 카드 기본값 같은 결정은 사람 몫.
+- **하지 않는 것:** dev 머지 · VM `DAENGS_CARDGEN_URL` · **가중치 잡 실행**(`jobs execute` — 버킷을 다시 쓴다. 잡은 이미지 태그만 바꾼다) · 가중치를 이미지에 굽기(15GB — 공식 권장은 10GB 미만, 빌드 비용·시간 큼) · 의존성 추가/삭제(`bitsandbytes` 는 Qwen 을 걷어내도 그대로 둔다 — 경계 테스트가 그룹 구성을 본다).
+- **Windows 에서 gcloud:** 쉼표가 든 인자는 PowerShell 에서 따옴표로. Git Bash 는 `MSYS2_ARG_CONV_EXCL` (cardgen.sh 가 설정). `gcloud logging read` 는 Bash. 10분 넘는 명령(Cloud Build · 전체 pytest · 비교 실행)은 `Start-Process` 분리 프로세스 + 로그 폴링(`infra/gcp/README.md` 「cardgen.sh」 표).
 
 ## 파일 구조
 
@@ -634,3 +637,596 @@ git add docs/cardimage/compare-2026-09-16-klein-e1.md docs/cardimage/worklog.md 
 git commit -m "FLUX.2-klein-4B 글씨 유지 실험(E1) 결과와 결론을 적는다 (#557)"
 git push
 ```
+
+---
+
+### Task 6: 서비스에서 Qwen-Image-Edit-2511 을 걷어낸다
+
+**Files:**
+- Modify: `backend/src/daengs_cardgen/diffusion.py` (QwenModel · QWEN_* · `os` import · `MODEL_REPOS` 의 qwen 항목 · 모듈 docstring)
+- Modify: `backend/src/daengs_cardgen/app.py` (모듈 docstring 4행)
+- Modify: `backend/tests/test_cardgen_diffusion.py`
+- Modify: `infra/gcp/cardgen.sh` (12~20행 MODEL 분기, 84행 주석, 93행 `CARDGEN_QWEN_QUANT`)
+- Modify: `infra/gcp/cardgen-teardown.sh` (14행 서비스 목록)
+- Modify: `docker/cardgen/Dockerfile` (24행·38~39행 주석만 — 명령은 그대로)
+
+**Interfaces:**
+- Consumes: 없음
+- Produces: `MODEL_REPOS == {"klein-4b": "black-forest-labs/FLUX.2-klein-4B"}`, `MODELS == {"klein-4b": KleinModel}`, `KLEIN_DEFAULTS`, `resolve`, `model_by_name`. `cardgen.sh` 는 `MODEL=klein` 만 받는다.
+
+- [ ] **Step 1: 테스트를 먼저 klein 하나로 바꾼다**
+
+`backend/tests/test_cardgen_diffusion.py` 를 아래로 바꾼다(Qwen 테스트 셋 삭제):
+
+```python
+"""모델 선택과 기본값 (D-078). GPU·가중치 없이 도는 부분만 — 실제 추론은 Cloud Run 에서 확인한다.
+
+Qwen-Image-Edit-2511 은 09-15 L4 결과가 깨져 D-078 에서 뺐다 — 후보는 FLUX.2-klein-4B 하나다 (#557)."""
+
+import pytest
+from PIL import Image
+
+from daengs_cardgen.diffusion import KLEIN_DEFAULTS, MODEL_REPOS, KleinModel, model_by_name, resolve
+from daengs_cardgen.models import EditRequest
+
+
+def _req(**over) -> EditRequest:
+    base = {"images": [Image.new("RGB", (8, 8))], "prompt": "p", "seed": 1, "width": 1024, "height": 1632}
+    base.update(over)
+    return EditRequest(**base)
+
+
+def test_model_by_name_knows_only_klein() -> None:
+    assert MODEL_REPOS == {"klein-4b": "black-forest-labs/FLUX.2-klein-4B"}
+    assert isinstance(model_by_name("klein-4b"), KleinModel)
+    with pytest.raises(ValueError, match="klein-4b"):
+        model_by_name("qwen-edit-2511")
+
+
+def test_resolve_uses_model_defaults_unless_request_overrides() -> None:
+    assert resolve(_req(), KLEIN_DEFAULTS) == (4, 1.0)
+    assert resolve(_req(steps=8, guidance=2.5), KLEIN_DEFAULTS) == (8, 2.5)
+
+
+def test_edit_before_load_is_a_clear_error() -> None:
+    with pytest.raises(RuntimeError, match="load"):
+        KleinModel().edit(_req())
+```
+
+- [ ] **Step 2: 실패를 확인한다**
+
+Run: `uv run pytest tests/test_cardgen_diffusion.py -v`
+Expected: `test_model_by_name_knows_only_klein` FAIL (qwen 항목이 아직 있다).
+
+- [ ] **Step 3: 코드에서 걷어낸다**
+
+`diffusion.py` 머리를 이렇게:
+
+```python
+"""diffusers 편집 파이프라인 (D-078). torch·diffusers 는 `load()`·`edit()` 안에서만 import 한다.
+
+FLUX.2-klein-4B 는 약 13GB 라 L4(24GB)에 bf16 그대로 올린다. Qwen-Image-Edit-2511 은 09-15 L4 nf4 결과가
+깨져(틀 강아지가 남고 노이즈) D-078 에서 뺐다 — 코드도 #557 에서 걷어냈다.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+from PIL import Image
+
+from daengs_cardgen.models import CardGenModel, EditRequest
+
+MODEL_REPOS = {
+    "klein-4b": "black-forest-labs/FLUX.2-klein-4B",
+}
+KLEIN_DEFAULTS = {"steps": 4, "guidance": 1.0}      # 증류판 권장값 (모델 카드)
+```
+
+`class QwenModel` 전체와 `QWEN_DEFAULTS`·`QWEN_QUANTS` 를 지우고, 맨 아래를 `MODELS: dict[str, type] = {KleinModel.name: KleinModel}` 로. `resolve`·`KleinModel`·`model_by_name` 은 그대로.
+
+`app.py` docstring 3~4행을:
+
+```python
+**포트는 곧바로 열린다** — 모델은 lifespan 이 띄운 백그라운드 스레드가 올린다. Cloud Run 의 시작
+프로브는 240초가 상한인데 FLUX.2-klein-4B 도 GCS FUSE 에서 425~430초 걸린다(09-15 실측).
+```
+
+`infra/gcp/cardgen.sh`:
+- 4행 사용법은 그대로(`MODEL=klein`).
+- 12~20행을:
+
+```bash
+: "${MODEL:?klein}"
+: "${INVOKER:?user:<gcloud 계정> — gcloud run services proxy 로 부를 사람}"
+PROJECT="${PROJECT:-daengs}"
+STEP="${STEP:-all}"
+case "${MODEL}" in
+  klein) MODEL_NAME=klein-4b ;;
+  *) echo "MODEL 은 klein (Qwen-Image-Edit-2511 은 D-078 에서 뺐다)" >&2; exit 2 ;;
+esac
+```
+
+- 84행 주석을 `# Cloud Run 시작 프로브는 240초가 상한이라 "다 올린 뒤 포트를 연다" 는 FLUX.2-klein-4B(425~430초)에서도 못 맞춘다.` 로.
+- 93행을 `    --set-env-vars="CARDGEN_MODEL=${MODEL_NAME},HF_HUB_OFFLINE=1"` 로.
+
+`infra/gcp/cardgen-teardown.sh` 14행을 `for s in daengs-cardgen-klein; do` 로.
+
+`docker/cardgen/Dockerfile` 주석만:
+- 24행: `# PYTORCH_CUDA_ALLOC_CONF: 2026-09-15 Qwen OOM 때 넣었다("1.97GiB reserved but unallocated") — 조각난 캐시를 다시 쓰게 한다. FLUX.2-klein-4B 에도 해가 없어 둔다.`
+- 38~39행: `# torchvision 도 같이 덮어쓴다 — 처음엔 Qwen2VLProcessor 때문에 넣었다. FLUX.2-klein-4B 만 남은 지금 빼도 되는지는` / `# 확인 안 했다(빼려면 GPU 에서 다시 로드해 봐야 한다). torch 만 cu126 으로 바꾸면` 로 바꾸고 40행(`# torchvision(+cpu)과 ABI 가 어긋나므로 둘을 한 명령으로 맞춘다.`)은 그대로.
+
+- [ ] **Step 4: 통과와 잔여를 확인한다**
+
+Run: `uv run pytest tests/test_cardgen_diffusion.py tests/test_cardgen_app.py tests/test_cardgen_boundary.py tests/test_cardgen_fetch.py -v`
+Expected: 전부 PASS
+
+Grep(도구)로 `(?i)qwen` 을 `backend/src/daengs_cardgen`·`backend/tests/test_cardgen_*`·`infra/gcp/cardgen*.sh` 에서 찾는다.
+Expected: diffusion.py docstring 과 test docstring 의 "뺐다" 설명, cardgen.sh 오류 메시지만 남는다.
+
+Run (Git Bash): `bash -n infra/gcp/cardgen.sh && bash -n infra/gcp/cardgen-teardown.sh`
+Expected: 출력 없음, 종료 0
+
+- [ ] **Step 5: 컨트롤러가 커밋한다**
+
+```bash
+git add backend/src/daengs_cardgen/diffusion.py backend/src/daengs_cardgen/app.py backend/tests/test_cardgen_diffusion.py infra/gcp/cardgen.sh infra/gcp/cardgen-teardown.sh docker/cardgen/Dockerfile
+git commit -m "GPU 서비스에서 Qwen-Image-Edit-2511 을 걷어낸다 — D-078 에서 뺀 모델 (#557)"
+```
+
+---
+
+### Task 7: 서비스 `/generate` 에 `count` — 한 요청에 여러 장
+
+**Files:**
+- Modify: `backend/src/daengs_cardgen/models.py`
+- Modify: `backend/src/daengs_cardgen/diffusion.py` (`KleinModel.edit`)
+- Modify: `backend/src/daengs_cardgen/app.py`
+- Test: `backend/tests/test_cardgen_app.py`
+
+**Interfaces:**
+- Consumes: Task 6 의 `diffusion.py`
+- Produces:
+  - `MAX_COUNT = 4`, `EditRequest.count: int = 1` (마지막 필드), `CardGenModel.edit(req) -> list[Image.Image]` (**길이 = req.count**)
+  - `seeds_for(seed: int, count: int) -> list[int]` — `[(seed + i) % 2**31 for i in range(count)]`
+  - HTTP: 요청 JSON 에 `"count": 1..4`(기본 1). **count 가 1 이면 응답은 지금과 글자 그대로 같은 PNG.** count 가 2 이상이면 `200 application/json` `{"model", "size": "WxH", "seconds": float, "seeds": [int…], "images_png_b64": [str…]}` + 같은 `X-Cardgen-*` 헤더.
+
+- [ ] **Step 1: 실패하는 테스트를 쓴다**
+
+`backend/tests/test_cardgen_app.py` 의 `FakeModel.edit` 을 리스트로 바꾸고(색으로 장 번호를 구분) import 에 `seeds_for` 를 더한다:
+
+```python
+from daengs_cardgen.models import EditRequest, seeds_for, snap
+```
+
+```python
+    def edit(self, req: EditRequest) -> list[Image.Image]:
+        self.requests.append(req)
+        return [Image.new("RGB", (req.width, req.height), (1, 2, i)) for i in range(req.count)]
+```
+
+파일 끝에 더한다:
+
+```python
+def test_seeds_for_counts_up_and_wraps() -> None:
+    assert seeds_for(7, 4) == [7, 8, 9, 10]
+    assert seeds_for(2**31 - 1, 2) == [2**31 - 1, 0]
+
+
+def test_count_one_is_the_same_png_response() -> None:
+    fake = FakeModel()
+    with TestClient(create_app(model=fake)) as client:
+        response = client.post("/generate", json=_body(count=1))
+    assert response.headers["content-type"] == "image/png"
+    assert fake.requests[0].count == 1
+
+
+def test_count_many_returns_json_with_seeds_and_images() -> None:
+    fake = FakeModel()
+    with TestClient(create_app(model=fake)) as client:
+        response = client.post("/generate", json=_body(count=3))
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("application/json")
+    assert response.headers["X-Cardgen-Size"] == "992x1584"
+    data = response.json()
+    assert (data["model"], data["size"], data["seeds"]) == ("fake", "992x1584", [7, 8, 9])
+    assert data["seconds"] >= 0
+    pixels = [Image.open(io.BytesIO(base64.b64decode(b))).getpixel((0, 0)) for b in data["images_png_b64"]]
+    assert pixels == [(1, 2, 0), (1, 2, 1), (1, 2, 2)]
+    assert fake.requests[0].count == 3
+
+
+def test_count_is_validated() -> None:
+    with TestClient(create_app(model=FakeModel())) as client:
+        assert client.post("/generate", json=_body(count=0)).status_code == 422
+        assert client.post("/generate", json=_body(count=5)).status_code == 422
+```
+
+- [ ] **Step 2: 실패를 확인한다**
+
+Run: `uv run pytest tests/test_cardgen_app.py -v`
+Expected: import 단계에서 FAIL — `cannot import name 'seeds_for'`.
+
+- [ ] **Step 3: 구현한다**
+
+`models.py`:
+
+```python
+#: 한 요청의 이미지 수 상한. 우리는 틀·사진 두 장만 쓴다 — klein 호스팅 API 의 상한(4)에 맞췄다.
+MAX_IMAGES = 4
+#: 한 요청에 뽑는 장수 상한 — "4장 뽑아 고르기"(roadmap 3번). L4 메모리는 #557 E2 에서 잰다.
+MAX_COUNT = 4
+SIZE_STEP = 16
+
+
+@dataclass(frozen=True)
+class EditRequest:
+    images: list[Image.Image]
+    prompt: str
+    seed: int
+    width: int
+    height: int
+    steps: int | None = None
+    guidance: float | None = None
+    count: int = 1
+
+
+class CardGenModel(Protocol):
+    name: str
+
+    def load(self) -> None: ...
+
+    def edit(self, req: EditRequest) -> list[Image.Image]:
+        """`req.count` 장을 돌려준다. i 번째 장의 seed 는 `seeds_for(req.seed, req.count)[i]`."""
+        ...
+
+
+def seeds_for(seed: int, count: int) -> list[int]:
+    """장마다 다른 seed — 요청 seed 부터 1씩(2**31 에서 0 으로 돈다). 운영에서는 이 값을 장별로 저장한다(roadmap 3번)."""
+    return [(seed + i) % 2**31 for i in range(count)]
+```
+
+(`snap` 은 그대로 둔다.)
+
+`diffusion.py` `KleinModel.edit`:
+
+```python
+    def edit(self, req: EditRequest) -> list[Image.Image]:
+        if self._pipe is None:
+            raise RuntimeError("load() 를 먼저 불러야 합니다")
+        import torch
+
+        steps, guidance = resolve(req, KLEIN_DEFAULTS)
+        # 장마다 자기 seed 의 generator — count=1 은 지금과 같은 단일 generator(09-15 결과와 같은 입력).
+        seeds = seeds_for(req.seed, req.count)
+        generators = [torch.Generator("cuda").manual_seed(s) for s in seeds]
+        result = self._pipe(
+            image=req.images, prompt=req.prompt, width=req.width, height=req.height,
+            num_inference_steps=steps, guidance_scale=guidance,
+            num_images_per_prompt=req.count,
+            generator=generators[0] if req.count == 1 else generators,
+        )
+        return list(result.images)
+```
+
+import 줄: `from daengs_cardgen.models import CardGenModel, EditRequest, seeds_for`
+
+`app.py`:
+- import: `from daengs_cardgen.models import MAX_COUNT, MAX_IMAGES, CardGenModel, EditRequest, seeds_for, snap`
+- `GenerateBody` 에 `count: int = Field(default=1, ge=1, le=MAX_COUNT)` 를 마지막 필드로.
+- `EditRequest(...)` 에 `count=body.count` 를 더한다.
+- `with lock:` 부터 끝까지를:
+
+```python
+        with lock:
+            outs = current.edit(req)
+        seconds = time.monotonic() - started
+        headers = {
+            "X-Cardgen-Model": current.name,
+            "X-Cardgen-Seconds": f"{seconds:.1f}",
+            "X-Cardgen-Size": f"{req.width}x{req.height}",
+        }
+        pngs = []
+        for out in outs:
+            buf = io.BytesIO()
+            out.save(buf, "PNG")
+            pngs.append(buf.getvalue())
+        if req.count == 1:
+            return Response(pngs[0], media_type="image/png", headers=headers)
+        return JSONResponse(
+            {
+                "model": current.name, "size": f"{req.width}x{req.height}", "seconds": round(seconds, 1),
+                "seeds": seeds_for(req.seed, req.count),
+                "images_png_b64": [base64.b64encode(p).decode() for p in pngs],
+            },
+            headers=headers,
+        )
+```
+
+모듈 docstring 끝에 한 줄: `` `count`(1~4)는 한 요청에 여러 장 — 1 이면 PNG 한 장, 2 이상이면 JSON(장별 seed·PNG base64) (#557 E2). ``
+
+- [ ] **Step 4: 통과를 확인한다**
+
+Run: `uv run pytest tests/test_cardgen_app.py tests/test_cardgen_diffusion.py tests/test_cardgen_boundary.py -v`
+Expected: 전부 PASS (기존 `test_generate_returns_png_at_snapped_size_and_passes_request` 포함)
+
+- [ ] **Step 5: 컨트롤러가 커밋한다**
+
+```bash
+git add backend/src/daengs_cardgen/models.py backend/src/daengs_cardgen/diffusion.py backend/src/daengs_cardgen/app.py backend/tests/test_cardgen_app.py
+git commit -m "GPU 서비스가 한 요청에 여러 장(count 1~4)을 장별 seed 로 뽑는다 — 1 장은 지금 응답 그대로 (#557 E2)"
+```
+
+---
+
+### Task 8: 클라이언트 여러 장 — `generate_batch` 와 비교 도구 `--batch`
+
+**Files:**
+- Modify: `backend/src/daengs_cardimage/engine.py` (`HttpCardImageEngine`)
+- Modify: `backend/tests/test_cardimage_engine_http.py`
+- Modify: `backend/tools/cardgen_compare.py`
+- Modify: `backend/tests/test_cardgen_compare_tool.py`
+
+**Interfaces:**
+- Consumes: Task 1 의 `HttpCardImageEngine(gen_size=…)`, Task 2 의 `PromptSuffixEngine`·명령줄, Task 7 의 HTTP 계약(count ≥ 2 → JSON)
+- Produces:
+  - `HttpCardImageEngine.generate_batch(*, template_png: bytes, photo_jpeg: bytes, prompt: str, count: int) -> list[bytes]` — 장마다 `CARD_SIZE` PNG. `last_meta = {"seeds": [...], "seconds": float, "model": str, "size": "WxH", "count": int}`. 응답이 JSON 이 아니거나 장수가 다르면 `EngineError("no_image", …)`.
+  - 도구: `class BatchReplayEngine(inner, count)` — 첫 `generate` 에서 `inner.generate_batch` 를 한 번 부르고 이후 호출마다 다음 장을 준다. `last_meta` 는 방금 준 장의 `{"seed", "index", "batch_seconds", "model", "size", "count"}`.
+  - 명령줄 `--batch N`(2~4, cardgen 엔진만): 사진·달·seed 마다 서비스 1회 호출로 N장 → 카드 이름 `<사진>_<달>_s<seed>_b<i>`. 결과 행에 `"batch": N` (없으면 `null`).
+
+- [ ] **Step 1: 실패하는 테스트를 쓴다**
+
+`backend/tests/test_cardimage_engine_http.py` 끝에:
+
+```python
+def test_generate_batch_decodes_each_image_and_keeps_seeds() -> None:
+    seen: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["body"] = json.loads(request.content)
+        images = [base64.b64encode(png(1024, 1632, (i, i, i))).decode() for i in range(3)]
+        return httpx.Response(200, json={"model": "fake", "size": "1024x1632", "seconds": 9.5,
+                                         "seeds": [11, 12, 13], "images_png_b64": images})
+
+    engine = _engine(handler)
+    outs = engine.generate_batch(template_png=png(), photo_jpeg=b"j", prompt="P", count=3)
+
+    assert seen["body"]["count"] == 3 and seen["body"]["seed"] == 11
+    assert [Image.open(io.BytesIO(o)).size for o in outs] == [(994, 1582)] * 3
+    assert engine.last_meta == {"seeds": [11, 12, 13], "seconds": 9.5, "model": "fake",
+                                "size": "1280x2048" if False else "1024x1632", "count": 3}
+
+
+def test_generate_batch_wrong_count_is_no_image() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"model": "fake", "size": "1024x1632", "seconds": 1.0, "seeds": [11],
+                                         "images_png_b64": [base64.b64encode(png()).decode()]})
+
+    with pytest.raises(EngineError) as info:
+        _engine(handler).generate_batch(template_png=png(), photo_jpeg=b"j", prompt="P", count=2)
+    assert info.value.code == "no_image"
+
+
+def test_generate_batch_non_200_is_upstream() -> None:
+    engine = _engine(lambda request: httpx.Response(500, text="boom"))
+    with pytest.raises(EngineError) as info:
+        engine.generate_batch(template_png=png(), photo_jpeg=b"j", prompt="P", count=2)
+    assert info.value.code == "upstream"
+```
+
+`backend/tests/test_cardgen_compare_tool.py` 끝에 (import 줄에 `BatchReplayEngine` 추가):
+
+```python
+class _BatchInner:
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, int]] = []
+        self.last_meta = None
+
+    def generate_batch(self, *, template_png: bytes, photo_jpeg: bytes, prompt: str, count: int) -> list[bytes]:
+        self.calls.append((prompt, count))
+        self.last_meta = {"seeds": [5, 6], "seconds": 3.0, "model": "fake", "size": "1024x1632", "count": count}
+        return [b"c0", b"c1"]
+
+
+def test_batch_replay_calls_service_once_and_hands_out_each_card() -> None:
+    inner = _BatchInner()
+    engine = BatchReplayEngine(inner, 2)
+    first = engine.generate(template_png=b"t", photo_jpeg=b"p", prompt="P")
+    assert engine.last_meta == {"seed": 5, "index": 0, "batch_seconds": 3.0, "model": "fake",
+                                "size": "1024x1632", "count": 2}
+    second = engine.generate(template_png=b"t", photo_jpeg=b"p", prompt="P")
+    assert (first, second) == (b"c0", b"c1")
+    assert engine.last_meta["seed"] == 6 and engine.last_meta["index"] == 1
+    assert inner.calls == [("P", 2)]
+    with pytest.raises(RuntimeError):
+        engine.generate(template_png=b"t", photo_jpeg=b"p", prompt="P")
+```
+
+- [ ] **Step 2: 실패를 확인한다**
+
+Run: `uv run pytest tests/test_cardimage_engine_http.py tests/test_cardgen_compare_tool.py -v`
+Expected: FAIL — `AttributeError: ... 'generate_batch'` 와 `ImportError: cannot import name 'BatchReplayEngine'`.
+
+- [ ] **Step 3: 구현한다**
+
+먼저 Step 1 의 첫 테스트에서 `"size": "1280x2048" if False else "1024x1632"` 를 `"size": "1024x1632"` 로 정리한다(값은 같다).
+
+`engine.py` 의 `HttpCardImageEngine` — 요청 몸통과 호출을 두 메서드가 같이 쓰게 뽑고, `generate_batch` 를 더한다:
+
+```python
+    def _post(self, *, template_png: bytes, photo_jpeg: bytes, prompt: str, count: int) -> tuple[int, httpx.Response]:
+        if not self._base:
+            raise EngineError("no_key", "DAENGS_CARDGEN_URL 이 비어 있습니다")
+        seed = self._seed if self._seed is not None else random.randrange(2**31)
+        body = {
+            "images_b64": [base64.b64encode(template_png).decode(), base64.b64encode(photo_jpeg).decode()],
+            "prompt": prompt, "seed": seed, "width": self._gen_size[0], "height": self._gen_size[1],
+        }
+        if count != 1:
+            body["count"] = count
+        try:
+            headers = {"Authorization": f"Bearer {self._auth(self._base)}"} if self._auth else {}
+            with httpx.Client(timeout=self._timeout_s, transport=self._transport) as client:
+                resp = client.post(f"{self._base}/generate", json=body, headers=headers)
+        except Exception as exc:  # 토큰 발급 실패까지 "응답을 못 받은" 것으로 모은다 (realtime_client 와 같은 판단)
+            raise EngineError("upstream", f"카드 생성 서비스 호출 실패: {type(exc).__name__}: {exc}") from exc
+        if resp.status_code != 200:
+            raise EngineError("upstream", f"카드 생성 서비스가 {resp.status_code} 을 돌려줬습니다: {resp.text[:200]!r}")
+        return seed, resp
+
+    def generate(self, *, template_png: bytes, photo_jpeg: bytes, prompt: str) -> bytes:
+        seed, resp = self._post(template_png=template_png, photo_jpeg=photo_jpeg, prompt=prompt, count=1)
+        self.last_meta = {"seed": seed, "seconds": resp.headers.get("X-Cardgen-Seconds"),
+                          "model": resp.headers.get("X-Cardgen-Model"),
+                          "size": f"{self._gen_size[0]}x{self._gen_size[1]}"}
+        return _decode_and_fit(resp.content, pad=0, padded_width=CARD_SIZE[0])
+
+    def generate_batch(self, *, template_png: bytes, photo_jpeg: bytes, prompt: str, count: int) -> list[bytes]:
+        """한 요청에 `count` 장(서비스 `count`, #557 E2). 장마다 카드 크기 PNG, 장별 seed 는 `last_meta["seeds"]`."""
+        _, resp = self._post(template_png=template_png, photo_jpeg=photo_jpeg, prompt=prompt, count=count)
+        try:
+            data = resp.json()
+            images = [base64.b64decode(b) for b in data["images_png_b64"]]
+        except (ValueError, KeyError, TypeError) as exc:
+            raise EngineError("no_image", f"여러 장 응답을 읽을 수 없습니다: {exc}") from exc
+        if len(images) != count:
+            raise EngineError("no_image", f"{count} 장을 요청했는데 {len(images)} 장이 왔습니다")
+        self.last_meta = {"seeds": data.get("seeds"), "seconds": data.get("seconds"), "model": data.get("model"),
+                          "size": data.get("size"), "count": count}
+        return [_decode_and_fit(image, pad=0, padded_width=CARD_SIZE[0]) for image in images]
+```
+
+(기존 `generate` 본문은 위 `_post` + `generate` 로 대체된다. docstring 에 `generate_batch` 한 줄을 더한다.)
+
+`tools/cardgen_compare.py`:
+- `PromptSuffixEngine` 뒤에:
+
+```python
+class BatchReplayEngine:
+    """서비스를 한 번 불러 N장을 받아 두고, `generate_card` 가 부를 때마다 다음 장을 준다 (#557 E2).
+    `generate_card(judge_min=1)` 은 카드 한 장에 엔진을 한 번만 부르므로 N번 부르면 N장이 된다."""
+
+    def __init__(self, inner, count: int) -> None:
+        self._inner, self._count = inner, count
+        self._cards: list[bytes] | None = None
+        self._next = 0
+        self.last_meta: dict | None = None
+
+    def generate(self, *, template_png: bytes, photo_jpeg: bytes, prompt: str) -> bytes:
+        if self._cards is None:
+            self._cards = self._inner.generate_batch(template_png=template_png, photo_jpeg=photo_jpeg,
+                                                     prompt=prompt, count=self._count)
+        if self._next >= len(self._cards):
+            raise RuntimeError(f"{self._count} 장을 이미 다 줬습니다")
+        meta = self._inner.last_meta or {}
+        i = self._next
+        self._next += 1
+        self.last_meta = {"seed": (meta.get("seeds") or [None] * self._count)[i], "index": i,
+                          "batch_seconds": meta.get("seconds"), "model": meta.get("model"),
+                          "size": meta.get("size"), "count": self._count}
+        return self._cards[i]
+```
+
+- 인자: `parser.add_argument("--batch", type=int, default=0, help="cardgen 한 요청에 N장(2~4) — 카드 이름에 _b<i> (#557 E2)")`
+- 검증(`--url` 검사 뒤): `if args.batch and (args.engine != "cardgen" or not 2 <= args.batch <= 4): print("--batch 는 cardgen 엔진에서 2~4", file=sys.stderr); return 2`
+- seed 루프 안을 이렇게 바꾼다 — 엔진을 만든 뒤 `copies` 번 카드를 만든다:
+
+```python
+            for seed in seeds:
+                if args.engine == "cardgen":
+                    engine = HttpCardImageEngine(base_url=args.url, timeout_s=settings.cardgen_timeout_s, seed=seed,
+                                                 gen_size=args.gen_size)
+                    if args.batch:
+                        engine = BatchReplayEngine(engine, args.batch)
+                else:
+                    engine = GeminiCardImageEngine(api_key=key, model=settings.cardimage_model,
+                                                   size=settings.cardimage_size,
+                                                   timeout_ms=settings.cardimage_timeout_ms)
+                if args.panel_text:
+                    engine = PromptSuffixEngine(engine, panel_sentence(month))
+                for copy in range(args.batch or 1):
+                    started = time.monotonic()
+                    card = generate_card(
+                        photo=photo, content_type=MIME[photo_path.suffix.lower()], month=month,
+                        dog_name=args.dog_name, engine=engine, judge=judge, base_dir=settings.cardimage_dir,
+                        open_months=frozenset(months), judge_min=1,
+                    )
+                    seconds = round(time.monotonic() - started, 1)
+                    name = f"{photo_path.stem}_{month}_s{seed}" + (f"_b{copy}" if args.batch else "")
+                    # (아래 저장·행 쓰기는 기존과 같고, row 에 "batch": args.batch or None 을 "panel_text" 뒤에 더한다)
+```
+
+  기존 저장·`row`·`results.jsonl`·`print` 코드는 이 `for copy` 블록 안으로 한 단계 들여쓰고, `row` 에 `"batch": args.batch or None` 을 더한다.
+- 모듈 docstring 의 E1 예시 뒤에 E2 예시 한 줄: `# #557 E2 — 한 요청에 4장: --batch 4 (순차 4회 비교는 --seeds 1,2,3,4)`
+
+- [ ] **Step 4: 통과를 확인한다**
+
+Run: `uv run pytest tests/test_cardimage_engine_http.py tests/test_cardgen_compare_tool.py tests/test_ai_card_engine.py -v`
+Expected: 전부 PASS
+
+Run: `uv run python tools/cardgen_compare.py --engine gemini --photos x.jpg --batch 4 --out _`
+Expected: 종료 코드 2 — 단, 이 검사는 키 확인 뒤에 있으므로 개발 PC 의 `backend/.env` 에 키가 있으면 `--batch 는 cardgen 엔진에서 2~4` 가, 없으면 키 오류가 나온다(둘 다 네트워크 호출 전).
+
+- [ ] **Step 5: 컨트롤러가 커밋한다**
+
+```bash
+git add backend/src/daengs_cardimage/engine.py backend/tests/test_cardimage_engine_http.py backend/tools/cardgen_compare.py backend/tests/test_cardgen_compare_tool.py
+git commit -m "카드 엔진과 비교 도구가 한 요청 여러 장을 받아 카드마다 나눠 만든다 (#557 E2)"
+```
+
+---
+
+### Task 9: 새 이미지 한 번 굽기 · 서비스·잡 같은 태그 · 옛 이미지 삭제 — 컨트롤러
+
+**Files:** 없음 (GCP 리소스). 기록은 Task 12.
+
+- [ ] **Step 1: 로컬 게이트** — `uv run check`, cardgen 관련 테스트(`tests/test_cardgen_* tests/test_cardimage_engine_http.py tests/test_cardgen_compare_tool.py tests/test_cardgen_grid_tool.py`) PASS, 커밋이 모두 push 됐는지.
+- [ ] **Step 2: 이미지 빌드** — Git Bash, 분리 프로세스(13~16분):
+  `MODEL=klein PROJECT=daengs INVOKER=user:choiyc05@gmail.com STEP=image bash infra/gcp/cardgen.sh` → 로그의 태그를 기록한다. 빌드 뒤 **파일을 고치지 않는다**(태그 재계산 함정).
+- [ ] **Step 3: 서비스 배포** — 같은 명령 `STEP=deploy`. 배포 뒤 `gcloud run services describe daengs-cardgen-klein --region=asia-southeast1 --format="value(spec.template.spec.containers[0].image,status.latestReadyRevisionName)"` 로 새 태그·새 리비전 확인. 그다음에만 `/health` 를 부른다(옛 리비전 호출 함정). 로드 완료까지 폴링 → `load_seconds` 기록(= E3 기준값). 1장 스모크: `cardgen_compare.py --photos <정면 사진> --months 4 --seeds 1 --out ../cardimage/out/_cardgen/smoke-count` 로 count=1 경로가 그대로 되는지.
+- [ ] **Step 4: 잡 이미지만 바꾼다** — `gcloud run jobs update cardgen-weights --region=asia-southeast1 --image=<새 태그>` (PowerShell). **execute 하지 않는다.** `jobs describe` 로 이미지·command·args(`-m daengs_cardgen.fetch klein-4b`)·env(`HF_HUB_DISABLE_XET=1`) 가 그대로인지 본다.
+- [ ] **Step 5: 옛 것 정리** — `gcloud run revisions list --service=daengs-cardgen-klein --region=asia-southeast1` 로 옛 리비전(`c917c96` 사용, 트래픽 0%)을 확인해 삭제 → `gcloud artifacts docker images list …/cardgen --include-tags` 로 digest 를 보고 `c917c96`·`90a42ef` 를 `--delete-tags` 로 삭제 → 목록에 새 태그 하나만 남는지.
+
+---
+
+### Task 10: E2 4장 뽑기 — 컨트롤러
+
+**Files:** 없음 (산출물 `cardimage/out/_cardgen/e2-*/`)
+
+조건은 E1 에서 가장 나은 조건(문구 명시 / 크기)을 쓴다 — 고른 이유를 ledger 에 룰링으로 적는다.
+
+- [ ] **Step 1: 순차 4회** — `--seeds 1,2,3,4` 로 사진 3장 × 4·9월 = 24장, `--out ../cardimage/out/_cardgen/e2-seq`.
+- [ ] **Step 2: 한 번에 4장** — `--seeds 1 --batch 4` 로 같은 24장, `--out ../cardimage/out/_cardgen/e2-batch`. 첫 호출이 CUDA OOM(503·500, 서비스 로그 `OutOfMemoryError`)이면 `--batch 2` 로 한 번 더 — 그것도 OOM 이면 "L4 에서 한 번에 여러 장 불가"로 기록하고 순차만 남긴다.
+- [ ] **Step 3: 시간 비교** — 순차: 사진·달마다 `service.seconds` 4개 합. 한 번에: `service.batch_seconds`. 서비스 로그의 인스턴스 메모리 경고도 본다.
+- [ ] **Step 4: 판정** — 사진·달마다 4장 격자(`cardgen_grid.py --col 순차=… --col 한번에=…`, 이름은 순차 `_s1.._s4`·한 번에 `_s1_b0.._b3` 라 열을 사진별로 따로 만든다: `--col` 을 폴더 둘로 주고 `--names` 에 두 이름 규칙을 모두 넣으면 없는 칸은 회색). 카드마다 쓸 만함 기준 = **문구 정확 · 닮음(눈, 검수 likeness ≥ 4 참고) · 목줄 없음 · 틀 강아지로 안 돌아감**. "4장 중 쓸 만한 장" 수를 사진·달별 표로. 서로 충분히 다른지(포즈·표정) 한 줄.
+
+---
+
+### Task 11: E3 콜드 스타트 — 컨트롤러
+
+**Files:**
+- Modify (마지막에 이긴 설정만): `infra/gcp/cardgen.sh` 배포 단계 `--add-volume` 한 줄
+
+기준은 Task 9 Step 3 의 `load_seconds`. 변형마다 새 리비전을 만들고 → `latestReadyRevisionName` 확인 → `/health` 로 깨워 `ready` 까지 폴링 → `load_seconds` 와 서비스 로그의 컨테이너 시작~`cardgen model=… load_seconds=` 줄 시각을 적는다. 변형 사이 유휴 대기 없이 다음 변형으로 넘어간다.
+
+공식 문서(docs.cloud.google.com/run/docs/configuring/services/gpu-best-practices, 09-16 조회): FUSE 는 `cache-dir=cr-volume:<in-memory 볼륨>` 또는 `enable-buffered-read=true` 를 권하고, 켜면 FUSE 메모리가 컨테이너 한도에 잡힌다. CLI 는 `mount-options="K=V;K=V"`.
+
+- [ ] **Step 1: V1 buffered read** (PowerShell, 따옴표 주의):
+  `gcloud run services update daengs-cardgen-klein --region=asia-southeast1 --remove-volume-mount=/models --remove-volume=weights "--add-volume=name=weights,type=cloud-storage,bucket=daengs-cardgen-weights,readonly=true,mount-options=enable-buffered-read=true" "--add-volume-mount=volume=weights,mount-path=/models"`
+  `services describe --format=yaml(spec.template.spec.volumes)` 로 저장값 확인 → 측정.
+- [ ] **Step 2: V2 파일 캐시 in-memory** — 메모리 32Gi 안에서 가중치 약 15GiB 캐시 + 모델 로드가 들어가는지가 관건. `--add-volume=name=fcache,type=in-memory,size-limit=16Gi` 를 더하고 weights 볼륨 `mount-options=cache-dir=cr-volume:fcache` 로 바꾼다(buffered read 는 cache-dir 이 우선이라 뺀다). 메모리 초과로 죽으면(로그 `Memory limit … exceeded`) 한 번만 `size-limit=15Gi` 로 재시도 없이 **기록만** 하고 V1 이나 기준으로 되돌린다.
+- [ ] **Step 3: 이긴 설정으로 고정** — `load_seconds` 가 기준보다 **60초 이상** 짧은 변형이 있으면 그것을 서비스에 남기고 `cardgen.sh` 배포 단계 `--add-volume` 을 같게 고친다(주석에 09-16 실측 숫자). 없으면 기준 설정으로 되돌린다. 가중치 굽기·CPU boost 는 이유(15GB > 권장 10GB · GPU 문서에 CPU boost 언급 없음, `--no-cpu-throttling` 이미 켬)만 기록.
+- [ ] **Step 4:** 끝나면 프록시를 끄고, L4 누적 시간을 ledger 에 합산한다.
+
+---
+
+### Task 12: 전체 게이트 · 기록 — 컨트롤러
+
+**Files:**
+- Create: `docs/cardimage/compare-2026-09-16-klein-e2-e3.md`
+- Modify: `docs/cardimage/worklog.md` · `roadmap.md`(표 2번, 체크리스트 E2·E3·이미지 하나로 맞추기, E2·E3 절 결론 한 줄, 맨 위 「GCP 에 남은 것」 이미지 태그) · `infra/gcp/README.md`(cardgen 절 「남아 있는 것」 이미지 태그, 실측 줄에 E3 결과, 이미지 두 개 함정 행에 "09-16 하나로 맞춤") · `docs/cardimage/README.md` 「지금 상태」 · PR #557 본문(작업 목록 체크 · 남은 것)
+
+- [ ] **Step 1:** 전체 `uv run pytest`(분리 프로세스, 약 9분) — 09-15 기준 무관 실패 13건 외 새 실패가 없는지 dev 대조.
+- [ ] **Step 2:** 문서들을 쓴다. 잰 것 / 추정을 행으로 가르고 결론 한 문장씩. **아침에 사람이 볼 요약**(무엇을 했나 · 격자 경로 · 결정할 것)을 worklog 09-16 절 맨 위에.
+- [ ] **Step 3:** `uv run check` → 커밋 → push → `gh pr edit 557 --body-file`.
+- [ ] **Step 4:** 최종 브랜치 리뷰(가장 강한 모델, "태스크 경계를 넘는 값 흐름" — `count`·seed·`gen_size`·`panel_text` 가 서비스→엔진→도구→결과 행까지 맞는지)를 돌리고 지적을 반영한다.

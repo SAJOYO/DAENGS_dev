@@ -10,6 +10,7 @@ import pytest
 from daengs_backend.services.walk_diary.preparation.board import assemble_saved_base_board
 from daengs_backend.services.walk_diary.preparation.relational import prepare_relational_diary
 from daengs_backend.services.walk_diary.relational_execution import (
+    RelationalConfigurationError,
     RelationalDiaryResult,
     RelationalExecutionPolicy,
 )
@@ -102,6 +103,18 @@ async def test_source_mismatch_fails_before_acquisition(base):
     changed = base.input.source.model_copy(update={"owner_id": "different-owner"})
     with pytest.raises(ValueError, match="prepared source"):
         await write_relational_board(changed, base, prepare=collector, send=send)
+    collector.assert_not_awaited()
+
+
+async def test_missing_config_stops_before_collection_and_pacing(base, monkeypatch):
+    from pydantic import SecretStr
+
+    from daengs_backend.config import settings
+
+    monkeypatch.setattr(settings, "gemini_api_key", SecretStr(""))
+    collector = AsyncMock()
+    with pytest.raises(RelationalConfigurationError):
+        await write_relational_board(base.input.source, base, prepare=collector)
     collector.assert_not_awaited()
 
 

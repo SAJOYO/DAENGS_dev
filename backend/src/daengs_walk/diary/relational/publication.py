@@ -60,7 +60,7 @@ def validate_publication(receipt):
         current_scene = pub.context.current
         if previous_scene and (
             current_scene.walk_id != previous_scene.walk_id
-            or current_scene.recorded_at <= previous_scene.recorded_at
+            or current_scene.recorded_at < previous_scene.recorded_at
         ):
             raise ValueError("published cards must be in chronological order in one walk")
         previous_scene = current_scene

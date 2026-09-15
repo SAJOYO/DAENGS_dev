@@ -182,8 +182,10 @@ class SpaceComparisonInput(ValueContract):
             if a.walk_id != b.walk_id or a.scene_id == b.scene_id:
                 raise ValueError("comparison needs distinct scenes in the same walk")
             elapsed = (b.recorded_at - a.recorded_at).total_seconds()
-            if elapsed <= 0 or c is None or abs(elapsed - c.elapsed_seconds) > 1e-6:
+            if elapsed < 0 or c is None or abs(elapsed - c.elapsed_seconds) > 1e-6:
                 raise ValueError("connection must preserve scene chronology")
+            if elapsed == 0 and (c.route_status != "unavailable" or self.route_evidence):
+                raise ValueError("simultaneous records cannot establish intervening movement")
             if (c.earlier_scene_id, c.current_scene_id) != (a.scene_id, b.scene_id):
                 raise ValueError("connection points to different scenes")
         left = {f.id: f for f in self.earlier.facts} if self.earlier else {}

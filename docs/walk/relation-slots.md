@@ -1,5 +1,61 @@
 # 관계 모듈과 결과 칸 — v6
 
+## 현재 연결 상태: HTTP·Postgres 발행 (2026-09-15)
+
+현재 DEV `10e4756a`를 작업 브랜치에 병합했다(`266b0670`). SGIS 도로명 조회를
+유지하면서 공급자 HTTP 의존성을 DEV의 `walk_background.http`에 맞췄다.
+아래 단계별 기록의 "미연결" 표현은 각 단계 당시의 상태이며, 현재 경로는 다음과 같다.
+
+```text
+POST /app/walks/{walk_id}/storyboard
+  bundle_format = walk-relational-diary-v1
+  → 소유자·원본·사진 버전 확인 → 기존 walk_storyboards 행에 예약 후 commit
+  → 관계 전용 base 준비(구형 슬롯 용량 선정 생략)
+  → write_relational_board → 실제 공간·도로명 수집 → 공간/현재 행동/검수/제목
+  → 원본 및 생성 세대 재확인 → walk-relational-diary-storage-v1 JSONB 저장
+GET 같은 URL?bundle_format=walk-relational-diary-v1
+  → 소유자·원본 확인 → 고정된 발행본 검증·반환(선정·관계 재계산·LLM 없음)
+```
+
+새 공개 형식은 `schemas/walk_relational_diary.py`가 소유한다. 각 카드에는 헤더의
+동·날씨, 독립된 space/action의 본문·상태·검수 상태, 현재 공간 스냅샷,
+비교 대상 장면 ID, 메모·사진 원문이 있다. 실패/의도적인 생략으로 본문이 비어도 유효하다.
+원시 공급자 응답, 프롬프트, 모델 후보와 검수 기록은 공개 응답에 넣지 않는다.
+`ready`는 발행본 저장 완료이며 각 부분의 서술 성공을 보장하지 않는다.
+
+요청은 기존처럼 `expected_entries`, `expected_photo_manifest`, `target_scene_count`를
+사용한다. target은 **중간 장면 목표 수**이고 시작·종료 장면이 추가될 수 있다.
+`refresh=false`는 저장본을 유지하며, 목표 수를 바꿔 다시 만들려면 명시적으로 refresh한다.
+이전 형식 저장본은 자동 변환하지 않는다. 새 형식으로 발행한 뒤 구형 형식으로
+읽거나 덮어쓰려는 요청은 409다. APP 수신·화면 코드는 아직 변경하지 않았다.
+
+원본 해시는 행동핀·메모·사진·동선·참여견에 묶고, 늦게 보강된 배경 자료는 제외한다.
+진행 중 원본 수정·삭제·새 생성이 있으면 오래된 완료 결과를 저장하지 않는다.
+GET에서 만료를 확인해도 대체 일기를 만들거나 ready로 저장하지 않는다.
+저장 테이블과 DDL은 그대로이며 JSONB에 고정 준비 입력·발행본·공개 투영을 보존한다.
+
+수집 12초 + 작성 180초 + 저장 여유 15초에 맞춘 예약 만료를 사용한다.
+nginx의 storyboard 경로만 240초로 늘렸다(`/api/`와 APP 직접 경로 모두).
+클라이언트도 요청 대기 시간을 맞추고, 네트워크 단절 후에는 GET으로 먼저 확인해야 한다.
+프로세스 재시작 후 작업 재개나 여러 산책 사이의 계정 공용 호출 한도는 아직 구현하지 않았다.
+
+실제 입력에서 같은 시각의 시작점·행동·사진 등이 함께 있을 수 있어, 별개 기록은
+보존하면서 경과 시간 0으로 표현한다. 이때 이동 연결을 허용하지 않는다.
+시각 역전과 같은 장면의 중복 저장은 계속 거절한다.
+
+코드 검사: `test_relational_http.py`, `test_relational_db.py` 및 비교 계약/저장본 검사.
+DB 검사는 `WALK_PIN_TEST_DATABASE_URL`의 loopback `walk_pin_test` 전용 스키마에서만 실행한다.
+실제 모델 확인은 `test_relational_http_postgres_roundtrip`에 `RELATIONAL_LIVE_SMOKE=1`,
+`RELATIONAL_SMOKE_ENV`(비공개 키 파일), `RELATIONAL_SMOKE_OUTPUT`(결과 파일)을 지정한다.
+합성 동선 1개·현재 행동핀 1개·시작/중간/종료 3장면을 실제 수집·모델·HTTP·Postgres로 통과시킨다.
+기본 코드 검사에서는 모델과 공공 API 응답만 대체하며 DB 저장/재조회는 실제로 실행한다.
+
+실제 실행 결과: Gemini 10회 모두 응답, 공간 1개·행동 1개·제목 채택,
+공간 2개 검수 거절, POST/JSONB/GET 일치(120.26초). 검수를 통과한 행동 문장에
+입력에 없는 "멈춰 서서"가 포함되어 의미 품질은 미완료다. 검수기가 현재 도로와
+피복의 좌표가 다르다고 잘못 설명한 사례도 있어 검수 결과 자체를 정답으로 보지 않는다.
+원문·검수·요청·호출 기록은 `backend/evals/relational_diary/api-postgres-20260915.json`에 있다.
+
 ## 서비스 오케스트레이션 연결 (2026-09-15)
 
 새 서비스 호출 경로는 다음과 같다.

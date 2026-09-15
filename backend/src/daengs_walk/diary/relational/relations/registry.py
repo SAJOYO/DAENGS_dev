@@ -38,7 +38,7 @@ def collect_spatial_comparisons(current, earlier=None):
     if earlier is not None:
         if current.walk_id != earlier.walk_id or current.scene_id == earlier.scene_id:
             raise ValueError("comparison requires distinct scenes in the same walk")
-        if current.recorded_at <= earlier.recorded_at:
+        if current.recorded_at < earlier.recorded_at:
             raise ValueError("comparison requires chronological scenes")
         if {f.id for f in current.facts} & {f.id for f in earlier.facts}:
             raise ValueError("comparison evidence IDs must be scene-qualified")

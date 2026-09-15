@@ -18,7 +18,7 @@ def comparison_input(frame, previous=None):
     if earlier:
         journey = frame.get("journey")
         # Retain partial coverage explicitly; it never becomes a connected route.
-        if journey and journey.get("segments"):
+        if current.recorded_at > earlier.recorded_at and journey and journey.get("segments"):
             route = {"id": "journey:" + digest(journey), **deepcopy(journey)}
         connection = SceneConnection(
             earlier_scene_id=earlier.scene_id,
@@ -26,7 +26,9 @@ def comparison_input(frame, previous=None):
             elapsed_seconds=(current.recorded_at - earlier.recorded_at).total_seconds(),
             route_status=journey["status"] if route else "unavailable",
             route_evidence_ids=(route["id"],) if route else (),
-            scope="두 기록 사이의 경과 시간. 이동을 설명할 범위는 route_status와 관측 근거를 따른다",
+            scope="기록 시각이 같은 별개의 기록. 표시 순서는 시간 순서나 이동의 근거가 아니다"
+            if current.recorded_at == earlier.recorded_at
+            else "두 기록 사이의 경과 시간. 이동을 설명할 범위는 route_status와 관측 근거를 따른다",
         )
     return SpaceComparisonInput(
         current=current,

@@ -117,6 +117,7 @@ def test_opt_in_ownership_validation_and_explicit_target(api, monkeypatch):
     assert client.get("/app/walks/storyboard/capabilities").json()["diary_formats"] == [
         FORMAT,
         "walk-diary-board-v1",
+        "walk-relational-diary-v1",
     ]
     missing = body(state)
     missing.pop("target_scene_count")

@@ -6,6 +6,10 @@ from math import isfinite
 MODEL = "gemini-3.1-flash-lite"
 
 
+class RelationalConfigurationError(RuntimeError):
+    """Configured provider cannot start; no retry/pacing loop should run."""
+
+
 @dataclass(frozen=True)
 class RelationalExecutionPolicy:
     preparation_timeout_s: float = 12.0

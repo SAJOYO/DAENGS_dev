@@ -128,7 +128,7 @@ async def test_reversed_plans_rejected_before_sender(prepared):  # noqa: F811
         await write_with_short_memory(changed, send=forbidden, review=False)
 
 
-async def test_reader_rejects_nonincreasing_card_times(prepared, tmp_path):  # noqa: F811
+async def test_reader_rejects_duplicate_cards(prepared, tmp_path):  # noqa: F811
     result = await write_with_short_memory(prepared, send=sender, review=False)
     path = tmp_path / "time.json"
     save_skeleton(path, result)
@@ -137,7 +137,7 @@ async def test_reader_rejects_nonincreasing_card_times(prepared, tmp_path):  # n
     cards[1] = deepcopy(cards[0])
     document["digest"] = digest(document["payload"])
     path.write_text(json.dumps(document), encoding="utf-8")
-    with pytest.raises(ValueError, match="chronological"):
+    with pytest.raises(ValueError, match="duplicate published scene"):
         read_skeleton(path)
 
 

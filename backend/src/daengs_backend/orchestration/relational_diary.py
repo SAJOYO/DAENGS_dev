@@ -7,6 +7,7 @@ from dataclasses import asdict
 
 from daengs_backend.services.walk_diary.relational_execution import (
     MODEL,
+    RelationalConfigurationError,
     RelationalDiaryResult,
     RelationalExecutionPolicy,
 )
@@ -132,8 +133,12 @@ class RelationalDiaryOrchestrationService:
         self.policy = execution_policy or RelationalExecutionPolicy()
 
     async def run(self, source, base, *, scene_ids=None):
+        from daengs_backend.config import settings
         from daengs_backend.services.walk_diary.writing.relational import validate_prepared
         from daengs_walk.diary.relational.assembly import assemble_receipt
+
+        if self.send is None and not settings.gemini_api_key.get_secret_value().strip():
+            raise RelationalConfigurationError("relational model is not configured")
 
         revision = source.revision()
         if (

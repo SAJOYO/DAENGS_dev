@@ -142,7 +142,7 @@ def validate_prepared(prepared):
         raise ValueError("duplicate scene plans")
     if snapshot.get("scene_comparison_version") == "scene-comparison-v1":
         times = [aware_time(p["anchor"]["event_at"]) for p in snapshot["plans"]]
-        if any(t is None for t in times) or any(a >= b for a, b in pairwise(times)):
+        if any(t is None for t in times) or any(a > b for a, b in pairwise(times)):
             raise ValueError("comparison plans must be in chronological order")
     tasks = []
     for plan in snapshot["plans"]:

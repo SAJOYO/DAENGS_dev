@@ -12,6 +12,18 @@ from daengs_walk.diary.relational.scene_comparison_contracts import (
 )
 
 
+def test_same_timestamp_is_not_intervening_movement():
+    data = request_data()
+    data["current"]["recorded_at"] = data["earlier"]["recorded_at"]
+    data["connection"]["elapsed_seconds"] = 0
+    assert SpaceComparisonInput.model_validate(data).connection.elapsed_seconds == 0
+    data["connection"]["route_status"] = "connected"
+    data["connection"]["route_evidence_ids"] = ["route"]
+    data["route_evidence"] = {"id": "route"}
+    with pytest.raises(ValueError, match="simultaneous records"):
+        SpaceComparisonInput.model_validate(data)
+
+
 def request_data():
     def scene(n):
         return {

@@ -1,6 +1,6 @@
 # cardimage — 사용자 강아지 사진으로 도감 카드 만들기
 
-카드 **#496**(첫 카드) → #537(앱 경로) → #543(한도) → **#544(GPU 서비스·FLUX.2-klein-4B)**. 이 폴더는 그 흐름의 **세션 인수인계 문서**입니다.
+카드 **#496**(첫 카드) → #537(앱 경로) → #543(한도) → #544(GPU 서비스·FLUX.2-klein-4B) → **#557(FLUX.2-klein-4B 실험)**. 이 폴더는 그 흐름의 **세션 인수인계 문서**입니다.
 다음 세션의 사람과 Claude 가 이 폴더만 읽고 이어서 하는 것이 목적입니다.
 
 | 문서 | 무엇 |
@@ -10,6 +10,9 @@
 | [`worklog.md`](worklog.md) | 날짜별 진행 기록. **세션이 끝날 때마다 한 절 추가** |
 | [`compare-2026-09-15-cardgen.md`](compare-2026-09-15-cardgen.md) | FLUX.2-klein-4B vs Nano Banana 2 같은 조건 12장 비교 (#544 Task 8) |
 | [`plan-2026-09-15-cardgen-gpu.md`](plan-2026-09-15-cardgen-gpu.md) | #544 구현 계획 (Task 1~9) |
+| [`compare-2026-09-16-klein-e1.md`](compare-2026-09-16-klein-e1.md) | #557 E1 글씨 유지 — 문구 명시 · 1280×2048 · 둘 다, 18장 |
+| [`compare-2026-09-16-klein-e2-e3.md`](compare-2026-09-16-klein-e2-e3.md) | #557 E2 4장 뽑기(순차만 됨) · E3 콜드 스타트(FUSE 옵션) |
+| [`plan-2026-09-16-klein-e1.md`](plan-2026-09-16-klein-e1.md) | #557 구현 계획 (Task 1~12) |
 | [`research-2026-09-15.md`](research-2026-09-15.md) | 2026-09-15 조사 — 오픈 모델 후보·라이선스·실행 자리(Cloud Run GPU) |
 | [`research-2026-09-13.md`](research-2026-09-13.md) | 2026-09-13 조사 — 생성 방법 네 갈래 · 후보 모델 · 비용 · 서빙 방식 · 결제 |
 
@@ -24,9 +27,15 @@
 - 앱에 이미 있는 사진 카드 경로(폰 안 누끼로 강아지를 오려 카드 얼굴창에 끼우는 것 — `DAENGS_APP` `ui/dogcard/Cutout.kt`, `docs/card-holes.md`)는 **그대로 두고**, 이것은 별도 경로다.
 - 엔진은 ComfyUI 로 못 박지 않는다. 브랜치 이름에 comfyui 가 남아 있는 것은 카드를 열 때의 짐작이다.
 
-## 지금 상태 (2026-09-16, #544 GPU 서비스 마무리)
+## 지금 상태 (2026-09-16 밤, #557 FLUX.2-klein-4B 실험 — 결과 정리, 사람 확인 대기)
 
 **다음 카드와 진행도는 [`roadmap.md`](roadmap.md) 맨 위 표를 본다.**
+
+**#557 (09-16).** E1·E2·E3·이미지 하나로 맞추기를 무인으로 돌렸다(판정은 잠정 — `worklog.md` 09-16 밤 「아침에 볼 것」).
+- **E1 글씨:** 프롬프트에 문구를 적으면 더 깨지고, 1280×2048 은 깨지는 자리만 옮긴다. **깨짐은 틀·seed·크기로 정해진다**(사진과 무관) → 달 틀마다 검증된 seed 를 쓰는 방향.
+- **E2 4장:** L4 에서 한 번에 여러 장은 CUDA OOM — 순차만(장당 약 16초). 쓸 만한 장 정면 1~2 · 엎드린 옆모습 0. seed 4 는 4·9월 모두 글씨 깨끗.
+- **E3 콜드 스타트:** FUSE buffered read 는 로드 2배 느림, in-memory 파일 캐시는 기동 실패 → 기본 유지(로드 375~403초).
+- **GCP:** 이미지 `07e7a55` 하나(서비스·잡 공용), 서비스 리비전 하나. `/generate` 에 `count` 가 생겼지만 L4 에선 1 만.
 
 **#544 (09-15~16, D-078).** 오픈 모델을 우리 GPU 서비스로 돌려 Nano Banana 2 와 비교했다. 새 패키지
 `backend/src/daengs_cardgen/`(FastAPI, diffusers)가 Cloud Run L4(asia-southeast1)에서 돌고, backend 는
@@ -93,11 +102,11 @@ backend`(의존성·마운트 변경이라 재생성 필요). nginx 는 `locatio
 | `backend/tools/cardimage_try.py` | 0단계 실험 스크립트 (full 모드만). `uv run --with pillow python tools/cardimage_try.py` | 커밋 |
 | `backend/src/daengs_cardimage/` | **생성 로직 패키지** (#537 에서 `daengs_backend/services/cardimage/` 에서 옮김) — catalog(틀·무대)·photo(검증·리사이즈)·title(Pillow 제목)·engine(Nano Banana 2 어댑터)·judge(닮음 검수)·generate(파이프라인). backend 를 import 하지 않는다 | 커밋 |
 | `backend/src/daengs_backend/services/ai_card_engine.py` · `ai_card.py` · `ai_card_quota.py` · `routers/ai_card.py` · `routers/admin_cardimage.py` | backend 쪽 — 설정으로 엔진 만들기(유일한 호출 자리) · 앱 경로 서비스 · 한도 · `/app/ai-cards` · `/admin/cardimage/generate` | 커밋 |
-| `backend/src/daengs_cardgen/` | **GPU 서비스 패키지** (#544) — app(FastAPI, 포트 먼저·백그라운드 로드)·models·diffusion(FLUX.2-klein-4B bf16 · Qwen-Image-Edit-2511 nf4+VAE 타일링)·fetch(가중치 받기). backend·cardimage 를 import 하지 않는다. 의존성 그룹 `cardgen`(`ml` 과 배타) | 커밋 |
+| `backend/src/daengs_cardgen/` | **GPU 서비스 패키지** (#544) — app(FastAPI, 포트 먼저·백그라운드 로드)·models·diffusion(FLUX.2-klein-4B bf16, `count` 로 여러 장 — L4 는 1 만 됨. Qwen 코드는 #557 에서 뺌)·fetch(가중치 받기). backend·cardimage 를 import 하지 않는다. 의존성 그룹 `cardgen`(`ml` 과 배타) | 커밋 |
 | `daengs_cardimage/engine.py` `HttpCardImageEngine` · `drift.py` · `title.plate_shift` | backend 쪽 GPU 서비스 호출 엔진 · 틀 밀림 측정 · 제목판 어긋남 측정 (#544) | 커밋 |
 | `backend/tools/cardgen_compare.py` | 같은 사진·틀·seed 로 엔진을 비교하고 `results.jsonl` 에 닮음·글자·틀 밀림·제목판·시간을 남긴다. **돈이 나간다 — 승인 뒤 PowerShell 로** | 커밋 |
 | `docker/cardgen/` · `infra/gcp/cardgen.sh` · `cardgen-teardown.sh` | CUDA 이미지 · 배포(이미지·가중치·서비스) · 삭제. 함정 표는 `infra/gcp/README.md` 「cardgen.sh」 | 커밋 |
-| `cardimage/out/_cardgen/` | #544 산출물 — `smoke-klein`·`smoke-qwen`·`task8-gemini`·`task8-klein`(각 `results.jsonl`), 비교 격자 `task8_grid_*.png`, `compare_4_template_nanobanana_klein_qwen.png` | 미추적 (`cardimage/out/` 규칙) |
+| `cardimage/out/_cardgen/` | #544 산출물 — `smoke-klein`·`smoke-qwen`·`task8-gemini`·`task8-klein`(각 `results.jsonl`), 비교 격자 `task8_grid_*.png`, `compare_4_template_nanobanana_klein_qwen.png`. #557 — `e1-panel`·`e1-2048`·`e1-both`·`e2-seq`·`smoke-count`, 격자 `e1_grid_*`·`e1_panels_*`·`e2-seq_panel_*`·`e2-seq_card_*` | 미추적 (`cardimage/out/` 규칙) |
 | `docs/cardimage/plan-2026-09-14-phase1.md` | 1단계 구현 계획 (Task 1~11) | 커밋 |
 | `docs/cardimage/` | 이 폴더 | 커밋 |
 

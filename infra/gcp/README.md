@@ -284,6 +284,11 @@ DAENGS_CORPUS_JOB=corpus-refresh
 | 새 리비전 전 호출 | 새 리비전 Ready 전에 `/health` 를 부르면 옛 리비전 인스턴스가 떠 로드가 헛돈다 | `latestReadyRevisionName` 이 새 이름이 된 뒤에 호출 |
 | 이미지가 빌드마다 8GB | 서비스 `c917c96`·잡 `90a42ef` 가 레이어를 공유하지 않아 16GB(09-16 조회: 저장소 28.2GB vs 이미지 합 28.4GB). Dockerfile 앞쪽 `ENV` 가 바뀌면 뒤 설치 레이어가 전부 새로 생긴다 | 새로 빌드하면 서비스·잡을 **같은 태그로 함께** 배포하고, 서비스 확인 뒤 옛 태그 삭제(`gcloud artifacts docker images delete ...@sha256:... --delete-tags`) |
 
+**Artifact Registry 정리 정책(cleanup policy)은 일부러 안 건다 (09-16).** 빌드가 드물어 손으로 지우는 것으로 충분하고,
+저장소 `daengs` 는 cardgen·pipeline·realtime 이 같이 쓴다 — 특히 `pipeline` 은 `cpu-*`(매일 04:00 `corpus-refresh`)와
+`cuda-*`(`corpus-embed-full`) **두 태그를 동시에** 쓰므로 "이미지마다 최근 N개" 같은 단순 규칙은 한쪽을 지워 다음 날
+잡을 죽인다. 11-17 이후 GCP 를 유지하게 되면 그때 이미지·태그별 규칙을 짜고 **dry-run 으로 먼저** 확인한다.
+
 - **돈이 나간다.** Cloud Build(CUDA 이미지), 가중치 받기 잡, 떠 있는 L4 시간. 요청 뒤에도 인스턴스가
   내려가기 전까지 과금된다(인스턴스 기반 과금 필수). 돌리기 전에 사람 승인.
 - **부르는 법** — 개발 PC 의 `gcloud auth print-identity-token` 은 이 서비스에서 미인증으로 취급된다

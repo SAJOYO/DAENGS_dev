@@ -27,7 +27,9 @@ SA_EMAIL="corpus-pipeline@${PROJECT}.iam.gserviceaccount.com"
 IMAGE_BASE="${REGION}-docker.pkg.dev/${PROJECT}/daengs/cardgen"
 export CLOUDSDK_CORE_PROJECT="${PROJECT}"
 # --command=/opt/venv/bin/python 도 Git Bash 가 Windows 경로로 바꾼다 (README 「자주 걸리는 것」①).
-export MSYS2_ARG_CONV_EXCL="--add-volume-mount;--command"
+# --set-env-vars=HF_XET_CACHE=/tmp/xet 도 마찬가지다 — 2026-09-15 실측: 잡에 `C:/Users/403/AppData/Local/Temp/xet`
+# 로 저장됐다(#544 Task 6, `jobs describe` 로 발견). 경로를 담는 인자는 전부 이 목록에 넣는다.
+export MSYS2_ARG_CONV_EXCL="--add-volume-mount;--command;--set-env-vars"
 
 # 태그는 이미지 입력의 내용 해시 (realtime.sh 와 같은 규칙). 목록이 곧 계약이다.
 SHA="$(git ls-files -s backend/pyproject.toml backend/uv.lock backend/README.md \

@@ -3,6 +3,26 @@
 세션이 끝날 때마다 한 절씩 위에 추가한다 (최신이 위). 무엇을 했고, 무엇을 정했고, 무엇을
 다음 세션에 넘기는지. 조사 내용 자체는 `research-*.md` 에, 요약·현재 상태는 `README.md` 에.
 
+## 2026-09-15 오후 — #544 GPU 서비스 Task 6: klein 4B 배포·첫 카드 (잰 값만)
+
+계획 `plan-2026-09-15-cardgen-gpu.md` Task 1~5(코드) 뒤 첫 유료 단계. 사용자 승인 뒤 진행.
+
+- **이미지**: Cloud Build `32a629a6`, 15분 32초, `asia-northeast3-docker.pkg.dev/daengs/daengs/cardgen:c917c96`. 빌드 안 확인 `torch 2.13.0+cu126 · cuda 12.6 · torchvision 0.28.0+cu126`.
+- **가중치 잡 `cardgen-weights`** (asia-southeast1) — 세 번째에 성공. 시도별 원인:
+  | 시도 | 결과 | 확인된 원인 | 바꾼 것 |
+  | --- | --- | --- | --- |
+  | 1 (python -m fetch, 4CPU/16Gi) | 7분 뒤 실패 | 메모리 한도 도달 — 큰 blob 3개(1.41·4.97·6.17GB)가 `.incomplete` 로 동시에 | 한 파일씩, xet 끔, 8CPU/32Gi |
+  | 2 (`hf download --include a b`) | 37초 실패 | `--include` 는 값 하나 — `*/*` 가 파일명으로 해석 | `--include` 두 번 |
+  | (거부) | 실행 안 됨 | gcloud `--args` 가 목록 안 `--include` 중복 거부 | `/bin/sh -c` 한 줄 + `set -f` |
+  | 3 | **성공 8분 59초** (다운로드 8분 38초, ~29MB/s) | — | — |
+  버킷 blobs 14.88GiB(transformer 7.75GB · text_encoder 4.97+3.08GB · vae 168MB). snapshots/ 링크는 gcsfuse 심볼릭 링크(`gcsfuse_symlink_target`)로 저장됨.
+  ⚠ 지금 잡의 command 는 `/bin/sh -c "set -f; exec /opt/venv/bin/hf download ..."` 로 덮어써진 상태 — 저장소의 `fetch.py`(max_workers=1)·`cardgen.sh`(8CPU/32Gi, `HF_HUB_DISABLE_XET=1`)는 같은 조건으로 고쳤지만 이미지는 다시 안 구웠다.
+- **Git Bash·PowerShell 함정 (전부 실측)**: ① `--set-env-vars=HF_XET_CACHE=/tmp/xet` 이 Git Bash 경로 변환으로 `C:/Users/.../Temp/xet` 저장 → `MSYS2_ARG_CONV_EXCL` 에 `--set-env-vars` 추가 ② PowerShell 은 따옴표 없는 인자의 쉼표를 배열로 쪼갬 → `--add-volume`·`--add-volume-mount`·`--set-env-vars` 는 따옴표 ③ `cardgen.sh STEP=deploy` 는 파일 해시로 태그를 다시 계산해, 빌드 뒤 파일을 고치면 없는 태그를 배포 → 이번엔 태그를 고정해 직접 배포 ④ `gcloud run services proxy` 는 `cloud-run-proxy` 컴포넌트가 필요하고, SDK 가 Program Files 라 관리자 권한으로 설치(사용자).
+- **서비스 `daengs-cardgen-klein`** (L4, min 0·max 1): 배포 수락 10:06:35Z → 인스턴스 시작 10:06:41Z → 포트 열림·기본 TCP 프로브 통과 10:06:45Z → Ready 10:07:03Z(이미지 가져오기 수 초). 백그라운드 로드 **`load_seconds` 430.3**(ready 10:14:05Z) — 대부분 버킷에서 ~15GB 읽기. 오프라인 캐시 로드·읽기 전용 마운트 문제 없음.
+- **카드 1장** (`KakaoTalk_20260913_220514335_03.jpg`, 4월, seed 1): 서비스 생성 26.2초(1024×1632, 4 step), 검수 포함 33.4초. 검수 닮음 5 · 아바타 OK · 글자 실패. 틀 밀림 dx 6·dy -2, 제목판 -1px. `cardimage/out/_cardgen/smoke-klein/`.
+  눈 확인(틀과 나란히): 강·다리·빌딩·바구니·매트·테두리·문구는 틀 그대로. **결함 ① 목줄이 생김**(프롬프트 금지, 검수가 못 잡음) **② `PETAL PAUSE` → `PETL PPAUSE`**. 한 장이라 경향인지는 Task 8 에서.
+- **요청 뒤 인스턴스가 내려간 시각**: 측정 중 (마지막 요청 10:14:54Z).
+
 ## 2026-09-15 — #543 한도 제품 규칙
 
 - 계기: 앱(DAENGS_APP#414) 실기기에서 9월 카드를 만들고 지운 뒤 4월 카드가 또 만들어짐 — 한도가 남아 있는 ready 행을 셈.

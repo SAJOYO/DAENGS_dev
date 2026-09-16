@@ -10,6 +10,7 @@
 | [`worklog.md`](worklog.md) | 날짜별 진행 기록. **세션이 끝날 때마다 한 절 추가** |
 | [`compare-2026-09-15-cardgen.md`](compare-2026-09-15-cardgen.md) | FLUX.2-klein-4B vs Nano Banana 2 같은 조건 12장 비교 (#544 Task 8) |
 | [`plan-2026-09-15-cardgen-gpu.md`](plan-2026-09-15-cardgen-gpu.md) | #544 구현 계획 (Task 1~9) |
+| [`experiments-explained-2026-09-16.md`](experiments-explained-2026-09-16.md) | **#557 실험 읽는 법** — base/panel/2048/both 같은 용어, 설계, 결과 해석, 정할 것 (먼저 읽기 좋음) |
 | [`compare-2026-09-16-klein-e1.md`](compare-2026-09-16-klein-e1.md) | #557 E1 글씨 유지 — 문구 명시 · 1280×2048 · 둘 다, 18장 |
 | [`compare-2026-09-16-klein-e2-e3.md`](compare-2026-09-16-klein-e2-e3.md) | #557 E2 4장 뽑기(순차만 됨) · E3 콜드 스타트(FUSE 옵션) |
 | [`plan-2026-09-16-klein-e1.md`](plan-2026-09-16-klein-e1.md) | #557 구현 계획 (Task 1~12) |

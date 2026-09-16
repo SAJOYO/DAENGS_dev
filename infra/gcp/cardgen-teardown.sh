@@ -11,7 +11,7 @@ BUCKET="daengs-cardgen-weights"
 IMAGE_BASE="${REGION}-docker.pkg.dev/${PROJECT}/daengs/cardgen"
 export CLOUDSDK_CORE_PROJECT="${PROJECT}"
 
-for s in daengs-cardgen-klein daengs-cardgen-qwen; do
+for s in daengs-cardgen-klein; do
   gcloud run services delete "$s" --region="${GPU_REGION}" --quiet || true
 done
 gcloud run jobs delete cardgen-weights --region="${GPU_REGION}" --quiet || true

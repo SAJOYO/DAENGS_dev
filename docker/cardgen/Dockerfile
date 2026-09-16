@@ -21,7 +21,7 @@ ENV UV_LINK_MODE=copy \
     UV_COMPILE_BYTECODE=1 \
     PYTHONUNBUFFERED=1
 WORKDIR /app
-# PYTORCH_CUDA_ALLOC_CONF: 2026-09-15 Qwen OOM 때 "1.97GiB reserved but unallocated" — 조각난 캐시를 다시 쓰게 한다.
+# PYTORCH_CUDA_ALLOC_CONF: 2026-09-15 Qwen OOM 때 넣었다("1.97GiB reserved but unallocated") — 조각난 캐시를 다시 쓰게 한다. FLUX.2-klein-4B 에도 해가 없어 둔다.
 ENV UV_PROJECT_ENVIRONMENT=/opt/venv \
     PYTHONPATH=/app/src \
     HF_HOME=/models \
@@ -35,8 +35,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends gcc libc6-dev \
 COPY backend/pyproject.toml backend/uv.lock backend/README.md ./
 RUN uv sync --frozen --only-group cardgen --no-install-project
 
-# torchvision 도 같이 덮어쓴다 — transformers 5.x 의 Qwen2VLProcessor 가 비디오 프로세서를 올리며
-# torchvision 을 요구한다(없으면 Qwen 파이프라인이 기동에서 죽는다). torch 만 cu126 으로 바꾸면
+# torchvision 도 같이 덮어쓴다 — 처음엔 Qwen2VLProcessor 때문에 넣었다. FLUX.2-klein-4B 만 남은 지금 빼도 되는지는
+# 확인 안 했다(빼려면 GPU 에서 다시 로드해 봐야 한다). torch 만 cu126 으로 바꾸면
 # torchvision(+cpu)과 ABI 가 어긋나므로 둘을 한 명령으로 맞춘다.
 RUN set -eux; \
     V_TORCH="$(uv pip show --python /opt/venv/bin/python torch | awk '/^Version/ {print $2}' | cut -d+ -f1)"; \

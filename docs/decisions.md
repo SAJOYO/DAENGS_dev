@@ -76,6 +76,7 @@
 | [D-073](#d-073) | 못 재는 이유를 말한다 - 기록된 산책과 `unmeasured` 고지 | 2026-09-12 |
 | [D-074](#d-074) | 도감 카드 AI 생성 엔진은 Nano Banana 2, 카드 통째 2K, 글자는 Pillow | 2026-09-14 |
 | [D-076](#d-076) | 도감 카드 생성 로직은 `daengs_cardimage` 로 떼고, 앱 경로는 backend 프로세스 안 비동기로 | 2026-09-14 |
+| [D-079](#d-079) | 피부 판정 해설을 서브에이전트로 — 판정 기록이 붙은 `skin` 신호만 EXECUTE | 2026-09-16 |
 
 ---
 
@@ -4821,3 +4822,25 @@ torchvision)은 Dockerfile 에서 `+cu126` 로 덮어쓰고 빌드 때 `torch.ve
 되돌리기: `DAENGS_CARDGEN_URL` 을 비우면 backend 는 Nano Banana 2 만 쓴다. GCP 쪽은 `cardgen-teardown.sh`(서비스·잡·가중치
 버킷·이미지 태그). 패키지·그룹을 없애려면 `daengs_cardgen`·`cardgen` 그룹·`conflicts` 선언·`docker/cardgen`·
 `HttpCardImageEngine`·`ai_card_engine` 갈림길을 함께 지운다.
+
+## D-079
+### 피부 판정 해설을 서브에이전트로 — 판정 기록이 붙은 `skin` 신호만 EXECUTE
+
+2026-09-16, #556. D-036 매트릭스의 "Skin EXECUTE — NO" 를 좁게 연다. 판정을 **새로 내는** 실행(`/screen/*`)은
+그대로 HANDOFF 이고, 열리는 것은 **이미 끝난 판정 기록을 해설하는** 실행 하나다.
+
+**비어 있던 자리를 메운 것이다.** #307 이 `screening_record_id` → `context["screening"]` 해소를 만들어 뒀는데 그 값을
+읽는 능력이 Life 하나였다. 결과 화면에서 "병원 가야 해?" 라고 이어 물으면 판정을 일부러 못 받는 general 로 가거나,
+방금 사진을 올린 사람에게 사진 등록 HANDOFF 를 다시 냈다.
+
+| 항목 | 결정 |
+| --- | --- |
+| 진입 | 명시 신호 `requested_capability="skin"` + 서버가 소유를 확인한 판정 기록. 하나라도 없으면 예전 HANDOFF. 라우터 · `ExecuteName` 무변경 |
+| 순서 | 응급 게이트 뒤, 명시 신호 해석 앞 (`service._plan_and_execute`) |
+| 입력 | `SkinPayload` = 원문 + `ScreeningContext` + `ScreeningHistory`. 병변 이름 · 확률 · 통제 문구 칸 없음 (불변식 15) |
+| 출력 | 해설 2~3문장 + 닫힌 행동 `retake` · `vet_visit` · `observe`. 행동 문장 · 고지 · 거절 문구는 코드의 고정 문장 |
+| 코드 가드 | `abnormal` → `vet_visit` 맨 앞, `observe` 제외 / `retake` → `retake` 맨 앞, `observe` 제외 / 해설에 병변 이름 · 확률이 섞이면 판정 요약 고정 문장으로 교체 |
+| 스위치 | `DAENGS_SKIN_AGENT` 기본 켜짐 — 앱이 두 값을 함께 보내기 전까지 운영 동작은 그대로다 |
+
+되돌리기: `DAENGS_SKIN_AGENT=false` 면 같은 요청이 HANDOFF 로 돌아간다. 코드를 걷으려면 `service` 의
+`resolve_skin_route` 호출 한 곳을 지운다.

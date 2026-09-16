@@ -27,6 +27,8 @@ AgentCategory = Literal[
     # `categories_of()` 가 이름을 그대로 넣으므로 여기도 넓혀야 합니다 — 이것이 #269 의
     # 사고 모양이고, `tests/test_orchestration_contracts.py` 가 그 대조를 들고 있습니다.
     "care_log",
+    # 피부 판정 해설 (D-079). 위와 같은 이유 — 라우터가 못 골라도 결과가 OK 면 저장된다.
+    "skin",
 ]
 
 

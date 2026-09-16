@@ -2,6 +2,11 @@
 
 from daengs_walk.diary.relational.brief_contracts import ActionWritingBrief
 from daengs_walk.diary.relational.relation_delivery import flow_view
+from daengs_walk.diary.relational.writer_material_policy import (
+    WRITER_POLICY,
+    hidden_flow_ids,
+    omit_retrace,
+)
 from daengs_walk.diary.relational.writer_meaning import (
     anchor_view,
     connection_view,
@@ -15,8 +20,6 @@ from daengs_walk.diary.relational.writer_meaning import (
     walk_view,
 )
 from daengs_walk.diary.relational.writer_time import DIARY_TIMEZONE, local_writer_times
-
-WRITER_POLICY = "single-writing-brief-v5"
 
 
 def memory_view(selection, *, legacy_v2=False):
@@ -98,6 +101,11 @@ def _writer_view(brief, *, legacy_v2=False):
 def writer_view(brief, *, legacy_v2=False):
     view = local_writer_times(_writer_view(brief, legacy_v2=legacy_v2))
     view["timezone"] = DIARY_TIMEZONE
+    if not isinstance(brief, ActionWritingBrief):
+        hidden = hidden_flow_ids(brief.context)
+        for memory in brief.delivery.recent:
+            hidden.update(hidden_flow_ids(memory.context))
+        view = omit_retrace(view, hidden)
     return view
 
 
@@ -105,6 +113,10 @@ def publication_writer_view(brief, policy):
     """Historical contexts without interval material retain the identical projection."""
     if policy == WRITER_POLICY:
         return writer_view(brief)
+    if policy == "single-writing-brief-v5":
+        view = local_writer_times(_writer_view(brief))
+        view["timezone"] = DIARY_TIMEZONE
+        return view
     if policy == "single-writing-brief-v4":
         return _writer_view(brief)
     if getattr(brief, "context", None) and any(

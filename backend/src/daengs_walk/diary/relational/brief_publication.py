@@ -24,7 +24,7 @@ def validate_brief_result(task, result, *, execution_review=None):
     if any(result[k] != getattr(task, k) for k in ("scene_id", "stage", "revision")):
         raise ValueError("brief result belongs to another task")
     request = publication_writer_view(brief, result["policy"])
-    schema = brief_response_schema(brief)
+    schema = brief_response_schema(brief, result["policy"])
     if result.get("request") != request or result.get("response_schema") != schema:
         raise ValueError("writer did not receive the canonical brief")
     if result["request_revision"] != brief_request_revision(
@@ -42,7 +42,7 @@ def validate_brief_result(task, result, *, execution_review=None):
         return None
     if result["status"] != "returned":
         raise ValueError("unknown brief result status")
-    answer = resolve_brief_answer(brief, json.loads(result["raw_text"]))
+    answer = resolve_brief_answer(brief, json.loads(result["raw_text"]), result["policy"])
     if (
         answer.model_dump(mode="json") != result["answer"]
         or result["candidate"] != result["answer"]

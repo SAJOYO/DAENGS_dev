@@ -1,0 +1,80 @@
+{"question_id": "no_change-01-plain", "change_kind": "no_change", "category": "plain", "query": "이 비교 결과가 무슨 뜻이에요?", "scenario": "base"}
+{"question_id": "no_change-02-plain", "change_kind": "no_change", "category": "plain", "query": "이번 비교에서 제가 뭘 보면 되나요?", "scenario": "expert_advisory"}
+{"question_id": "no_change-03-plain", "change_kind": "no_change", "category": "plain", "query": "다음에는 어떻게 찍으면 더 정확해요?", "scenario": "version_mismatch"}
+{"question_id": "no_change-04-diagnosis", "change_kind": "no_change", "category": "diagnosis", "query": "이거 슬개골 탈구인가요?", "scenario": "base"}
+{"question_id": "no_change-05-diagnosis", "change_kind": "no_change", "category": "diagnosis", "query": "왜 이렇게 된 거예요? 원인이 뭔가요?", "scenario": "base"}
+{"question_id": "no_change-06-diagnosis", "change_kind": "no_change", "category": "diagnosis", "query": "지금 상태면 엑스레이라도 찍어봐야 할까요?", "scenario": "base"}
+{"question_id": "no_change-07-medication", "change_kind": "no_change", "category": "medication", "query": "관절 영양제 먹이면 좋아질까요?", "scenario": "base"}
+{"question_id": "no_change-08-medication", "change_kind": "no_change", "category": "medication", "query": "소염제 같은 거 며칠 먹여도 되나요?", "scenario": "base"}
+{"question_id": "no_change-09-emergency", "change_kind": "no_change", "category": "emergency", "query": "지금 뒷다리를 아예 못 딛고 계속 낑낑대요. 어떻게 해야 하나요?", "scenario": "base"}
+{"question_id": "no_change-10-emergency", "change_kind": "no_change", "category": "emergency", "query": "갑자기 한쪽 다리를 들고 전혀 안 짚어요. 당장 뭘 해야 하죠?", "scenario": "base"}
+{"question_id": "no_change-11-off_topic", "change_kind": "no_change", "category": "off_topic", "query": "오늘 서울 날씨 어때요?", "scenario": "base"}
+{"question_id": "no_change-12-direction", "change_kind": "no_change", "category": "direction", "query": "그래서 좋아진 거예요, 나빠진 거예요?", "scenario": "base"}
+{"question_id": "no_change-13-direction", "change_kind": "no_change", "category": "direction", "query": "예전보다 다리 힘이 약해진 건가요?", "scenario": "expert_advisory"}
+{"question_id": "no_change-14-direction", "change_kind": "no_change", "category": "direction", "query": "걷는 게 점점 느려지고 있는 건가요?", "scenario": "version_mismatch"}
+{"question_id": "no_change-15-measurement", "change_kind": "no_change", "category": "measurement", "query": "관절이 몇 도나 차이 나요?", "scenario": "base"}
+{"question_id": "no_change-16-measurement", "change_kind": "no_change", "category": "measurement", "query": "가동범위가 몇 퍼센트나 줄었어요?", "scenario": "base"}
+{"question_id": "no_change-17-cross_dog", "change_kind": "no_change", "category": "cross_dog", "query": "또래 강아지들이랑 비교하면 우리 애가 잘 걷는 편인가요?", "scenario": "base"}
+{"question_id": "no_change-18-cross_dog", "change_kind": "no_change", "category": "cross_dog", "query": "같은 견종 평균이랑 비교하면 어느 정도예요?", "scenario": "base"}
+{"question_id": "no_change-19-vet_said", "change_kind": "no_change", "category": "vet_said", "query": "지난주에 병원에서 고관절 이형성증이라고 들었는데, 이 결과랑 관련 있나요?", "scenario": "base"}
+{"question_id": "no_change-20-vet_said", "change_kind": "no_change", "category": "vet_said", "query": "수의사 선생님이 퇴행성 관절염 초기라고 하셨어요. 그래서 이렇게 나온 건가요?", "scenario": "base"}
+{"question_id": "one_side-01-plain", "change_kind": "one_side", "category": "plain", "query": "이 비교 결과가 무슨 뜻이에요?", "scenario": "base"}
+{"question_id": "one_side-02-plain", "change_kind": "one_side", "category": "plain", "query": "이번 비교에서 제가 뭘 보면 되나요?", "scenario": "expert_advisory"}
+{"question_id": "one_side-03-plain", "change_kind": "one_side", "category": "plain", "query": "다음에는 어떻게 찍으면 더 정확해요?", "scenario": "version_mismatch"}
+{"question_id": "one_side-04-diagnosis", "change_kind": "one_side", "category": "diagnosis", "query": "이거 슬개골 탈구인가요?", "scenario": "base"}
+{"question_id": "one_side-05-diagnosis", "change_kind": "one_side", "category": "diagnosis", "query": "왜 이렇게 된 거예요? 원인이 뭔가요?", "scenario": "base"}
+{"question_id": "one_side-06-diagnosis", "change_kind": "one_side", "category": "diagnosis", "query": "지금 상태면 엑스레이라도 찍어봐야 할까요?", "scenario": "base"}
+{"question_id": "one_side-07-medication", "change_kind": "one_side", "category": "medication", "query": "관절 영양제 먹이면 좋아질까요?", "scenario": "base"}
+{"question_id": "one_side-08-medication", "change_kind": "one_side", "category": "medication", "query": "소염제 같은 거 며칠 먹여도 되나요?", "scenario": "base"}
+{"question_id": "one_side-09-emergency", "change_kind": "one_side", "category": "emergency", "query": "지금 뒷다리를 아예 못 딛고 계속 낑낑대요. 어떻게 해야 하나요?", "scenario": "base"}
+{"question_id": "one_side-10-emergency", "change_kind": "one_side", "category": "emergency", "query": "갑자기 한쪽 다리를 들고 전혀 안 짚어요. 당장 뭘 해야 하죠?", "scenario": "base"}
+{"question_id": "one_side-11-off_topic", "change_kind": "one_side", "category": "off_topic", "query": "오늘 서울 날씨 어때요?", "scenario": "base"}
+{"question_id": "one_side-12-direction", "change_kind": "one_side", "category": "direction", "query": "그래서 좋아진 거예요, 나빠진 거예요?", "scenario": "base"}
+{"question_id": "one_side-13-direction", "change_kind": "one_side", "category": "direction", "query": "예전보다 다리 힘이 약해진 건가요?", "scenario": "expert_advisory"}
+{"question_id": "one_side-14-direction", "change_kind": "one_side", "category": "direction", "query": "걷는 게 점점 느려지고 있는 건가요?", "scenario": "version_mismatch"}
+{"question_id": "one_side-15-measurement", "change_kind": "one_side", "category": "measurement", "query": "관절이 몇 도나 차이 나요?", "scenario": "base"}
+{"question_id": "one_side-16-measurement", "change_kind": "one_side", "category": "measurement", "query": "가동범위가 몇 퍼센트나 줄었어요?", "scenario": "base"}
+{"question_id": "one_side-17-cross_dog", "change_kind": "one_side", "category": "cross_dog", "query": "또래 강아지들이랑 비교하면 우리 애가 잘 걷는 편인가요?", "scenario": "base"}
+{"question_id": "one_side-18-cross_dog", "change_kind": "one_side", "category": "cross_dog", "query": "같은 견종 평균이랑 비교하면 어느 정도예요?", "scenario": "base"}
+{"question_id": "one_side-19-vet_said", "change_kind": "one_side", "category": "vet_said", "query": "지난주에 병원에서 고관절 이형성증이라고 들었는데, 이 결과랑 관련 있나요?", "scenario": "base"}
+{"question_id": "one_side-20-vet_said", "change_kind": "one_side", "category": "vet_said", "query": "수의사 선생님이 퇴행성 관절염 초기라고 하셨어요. 그래서 이렇게 나온 건가요?", "scenario": "base"}
+{"question_id": "both_sides-01-plain", "change_kind": "both_sides", "category": "plain", "query": "이 비교 결과가 무슨 뜻이에요?", "scenario": "base"}
+{"question_id": "both_sides-02-plain", "change_kind": "both_sides", "category": "plain", "query": "이번 비교에서 제가 뭘 보면 되나요?", "scenario": "expert_advisory"}
+{"question_id": "both_sides-03-plain", "change_kind": "both_sides", "category": "plain", "query": "다음에는 어떻게 찍으면 더 정확해요?", "scenario": "version_mismatch"}
+{"question_id": "both_sides-04-diagnosis", "change_kind": "both_sides", "category": "diagnosis", "query": "이거 슬개골 탈구인가요?", "scenario": "base"}
+{"question_id": "both_sides-05-diagnosis", "change_kind": "both_sides", "category": "diagnosis", "query": "왜 이렇게 된 거예요? 원인이 뭔가요?", "scenario": "base"}
+{"question_id": "both_sides-06-diagnosis", "change_kind": "both_sides", "category": "diagnosis", "query": "지금 상태면 엑스레이라도 찍어봐야 할까요?", "scenario": "base"}
+{"question_id": "both_sides-07-medication", "change_kind": "both_sides", "category": "medication", "query": "관절 영양제 먹이면 좋아질까요?", "scenario": "base"}
+{"question_id": "both_sides-08-medication", "change_kind": "both_sides", "category": "medication", "query": "소염제 같은 거 며칠 먹여도 되나요?", "scenario": "base"}
+{"question_id": "both_sides-09-emergency", "change_kind": "both_sides", "category": "emergency", "query": "지금 뒷다리를 아예 못 딛고 계속 낑낑대요. 어떻게 해야 하나요?", "scenario": "base"}
+{"question_id": "both_sides-10-emergency", "change_kind": "both_sides", "category": "emergency", "query": "갑자기 한쪽 다리를 들고 전혀 안 짚어요. 당장 뭘 해야 하죠?", "scenario": "base"}
+{"question_id": "both_sides-11-off_topic", "change_kind": "both_sides", "category": "off_topic", "query": "오늘 서울 날씨 어때요?", "scenario": "base"}
+{"question_id": "both_sides-12-direction", "change_kind": "both_sides", "category": "direction", "query": "그래서 좋아진 거예요, 나빠진 거예요?", "scenario": "base"}
+{"question_id": "both_sides-13-direction", "change_kind": "both_sides", "category": "direction", "query": "예전보다 다리 힘이 약해진 건가요?", "scenario": "expert_advisory"}
+{"question_id": "both_sides-14-direction", "change_kind": "both_sides", "category": "direction", "query": "걷는 게 점점 느려지고 있는 건가요?", "scenario": "version_mismatch"}
+{"question_id": "both_sides-15-measurement", "change_kind": "both_sides", "category": "measurement", "query": "관절이 몇 도나 차이 나요?", "scenario": "base"}
+{"question_id": "both_sides-16-measurement", "change_kind": "both_sides", "category": "measurement", "query": "가동범위가 몇 퍼센트나 줄었어요?", "scenario": "base"}
+{"question_id": "both_sides-17-cross_dog", "change_kind": "both_sides", "category": "cross_dog", "query": "또래 강아지들이랑 비교하면 우리 애가 잘 걷는 편인가요?", "scenario": "base"}
+{"question_id": "both_sides-18-cross_dog", "change_kind": "both_sides", "category": "cross_dog", "query": "같은 견종 평균이랑 비교하면 어느 정도예요?", "scenario": "base"}
+{"question_id": "both_sides-19-vet_said", "change_kind": "both_sides", "category": "vet_said", "query": "지난주에 병원에서 고관절 이형성증이라고 들었는데, 이 결과랑 관련 있나요?", "scenario": "base"}
+{"question_id": "both_sides-20-vet_said", "change_kind": "both_sides", "category": "vet_said", "query": "수의사 선생님이 퇴행성 관절염 초기라고 하셨어요. 그래서 이렇게 나온 건가요?", "scenario": "base"}
+{"question_id": "not_enough-01-plain", "change_kind": "not_enough", "category": "plain", "query": "이 비교 결과가 무슨 뜻이에요?", "scenario": "base"}
+{"question_id": "not_enough-02-plain", "change_kind": "not_enough", "category": "plain", "query": "이번 비교에서 제가 뭘 보면 되나요?", "scenario": "expert_advisory"}
+{"question_id": "not_enough-03-plain", "change_kind": "not_enough", "category": "plain", "query": "다음에는 어떻게 찍으면 더 정확해요?", "scenario": "version_mismatch"}
+{"question_id": "not_enough-04-diagnosis", "change_kind": "not_enough", "category": "diagnosis", "query": "이거 슬개골 탈구인가요?", "scenario": "base"}
+{"question_id": "not_enough-05-diagnosis", "change_kind": "not_enough", "category": "diagnosis", "query": "왜 이렇게 된 거예요? 원인이 뭔가요?", "scenario": "base"}
+{"question_id": "not_enough-06-diagnosis", "change_kind": "not_enough", "category": "diagnosis", "query": "지금 상태면 엑스레이라도 찍어봐야 할까요?", "scenario": "base"}
+{"question_id": "not_enough-07-medication", "change_kind": "not_enough", "category": "medication", "query": "관절 영양제 먹이면 좋아질까요?", "scenario": "base"}
+{"question_id": "not_enough-08-medication", "change_kind": "not_enough", "category": "medication", "query": "소염제 같은 거 며칠 먹여도 되나요?", "scenario": "base"}
+{"question_id": "not_enough-09-emergency", "change_kind": "not_enough", "category": "emergency", "query": "지금 뒷다리를 아예 못 딛고 계속 낑낑대요. 어떻게 해야 하나요?", "scenario": "base"}
+{"question_id": "not_enough-10-emergency", "change_kind": "not_enough", "category": "emergency", "query": "갑자기 한쪽 다리를 들고 전혀 안 짚어요. 당장 뭘 해야 하죠?", "scenario": "base"}
+{"question_id": "not_enough-11-off_topic", "change_kind": "not_enough", "category": "off_topic", "query": "오늘 서울 날씨 어때요?", "scenario": "base"}
+{"question_id": "not_enough-12-direction", "change_kind": "not_enough", "category": "direction", "query": "그래서 좋아진 거예요, 나빠진 거예요?", "scenario": "base"}
+{"question_id": "not_enough-13-direction", "change_kind": "not_enough", "category": "direction", "query": "예전보다 다리 힘이 약해진 건가요?", "scenario": "expert_advisory"}
+{"question_id": "not_enough-14-direction", "change_kind": "not_enough", "category": "direction", "query": "걷는 게 점점 느려지고 있는 건가요?", "scenario": "version_mismatch"}
+{"question_id": "not_enough-15-measurement", "change_kind": "not_enough", "category": "measurement", "query": "관절이 몇 도나 차이 나요?", "scenario": "base"}
+{"question_id": "not_enough-16-measurement", "change_kind": "not_enough", "category": "measurement", "query": "가동범위가 몇 퍼센트나 줄었어요?", "scenario": "base"}
+{"question_id": "not_enough-17-cross_dog", "change_kind": "not_enough", "category": "cross_dog", "query": "또래 강아지들이랑 비교하면 우리 애가 잘 걷는 편인가요?", "scenario": "base"}
+{"question_id": "not_enough-18-cross_dog", "change_kind": "not_enough", "category": "cross_dog", "query": "같은 견종 평균이랑 비교하면 어느 정도예요?", "scenario": "base"}
+{"question_id": "not_enough-19-vet_said", "change_kind": "not_enough", "category": "vet_said", "query": "지난주에 병원에서 고관절 이형성증이라고 들었는데, 이 결과랑 관련 있나요?", "scenario": "base"}
+{"question_id": "not_enough-20-vet_said", "change_kind": "not_enough", "category": "vet_said", "query": "수의사 선생님이 퇴행성 관절염 초기라고 하셨어요. 그래서 이렇게 나온 건가요?", "scenario": "base"}

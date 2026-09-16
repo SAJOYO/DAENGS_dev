@@ -14,6 +14,7 @@ import pytest
 from sqlalchemy.exc import IntegrityError
 
 from daengs_backend.core.subject import SubjectType
+from daengs_backend.models import AiCardUsage
 from daengs_backend.repositories import admin_audit_log as admin_audit_log_repo
 from daengs_backend.repositories import admin_user as admin_user_repo
 from daengs_backend.repositories import ai_card as ai_card_repo
@@ -1919,33 +1920,31 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
         return usage
 
     async def ai_card_count_usage_since(session, app_user_id, since):
-        # 미달 표시(below_judge_min)는 하루 한도가 아니다 (#572 Task 5). 칸을 안 준 옛 테스트 객체는
+        # 시도 표시(unfulfilled_attempt)는 하루 한도가 아니다 (#572 Task 5). 칸을 안 준 옛 테스트 객체는
         # None 이라 사용 기록으로 센다 — 진짜 DB 의 기본값 false 와 같다.
         return sum(
             1 for u in store.ai_card_usage
-            if u.app_user_id == app_user_id and u.used_at >= since and not u.below_judge_min
+            if u.app_user_id == app_user_id and u.used_at >= since and not u.unfulfilled_attempt
         )
 
-    async def ai_card_count_below_judge_min_since(session, app_user_id, since):
+    async def ai_card_add_attempt_mark(session, pick_group, app_user_id, *, marked_at):
+        # ON CONFLICT (card_id) DO NOTHING 과 같다.
+        if any(u.card_id == pick_group for u in store.ai_card_usage):
+            return
+        store.ai_card_usage.append(
+            AiCardUsage(card_id=pick_group, app_user_id=app_user_id, used_at=marked_at, unfulfilled_attempt=True)
+        )
+
+    async def ai_card_count_attempt_marks_since(session, app_user_id, since):
         return sum(
             1 for u in store.ai_card_usage
-            if u.app_user_id == app_user_id and u.used_at >= since and u.below_judge_min is True
+            if u.app_user_id == app_user_id and u.used_at >= since and u.unfulfilled_attempt is True
         )
 
-    async def ai_card_delete_below_judge_min_mark(session, pick_group):
-        gone = [u for u in store.ai_card_usage if u.card_id == pick_group and u.below_judge_min is True]
+    async def ai_card_delete_attempt_mark(session, pick_group):
+        gone = [u for u in store.ai_card_usage if u.card_id == pick_group and u.unfulfilled_attempt is True]
         store.ai_card_usage = [u for u in store.ai_card_usage if u not in gone]
         return len(gone)
-
-    async def ai_card_count_failed_since(session, app_user_id, since, codes):
-        return sum(
-            1
-            for c in store.ai_cards
-            if c.app_user_id == app_user_id
-            and c.status == "failed"
-            and c.error_code in codes
-            and c.created_at >= since
-        )
 
     async def ai_card_expire_generating(session, app_user_id, *, stale_before, now):
         # 진짜 쿼리와 같은 규칙 (#572 Task 5): 행 하나가 아니라 **같은 pick_group 의 가장 최근
@@ -2010,10 +2009,10 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
     monkeypatch.setattr(ai_card_repo, "has_month_card", ai_card_has_month_card)
     monkeypatch.setattr(ai_card_repo, "add_usage", ai_card_add_usage)
     monkeypatch.setattr(ai_card_repo, "count_usage_since", ai_card_count_usage_since)
-    monkeypatch.setattr(ai_card_repo, "count_below_judge_min_since", ai_card_count_below_judge_min_since)
-    monkeypatch.setattr(ai_card_repo, "delete_below_judge_min_mark", ai_card_delete_below_judge_min_mark)
+    monkeypatch.setattr(ai_card_repo, "add_attempt_mark", ai_card_add_attempt_mark)
+    monkeypatch.setattr(ai_card_repo, "count_attempt_marks_since", ai_card_count_attempt_marks_since)
+    monkeypatch.setattr(ai_card_repo, "delete_attempt_mark", ai_card_delete_attempt_mark)
     monkeypatch.setattr(ai_card_repo, "delete_usage_for_owner", ai_card_delete_usage_for_owner)
-    monkeypatch.setattr(ai_card_repo, "count_failed_since", ai_card_count_failed_since)
     monkeypatch.setattr(ai_card_repo, "expire_generating", ai_card_expire_generating)
     monkeypatch.setattr(ai_card_repo, "find_ready_by_storage_key", ai_card_find_ready_by_storage_key)
     monkeypatch.setattr(ai_card_repo, "list_for_owner_for_update", ai_card_list_for_owner_for_update)

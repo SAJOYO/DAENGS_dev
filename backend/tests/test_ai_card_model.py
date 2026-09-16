@@ -47,13 +47,13 @@ def test_usage_columns_follow_sql() -> None:
     """`db/init/39_ai_card_usage.sql` 을 따라간다 (#543, D-077)."""
     table = AiCardUsage.__table__
     assert table.name == "ai_card_usage"
-    assert set(table.c.keys()) == {"card_id", "app_user_id", "used_at", "below_judge_min"}
+    assert set(table.c.keys()) == {"card_id", "app_user_id", "used_at", "unfulfilled_attempt"}
     assert [c.name for c in table.primary_key.columns] == ["card_id"]
 
 
-def test_usage_below_judge_min_is_not_null_and_false_by_default() -> None:
-    """#572 Task 5 — 미달 표시 칸. 기본이 `true` 거나 비면 모든 사용 기록이 하루 한도에서 빠진다."""
-    column = AiCardUsage.__table__.c.below_judge_min
+def test_usage_unfulfilled_attempt_is_not_null_and_false_by_default() -> None:
+    """#572 Task 5 — 시도 표시 칸. 기본이 `true` 거나 비면 모든 사용 기록이 하루 한도에서 빠진다."""
+    column = AiCardUsage.__table__.c.unfulfilled_attempt
     assert type(column.type) is Boolean
     assert not column.nullable
     assert str(column.server_default.arg) == "false"

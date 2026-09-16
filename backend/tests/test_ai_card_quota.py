@@ -1,9 +1,9 @@
-"""`services/ai_card_quota.py` — 앱 사용자 AI 카드 생성 한도 (#537 · #543, D-076 · D-077).
+"""`services/ai_card_quota.py` — 앱 사용자 AI 카드 생성 한도 (#537 · #543 · #572, D-076 · D-077 · D-084).
 
 제품 규칙(사용자 결정 2026-09-15): 동시 1장 · KST 하루 N회(**사용 기록**으로 셈 — 지워도 안 돌아옴,
-실패는 안 셈) · 강아지마다 달마다 한 장(보호자마다 따로) · 돈 나간 실패 하루 5번.
-#572(D-084): 닮음 미달 뽑기는 하루 한도 대신 그 5번에 든다 · 정리 기준은 요청 단위 마지막 진척부터 ·
-GPU 경로면 콜드 스타트를 예산에 더한다.
+실패는 안 셈) · 강아지마다 달마다 한 장(보호자마다 따로).
+#572(D-084): 좋은 카드를 못 얻은 유료 시도는 지울 수 없는 시도 표시로 하루 5요청까지 · 정리 기준은 요청
+단위 마지막 진척부터 · GPU 경로면 콜드 스타트를 예산에 더한다.
 """
 
 import asyncio
@@ -54,8 +54,10 @@ def _card(
     )
 
 
-def _usage(used_at: datetime, owner: uuid.UUID = OWNER, *, below_judge_min: bool = False) -> AiCardUsage:
-    return AiCardUsage(card_id=uuid.uuid4(), app_user_id=owner, used_at=used_at, below_judge_min=below_judge_min)
+def _usage(used_at: datetime, owner: uuid.UUID = OWNER, *, unfulfilled_attempt: bool = False) -> AiCardUsage:
+    return AiCardUsage(
+        card_id=uuid.uuid4(), app_user_id=owner, used_at=used_at, unfulfilled_attempt=unfulfilled_attempt
+    )
 
 
 def _check(limit: int = 1, *, dog_id: uuid.UUID | None = None, month: int = 4) -> None:
@@ -83,7 +85,7 @@ def test_stale_after_covers_worst_case_retry(store: Store, monkeypatch: pytest.M
 def test_stale_after_covers_gpu_cold_start_when_cardgen_is_configured(
     store: Store, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """FLUX.2-klein-4B 는 콜드 스타트만 6~7분이다(#557 E3, #572 12달 실험 460초). 예산이 그보다
+    """FLUX.2-klein-4B 는 콜드 스타트만 340.7~460초다(#557 E3, #572 12달 실험). 예산이 그보다
     짧으면 정상 진행 중인 카드를 사라진 작업으로 덮는다 — `cardgen_timeout_s` 를 통째로 더한다."""
     monkeypatch.setattr(settings, "cardgen_url", "http://cardgen.example")
     monkeypatch.setattr(settings, "cardgen_timeout_s", 900.0)
@@ -239,77 +241,48 @@ def test_other_users_rows_are_ignored(store: Store) -> None:
     _check()
 
 
-# ── 돈 나간 실패 — 그대로 ───────────────────────────────────────────────
+# ── 돈 나간 시도 상한 — 지울 수 없는 시도 표시만 센다 (#572, D-084) ───────
 
 
-def _failures(store: Store, n: int, code: str = "upstream", at: datetime = NOW - timedelta(hours=1)) -> None:
+def _attempt_marks(store: Store, n: int, at: datetime = NOW - timedelta(hours=1)) -> None:
     for _ in range(n):
-        store.ai_cards.append(_card("failed", at, error_code=code))
+        store.ai_card_usage.append(_usage(at, unfulfilled_attempt=True))
 
 
-def test_five_paid_failures_today_hit_limit(store: Store) -> None:
-    _failures(store, quota.MAX_PAID_FAILURES_PER_DAY)
-    with pytest.raises(quota.AiCardLimitError):
-        _check()
-
-
-def test_four_paid_failures_today_are_ok(store: Store) -> None:
-    _failures(store, quota.MAX_PAID_FAILURES_PER_DAY - 1)
-    _check()
-
-
-def test_interrupted_failures_do_not_count(store: Store) -> None:
-    _failures(store, quota.MAX_PAID_FAILURES_PER_DAY, code="interrupted")
-    _check()
-
-
-def test_paid_failures_yesterday_kst_do_not_count(store: Store) -> None:
-    _failures(store, quota.MAX_PAID_FAILURES_PER_DAY, at=KST_YESTERDAY_LAST)
-    _check()
-
-
-def test_paid_failure_cap_applies_even_when_unlimited(store: Store) -> None:
-    _failures(store, quota.MAX_PAID_FAILURES_PER_DAY, code="no_image")
-    with pytest.raises(quota.AiCardLimitError):
-        _check(limit=0)
-
-
-# ── 닮음 미달 뽑기 — 하루 한도는 안 쓰고, 돈 나간 헛시도 상한에 든다 (#572) ──
-
-
-def _below_min_groups(store: Store, n: int, at: datetime = NOW - timedelta(hours=1)) -> None:
-    for _ in range(n):
-        store.ai_card_usage.append(_usage(at, below_judge_min=True))
-
-
-def test_below_min_mark_does_not_use_the_daily_limit(store: Store) -> None:
-    _below_min_groups(store, 1)
+def test_attempt_mark_does_not_use_the_daily_limit(store: Store) -> None:
+    _attempt_marks(store, 1)
     _check()
     assert _remaining() == 1
 
 
-def test_five_below_min_groups_hit_the_paid_cap(store: Store) -> None:
-    """사진이 늘 기준 미만으로 나오면 하루 한도가 안 줄어 GPU·검수를 끝없이 부를 수 있다 —
-    `count_failed_since` 는 `failed` 행만 세고 닮음 미달 카드는 `ready` 라 거기 안 걸린다."""
-    _below_min_groups(store, quota.MAX_PAID_FAILURES_PER_DAY)
-    with pytest.raises(quota.AiCardLimitError):
-        _check(limit=0)
-
-
-def test_four_below_min_groups_are_ok(store: Store) -> None:
-    _below_min_groups(store, quota.MAX_PAID_FAILURES_PER_DAY - 1)
-    _check()
-
-
-def test_below_min_groups_and_paid_failures_share_one_cap(store: Store) -> None:
-    _below_min_groups(store, 3)
-    _failures(store, quota.MAX_PAID_FAILURES_PER_DAY - 3)
+def test_five_attempt_marks_hit_the_paid_cap(store: Store) -> None:
+    _attempt_marks(store, quota.MAX_PAID_FAILURES_PER_DAY)
     with pytest.raises(quota.AiCardLimitError):
         _check()
 
 
-def test_below_min_marks_yesterday_kst_do_not_count(store: Store) -> None:
-    _below_min_groups(store, quota.MAX_PAID_FAILURES_PER_DAY, at=KST_YESTERDAY_LAST)
+def test_four_attempt_marks_are_ok(store: Store) -> None:
+    _attempt_marks(store, quota.MAX_PAID_FAILURES_PER_DAY - 1)
+    _check()
+
+
+def test_paid_cap_applies_even_when_unlimited(store: Store) -> None:
+    _attempt_marks(store, quota.MAX_PAID_FAILURES_PER_DAY)
+    with pytest.raises(quota.AiCardLimitError):
+        _check(limit=0)
+
+
+def test_attempt_marks_yesterday_kst_do_not_count(store: Store) -> None:
+    _attempt_marks(store, quota.MAX_PAID_FAILURES_PER_DAY, at=KST_YESTERDAY_LAST)
+    _check()
+
+
+def test_failed_card_rows_are_not_the_ledger(store: Store) -> None:
+    """실패한 카드 행은 세지 않는다 — 지울 수 있어서 셈이 사라진다. 그 요청의 셈은 슬롯을 잡을 때 남긴
+    시도 표시가 맡는다(유료 호출 전에 남으므로 실패 행이 있는 요청에는 표시도 있다)."""
+    for code in ("upstream", "no_image", "storage"):
+        for _ in range(quota.MAX_PAID_FAILURES_PER_DAY):
+            store.ai_cards.append(_card("failed", NOW - timedelta(hours=1), error_code=code))
     _check()
 
 

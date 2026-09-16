@@ -10,25 +10,27 @@
   `dog_id` 가 없으면 보지 않습니다.
 - KST **하루 N회** (`DAENGS_CARDIMAGE_DAILY_LIMIT`, 기본 1) — `AiCardLimitError` (429 `limit_reached`).
   **세는 단위는 카드 장수가 아니라 요청(뽑기) 한 번입니다.** `ai_card_usage` 의 사용 기록
-  (`below_judge_min = false`)으로 셉니다. 한 요청에서 **닮음이 `cardimage_judge_min` 이상인 카드가
+  (`unfulfilled_attempt = false`)으로 셉니다. 한 요청에서 **닮음이 `cardimage_judge_min` 이상인 카드가
   처음 `ready` 가 될 때** 딱 한 줄 남습니다. 검수 점수가 없는 카드(검수 장애)는 기준을 넘은 것으로
-  봅니다 — 장애가 공짜 무한 생성이 되면 안 됩니다. 카드를 지워도 횟수는 돌아오지 않고, 실패한
-  카드는 기록이 없어 세지 않습니다.
+  봅니다 — 장애가 공짜 무한 생성이 되면 안 됩니다. 카드를 지워도 횟수는 돌아오지 않습니다.
 
-**돈 나간 헛시도 상한 — 하루 `MAX_PAID_FAILURES_PER_DAY` 번** (하루 한도가 0 이어도 적용).
-하루 한도가 세지 않는데 돈은 나간 것 두 가지를 **합쳐서** 셉니다.
+**돈 나간 시도 상한 — KST 하루 `MAX_PAID_FAILURES_PER_DAY`(5) 요청** (하루 한도가 0 이어도 적용).
+세는 것은 `ai_card_usage` 의 **시도 표시**(`unfulfilled_attempt = true`) 줄 수 **하나뿐**입니다.
 
-- **실패한 유료 호출** — `failed` 이고 `error_code` 가 `PAID_FAILURE_CODES` 인 **카드 행 수**. #572 부터
-  취소된 형제 카드는 엔진을 안 부르고(`_claim_slot`) 이 코드를 받지 않으므로, 행 수가 곧 **실패한
-  유료 호출 수**입니다. 한 요청에서 두 장이 실패하면 돈이 두 번 나갔으니 둘로 셉니다.
-- **닮음 미달 요청** — 카드는 `ready` 가 됐지만 한 장도 기준에 못 미친 요청. 사진 각도가 나쁘면 몇
-  번을 뽑아도 안 구해지므로(#557 E2 엎드린 옆모습 0장) 하루 한도를 안 쓰게 했는데, 그 카드는
-  `failed` 가 아니라 위 셈에 안 걸립니다 — 막지 않으면 GPU·검수를 끝없이 부를 수 있습니다. 그래서
-  `ai_card_usage` 에 **요청마다 한 줄** 미달 표시(`below_judge_min = true`)를 남기고 그것을 셉니다.
-  카드 행으로 세지 않는 이유는 같은 강아지·같은 달을 다시 뽑으려면 그 카드를 지워야 해서입니다.
+- 표시는 요청의 첫 카드가 슬롯을 잡는 트랜잭션(`services/ai_card.py::_claim_slot`)에서, **유료 호출
+  (엔진·검수)보다 먼저** 요청마다 한 줄(`card_id = pick_group`) 남습니다. 슬롯을 못 잡은 요청(대기 중에
+  지워졌거나 정리됐다)은 엔진을 안 부르고 표시도 안 남깁니다.
+- 기준 이상 카드가 나오면 `_finish_ready` 가 같은 트랜잭션에서 표시를 지우고 사용 기록을 남깁니다.
+- 그래서 표시가 남는 요청은 **유료 호출까지 가서 좋은 카드를 못 얻은 요청 전부**입니다 — 닮음 미달
+  (사진 각도가 나쁘면 몇 번을 뽑아도 안 구해져서(#557 E2 엎드린 옆모습 0장) 하루 한도를 안 쓰게
+  했다), 호출 실패, 생성 중 삭제, 배포 재시작과 겹친 중단. 카드를 지워도 표시는 남습니다 — 카드
+  행(`ai_cards`)으로 셌다면 생성 중에 지우는 것만으로 셈이 사라져 시작→삭제를 끝없이 되풀이할 수 있었습니다.
 
-그래서 KST 하루에 사용자가 받는 것은 **좋은 뽑기 N번 + 헛시도(미달 요청·실패한 유료 호출) 합쳐 최대
-5번**입니다. 전체 지출의 바닥은 카드 생성 키의 별도 GCP 프로젝트 지출 상한입니다.
+그래서 KST 하루에 유료 호출까지 가는 요청은 **좋은 뽑기 `DAENGS_CARDIMAGE_DAILY_LIMIT` 번 + 좋은 카드를
+못 얻은 요청 최대 5번**이고, 요청 하나가 부르는 엔진은 최대 `cardimage_pick_count` 번입니다. 한도
+검사를 통과한 요청이 슬롯을 잡기 전에는 표시가 없지만, 그 요청이 살아 있는 동안은 동시 1요청이 다음
+요청을 막고, 지워지면 엔진을 안 부르므로 이 셈을 넘지 않습니다. 전체 지출의 바닥은 카드 생성 키의
+별도 GCP 프로젝트 지출 상한입니다.
 """
 
 from __future__ import annotations
@@ -44,9 +46,8 @@ from daengs_backend.repositories import ai_card as ai_card_repo
 
 KST = ZoneInfo("Asia/Seoul")
 
-# 모델 호출까지 가서(돈이 나간 뒤) 실패한 코드와 헛시도 하루 상한. 설정값으로 빼지 않습니다.
-# `interrupted`·`internal`·`unavailable` 은 세지 않습니다. 상한에는 닮음 미달 요청도 함께 듭니다.
-PAID_FAILURE_CODES = frozenset({"upstream", "no_image", "storage"})
+# 유료 호출까지 가서 좋은 카드를 못 얻은 요청(시도 표시)의 KST 하루 상한. 설정값으로 빼지 않습니다.
+# 이름은 옛 판(실패한 카드 행을 셌다)에서 왔다 — #572(D-084)부터는 시도 표시만 센다.
 MAX_PAID_FAILURES_PER_DAY = 5
 
 
@@ -74,7 +75,8 @@ def stale_after() -> timedelta:
     애초에 엔진을 부르지 않는다.
 
     **GPU 경로(`cardgen_url`)가 켜져 있으면 `cardgen_timeout_s` 를 통째로 더한다** (#572, D-084).
-    FLUX.2-klein-4B 는 콜드 스타트만 6~7분이고(#557 E3 — 설정으로 못 줄였다, #572 12달 실험 460초)
+    FLUX.2-klein-4B 는 콜드 스타트만 340.7~460초다(#557 E3 기본 마운트 로드 340.7~403.1초 — 설정으로
+    못 줄였다, #572 12달 실험 460초)
     `cardimage_timeout_ms` 는 그것을 모른다. 엔진 호출의 상한은 그때 `cardgen_timeout_s`(콜드 스타트
     포함, `ai_card_engine.default_engine`)이므로 그 값을 그대로 더한다 — 이 예산이 콜드 스타트보다
     짧으면 멀쩡히 도는 카드가 사라진 것으로 정리된다. **꺼져 있으면(지금 운영, Nano Banana 2) 예산은
@@ -113,10 +115,9 @@ async def check_quota(
     day_start = kst_day_start(now)
     if daily_limit and await ai_card_repo.count_usage_since(session, app_user_id, day_start) >= daily_limit:
         raise AiCardLimitError
-    # `daily_limit == 0`(무제한)이어도 적용합니다 — 헛시도는 하루 한도와 따로 셉니다.
-    paid_failures = await ai_card_repo.count_failed_since(session, app_user_id, day_start, PAID_FAILURE_CODES)
-    below_min_requests = await ai_card_repo.count_below_judge_min_since(session, app_user_id, day_start)
-    if paid_failures + below_min_requests >= MAX_PAID_FAILURES_PER_DAY:
+    # `daily_limit == 0`(무제한)이어도 적용합니다 — 돈 나간 시도는 하루 한도와 따로 셉니다.
+    # 카드 행(failed 등)은 보지 않습니다 — 지울 수 있어서 셈이 사라집니다. 지울 수 없는 표시만 셉니다.
+    if await ai_card_repo.count_attempt_marks_since(session, app_user_id, day_start) >= MAX_PAID_FAILURES_PER_DAY:
         raise AiCardLimitError
 
 
@@ -125,7 +126,7 @@ async def daily_remaining(
 ) -> int | None:
     """오늘 남은 횟수. 무제한(`daily_limit == 0`)이면 `None`. 앱이 「오늘 1번 남았어요」를 띄웁니다.
 
-    헛시도 상한은 여기 반영하지 않습니다 — 그것은 안전장치라 앱에 숫자로 보이지 않습니다.
+    돈 나간 시도 상한은 여기 반영하지 않습니다 — 그것은 안전장치라 앱에 숫자로 보이지 않습니다.
     """
     if not daily_limit:
         return None

@@ -8,9 +8,9 @@
 한도 → INSERT(전부) → commit 이 짧은 한 트랜잭션입니다. 생성은 같은 backend 프로세스 안의
 백그라운드 작업(`_run`)이 그 행들을 **하나씩 순서대로** 채우고, 끝날 때마다 **새 세션으로**
 그 행을 `ready`/`failed` 로 바꿉니다. 한도 규칙은 `services/ai_card_quota.py` 가 정하고
-(D-077 · D-084), `ai_card_usage` 에는 **요청마다 한 줄**만 남깁니다 — 닮음이 기준 이상인 카드가
-처음 `ready` 가 될 때 사용 기록, 그 전에 기준 미만 카드만 나왔으면 미달 표시(카드 수가 아니라
-요청 수를 셉니다).
+(D-077 · D-084), `ai_card_usage` 에는 **요청마다 한 줄**만 남깁니다 — 처음 슬롯을 잡을 때(유료
+호출 전) 시도 표시, 닮음이 기준 이상인 카드가 처음 `ready` 가 되면 그것을 사용 기록으로 바꿉니다
+(카드 수가 아니라 요청 수를 셉니다).
 
 ⚠️ **백그라운드는 요청 세션을 쓰지 않습니다** — 요청이 끝나면 그 세션은 닫힙니다.
 ⚠️ **배포 재시작과 겹친 작업은 사라집니다.** 행은 `stale_after()` 가 지난 뒤 조회에서
@@ -221,7 +221,7 @@ def _store_png(key: str, data: bytes) -> StoredObject:
     return stored
 
 
-async def _claim_slot(card_id: uuid.UUID) -> bool:
+async def _claim_slot(card_id: uuid.UUID, *, mark_attempt: bool) -> bool:
     """세마포어를 얻은 뒤, 돈이 나가는 호출(엔진) **직전**에 행을 다시 봅니다.
 
     대기열에 있는 동안 행이 지워졌거나(삭제·탈퇴) 이미 다른 경로로 끝났으면(`generating` 이
@@ -230,13 +230,23 @@ async def _claim_slot(card_id: uuid.UUID) -> bool:
     정리 기준(`stale_after`)은 **그 요청에서 가장 최근에 찍힌 이 칸부터** 잽니다
     (`ai_card_repo.expire_generating`, D-084) — 아직 도는 작업을 다른 조회가 가로채 실패로 덮지
     않고, 이 카드가 도는 동안 차례를 기다리는 같은 요청의 다음 카드도 덮지 않습니다.
+
+    `mark_attempt=True`(요청에서 처음 슬롯을 잡을 때 — `_run` 이 정합니다)면 **같은 트랜잭션에서**
+    요청의 시도 표시를 남깁니다(D-084). 유료 호출보다 먼저 커밋되므로, 호출 도중에 사용자가 카드를
+    지워도 표시는 남아 돈 나간 시도 상한이 그 요청을 셉니다 — 시작→삭제를 되풀이해 유료 호출을
+    끝없이 부르는 길을 막습니다.
     """
     async with _session_factory() as session:
         card = await ai_card_repo.get_for_update(session, card_id)
         if card is None or card.status != "generating":
             await session.rollback()
             return False
-        card.updated_at = datetime.now(UTC)
+        now = datetime.now(UTC)
+        card.updated_at = now
+        if mark_attempt:
+            await ai_card_repo.add_attempt_mark(
+                session, card.pick_group or card.id, card.app_user_id, marked_at=now
+            )
         await session.commit()
         return True
 
@@ -258,13 +268,14 @@ async def _run(
     없습니다 — 카드 여러 장을 만드는 것 자체가 재시도의 대안입니다) → ③결과를 그 행에 씁니다.
     카드 하나의 실패·취소가 **다음 카드 시도를 막지 않습니다** — 행마다 독립입니다.
 
-    한도 기록은 **요청마다 한 줄**입니다 (D-084). 닮음이 기준 이상인 카드(`_meets_judge_min`)가
-    처음 `ready` 가 되면 사용 기록을 남기고, 그 전에 미달 카드만 `ready` 가 됐으면 첫 미달 카드에서
-    미달 표시를 남깁니다 — 뒤에 기준 이상 카드가 나오면 `_finish_ready` 가 그 표시를 지우고 사용
-    기록으로 바꿉니다. 사용 기록이 남은 뒤에는 어느 쪽도 더 남기지 않습니다.
+    한도 기록은 **요청마다 한 줄**입니다 (D-084). 처음 슬롯을 잡을 때(유료 호출 전) 시도 표시를
+    남기고(`_claim_slot(mark_attempt=True)`), 닮음이 기준 이상인 카드(`_meets_judge_min`)가 처음
+    `ready` 가 되면 `_finish_ready` 가 그 표시를 지우고 사용 기록으로 바꿉니다. 좋은 카드가 끝내 안
+    나오면(미달·실패·삭제) 표시가 그대로 남습니다. 표시는 한 번만 남기므로, 좋은 카드 뒤의 카드가
+    슬롯을 잡아도 표시가 되살아나지 않습니다.
     """
     usage_recorded = False
-    below_min_marked = False
+    attempt_marked = False
     # 요청 하나에 엔진·검수 하나 — 카드마다 새로 만들지 않는다(행마다 다시 만들면 호출별 상태
     # (예: HTTP 엔진의 `last_meta`)가 카드 사이에서 안 이어진다).
     engine = ai_card_engine.default_engine()
@@ -272,10 +283,11 @@ async def _run(
     try:
         async with _slot():
             for card_id, seed in zip(card_ids, seeds, strict=True):
-                if not await _claim_slot(card_id):
+                if not await _claim_slot(card_id, mark_attempt=not attempt_marked):
                     # 이 행이 사라졌거나(삭제·탈퇴) 이미 정리됐습니다 — 이 카드는 건너뜁니다
                     # (엔진을 부르지 않습니다, 돈이 나가지 않습니다). 다른 행은 독립이니 계속 시도합니다.
                     continue
+                attempt_marked = True
                 try:
                     generated = await asyncio.to_thread(
                         ai_card_engine.generate,
@@ -305,13 +317,9 @@ async def _run(
                     await _finish_failed(card_id, "storage")
                     continue
 
-                meets = _meets_judge_min(generated)
-                record_usage = meets and not usage_recorded
-                mark_below_min = not meets and not usage_recorded and not below_min_marked
+                record_usage = not usage_recorded and _meets_judge_min(generated)
                 try:
-                    updated = await _finish_ready(
-                        card_id, key, stored, generated, record_usage=record_usage, mark_below_min=mark_below_min
-                    )
+                    updated = await _finish_ready(card_id, key, stored, generated, record_usage=record_usage)
                 except Exception:
                     # 객체는 저장됐는데 행을 못 바꿨습니다. 키를 아는 곳이 여기뿐이라 지우지 않으면 영구 고아입니다.
                     # 행은 `generating` 으로 남고 정리 기준이 지나면 `interrupted` 가 됩니다.
@@ -321,9 +329,8 @@ async def _run(
                     except Exception:
                         log.exception("AI 카드 고아 객체 삭제도 실패했습니다 (card=%s, key=%s)", card_id, key)
                     continue
-                if updated:
-                    usage_recorded = usage_recorded or record_usage
-                    below_min_marked = below_min_marked or mark_below_min
+                if updated and record_usage:
+                    usage_recorded = True
     except Exception:
         log.exception("AI 카드 백그라운드 작업이 정리 중에 실패했습니다 (cards=%s)", card_ids)
 
@@ -344,7 +351,6 @@ async def _finish_ready(
     generated: GeneratedCard,
     *,
     record_usage: bool,
-    mark_below_min: bool,
 ) -> bool:
     """이 행을 `ready` 로 채웁니다. **실제로 채웠으면 `True`.**
 
@@ -352,15 +358,11 @@ async def _finish_ready(
     객체를 지우고 `False` 를 돌려줍니다 — 고아를 남기지 않습니다. 기록은 부르는 쪽(`_run`)이 정한
     대로 **같은 트랜잭션에서** 남깁니다 (D-084).
 
-    - `record_usage=True` — 하루 한도 사용 기록(`card_id` = 이 카드). 같은 요청의 미달 표시가 있으면
-      같이 지웁니다 — 그 요청은 이제 헛시도가 아니라 좋은 뽑기입니다.
-    - `mark_below_min=True` — 미달 표시(`card_id` = 이 요청의 `pick_group`). 나중에 같은 요청에서 기준
-      이상 카드가 나오면 그 값으로 찾아 지웁니다. 카드를 지워도 표시는 남습니다.
-
-    둘 다 참이면 **`ValueError`** — 어느 한쪽을 조용히 골라 부탁받은 것과 다른 기록을 남기지 않습니다.
+    `record_usage=True`(이 요청에서 처음 닮음 기준 이상인 카드)면 하루 한도 사용 기록(`card_id` = 이
+    카드)을 남기고, 같은 요청의 시도 표시(`_claim_slot` 이 남긴 것)를 지웁니다 — 그 요청은 이제 좋은
+    카드를 못 얻은 시도가 아니라 좋은 뽑기입니다. `False` 면 기록을 건드리지 않습니다(미달 카드는
+    시도 표시가 그대로 남습니다).
     """
-    if record_usage and mark_below_min:
-        raise ValueError("record_usage 와 mark_below_min 은 동시에 참일 수 없습니다")
     width, height = Image.open(io.BytesIO(generated.png)).size
     async with _session_factory() as session:
         card = await ai_card_repo.get_for_update(session, card_id)
@@ -382,19 +384,11 @@ async def _finish_ready(
         if record_usage:
             # **같은 트랜잭션에서** 사용 기록을 남깁니다 (#543, D-077). 카드를 지워도 이 줄은 남아
             # 하루 한도가 돌아오지 않습니다. 한 요청에 한 번뿐입니다 — 카드 수가 아니라 요청을 셉니다.
-            if card.pick_group is not None:
-                await ai_card_repo.delete_below_judge_min_mark(session, card.pick_group)
+            # 표시를 **먼저** 지웁니다 — 대표 카드가 좋은 카드면 사용 기록의 card_id 도 pick_group 입니다.
+            await ai_card_repo.delete_attempt_mark(session, card.pick_group or card.id)
             ai_card_repo.add_usage(
                 session,
-                AiCardUsage(card_id=card.id, app_user_id=card.app_user_id, used_at=now, below_judge_min=False),
-            )
-        elif mark_below_min:
-            # 닮음 미달 카드만 나온 요청의 표시 (D-084). 하루 한도가 아니라 헛시도 상한이 셉니다.
-            ai_card_repo.add_usage(
-                session,
-                AiCardUsage(
-                    card_id=card.pick_group or card.id, app_user_id=card.app_user_id, used_at=now, below_judge_min=True
-                ),
+                AiCardUsage(card_id=card.id, app_user_id=card.app_user_id, used_at=now, unfulfilled_attempt=False),
             )
         await session.commit()
         return True
@@ -518,8 +512,8 @@ async def delete_card(session: AsyncSession, app_user_id: uuid.UUID, card_id: uu
     **지우는 카드 자신이 `generating` 일 때만** 같은 요청(`pick_group`)의 아직 `generating` 인
     형제도 함께 지웁니다(#572 Task 4 fix round 1 Critical, fix round 2 R2-2). 취소는 "아직 진행
     중인 요청을 그만둔다" 는 뜻이라 이 조건이 필요합니다 — 지우는 카드가 이미 `ready` 라면
-    그 요청은 **그 카드로 이미 기록이 남았으므로**(기준 이상이면 사용 기록, 미달이면 헛시도 상한에
-    드는 미달 표시 — D-084, 둘 다 카드를 지워도 남습니다), 형제를 지우지 않아도 공짜로 돌아오는
+    그 요청은 **이미 기록이 남았으므로**(첫 슬롯에서 남긴 시도 표시, 기준 이상 카드가 나왔으면 사용
+    기록 — D-084, 둘 다 카드를 지워도 남습니다), 형제를 지우지 않아도 공짜로 돌아오는
     것이 없고 `month_taken` 도 그대로입니다. 오히려 형제를
     지우면 사용자에게 카드가 하나도 안 남을 수 있으므로(#572 Task 4 fix round 2 재검토) 지우지
     않습니다 — 이미 끝난(`ready`·`failed`) 형제는 그 카드를 지울 때만 건드립니다(독립된

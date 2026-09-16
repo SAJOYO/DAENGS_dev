@@ -411,20 +411,21 @@ def test_ready_records_usage(store, jobs) -> None:
     assert usage.card_id == card.id and usage.app_user_id == OWNER and usage.used_at is not None
 
 
-def test_failed_records_no_usage(store, jobs, monkeypatch) -> None:
+def test_failed_records_no_usage_but_an_attempt_mark(store, jobs, monkeypatch) -> None:
     monkeypatch.setattr(ai_card_engine, "default_engine", lambda: FakeEngine(error=EngineError("upstream", "x")))
-    _start()
+    card = _start()
     _run_all(jobs)
-    assert store.ai_card_usage == []
+    assert [(u.card_id, u.unfulfilled_attempt) for u in store.ai_card_usage] == [(card.pick_group, True)]
+    assert asyncio.run(service.daily_status(FakeSession(), OWNER)) == (1, 1)
 
 
-def test_row_deleted_mid_generation_records_no_usage(store, jobs, monkeypatch) -> None:
+def test_row_deleted_mid_generation_records_no_usage_but_an_attempt_mark(store, jobs, monkeypatch) -> None:
     card = _start()
     monkeypatch.setattr(
         ai_card_engine, "default_engine", lambda: _SideEffectEngine(lambda: store.ai_cards.remove(card))
     )
     _run_all(jobs)
-    assert store.ai_card_usage == []
+    assert [(u.card_id, u.unfulfilled_attempt) for u in store.ai_card_usage] == [(card.pick_group, True)]
 
 
 def test_deleting_ready_card_does_not_give_limit_back(store, jobs) -> None:
@@ -810,12 +811,12 @@ def _judge_scores(monkeypatch: pytest.MonkeyPatch, scores: list) -> None:
 
 def test_below_min_card_is_ready_but_does_not_use_the_daily_limit(store, jobs, monkeypatch) -> None:
     """닮음이 기준 미만이면 카드는 돌려주되 하루치는 안 쓴다 — 사진 각도가 나쁘면 다시 뽑아도
-    안 구해지므로(#557 E2 엎드린 옆모습 0장) 사용자가 그날을 통째로 잃는다. 대신 표시가 남는다."""
+    안 구해지므로(#557 E2 엎드린 옆모습 0장) 사용자가 그날을 통째로 잃는다. 대신 시도 표시가 남는다."""
     _judge_scores(monkeypatch, [2])
     card = _start()
     _run_all(jobs)
     assert card.status == "ready" and card.likeness == 2
-    assert [(u.card_id, u.below_judge_min) for u in store.ai_card_usage] == [(card.pick_group, True)]
+    assert [(u.card_id, u.unfulfilled_attempt) for u in store.ai_card_usage] == [(card.pick_group, True)]
     assert asyncio.run(service.daily_status(FakeSession(), OWNER)) == (1, 1)
     assert _start(month=9).status == "generating"
 
@@ -824,7 +825,7 @@ def test_card_at_the_threshold_uses_the_daily_limit(store, jobs, monkeypatch) ->
     _judge_scores(monkeypatch, [3])
     card = _start()
     _run_all(jobs)
-    assert [(u.card_id, u.below_judge_min) for u in store.ai_card_usage] == [(card.id, False)]
+    assert [(u.card_id, u.unfulfilled_attempt) for u in store.ai_card_usage] == [(card.id, False)]
     with pytest.raises(quota.AiCardLimitError):
         _start()
 
@@ -837,21 +838,21 @@ def test_judge_outage_uses_the_daily_limit(store, jobs, monkeypatch) -> None:
     card = _start()
     _run_all(jobs)
     assert card.status == "ready" and card.likeness is None
-    assert [u.below_judge_min for u in store.ai_card_usage] == [False]
+    assert [u.unfulfilled_attempt for u in store.ai_card_usage] == [False]
     with pytest.raises(quota.AiCardLimitError):
         _start()
 
 
 def test_below_min_then_good_card_leaves_only_the_usage(store, jobs, monkeypatch) -> None:
-    """한 요청에서 한 장이라도 기준을 넘으면 그 요청은 성공한 뽑기다 — 앞서 남긴 미달 표시는 같은
-    트랜잭션에서 지우고 사용 기록 하나만 남는다(헛시도 상한에 이중으로 잡히지 않는다)."""
+    """한 요청에서 한 장이라도 기준을 넘으면 그 요청은 성공한 뽑기다 — 첫 슬롯에서 남긴 시도 표시는
+    같은 트랜잭션에서 지우고 사용 기록 하나만 남는다(시도 상한에 이중으로 잡히지 않는다)."""
     monkeypatch.setattr(settings, "cardimage_pick_count", 2)
     _judge_scores(monkeypatch, [2, 5])
     _start()
     _run_all(jobs)
     primary, sibling = store.ai_cards
     assert primary.status == "ready" and sibling.status == "ready"
-    assert [(u.card_id, u.below_judge_min) for u in store.ai_card_usage] == [(sibling.id, False)]
+    assert [(u.card_id, u.unfulfilled_attempt) for u in store.ai_card_usage] == [(sibling.id, False)]
 
 
 def test_good_then_below_min_card_leaves_only_the_usage(store, jobs, monkeypatch) -> None:
@@ -859,16 +860,16 @@ def test_good_then_below_min_card_leaves_only_the_usage(store, jobs, monkeypatch
     _judge_scores(monkeypatch, [5, 2])
     card = _start()
     _run_all(jobs)
-    assert [(u.card_id, u.below_judge_min) for u in store.ai_card_usage] == [(card.id, False)]
+    assert [(u.card_id, u.unfulfilled_attempt) for u in store.ai_card_usage] == [(card.id, False)]
 
 
 def test_two_below_min_cards_leave_one_mark_per_request(store, jobs, monkeypatch) -> None:
-    """헛시도는 **요청 단위**로 센다 — 두 장이 다 미달이어도 뽑기 한 번이다."""
+    """시도는 **요청 단위**로 센다 — 두 장이 다 미달이어도 뽑기 한 번이다."""
     monkeypatch.setattr(settings, "cardimage_pick_count", 2)
     _judge_scores(monkeypatch, [2])
     card = _start()
     _run_all(jobs)
-    assert [(u.card_id, u.below_judge_min) for u in store.ai_card_usage] == [(card.pick_group, True)]
+    assert [(u.card_id, u.unfulfilled_attempt) for u in store.ai_card_usage] == [(card.pick_group, True)]
 
 
 def test_deleting_below_min_cards_does_not_reset_the_paid_cap(store, jobs, monkeypatch) -> None:
@@ -888,12 +889,44 @@ def test_deleting_below_min_cards_does_not_reset_the_paid_cap(store, jobs, monke
         _start(dog_id=pet.id, month=4)
 
 
-def test_finish_ready_refuses_contradictory_usage_flags(store, storage, jobs) -> None:
-    """사용 기록과 미달 표시를 한 카드에 둘 다 남기라는 호출은 조용히 하나를 고르지 않고 거절한다."""
+def test_start_then_delete_mid_generation_loop_is_bounded(store, storage, jobs, monkeypatch) -> None:
+    """F1 (D-084) — 시작 → 유료 호출 도중 삭제를 되풀이하면 카드 행·사용 기록이 하나도 안 남는다. 시도
+    표시가 **호출 전에** 남으므로 5번째 뒤로는 거절되고, 엔진은 정확히 5번만 불린다."""
+    monkeypatch.setattr(settings, "cardimage_pick_count", 2)
+    monkeypatch.setattr(settings, "cardimage_daily_limit", 1)
+    current: dict = {}
+    engine = _SideEffectEngine(lambda: asyncio.run(service.delete_card(FakeSession(), OWNER, current["id"])))
+    monkeypatch.setattr(ai_card_engine, "default_engine", lambda: engine)
+    for _ in range(quota.MAX_PAID_FAILURES_PER_DAY):
+        current["id"] = _start().id
+        _run_all(jobs)
+        assert store.ai_cards == []  # 대표·형제 모두 지워졌다 — 카드 행으로는 셀 것이 없다
+    assert [u.unfulfilled_attempt for u in store.ai_card_usage] == [True] * quota.MAX_PAID_FAILURES_PER_DAY
+    with pytest.raises(quota.AiCardLimitError):
+        _start()
+    assert len(engine.calls) == quota.MAX_PAID_FAILURES_PER_DAY
+
+
+def test_failed_calls_leave_one_mark_per_request_even_after_deleting_the_cards(store, jobs, monkeypatch) -> None:
+    """두 장이 다 실패한 요청도 표시는 요청마다 한 줄이고, 실패 카드를 지워도 남는다."""
+    monkeypatch.setattr(settings, "cardimage_pick_count", 2)
+    monkeypatch.setattr(ai_card_engine, "default_engine", lambda: FakeEngine(error=EngineError("upstream", "x")))
     card = _start()
-    with pytest.raises(ValueError):
-        asyncio.run(service._finish_ready(card.id, "k", None, None, record_usage=True, mark_below_min=True))
-    assert card.status == "generating" and store.ai_card_usage == []
+    _run_all(jobs)
+    assert [c.status for c in store.ai_cards] == ["failed", "failed"]
+    for c in list(store.ai_cards):
+        asyncio.run(service.delete_card(FakeSession(), OWNER, c.id))
+    assert [(u.card_id, u.unfulfilled_attempt) for u in store.ai_card_usage] == [(card.pick_group, True)]
+
+
+def test_attempt_mark_is_written_before_the_paid_call(store, jobs, monkeypatch) -> None:
+    seen: list = []
+    engine = _SideEffectEngine(lambda: seen.append([(u.card_id, u.unfulfilled_attempt) for u in store.ai_card_usage]))
+    monkeypatch.setattr(ai_card_engine, "default_engine", lambda: engine)
+    card = _start()
+    assert store.ai_card_usage == []  # 한도 검사를 통과한 것만으로는 안 남는다
+    _run_all(jobs)
+    assert seen == [[(card.pick_group, True)]]
 
 
 def test_choose_a_generating_card_is_rejected_and_deletes_nothing(store, storage, jobs, monkeypatch) -> None:

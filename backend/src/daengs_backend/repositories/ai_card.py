@@ -7,6 +7,7 @@ from datetime import datetime
 
 from sqlalchemy import delete as sql_delete
 from sqlalchemy import func, select, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
@@ -67,62 +68,67 @@ async def has_month_card(session: AsyncSession, app_user_id: uuid.UUID, dog_id: 
 
 
 def add_usage(session: AsyncSession, usage: AiCardUsage) -> AiCardUsage:
-    """사용 기록 또는 닮음 미달 표시 한 줄. 커밋은 부르는 쪽(ready 로 바꾸는 같은 트랜잭션)이 합니다."""
+    """사용 기록 한 줄. 커밋은 부르는 쪽(ready 로 바꾸는 같은 트랜잭션)이 합니다."""
     session.add(usage)
     return usage
+
+
+async def add_attempt_mark(
+    session: AsyncSession, pick_group: uuid.UUID, app_user_id: uuid.UUID, *, marked_at: datetime
+) -> None:
+    """이 요청의 시도 표시(`unfulfilled_attempt = true`, `card_id = pick_group`)를 남깁니다 (D-084).
+
+    **유료 호출 전에** 슬롯을 잡는 트랜잭션에서 부릅니다 — 그래야 호출 도중 카드를 지워도 표시가
+    남습니다. 같은 `card_id` 줄이 이미 있으면 아무것도 안 합니다(`ON CONFLICT DO NOTHING`) — 표시가
+    이미 있거나, 대표 행이 이미 좋은 카드가 되어 그 id(= `pick_group`)로 사용 기록이 있는 경우이고,
+    둘 다 덮으면 안 됩니다. 커밋은 부르는 쪽이 합니다.
+    """
+    await session.execute(
+        pg_insert(AiCardUsage)
+        .values(card_id=pick_group, app_user_id=app_user_id, used_at=marked_at, unfulfilled_attempt=True)
+        .on_conflict_do_nothing(index_elements=[AiCardUsage.card_id])
+    )
 
 
 async def count_usage_since(session: AsyncSession, app_user_id: uuid.UUID, since: datetime) -> int:
     """`since` 이후의 사용 기록 수. **지운 카드도 셉니다** — 기록은 카드와 따로 남습니다.
 
-    **닮음 미달 표시(`below_judge_min`)는 세지 않습니다** — 그것은 하루 한도가 아니라 돈 나간 헛시도
-    상한이 셉니다(`count_below_judge_min_since`, D-084).
+    **시도 표시(`unfulfilled_attempt`)는 세지 않습니다** — 그것은 하루 한도가 아니라 돈 나간 시도
+    상한이 셉니다(`count_attempt_marks_since`, D-084).
     """
     stmt = select(func.count()).select_from(AiCardUsage).where(
         AiCardUsage.app_user_id == app_user_id,
         AiCardUsage.used_at >= since,
-        AiCardUsage.below_judge_min.is_(False),
+        AiCardUsage.unfulfilled_attempt.is_(False),
     )
     return int(await session.scalar(stmt) or 0)
 
 
-async def count_below_judge_min_since(session: AsyncSession, app_user_id: uuid.UUID, since: datetime) -> int:
-    """`since` 이후 **닮음 기준 미만 카드만 나온 요청** 수 — 요청마다 표시가 한 줄뿐이라 행 수가 곧 요청 수다.
+async def count_attempt_marks_since(session: AsyncSession, app_user_id: uuid.UUID, since: datetime) -> int:
+    """`since` 이후 **유료 호출까지 갔는데 좋은 카드가 안 나온(아직 안 나온) 요청** 수 — 요청마다 표시가
+    한 줄뿐이라 행 수가 곧 요청 수다.
 
-    카드 행(`ai_cards`)으로 세지 않는 이유: 같은 강아지·같은 달을 다시 뽑으려면 미달 카드를 지워야
-    하므로(`has_month_card`) 카드 행으로 세면 지울 때마다 초기화된다.
+    카드 행(`ai_cards`)으로 세지 않는 이유: 카드는 지울 수 있다. 같은 강아지·같은 달을 다시 뽑으려면
+    미달 카드를 지워야 하고(`has_month_card`), 생성 중에 지우면 행이 아예 안 남는다.
     """
     stmt = select(func.count()).select_from(AiCardUsage).where(
         AiCardUsage.app_user_id == app_user_id,
         AiCardUsage.used_at >= since,
-        AiCardUsage.below_judge_min.is_(True),
+        AiCardUsage.unfulfilled_attempt.is_(True),
     )
     return int(await session.scalar(stmt) or 0)
 
 
-async def delete_below_judge_min_mark(session: AsyncSession, pick_group: uuid.UUID) -> int:
-    """이 요청의 닮음 미달 표시를 지웁니다 — 같은 요청에서 기준 이상 카드가 나와 사용 기록으로 바뀔 때.
+async def delete_attempt_mark(session: AsyncSession, pick_group: uuid.UUID) -> int:
+    """이 요청의 시도 표시를 지웁니다 — 같은 요청에서 기준 이상 카드가 나와 사용 기록으로 바뀔 때.
 
-    **표시(`below_judge_min = true`)만** 지웁니다. 대표 행의 사용 기록도 `card_id = pick_group` 이라
+    **표시(`unfulfilled_attempt = true`)만** 지웁니다. 대표 행의 사용 기록도 `card_id = pick_group` 이라
     조건이 없으면 그것까지 지울 수 있습니다. 커밋은 부르는 쪽(같은 트랜잭션)이 합니다.
     """
     result = await session.execute(
-        sql_delete(AiCardUsage).where(AiCardUsage.card_id == pick_group, AiCardUsage.below_judge_min.is_(True))
+        sql_delete(AiCardUsage).where(AiCardUsage.card_id == pick_group, AiCardUsage.unfulfilled_attempt.is_(True))
     )
     return result.rowcount or 0
-
-
-async def count_failed_since(
-    session: AsyncSession, app_user_id: uuid.UUID, since: datetime, codes: frozenset[str]
-) -> int:
-    """`since` 이후 만든 카드 중 `error_code` 가 `codes` 인 `failed` 수. 어떤 코드를 셀지는 한도가 정합니다."""
-    stmt = select(func.count()).where(
-        AiCard.app_user_id == app_user_id,
-        AiCard.status == "failed",
-        AiCard.error_code.in_(sorted(codes)),
-        AiCard.created_at >= since,
-    )
-    return int(await session.scalar(stmt) or 0)
 
 
 async def expire_generating(

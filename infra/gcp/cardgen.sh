@@ -9,14 +9,13 @@
 # ⚠ Git Bash 에서 돌린다. `MSYS_NO_PATHCONV=1` 을 켜지 마라 — gcloud 자체가 깨진다 (infra/gcp/README.md).
 set -euo pipefail
 
-: "${MODEL:?klein 또는 qwen}"
+: "${MODEL:?klein}"
 : "${INVOKER:?user:<gcloud 계정> — gcloud run services proxy 로 부를 사람}"
 PROJECT="${PROJECT:-daengs}"
 STEP="${STEP:-all}"
 case "${MODEL}" in
   klein) MODEL_NAME=klein-4b ;;
-  qwen)  MODEL_NAME=qwen-edit-2511 ;;
-  *) echo "MODEL 은 klein 또는 qwen" >&2; exit 2 ;;
+  *) echo "MODEL 은 klein (Qwen-Image-Edit-2511 은 D-078 에서 뺐다)" >&2; exit 2 ;;
 esac
 
 REGION=asia-northeast3        # 이미지 저장소(daengs)는 서울 — 코퍼스·realtime 과 공유
@@ -81,7 +80,7 @@ if [ "${STEP}" = all ] || [ "${STEP}" = deploy ]; then
   echo "== 서비스 배포 (${SERVICE})"
   # min 0 · max 1: 요청이 없으면 0대(0원). GPU 서비스는 인스턴스 기반 과금이라 떠 있는 동안은 유휴도 과금된다.
   # 포트는 곧바로 열리고 모델은 백그라운드로 올라간다(daengs_cardgen/app.py) — 시작 프로브는 기본 TCP 로 충분하다.
-  # Cloud Run 시작 프로브는 240초가 상한이라 "다 올린 뒤 포트를 연다" 는 Qwen 에서 못 맞춘다.
+  # Cloud Run 시작 프로브는 240초가 상한이라 "다 올린 뒤 포트를 연다" 는 FLUX.2-klein-4B(425~430초)에서도 못 맞춘다.
   # 올리는 동안 온 요청은 앱이 최대 840초 기다린다(--timeout=900 안쪽). 진행은 /health 의 ready·error.
   gcloud run deploy "${SERVICE}" --region="${GPU_REGION}" --image="${IMAGE}" \
     --service-account="${SA_EMAIL}" --no-allow-unauthenticated \
@@ -90,7 +89,7 @@ if [ "${STEP}" = all ] || [ "${STEP}" = deploy ]; then
     --concurrency=1 --min-instances=0 --max-instances=1 --timeout=900 \
     --add-volume=name=weights,type=cloud-storage,bucket="${BUCKET}",readonly=true \
     --add-volume-mount=volume=weights,mount-path=/models \
-    --set-env-vars="CARDGEN_MODEL=${MODEL_NAME},HF_HUB_OFFLINE=1,CARDGEN_QWEN_QUANT=${CARDGEN_QWEN_QUANT:-nf4}"
+    --set-env-vars="CARDGEN_MODEL=${MODEL_NAME},HF_HUB_OFFLINE=1"
   gcloud run services add-iam-policy-binding "${SERVICE}" --region="${GPU_REGION}" \
     --member="${INVOKER}" --role=roles/run.invoker >/dev/null
   URL="$(gcloud run services describe "${SERVICE}" --region="${GPU_REGION}" --format='value(status.url)')"

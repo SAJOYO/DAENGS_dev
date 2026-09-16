@@ -8,8 +8,8 @@ from daengs_walk.diary.relational.scene_comparison_contracts import (
     SceneFact,
     SceneSnapshot,
 )
-from daengs_walk.diary.space.road import road_name
 from daengs_walk.diary.space.semantics import material
+from daengs_walk.route.road import road_name
 from daengs_walk.value_contracts import digest
 
 

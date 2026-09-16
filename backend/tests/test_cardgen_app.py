@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from PIL import Image
 
 from daengs_cardgen.app import create_app
-from daengs_cardgen.models import EditRequest, snap
+from daengs_cardgen.models import EditRequest, seeds_for, snap
 
 
 class FakeModel:
@@ -21,9 +21,9 @@ class FakeModel:
     def load(self) -> None:
         raise AssertionError("주입한 모델은 lifespan 이 다시 올리지 않는다")
 
-    def edit(self, req: EditRequest) -> Image.Image:
+    def edit(self, req: EditRequest) -> list[Image.Image]:
         self.requests.append(req)
-        return Image.new("RGB", (req.width, req.height), (1, 2, 3))
+        return [Image.new("RGB", (req.width, req.height), (1, 2, i)) for i in range(req.count)]
 
 
 def _b64(size=(64, 64), fmt="PNG") -> str:
@@ -124,3 +124,37 @@ def test_generate_waits_for_loading_then_succeeds() -> None:
             assert health["load_seconds"] is not None
     finally:
         release.set()
+
+
+def test_seeds_for_counts_up_and_wraps() -> None:
+    assert seeds_for(7, 4) == [7, 8, 9, 10]
+    assert seeds_for(2**31 - 1, 2) == [2**31 - 1, 0]
+
+
+def test_count_one_is_the_same_png_response() -> None:
+    fake = FakeModel()
+    with TestClient(create_app(model=fake)) as client:
+        response = client.post("/generate", json=_body(count=1))
+    assert response.headers["content-type"] == "image/png"
+    assert fake.requests[0].count == 1
+
+
+def test_count_many_returns_json_with_seeds_and_images() -> None:
+    fake = FakeModel()
+    with TestClient(create_app(model=fake)) as client:
+        response = client.post("/generate", json=_body(count=3))
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("application/json")
+    assert response.headers["X-Cardgen-Size"] == "992x1584"
+    data = response.json()
+    assert (data["model"], data["size"], data["seeds"]) == ("fake", "992x1584", [7, 8, 9])
+    assert data["seconds"] >= 0
+    pixels = [Image.open(io.BytesIO(base64.b64decode(b))).getpixel((0, 0)) for b in data["images_png_b64"]]
+    assert pixels == [(1, 2, 0), (1, 2, 1), (1, 2, 2)]
+    assert fake.requests[0].count == 3
+
+
+def test_count_is_validated() -> None:
+    with TestClient(create_app(model=FakeModel())) as client:
+        assert client.post("/generate", json=_body(count=0)).status_code == 422
+        assert client.post("/generate", json=_body(count=5)).status_code == 422

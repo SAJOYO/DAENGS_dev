@@ -243,6 +243,14 @@ async def test_real_graph_storage_and_cache_keep_the_tool_receipt():
 
 
 async def test_late_tool_completion_cannot_change_frozen_card_or_titles():
+    # 아래 마감은 **0.8초짜리 절대 시각**이고 `_DiaryRun.__init__` 이 그것을 한 번 스냅샷한다.
+    # 그래서 그래프 빌드 같은 **일회성 비용이 그 예산 안에** 들어간다 — 실측으로 이 프로세스의
+    # 첫 write_cards 는 space 단계 도달까지 1.357초, 두 번째부터는 0.275초다. 데우지 않으면
+    # `entered` 가 설정되기 전에 마감이 지나 `assert entered.is_set()` 이 어긋난다.
+    # 파일 전체를 돌릴 때만 통과하던 이유가 이것이다 — 앞 테스트가 대신 데워 줬다 (#566 ⓑ).
+    warm = public_base()
+    await runtime.write_cards(warm.input.source, warm, generate=prose)
+
     base = public_base()
     entered, release = asyncio.Event(), asyncio.Event()
 

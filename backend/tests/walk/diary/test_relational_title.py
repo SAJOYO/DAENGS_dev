@@ -8,6 +8,8 @@ import pytest
 from daengs_backend.orchestration.relational_diary import generate_prepared_relational_diary
 from daengs_backend.services.walk_diary.storage.relational import read_skeleton, save_skeleton
 from daengs_backend.services.walk_diary.writing.relational_title import write_relational_title
+from daengs_walk.diary.relational.scene_title_context import scene_title_context
+from daengs_walk.diary.relational.scene_title_writer_view import scene_title_writer_view
 from daengs_walk.diary.relational.title_context import (
     TITLE_CONTRACT,
     TitleReadModel,
@@ -15,7 +17,6 @@ from daengs_walk.diary.relational.title_context import (
     title_request_revision,
     validate_title_publication,
 )
-from daengs_walk.diary.relational.title_writer_view import title_writer_view
 from daengs_walk.value_contracts import digest
 from tests.walk.diary.test_relational_orchestration import send as body_sender
 from tests.walk.diary.test_relational_takeover import assessment
@@ -185,19 +186,22 @@ async def test_saved_title_cannot_be_rebound_by_only_rehashing_request(change):
 
 async def test_real_orchestration_and_local_saved_title_binding(prepared, tmp_path):  # noqa: F811
     result = await generate_prepared_relational_diary(prepared, send=body_sender)
-    title = result["receipt"]["title"]
+    scene_id = result["receipt"]["cards"][0]["scene_id"]
+    title = result["receipt"]["scene_titles"][scene_id]
     assert title["status"] == "returned"
-    assert title["request"] == title_writer_view(title_context(result["receipt"]))
+    assert title["request"] == scene_title_writer_view(
+        scene_title_context(result["receipt"]["cards"][0])
+    )
     path = tmp_path / "title.json"
     save_skeleton(path, result)
     assert read_skeleton(path) == result["receipt"]
     document = json.loads(path.read_text(encoding="utf-8"))
-    document["payload"]["receipt"]["title"]["text"] = "교체된 제목"
+    document["payload"]["receipt"]["scene_titles"][scene_id]["text"] = "교체된 제목"
     document["digest"] = digest(document["payload"])
     path.write_text(json.dumps(document), encoding="utf-8")
     with pytest.raises(ValueError, match="candidate"):
         read_skeleton(path)
-    result["receipt"]["title"]["request"]["scenes"].clear()
+    result["receipt"]["scene_titles"][scene_id]["request"]["space"] = "다른 본문"
     with pytest.raises(ValueError, match="adopted"):
         save_skeleton(tmp_path / "wrong.json", result)
 

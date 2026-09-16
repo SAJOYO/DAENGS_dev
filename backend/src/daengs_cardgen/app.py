@@ -1,10 +1,12 @@
 """GPU 서비스 HTTP 앱. 모델은 기동 때 한 번 올리고, 요청은 한 번에 하나씩 처리한다.
 
 **포트는 곧바로 열린다** — 모델은 lifespan 이 띄운 백그라운드 스레드가 올린다. Cloud Run 의 시작
-프로브는 240초가 상한인데 Qwen(약 58GB, GCS FUSE + nf4)은 그 안에 못 올라오기 때문이다.
+프로브는 240초가 상한인데 FLUX.2-klein-4B 도 GCS FUSE 에서 425~430초 걸린다(09-15 실측).
 올리는 동안 들어온 `/generate` 는 `ready_timeout_s`(Cloud Run 요청 타임아웃 900초보다 짧게)까지
 기다렸다가 처리한다 — 그래서 콜드 스타트 요청은 여전히 503 이 아니라 **느리게 성공**한다.
 올린 시간은 `/health` 의 `load_seconds`, 올리다 실패하면 `error` 에 남고 `/generate` 는 503 `load_failed`.
+
+`count`(1~4)는 한 요청에 여러 장 — 1 이면 PNG 한 장, 2 이상이면 JSON(장별 seed·PNG base64) (#557 E2).
 """
 
 from __future__ import annotations
@@ -25,7 +27,7 @@ from fastapi.responses import JSONResponse, Response
 from PIL import Image, UnidentifiedImageError
 from pydantic import BaseModel, Field
 
-from daengs_cardgen.models import MAX_IMAGES, CardGenModel, EditRequest, snap
+from daengs_cardgen.models import MAX_COUNT, MAX_IMAGES, CardGenModel, EditRequest, seeds_for, snap
 
 
 class GenerateBody(BaseModel):
@@ -36,6 +38,7 @@ class GenerateBody(BaseModel):
     height: int = Field(ge=256, le=2048)
     steps: int | None = Field(default=None, ge=1, le=100)
     guidance: float | None = Field(default=None, ge=0, le=20)
+    count: int = Field(default=1, ge=1, le=MAX_COUNT)
 
 
 def _decode(b64: str) -> Image.Image:
@@ -111,20 +114,31 @@ def create_app(
         req = EditRequest(
             images=images, prompt=body.prompt, seed=body.seed,
             width=snap(body.width), height=snap(body.height), steps=body.steps, guidance=body.guidance,
+            count=body.count,
         )
         started = time.monotonic()
         with lock:
-            out = current.edit(req)
-        buf = io.BytesIO()
-        out.save(buf, "PNG")
-        return Response(
-            buf.getvalue(),
-            media_type="image/png",
-            headers={
-                "X-Cardgen-Model": current.name,
-                "X-Cardgen-Seconds": f"{time.monotonic() - started:.1f}",
-                "X-Cardgen-Size": f"{req.width}x{req.height}",
+            outs = current.edit(req)
+        seconds = time.monotonic() - started
+        headers = {
+            "X-Cardgen-Model": current.name,
+            "X-Cardgen-Seconds": f"{seconds:.1f}",
+            "X-Cardgen-Size": f"{req.width}x{req.height}",
+        }
+        pngs = []
+        for out in outs:
+            buf = io.BytesIO()
+            out.save(buf, "PNG")
+            pngs.append(buf.getvalue())
+        if req.count == 1:
+            return Response(pngs[0], media_type="image/png", headers=headers)
+        return JSONResponse(
+            {
+                "model": current.name, "size": f"{req.width}x{req.height}", "seconds": round(seconds, 1),
+                "seeds": seeds_for(req.seed, req.count),
+                "images_png_b64": [base64.b64encode(p).decode() for p in pngs],
             },
+            headers=headers,
         )
 
     return app

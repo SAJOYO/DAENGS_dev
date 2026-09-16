@@ -166,7 +166,9 @@ async def test_working_skeleton_failure_originals_and_saved_read(tmp_path):
               "response": {"errCd": 0, "result": [{"road_nm": f"시험로{i}길"}]}}
              for i, s in enumerate(base.board.scenes) if s.anchor.point is not None]
     result = await generate_relational_skeleton(base, send=send, road_snapshots=roads)
-    assert seen[-2][0] == "title" and seen[-1][0] == "review"
+    assert sum(stage == "title" for stage, _ in seen) == sum(
+        bool(card["body"]) for card in result["receipt"]["cards"]
+    )
     originals = result["prepared"]["snapshot"]["originals"]
     assert originals
     for original in originals:
@@ -182,7 +184,7 @@ async def test_working_skeleton_failure_originals_and_saved_read(tmp_path):
     with pytest.raises(ValueError):
         validate_prepared(changed)
     data = json.loads(path.read_text(encoding="utf-8"))
-    data["payload"]["receipt"]["title"]["text"] = "changed"
+    next(iter(data["payload"]["receipt"]["scene_titles"].values()))["text"] = "changed"
     path.write_text(json.dumps(data), encoding="utf-8")
     with pytest.raises(ValueError):
         read_skeleton(path)

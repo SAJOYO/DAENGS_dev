@@ -3,12 +3,33 @@
 __all__ = [
     "existing_format",
     "generate_diary",
+    "generate_relational",
     "get_diary",
+    "get_relational",
     "get_slot_writer",
     "guard_old_writer",
+    "is_relational",
     "legacy_slot_writer",
     "preview_saved_slots",
 ]
+
+
+def is_relational(row):
+    from .lifecycle.relational import is_relational as check
+
+    return check(row)
+
+
+async def get_relational(session, owner, walk_id, target=None):
+    from .lifecycle.relational import get_relational as read
+
+    return await read(session, owner, walk_id, target)
+
+
+async def generate_relational(session, owner, walk_id, request, *, writer=None, policy=None):
+    from .lifecycle.relational import generate_relational as generate
+
+    return await generate(session, owner, walk_id, request, writer=writer, policy=policy)
 
 
 def legacy_slot_writer(writer=None):

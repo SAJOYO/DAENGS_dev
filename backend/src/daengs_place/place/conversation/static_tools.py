@@ -52,7 +52,14 @@ TURN_TOOL["parameters"]["required"] = [
     "goal",
     "search_scope_quote",
     "feedback",
+    "changes",
 ]
+TURN_TOOL["parameters"]["properties"]["changes"]["description"] = (
+    "지원 가능한 검색 변경. 업종명뿐 아니라 사용자가 하려는 활동을 kinds로 해석한다: "
+    "먹을 곳=dining(cafe,restaurant), 놀 곳=outing(travel,leisure). "
+    "미지원 동반 조건은 unsupported에 따로 적고 이 업종 변경을 빠뜨리지 않는다. "
+    "변경이 없는 읽기·잡담이면 빈 객체다."
+)
 
 PENDING_TOOL = {
     "type": "function",
@@ -139,7 +146,8 @@ all은 '전부/전체/모두/다'다. text에는 조사나 동사를 붙이지 �
 explain에서는 changes를 비우고, 질문한 속성을 asked_attributes에 모두 넣는다.
 조용한지/무료인지 질문은 quiet/free다. 이유 질문과 실제 속성 질문을 구별한다.
 카페만/카페로는 kinds set [cafe], 음식점도는 add [restaurant], 음식점 빼줘는 remove [restaurant].
-대분류는 purposes의 소분류 kinds로 펼친다. 최대 6개다. 명시된 최종 정정을 따른다.
+업종명이 없어도 하려는 활동을 purposes의 소분류 kinds로 해석한다. 먹을 곳은 dining, 놀 곳은 outing이다.
+명사형 요청도 검색이다. 미지원 조건과 별개로 활동에 맞는 kinds 변경을 남긴다. 최대 6개이며 최종 정정을 따른다.
 '주차 필수야, 아니 주차 없어도 돼'는 마지막 정정을 따른다.
 '주차 필수인데 주차 없는 곳만'처럼 정정 표시 없는 모순은 unresolved=conflicting_conditions다.
 주차 되는 곳만: required_true. 안 되는 곳만: required_false. 있으면 좋음/우선: preferred_true.

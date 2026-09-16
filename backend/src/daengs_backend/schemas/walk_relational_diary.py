@@ -3,7 +3,7 @@
 import uuid
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, JsonValue
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
 
 from daengs_walk.diary.contracts.input import Anchor, PhotoManifestRef, UserRecord
 from daengs_walk.diary.relational.scene_comparison_contracts import SceneCardHeader, SceneSnapshot
@@ -33,6 +33,16 @@ class RelationalCard(PublicValue):
     current_context: SceneSnapshot
     comparison_scene_id: str | None
     originals: list[UserRecord]
+    title: str | None = Field(default=None, min_length=1, max_length=30)
+    title_status: Literal["returned", "failed", "not_requested"] = "not_requested"
+
+    @model_validator(mode="after")
+    def title_matches_status(self):
+        if (self.title_status == "returned") != (self.title is not None):
+            raise ValueError("card title status mismatch")
+        if self.title is not None and (not self.title.strip() or not self.body.strip()):
+            raise ValueError("card title requires adopted body")
+        return self
 
 
 class RelationalBundle(PublicValue):

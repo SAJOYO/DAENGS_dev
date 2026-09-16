@@ -16,6 +16,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from PIL import Image
 
+from daengs_backend.config import settings
 from daengs_backend.core.deps import Principal, current_admin
 from daengs_backend.routers import admin_cardimage
 from daengs_cardimage import engine as engine_mod
@@ -76,10 +77,14 @@ def test_mixed_case_content_type_is_accepted(client: TestClient) -> None:
     assert r.status_code == 200, r.text
 
 
-def test_closed_month_is_404(client: TestClient) -> None:
+def test_closed_month_is_404(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    # #572 부터 기본값이 1~12월 전부 열림이라 실제로 닫힌 달이 없다 — 이 테스트는 `require_open`
+    # 이 여전히 404 로 막는지를 보는 것이 목적이라, 다른 테스트 파일들과 같은 방식으로
+    # `cardimage_months` 를 좁혀 12월만 닫힌 상태를 만든다.
+    monkeypatch.setattr(settings, "cardimage_months", frozenset({4, 9}))
     r = client.post(
         "/admin/cardimage/generate",
-        params={"month": 12, "dog_name": "x"},   # 12월은 틀만 있고 아직 안 열렸다 (열린 달: 4·9)
+        params={"month": 12, "dog_name": "x"},
         content=_photo(),
         headers={"Content-Type": "image/jpeg"},
     )

@@ -129,3 +129,30 @@ def test_generate_card_without_rng_still_works():
     """`rng` 를 안 넘기면(운영 경로) 내부에서 새 `random.Random()` 을 만들어 쓴다."""
     out = _run(FakeEngine(), FakeJudge([5]))
     assert out.seed in catalog.get(4).seeds
+
+
+def test_low_likeness_retries_with_a_different_seed():
+    """#572 fix round 1 F2 — 같은 seed 로 재시도하면 cardgen 엔진에서는 무의미한 재생성이다.
+    `pick_seeds` 가 서로 다른 두 값을 미리 뽑아 두고, 두 번째 시도는 그 다른 값을 쓴다."""
+    eng = FakeEngine([png(color=(1, 1, 1)), png(color=(2, 2, 2))])
+    jd = FakeJudge([2, 4])
+    out = _run(eng, jd, rng=random.Random(0))
+    assert out.attempts == 2
+    assert eng.calls[0]["seed"] != eng.calls[1]["seed"]
+    assert {eng.calls[0]["seed"], eng.calls[1]["seed"]} <= set(catalog.get(4).seeds)
+    assert out.seed == eng.calls[1]["seed"]
+
+
+def test_explicit_seed_is_used_verbatim_and_skips_retry(monkeypatch):
+    """#572 fix round 1 F1 — 호출자가 seed 를 못박으면 pick_seeds 를 부르지 않고 재시도도 없다."""
+
+    def _boom(*args, **kwargs):
+        raise AssertionError("pick_seeds 가 불렸다 — 명시한 seed 를 무시했다")
+
+    monkeypatch.setattr(catalog, "pick_seeds", _boom)
+    # 검수 점수를 낮게 둬서, 재시도가 있었다면 걸렸을 조건을 일부러 만든다.
+    eng, jd = FakeEngine(), FakeJudge([1])
+    out = _run(eng, jd, seed=999)
+    assert out.attempts == 1
+    assert out.seed == 999
+    assert len(eng.calls) == 1 and eng.calls[0]["seed"] == 999

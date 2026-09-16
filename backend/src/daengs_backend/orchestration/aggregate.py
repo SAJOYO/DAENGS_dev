@@ -31,6 +31,8 @@ _LABELS = {
     CapabilityName.CARE_LOG: "케어 기록",
     # 배타 단일 요청이라 화면에 안 찍힌다. 그래도 빠뜨리면 KeyError 다 (D-079).
     CapabilityName.SKIN: "피부",
+    # 위와 같다 (D-080).
+    CapabilityName.GAIT: "보행",
 }
 
 # HANDOFF 사용자 문구. `handoff.target`/`handoff.reason` 은 라우팅 내부 값이라

@@ -375,6 +375,7 @@ def _general_recording_adapter(sink: dict[str, Any]) -> Any:
 def build_adapters(mode: AdapterMode, general_sink: dict[str, Any]) -> Mapping[Any, Any] | None:
     """`answer_quality.collect.build_adapters` 와 같은 갈래. General 자리만 항상 감싼다."""
     from daengs_backend.orchestration.adapters import (
+        GaitCapabilityAdapter,
         LifeCapabilityAdapter,
         PlaceCapabilityAdapter,
         SkinCapabilityAdapter,
@@ -399,6 +400,9 @@ def build_adapters(mode: AdapterMode, general_sink: dict[str, Any]) -> Mapping[A
             # 판정 기록이 붙은 `skin` 신호로만 들어온다 (D-079). 하네스는 기록 id 를 안
             # 보내므로 실제로는 안 돈다 — 운영 엔진과 같은 등록을 두는 것뿐이다.
             CapabilityName.SKIN: SkinCapabilityAdapter(),
+            # 비교 참조가 붙은 `gait` 신호로만 들어온다 (D-080). 위와 같은 이유로 하네스에서는
+            # 안 돈다 — 등록만 운영 엔진과 맞춘다.
+            CapabilityName.GAIT: GaitCapabilityAdapter(),
         }
     if mode == "fake":
         return _fake_adapters()

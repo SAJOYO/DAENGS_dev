@@ -40,6 +40,7 @@ from daengs_backend.orchestration.planner import (
     resolve_care_log_write,
     resolve_deterministic_route,
     resolve_emergency_route,
+    resolve_gait_route,
     resolve_skin_route,
 )
 from daengs_backend.orchestration.resolver import (
@@ -201,6 +202,18 @@ class AssistantOrchestrationService:
                 context=structured_context,
                 requested_capability=requested_capability,
                 enabled=settings.skin_agent,
+            )
+        # ── 보행 변화 관찰 해설 (D-080). 피부와 같은 자리, 같은 이유.
+        # `gait` 신호도 `resolve_deterministic_route` 가 HANDOFF 로 읽는다 — 서버가 소유를
+        # 확인하고 계산한 비교(또는 못 한 이유)가 붙은 요청만 여기서 먼저 가로챈다.
+        # 응급이 앞인 이유도 같다: "다리를 아예 못 디뎌요" 는 변화 관찰이 아니라 병원이다.
+        # skin 과 서로 순서가 무관한 것은 신호 이름이 달라 둘이 겹칠 수 없어서다.
+        if route_plan is None:
+            route_plan = resolve_gait_route(
+                query=query,
+                context=structured_context,
+                requested_capability=requested_capability,
+                enabled=settings.gait_agent,
             )
         if route_plan is None:
             route_plan = resolve_deterministic_route(

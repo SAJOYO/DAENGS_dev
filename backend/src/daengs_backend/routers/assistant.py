@@ -41,6 +41,7 @@ from daengs_backend.schemas.assistant import AssistantQueryRequest
 from daengs_backend.services import care_log_context as care_log_context_service
 from daengs_backend.services import chat as chat_service
 from daengs_backend.services import dog_context as dog_context_service
+from daengs_backend.services import gait_context as gait_context_service
 from daengs_backend.services import request_metrics as metrics_service
 from daengs_backend.services import screening_context as screening_context_service
 from daengs_backend.services import vet_spend_context as vet_spend_context_service
@@ -194,6 +195,42 @@ async def _with_screening_context(
     return {**context, **resolved}
 
 
+async def _with_gait_context(
+    context: dict[str, Any],
+    body: AssistantQueryRequest,
+    principal: Principal | AppPrincipal,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> dict[str, Any]:
+    """`context["gait_compare"]` 또는 `context["gait_compare_unavailable"]` 를 채운다 (D-080).
+
+    `_with_screening_context` 와 같은 자리이고 같은 규칙이다 — **비교 내용은 본문에서 안
+    받는다.** 앱이 보내는 것은 기록 참조 둘뿐이고, 무엇이 달라 보였는지는 서버가 두 행의
+    소유를 확인해 계산한다. 응답이 대화 turn 으로 저장되는 경로라(D-048), 검증하지 않은
+    비교를 그대로 실었다면 지난 turn 에서 되돌릴 수 없다.
+
+    **못 채워도 그냥 지나가지 않는다** — 피부와 갈리는 유일한 지점이다. 남의 기록 · 없는
+    기록 · 다른 아이 · 분석 방식 불일치 · 한쪽 영상 품질 부족이 전부 **이유를 달고** 온다
+    (`services/gait_context.resolve_compare`). 사용자가 비교 결과 화면에서 눌러 들어온
+    요청이라, 조용히 일반 답으로 넘기면 방금 본 비교와 무관한 답이 나간다.
+
+    **관리자 토큰은 여기 안 들어온다** — 기록의 주인이 앱 회원이라 `AppPrincipal` 이
+    아니면 참조를 해소할 주체가 없다. 그때는 이 필드가 없는 요청과 같아져 예전처럼
+    gait HANDOFF 다 (`_with_screening_context` 와 같은 처리).
+    """
+    if not isinstance(principal, AppPrincipal) or body.gait_compare is None:
+        return context
+    async with session_factory() as session:
+        resolved = await gait_context_service.resolve_compare(
+            session,
+            principal.app_user_id,
+            body.gait_compare.recent_record_id,
+            body.gait_compare.past_record_id,
+        )
+    if not resolved:
+        return context
+    return {**context, **resolved}
+
+
 async def _resolved_context(
     base: dict[str, Any],
     body: AssistantQueryRequest,
@@ -203,11 +240,12 @@ async def _resolved_context(
     """신뢰된 구조화 컨텍스트를 다 채운 모양. 부르는 자리가 둘(무상태 · 저장)이라 묶어 둔다.
 
     **세션을 각자 연다.** 해당 필드를 안 보낸 요청은 DB 를 아예 안 열고, 보낸 요청만
-    그만큼 연다 — 무상태 요청이 DB 를 한 번도 안 여는 성질(D-048)을 이 두 필드가
+    그만큼 연다 — 무상태 요청이 DB 를 한 번도 안 여는 성질(D-048)을 이 세 필드가
     필요할 때만 깬다.
     """
     context = await _with_dog_context(base, principal, session_factory)
-    return await _with_screening_context(context, body, principal, session_factory)
+    context = await _with_screening_context(context, body, principal, session_factory)
+    return await _with_gait_context(context, body, principal, session_factory)
 
 
 @router.post(

@@ -431,7 +431,8 @@ Place 는 PR #196 에서 실행 registry 에 들어왔고 `requested_capability=
 | Place | YES | YES |
 | Skin 판정 EXECUTE (`/screen/*`) | NO | NO |
 | Skin 판정 해설 EXECUTE — 기록이 붙은 `skin` 신호 (D-079) | YES | NO (기록이 없어 HANDOFF) |
-| Gait EXECUTE | NO | NO |
+| Gait 변화 관찰 해설 EXECUTE — 비교 참조가 붙은 `gait` 신호 (D-080) | **YES** | NO (참조를 해소할 주체가 없어 HANDOFF) |
+| Gait 분석 EXECUTE (영상 업로드) | NO | NO |
 
 - **앱 회원의 assistant 경유 Training 실행은 의도된 제품 접근 확대입니다** — 우발적
   우회가 아닙니다 (2026-08-30 사람 승인). 기존 직접 엔드포인트 `/training/chat` 은
@@ -450,13 +451,24 @@ Place 는 PR #196 에서 실행 registry 에 들어왔고 `requested_capability=
   새로 내는 것은 여전히 HANDOFF 이고, 라우터는 `skin` 을 EXECUTE 로 고를 수 없습니다.
   Skin 은 #100/D-040 이후 main backend 의 `/screen/*` 로 기술적으로 호출 가능하지만,
   multipart 업로드와 통제 문구 보존이 필요한 전용 플로우라 Card 1 역할은 그대로
-  HANDOFF 입니다. Gait 는 여전히 `gait` profile 뒤의 별도 프로세스이고 #98도 미머지입니다.
+  HANDOFF 입니다.
+
+  **Gait 에도 같은 예외가 하나 생겼습니다** (D-080, `planner.resolve_gait_route`). 앱이
+  **비교 참조 둘**(`gait_compare`)을 붙여 `gait` 신호를 보내면, 서버가 소유를 확인하고
+  계산한 비교를 **해설**하는 `gait` EXECUTE 가 돕니다. 영상을 새로 분석하는 것은 여전히
+  HANDOFF 이고, 라우터는 `gait` 를 EXECUTE 로 고를 수 없습니다. 목적이 피부와 다릅니다 —
+  판정 해설이 아니라 **같은 아이의 시간 변화 관찰**이라(D-058) 행동 집합에 진료 권유가
+  없고, 좋아졌다·나빠졌다는 어느 경로로도 말하지 않습니다.
+  분석 자체는 `gait` profile 뒤의 Celery 워커가 맡습니다 (D-063 으로 소스는 backend
+  프로젝트 안으로 들어왔습니다).
   Journey는 #99로 소스가 backend 프로젝트에 합쳐졌을 뿐 Card 1 EXECUTE 대상이 아닙니다.
   Place는 PR #204(D-051)로 전역 의미 라우터 대상이 됐습니다 — 근거·서비스·목적지 순서를
   지킨 결과이지 기술 가용성 때문이 아닙니다.
   **기술 가용성은 오케스트레이션 범위 승인이 아닙니다.**
-- Gait 가 미래에 들어오면 동기 EXECUTE 가 아니라 CapabilityResult 의 PENDING + job
-  메타데이터 경로(contracts §4)입니다 — 추론이 분 단위입니다.
+- **분석을 새로 돌리는** Gait 가 미래에 들어오면 동기 EXECUTE 가 아니라 CapabilityResult 의
+  PENDING + job 메타데이터 경로(contracts §4)입니다 — 추론이 분 단위입니다. D-080 의 변화
+  관찰 해설은 그 경로가 아닙니다: **이미 끝난 두 기록**을 읽어 비교를 계산할 뿐이라
+  (numpy 만, 모델·영상 없음) 다른 해설 능력과 같은 동기 실행입니다.
 - 능력의 의존성이 일시적으로 죽어 있을 때(예: Training 의 전용 PGVector 컨테이너나
   Gemini 호출 실패 — #94 이후 Training 은 backend 프로세스 안이므로 "프로세스 다운"이
   아니라 의존성 실패입니다) 그 실패는 REFUSED 도 ABSTAINED 도 아니라 ERROR 입니다

@@ -97,8 +97,87 @@ SKIN_VERDICT_SUMMARY: dict[str, str] = {
     "retake": "이번 사진으로는 판정하지 못했어요.",
 }
 
+#: 보행 **변화 관찰** 해설(D-080)의 다음 행동. 피부(`SkinAction`)와 셋 다 다르고, 특히
+#: **진료 권유가 없다.** 이 서비스는 진단이 아니라 같은 아이의 시간 변화 관찰이고(D-058),
+#: 걸음 비교에서 병원을 권하기 시작하면 관찰이 판정으로 되돌아간다. 병원이 필요한 질문
+#: ("병원 가야 해?" · "무슨 병이야?")은 행동이 아니라 **거절**로 가고, 그때 나가는
+#: `SCOPED_REDIRECT_MESSAGES["diagnosis"]` 의 둘째 문장이 진료를 안내한다.
+GaitAction = Literal["same_condition_retake", "keep_observing", "check_conditions"]
+
+GAIT_ACTION_MESSAGES: dict[GaitAction, str] = {
+    "same_condition_retake": "같은 거리·같은 각도·비슷한 밝기에서 한 번 더 찍어 비교해 보세요.",
+    "keep_observing": "다음에 한 번 더 찍어 흐름을 보면 변화인지 더 분명해져요.",
+    "check_conditions": (
+        "이번 두 영상은 촬영 조건이 달랐을 수 있어요. 조건을 맞춰 다시 찍으면 차이가 "
+        "조건 때문인지 알 수 있어요."
+    ),
+}
+
+#: 모델 해설이 **방향(좋아졌다·나빠졌다) · 진단어 · 수치**를 말했을 때 그 문장 대신 나가는
+#: 변화 요약 (D-080). 앱 `GaitVerdict` 의 네 갈래와 **같은 뜻**이어야 한다 — 같은 비교가
+#: 카드와 해설에서 다른 말로 나오면 사용자가 그것을 다른 결과로 읽는다.
+GAIT_CHANGE_SUMMARY: dict[str, str] = {
+    "no_change": "두 기록을 비교했을 때 주요 관절 움직임은 전반적으로 비슷했어요.",
+    "one_side": "한쪽 다리의 여러 관절에서 움직임 차이가 함께 관찰됐어요.",
+    "both_sides": (
+        "양쪽 다리 모두에서 차이가 관찰됐어요. 걸음 변화보다 촬영 조건이 달랐을 "
+        "가능성을 먼저 봐야 해요."
+    ),
+    "not_enough": "두 영상에서 같은 관절을 충분히 재지 못해 변화가 있었는지 말하기 어려워요.",
+}
+
+#: 보행 해설 답 끝에 **조건 없이** 붙는다 (`SKIN_REFERENCE_NOTICE` 와 같은 판단).
+#: **진료를 권하지 않는다** — 그것이 이 능력의 행동 집합과 같은 선이다.
+GAIT_REFERENCE_NOTICE = (
+    "영상으로 본 움직임 비교는 참고용이에요. 실제 변화인지는 같은 조건에서 여러 번 찍어 "
+    "봐야 알 수 있어요."
+)
+
+#: 두 기록의 분석 버전이 다를 때 **조건 없이** 함께 나간다. 앱도 같은 상황에서 서버
+#: `version_warning` 을 띄운다 — 같은 사실이 두 화면에서 같은 무게로 보여야 한다.
+GAIT_VERSION_WARNING = (
+    "두 기록은 분석 버전이 달라요. 같은 영상이라도 버전이 다르면 움직임 범위가 달라 보일 수 있어요."
+)
+
+#: 여섯 판정 지점이 전부 달라졌고 그렇게 볼 근거도 충분할 때 **덧붙는** 한 줄 (D-080).
+#: 조건은 `services/gait_context._expert_advisory` 가 정하고, 문장은 여기서 나간다.
+#:
+#: ⚠️ **"수의사" 가 아니라 "전문가" 다.** 진료 권유는 이 능력의 행동 집합에 없고(그것이
+#:    관찰을 판정으로 되돌리는 문이다), 이 줄도 권유가 아니라 **선택지를 알려 주는 말**이다.
+#: ⚠️ 정도(심하다 · 악화 · 질환 의심)를 말하지 않는다. 영상만으로는 원인을 알 수 없다는
+#:    사실이 이 문장의 앞 절이고, 그것이 이 줄이 과장으로 읽히지 않게 하는 장치다.
+GAIT_EXPERT_ADVISORY = (
+    "영상만으로는 원인을 알 수 없어요. 이런 변화가 다음에도 반복되면 전문가의 의견을 "
+    "받아 보는 것도 좋아요."
+)
+
+#: 비교를 해설할 수 없을 때 **이유 범주별로** 나가는 문장 (D-080). 조용히 다른 능력으로
+#: 넘기지 않는 이유는 사용자가 비교 화면에서 눌러 들어왔기 때문이다 — general 로 가면 방금
+#: 본 비교와 무관한 답이 나오고, HANDOFF 로 가면 "영상을 올려 주세요" 가 다시 나온다.
+#: 둘 다 사용자가 한 행동을 부정한다.
+GAIT_UNAVAILABLE_MESSAGES: dict[str, str] = {
+    "not_found": "비교 정보를 불러올 수 없어요. 기록 화면에서 두 기록을 다시 골라 주세요.",
+    "same_record": "같은 기록끼리는 비교할 수 없어요. 다른 날 기록과 비교해 주세요.",
+    "different_pet": "서로 다른 아이의 기록은 비교할 수 없어요.",
+    "model_mismatch": "두 기록은 분석 방식이 달라서 비교할 수 없어요.",
+    "quality": (
+        "한쪽 영상에서 분석에 쓸 보행 장면이 부족해 비교하지 못했어요. 밝은 곳에서 강아지 "
+        "전신이 보이도록 흔들림 없이 다시 찍어 주세요."
+    ),
+    "legacy_pair": (
+        "예전 분석 방식으로 만든 기록이라 다리별 변화까지는 설명해 드릴 수 없어요. "
+        "최근 기록끼리 비교하면 자세히 볼 수 있어요."
+    ),
+}
+
 __all__ = [
     "DISTANCE_FROM_RECORDED_WALKS_ONLY",
+    "GAIT_ACTION_MESSAGES",
+    "GAIT_CHANGE_SUMMARY",
+    "GAIT_EXPERT_ADVISORY",
+    "GAIT_REFERENCE_NOTICE",
+    "GAIT_UNAVAILABLE_MESSAGES",
+    "GAIT_VERSION_WARNING",
     "NO_CAPABILITY_MESSAGE",
     "SCOPED_REDIRECT_MESSAGES",
     "SKIN_ACTION_MESSAGES",
@@ -108,6 +187,7 @@ __all__ = [
     "VET_CONTACT_CURRENT_LOCATION_FRAME",
     "VET_CONTACT_HOURS_UNKNOWN",
     "VET_CONTACT_LOCATION_UNKNOWN",
+    "GaitAction",
     "RefusalReason",
     "SkinAction",
 ]

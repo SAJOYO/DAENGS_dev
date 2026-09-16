@@ -252,7 +252,16 @@ async def annotate(
 
 
 class CompareError(RuntimeError):
-    """비교할 수 없는 요청. 라우터가 400 으로 옮깁니다 (없는 것과 구분됩니다)."""
+    """비교할 수 없는 요청. 라우터가 400 으로 옮깁니다 (없는 것과 구분됩니다).
+
+    `code` 는 **기계가 읽는 이유**입니다 (D-080). 보행 변화 관찰 해설은 비교를 못 했을 때
+    이유 범주별 고정 문구로 닫는데, 그 범주를 사람이 읽는 `str(exc)` 에서 되짚으면 문구를
+    다듬는 순간 분류가 조용히 틀립니다. 400 응답 본문은 지금처럼 메시지만 씁니다.
+    """
+
+    def __init__(self, message: str, *, code: str) -> None:
+        super().__init__(message)
+        self.code = code
 
 
 def _as_compare_record(record: GaitRecord) -> dict:
@@ -310,7 +319,24 @@ async def compare(
     record_id_a: uuid.UUID,
     record_id_b: uuid.UUID,
 ) -> dict:
-    """두 기록 비교. **DB 데이터만으로 완결됩니다** (D-058).
+    """두 기록 비교 — `/app/gait/compare` 가 쓰는 자리. 비교 결과만 돌려줍니다."""
+    result, _past, _recent = await compare_detailed(
+        session, app_user_id, record_id_a, record_id_b
+    )
+    return result
+
+
+async def compare_detailed(
+    session: AsyncSession,
+    app_user_id: uuid.UUID,
+    record_id_a: uuid.UUID,
+    record_id_b: uuid.UUID,
+) -> tuple[dict, GaitRecord, GaitRecord]:
+    """비교 결과 **와 그 두 행**(오래된 것, 최근 것). 두 기록 비교. **DB 데이터만으로 완결됩니다** (D-058).
+
+    행까지 돌려주는 이유는 보행 변화 관찰 해설(D-080) 때문입니다 — 그쪽은 비교 결과 말고도
+    **두 기록의 품질 등급과 촬영일**이 필요한데, 그것만 따로 읽으면 같은 두 행을 한 요청에서
+    두 번 읽게 됩니다. `/app/gait/compare` 는 결과만 필요하므로 `compare` 를 씁니다.
 
     판정·임계값·문구는 각 모델의 비교 함수 그대로입니다 — 여기서는 입력을 모아 주고,
     **두 기록의 `pose_model` 로 비교 가능 여부**를 가른 뒤, `_dev_only_*` 만 걷어냅니다.
@@ -320,7 +346,7 @@ async def compare(
     모델을 모르는 기록끼리는 관절 정의가 같다는 보장이 없습니다.
     """
     if record_id_a == record_id_b:
-        raise CompareError("같은 기록끼리는 비교할 수 없습니다.")
+        raise CompareError("같은 기록끼리는 비교할 수 없습니다.", code="same_record")
 
     rows = await gait_repo.get_accessible_pair(session, app_user_id, (record_id_a, record_id_b))
     if len(rows) != 2:
@@ -331,21 +357,22 @@ async def compare(
     if first.pet_id != second.pet_id:
         # 소유자는 같지만 **다른 반려견**입니다. 개체가 다르면 비교가 의미를 잃습니다 —
         # 이 서비스는 "같은 아이의 시간 변화"를 보는 것이라서요.
-        raise CompareError("서로 다른 반려견의 기록은 비교할 수 없습니다.")
+        raise CompareError("서로 다른 반려견의 기록은 비교할 수 없습니다.", code="different_pet")
 
     # 관절 정의 호환성 (D-063). 서버가 지금 어떤 엔진을 돌리는지(`GAIT_ENGINE`)는 보지 않습니다 —
     # 기록이 무엇으로 만들어졌는지가 기준입니다.
     if first.pose_model is None or second.pose_model is None:
-        raise CompareError("비교 불가 — 분석 모델 정보가 없는 기록입니다.")
+        raise CompareError("비교 불가 — 분석 모델 정보가 없는 기록입니다.", code="model_mismatch")
     if first.pose_model != second.pose_model:
-        raise CompareError("비교 불가 — 서로 다른 분석 모델로 만든 기록입니다.")
+        raise CompareError("비교 불가 — 서로 다른 분석 모델로 만든 기록입니다.", code="model_mismatch")
 
     past, recent = _order_by_age(first, second)
 
     # 비교 함수 선택과 `_dev_only_*` 제거는 `_run_compare` 에 있습니다.
-    return _run_compare(
+    result = _run_compare(
         _as_compare_record(past), _as_compare_record(recent), pose_model=first.pose_model
     )
+    return result, past, recent
 
 
 # ── 정리 (워커/스케줄) ──────────────────────────────────────────────────
@@ -764,7 +791,9 @@ def _run_compare(past: dict, recent: dict, *, pose_model: str) -> dict:
         #    가볍게 유지하는 규율(D-021)이고, 비교를 안 부르면 안 올라옵니다.
         from daengs_gait.compare import compare_loaded_records as compare_fn
     else:
-        raise CompareError(f"비교 불가 — 지원하지 않는 분석 모델입니다: {pose_model}")
+        raise CompareError(
+            f"비교 불가 — 지원하지 않는 분석 모델입니다: {pose_model}", code="model_mismatch"
+        )
 
     result = compare_fn(past, recent)
     return {k: v for k, v in result.items() if not k.startswith("_dev_only_")}

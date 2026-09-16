@@ -30,6 +30,26 @@ class LocationIn(BaseModel):
     lon: float = Field(ge=_LON_BOUNDS[0], le=_LON_BOUNDS[1])
 
 
+class GaitCompareRef(BaseModel):
+    """이어서 물을 보행 비교의 **참조 두 개** (D-080).
+
+    스크리닝이 참조 하나인데 여기가 둘인 이유는 **비교가 저장되지 않기 때문**이다 — 비교
+    테이블이 없고, 서버가 두 기록을 읽어 그 자리에서 계산한다 (`services/gait_context.py`).
+
+    **비교 내용은 안 받는다.** `screening_record_id` 와 같은 이유다: 응답이 대화 turn 으로
+    저장되므로(D-048), 검증하지 않은 비교가 한 번 들어가면 지난 turn 에서 되돌릴 수 없다.
+
+    한쪽만 보내는 모양은 없다 — 둘 다 필수라 스키마가 막는다. 같은 id 두 개는 여기서
+    막지 않고 `services/gait_context` 가 `same_record` 이유로 닫는다: 그 사실을 사용자에게
+    말해 주는 편이 422 로 끝내는 것보다 낫다.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    recent_record_id: uuid.UUID
+    past_record_id: uuid.UUID
+
+
 def _reject_blank(value: str | None) -> str | None:
     if value is not None and not value.strip():
         raise ValueError("must not be blank")
@@ -60,6 +80,12 @@ class AssistantQueryRequest(BaseModel):
     # (`services/screening_context.py`). 남의 것·없는 것·판정 전은 조용히 무시됩니다 —
     # 기록을 못 찾았다는 이유로 답할 수 있는 질문을 실패시키지 않습니다.
     screening_record_id: uuid.UUID | None = None
+    # 이어서 물을 보행 **비교** (D-080). `screening_record_id` 와 같은 규칙이다 —
+    # **비교 내용이 아니라 참조**이고, 두 기록의 소유 확인과 비교 계산은 서버가 한다
+    # (`services/gait_context.py`). 비교가 저장되지 않으므로 참조가 두 개다.
+    # 남의 것·없는 것·비교 불가는 조용히 무시되지 않고 **이유 범주별 고정 문구로 닫힌다** —
+    # 사용자가 비교 결과 화면에서 눌러 들어온 요청이라서다.
+    gait_compare: GaitCompareRef | None = None
     # 대화 저장 (D-048). **둘 다 있으면** 이 질문과 답이 그 대화의 turn 으로 남고, **둘 다
     # 없으면** v0.0.0 그대로 무상태다 — 그 요청은 DB 를 한 번도 열지 않는다. 한쪽만 있는
     # 것은 모양이 틀린 것이라 422. 앱 회원 전용이고, 대화의 `pet_id` 가 `active_dog_id` 보다

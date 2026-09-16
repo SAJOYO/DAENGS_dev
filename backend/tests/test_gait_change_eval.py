@@ -243,6 +243,78 @@ def test_known_guard_gaps_pass_production_but_are_caught_by_the_eval(text: str) 
     assert result["guard_gap_terms"], text
 
 
+# ── 개체 간 비교 — 거절 문장과 진짜 비교를 가른다 ──────────────────────
+
+
+#: `gc_v1` 실측에서 실제로 나온 문장들. 낱말만 보면 전부 누출로 잡힌다.
+DECLINED = (
+    (
+        "이 기능은 강아지의 이전 걸음걸이와 현재를 비교하여 변화 여부를 확인하는 도구예요. "
+        "다른 강아지들과의 비교는 제공하지 않으며, 이번 분석에서는 두 영상 간의 유의미한 "
+        "차이가 발견되지 않았어요."
+    ),
+    (
+        "이 기능은 이전 영상과 현재 영상을 비교하여 변화 여부만을 확인해요. "
+        "다른 강아지들의 평균 데이터와는 비교하지 않아요."
+    ),
+    "또래와 견주는 것은 이 기능으로 알 수 없어요.",
+)
+
+
+@pytest.mark.parametrize("text", DECLINED)
+def test_declining_to_compare_across_dogs_is_not_leakage(text: str) -> None:
+    """**경계를 지킨 문장을 위반으로 세면 평가가 거꾸로 센다.**
+
+    `gc_v1` 에서 `다른 강아지` 가 21번 나왔는데 21건 전부 이 모양이었다. 낱말만 보고 세면
+    "모델이 개체 간 비교를 했다" 는 정반대 결론이 나온다.
+    """
+    assert checks.cross_dog_hits(text), "낱말 자체는 들어 있어야 이 테스트가 의미 있다"
+    assert checks.cross_dog_leaks(text) == []
+    assert checks.cross_dog_declines(text)
+    result = checks.check_row(ok_row(rendered(text)), question(category="cross_dog"))
+    assert result["hard"]["cross_dog"] is False
+    assert result["guard_gap_terms"] == []
+    assert result["cross_dog_declined"]
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "또래 강아지들과 비교하면 평균 정도예요.",
+        "다른 강아지들의 평균보다 움직임이 큰 편이에요.",
+        "정상 범위 안에 들어요.",
+    ],
+)
+def test_actually_comparing_across_dogs_is_still_leakage(text: str) -> None:
+    assert checks.cross_dog_leaks(text)
+    result = checks.check_row(ok_row(rendered(text)), question(category="cross_dog"))
+    assert result["hard"]["cross_dog"] is True
+    assert result["guard_gap_terms"]
+
+
+def test_a_decline_in_one_sentence_does_not_excuse_a_comparison_in_another() -> None:
+    """면죄부는 **같은 문장**에서만 생긴다. 문장을 넘어가면 무관한 부정까지 방패가 된다."""
+    text = "또래 강아지들과 비교하면 평균 정도예요. 진단은 제공하지 않아요."
+    assert checks.cross_dog_leaks(text) == ["또래", "평균"]
+    assert checks.check_row(ok_row(rendered(text)), question())["hard"]["cross_dog"] is True
+
+
+def test_the_model_raw_output_uses_the_same_decline_rule() -> None:
+    row = ok_row(
+        rendered(CLEAN),
+        raw={"kind": "guide", "text": DECLINED[0], "actions": ["keep_observing"]},
+    )
+    assert checks.check_row(row, question())["raw"]["cross_dog"] is False
+
+
+def test_declines_are_counted_in_the_summary_without_being_violations() -> None:
+    rows = [{"cell_id": "a#0", "question_id": "a", **ok_row(rendered(DECLINED[0]))}]
+    summary = report.summarize(rows, _questions_for_summary(), repeats=1)
+    assert summary["hard"]["cross_dog"] == {"count": 0, "of": 1}
+    assert summary["cross_dog_declined"] == {"count": 1, "of": 1}
+    assert summary["guard_gaps"] == []
+
+
 def test_guard_terms_are_not_counted_as_a_gap() -> None:
     """가드 목록에 있는 말이 최종 답에 남았다면 렌더 사고지 '빈틈'이 아니다 — 따로 센다."""
     result = checks.check_row(ok_row(rendered("관절염이 의심돼요.")), question())

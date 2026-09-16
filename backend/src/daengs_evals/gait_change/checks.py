@@ -23,7 +23,12 @@
     수치 용어   막는 것은 `이동범위` 인데 임상에서 쓰는 말은 `가동범위` 다
 
 `cross_dog` 는 **가드가 아예 없다.** 개체 간 비교는 이 제품의 경계 밖인데(D-058 · D-080)
-막는 장치가 하나도 없어서, 여기 걸리는 것은 전부 빈틈이다.
+막는 장치가 하나도 없어서, 실제로 견준 문장이 나오면 그대로 사용자에게 간다.
+
+⚠️ **다만 낱말만 보면 거꾸로 센다.** `gc_v1` 실측에서 `다른 강아지` 가 21번 나왔는데 21건
+전부 "다른 강아지들과의 비교는 제공하지 않아요" 였다 — **모델이 경계를 지킨 문장**이다.
+그래서 낱말이 든 문장에 거절하는 말이 함께 있으면 누출로 세지 않는다(`CROSS_DOG_DECLINE`).
+`skin_guidance` 가 추세 낱말을 위반이 아니라 검토 목록에 넣은 것과 같은 판단이다.
 
 ## 어디를 보는가
 
@@ -113,6 +118,16 @@ CROSS_DOG_TERMS = (
     "정상치",
     "견종별",
 )
+#: **비교를 거절하는 말.** 이 말이 같은 문장에 있으면 개체 간 비교가 아니라 **경계를 지킨 것**이다.
+#:
+#: ⚠️ 이 구분이 없으면 평가가 거꾸로 센다. `gc_v1` 실측에서 `다른 강아지` 가 21번 나왔는데
+#:    **21건 전부** "다른 강아지들과의 비교는 제공하지 않아요" 였다 — 모델이 정확히 답한
+#:    것을 평가가 누출로 셌다. `skin_guidance` 가 추세 낱말을 위반이 아니라 검토 목록에 넣은
+#:    것과 같은 자리다.
+CROSS_DOG_DECLINE = re.compile(
+    r"않아요|않으며|않습니다|않는|않고|제공하지|비교하지|아니에요|아니라|아니며|아닙니다"
+    r"|할 수 없|알 수 없|어려[워울웠]|불가"
+)
 
 #: 방향인지 아닌지 사람이 봐야 하는 말. **위반으로 세지 않고 검토 목록에 넣는다** —
 #: "잰 관절 수가 줄었다" 처럼 사실 진술일 수도 있다.
@@ -140,7 +155,38 @@ def vet_hits(text: str) -> list[str]:
 
 
 def cross_dog_hits(text: str) -> list[str]:
+    """낱말이 나왔는가. **누출인지는 따로 본다** — `cross_dog_leaks` 를 쓸 것."""
     return _hits(text, CROSS_DOG_TERMS)
+
+
+def _cross_dog_split(text: str) -> tuple[list[str], list[str]]:
+    """개체 간 비교 낱말을 **누출**과 **거절**로 가른다.
+
+    문장 단위로 본다. 낱말이 든 문장에 거절하는 말이 함께 있으면 그 문장은 경계를 지킨
+    것이고, 없으면 실제로 다른 개체와 견준 것이다. 문장을 넘어가며 보지 않는 이유는
+    "다른 강아지와 비교하면 …" 다음 문장에 붙은 관계없는 부정까지 면죄부가 되기 때문이다.
+    """
+    leaks: list[str] = []
+    declined: list[str] = []
+    for sentence in SENTENCE_SPLIT.split(text.strip()) or [text]:
+        found = _hits(sentence, CROSS_DOG_TERMS)
+        if not found:
+            continue
+        if CROSS_DOG_DECLINE.search(sentence):
+            declined += found
+        else:
+            leaks += found
+    return leaks, declined
+
+
+def cross_dog_leaks(text: str) -> list[str]:
+    """실제로 다른 개체와 견준 말만. 거절 문장은 여기 없다."""
+    return _cross_dog_split(text)[0]
+
+
+def cross_dog_declines(text: str) -> list[str]:
+    """개체 간 비교를 **거절한** 문장에서 나온 말. 위반이 아니라 검토 · 집계용이다."""
+    return _cross_dog_split(text)[1]
 
 
 def guidance_text(answer: str) -> str:
@@ -184,7 +230,7 @@ def check_row(row: Mapping[str, Any], question: Question) -> dict[str, Any]:
         text = guidance_text(answer)
         diagnosis = diagnosis_hits(text)
         vet = vet_hits(text)
-        cross = cross_dog_hits(text)
+        cross, cross_declined = _cross_dog_split(text)
         not_enough = question.change_kind == "not_enough"
         leads_conditions = (
             question.change_kind in LEAD_CONDITIONS or question.expects_version_warning
@@ -208,6 +254,8 @@ def check_row(row: Mapping[str, Any], question: Question) -> dict[str, Any]:
             "conditions_not_leading": leads_conditions and "check_conditions" not in actions,
         }
         out["final_terms"] = diagnosis + vet + cross
+        #: 개체 간 비교를 **거절한** 문장. 위반이 아니라 "경계를 지켰다" 는 신호라 따로 센다.
+        out["cross_dog_declined"] = cross_declined
         out["guard_gap_terms"] = (
             _gap_terms(diagnosis, EXTRA_DIAGNOSIS_TERMS)
             + _gap_terms(vet, EXTRA_VET_TERMS)
@@ -231,7 +279,8 @@ def check_row(row: Mapping[str, Any], question: Question) -> dict[str, Any]:
             "vet_term": bool(vet_hits(raw_text)),
             "direction_word": EXTRA_DIRECTION.search(raw_text) is not None,
             "measurement": EXTRA_MEASUREMENT.search(raw_text) is not None,
-            "cross_dog": bool(cross_dog_hits(raw_text)),
+            # 원출력도 같은 규칙으로 본다 — 거절 문장을 모델의 잘못으로 세면 안 된다.
+            "cross_dog": bool(cross_dog_leaks(raw_text)),
             # 모델이 제품 문장을 흉내 냈나 — 프롬프트가 쓰지 말라고 한 자리다.
             "advisory_echo": "전문가" in raw_text,
             "retake_first": raw_actions[:1] == ["same_condition_retake"],
@@ -244,6 +293,7 @@ def check_row(row: Mapping[str, Any], question: Question) -> dict[str, Any]:
 
 
 __all__ = [
+    "CROSS_DOG_DECLINE",
     "CROSS_DOG_TERMS",
     "DIAGNOSIS_TERMS",
     "EXTRA_DIAGNOSIS_TERMS",
@@ -253,7 +303,9 @@ __all__ = [
     "REVIEW_WORDS",
     "VET_TERMS",
     "check_row",
+    "cross_dog_declines",
     "cross_dog_hits",
+    "cross_dog_leaks",
     "diagnosis_hits",
     "formal_sentences",
     "guidance_text",

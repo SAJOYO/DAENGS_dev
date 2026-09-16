@@ -220,7 +220,7 @@ def build_orchestrator(
 ) -> Any:
     from daengs_backend.orchestration.semantic import GeminiSemanticRouter
     from daengs_backend.orchestration.service import AssistantOrchestrationService
-    from daengs_evals.orchestrator_comparison.runner import _metered_semantic_generate
+    from daengs_evals.eval_harness import metered_semantic_generate as _metered_semantic_generate
 
     return AssistantOrchestrationService(
         engine=RecordingEngine(build_adapters(mode, general_meter), sink),  # type: ignore[arg-type]

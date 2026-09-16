@@ -153,7 +153,7 @@ def build_orchestrator(
     from daengs_backend.orchestration.resolver import GeminiTurnResolver
     from daengs_backend.orchestration.semantic import GeminiSemanticRouter
     from daengs_backend.orchestration.service import AssistantOrchestrationService
-    from daengs_evals.orchestrator_comparison.runner import _metered_semantic_generate
+    from daengs_evals.eval_harness import metered_semantic_generate as _metered_semantic_generate
     from daengs_evals.profile_fitness.collect import _metered_general_generate
 
     adapters: dict[CapabilityName, Any] = dict(_fake_adapters())

@@ -47,6 +47,7 @@ from daengs_backend.orchestration.contracts import (
 )
 from daengs_backend.orchestration.graph import OrchestrationEngine
 from daengs_backend.orchestration.planner import (
+    assemble_route_plan,
     resolve_deterministic_route,
     resolve_emergency_route,
     resolve_skin_route,
@@ -58,7 +59,11 @@ from daengs_backend.orchestration.redirects import (
     SKIN_VERDICT_SUMMARY,
     SkinAction,
 )
-from daengs_backend.orchestration.semantic import ExecuteName, GeminiSemanticRouter
+from daengs_backend.orchestration.semantic import (
+    ExecuteName,
+    GeminiSemanticRouter,
+    SemanticRoutingDecision,
+)
 from daengs_backend.orchestration.service import AssistantOrchestrationService
 from daengs_screening.config import CLASS_KO, NORMAL_LABEL
 
@@ -182,6 +187,76 @@ def test_the_explicit_resolver_never_turns_skin_into_an_execute() -> None:
 
 def test_the_router_cannot_select_skin() -> None:
     assert "skin" not in get_args(ExecuteName)
+
+
+# ── 진입: 라우터가 낸 HANDOFF 를 해설로 바꾸기 (#569) ──────────────────
+
+
+def routed(handoffs: list[str], *, execute: list[str] | None = None, context=None, skin_agent=True):
+    return assemble_route_plan(
+        SemanticRoutingDecision(execute=execute or [], handoffs=handoffs),
+        query=QUERY,
+        context=dict(SCREENED) if context is None else context,
+        router=RouterKind.LLM,
+        skin_agent=skin_agent,
+    )
+
+
+def test_router_skin_handoff_becomes_the_explainer_when_a_record_is_attached() -> None:
+    """사용자는 방금 판정을 봤고 이어서 물었다. 같은 화면으로 다시 보내는 것은 답이 아니다."""
+    plan = routed(["skin"])
+    [only] = plan.requests
+    assert only.capability == CapabilityName.SKIN
+    assert only.payload.screening.verdict == "abnormal"
+    assert only.payload.question == QUERY
+    assert plan.handoffs == [] and plan.clarify is None
+
+
+def test_the_converted_plan_is_the_same_one_the_explicit_signal_builds() -> None:
+    """진입이 둘이어도 계획은 한 곳에서 만들어져야 두 길이 다른 답을 내지 않는다."""
+    by_signal = skin_route()
+    assert by_signal is not None
+    assert routed(["skin"]).requests == by_signal.requests
+
+
+def test_without_a_record_the_router_handoff_stays_a_handoff() -> None:
+    plan = routed(["skin"], context={})
+    assert plan.requests == []
+    assert [(h.target, h.reason) for h in plan.handoffs] == [("skin", "image_upload_required")]
+
+
+def test_the_kill_switch_also_turns_off_the_converted_entry() -> None:
+    plan = routed(["skin"], skin_agent=False)
+    assert plan.requests == [] and [h.target for h in plan.handoffs] == ["skin"]
+
+
+def test_conversion_is_exclusive_and_drops_other_selections() -> None:
+    """판정 이야기에 산책 조건이 섞이면 이어 물은 답이 흐려진다 — 명시 신호 때와 같은 규칙."""
+    context = {**SCREENED, "location": {"lat": 37.5, "lon": 127.0}}
+    plan = routed(["skin"], execute=["walk", "life"], context=context)
+    assert [r.capability for r in plan.requests] == [CapabilityName.SKIN]
+    assert plan.handoffs == []
+
+
+def test_the_coordinate_clarify_still_comes_first() -> None:
+    """CLARIFY 는 예전부터 배타다 (O-8). 좌표가 없으면 아무것도 실행되지 않는 규칙을 이 바꿔치기가
+    약하게 만들지 않는다 — 좌표를 묻고 끝낸다."""
+    plan = routed(["skin"], execute=["walk"])
+    assert plan.requests == [] and plan.clarify is not None
+
+
+def test_other_handoffs_are_untouched() -> None:
+    """라우터의 판단을 바꾸지 않는다 — 그 판단이 skin HANDOFF 일 때 목적지만 바꾼다."""
+    plan = routed(["gait"])
+    assert plan.requests == []
+    assert [(h.target, h.reason) for h in plan.handoffs] == [("gait", "video_upload_required")]
+
+
+def test_a_walk_question_still_goes_to_walk_even_with_a_record_attached() -> None:
+    """가로채기가 없다는 것이 이 설계의 요점이다."""
+    context = {**SCREENED, "location": {"lat": 37.5, "lon": 127.0}}
+    plan = routed([], execute=["walk"], context=context)
+    assert [r.capability for r in plan.requests] == [CapabilityName.WALK]
 
 
 # ── 계약 ─────────────────────────────────────────────────────────────

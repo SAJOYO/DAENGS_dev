@@ -430,7 +430,7 @@ Place 는 PR #196 에서 실행 registry 에 들어왔고 `requested_capability=
 | Walk | YES | YES |
 | Place | YES | YES |
 | Skin 판정 EXECUTE (`/screen/*`) | NO | NO |
-| Skin 판정 해설 EXECUTE — 기록이 붙은 `skin` 신호 (D-079) | YES | NO (기록이 없어 HANDOFF) |
+| Skin 판정 해설 EXECUTE — 기록이 붙은 `skin` 신호, 또는 기록이 붙은 라우터 `skin` HANDOFF (D-079 · D-081) | YES | NO (기록이 없어 HANDOFF) |
 | Gait 변화 관찰 해설 EXECUTE — 비교 참조가 붙은 `gait` 신호 (D-080) | **YES** | NO (참조를 해소할 주체가 없어 HANDOFF) |
 | Gait 분석 EXECUTE (영상 업로드) | NO | NO |
 

@@ -55,6 +55,10 @@ class VetVisitReceiptItemOut(BaseModel):
 
     name: str
     amount_krw: int
+    #: 몇 번째 `동물명` 블록이었나 (0부터, 블록이 하나뿐이거나 모르면 `null`).
+    #: **앱이 아이별 분할을 제안하는 유일한 재료다** — 확정 때 `splits[].patient_index`
+    #: 로 돌려보내면 서버가 `raw_ocr_items` 를 그 블록으로 잘라 넣는다.
+    patient_index: int | None = None
 
 
 class VetVisitReasonOptionOut(BaseModel):
@@ -86,6 +90,9 @@ class VetVisitDraftResponse(BaseModel):
     hospital_address: str | None
     hospital_phone: str | None
     items: list[VetVisitReceiptItemOut]
+    #: `동물명` 블록이 몇 개인가. **2 이상이면 확인 화면이 금액을 나누게 해야 한다** —
+    #: 안 나누면 고른 한 아이에게 전액이 붙고, 화면은 정상으로 보인다 (docs §2 다견).
+    patient_count: int = 1
     #: 목록 안의 값이거나 `null`(제안 없음). `null` 이면 확인 화면이 아무것도
     #: 미리 고르지 않는다.
     suggested_reason_code: VetVisitReasonCode | None

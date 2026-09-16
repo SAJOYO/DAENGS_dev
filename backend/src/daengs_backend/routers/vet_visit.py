@@ -79,10 +79,16 @@ def _to_draft_response(
         hospital_address=extraction.hospital_address if extraction else None,
         hospital_phone=extraction.hospital_phone if extraction else None,
         items=(
-            [VetVisitReceiptItemOut(name=i.name, amount_krw=i.amount_krw) for i in extraction.items]
+            [
+                VetVisitReceiptItemOut(
+                    name=i.name, amount_krw=i.amount_krw, patient_index=i.patient_index
+                )
+                for i in extraction.items
+            ]
             if extraction
             else []
         ),
+        patient_count=extraction.patient_count if extraction else 1,
         suggested_reason_code=extraction.suggested_reason_code if extraction else None,
         is_emergency=extraction.is_emergency if extraction else False,
         possible_duplicate=result.possible_duplicate,

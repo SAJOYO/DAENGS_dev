@@ -79,16 +79,24 @@ def care(store: Store, monkeypatch: pytest.MonkeyPatch) -> CareStore:
         cs.events.append(fake)
         return event
 
+    def _is_member(pet_id, app_user_id):
+        """`pet_repo.member_condition` 의 대역 — 대표 ∪ 돌보미."""
+        return _pet_owner(pet_id) == app_user_id or (pet_id, app_user_id) in store.pet_members
+
     async def get_deletable(session, app_user_id, event_id):
-        # 진짜와 같게 **적은 사람 또는 그 아이의 대표** 입니다 (docs/co-care.md §2).
+        # 진짜와 같게 **그 행의 대표, 또는 지금도 구성원인 적은 사람**입니다
+        # (docs/co-care.md §2, #574). 적은 사람의 멤버십을 빼먹으면 나간 사람이 지웁니다.
         return next(
             (
                 e
                 for e in cs.events
                 if e.id == event_id
                 and (
-                    e.actor_app_user_id == app_user_id
-                    or _pet_owner(e.pet_id) == app_user_id
+                    _pet_owner(e.pet_id) == app_user_id
+                    or (
+                        e.actor_app_user_id == app_user_id
+                        and _is_member(e.pet_id, app_user_id)
+                    )
                 )
             ),
             None,
@@ -482,6 +490,25 @@ def test_남남은_우리_아이의_기록을_못_지운다(client, client_as, p
     created = client.post("/app/care-events", json=_body(pet.id)).json()
     assert client_as(STRANGER).delete(f"/app/care-events/{created['id']}").status_code == 404
     assert len(care.events) == 1
+
+
+def test_돌보미가_아니게_되면_자기가_적은_기록도_못_지운다(
+    client, client_as, store, pet, care
+) -> None:
+    """적은 사람의 삭제 자격은 **지금의 멤버십**을 따릅니다 (#574).
+
+    멤버십이 빠지면 그 아이의 기록을 못 읽는데(`get_accessible`), actor 만 보고 지우게 두면
+    읽지도 못하는 줄을 id 로 지웁니다. **기록은 안 사라집니다** — 대표는 그대로 지울 수
+    있습니다. 한 흐름(`remove_member`)은 `test_co_care_group_reads.py` 가 봅니다.
+    """
+    store.pet_members.append((pet.id, CARER))
+    created = client_as(CARER).post("/app/care-events", json=_body(pet.id)).json()
+    store.pet_members.remove((pet.id, CARER))
+
+    assert client_as(CARER).delete(f"/app/care-events/{created['id']}").status_code == 404
+    assert len(care.events) == 1, "나간 사람의 404 가 기록까지 지웠다"
+    assert client.delete(f"/app/care-events/{created['id']}").status_code == 204
+    assert care.events == []
 
 
 # ── 약 중복 확인 (docs/co-care.md §4) ────────────────────────────────

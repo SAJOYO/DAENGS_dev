@@ -123,14 +123,39 @@ def test_skin_executes_only_as_an_explainer_of_the_narrow_verdict() -> None:
     """D-079 이 D-036 의 `Skin EXECUTE = NO` 를 좁게 열었다 — 이미 끝난 판정을 **해설**하는
     실행 하나다. #307 의 좁힘은 그대로다: 해설 payload 의 판정은 `ScreeningContext` 자체라서
     병변 이름 · 확률 · 통제 문구가 들어갈 칸이 없다. 판정을 새로 내는 실행은 여전히 없다 —
-    업로드가 필요한 `gait` 도 능력이 아니라 HANDOFF 다."""
+영상을 새로 분석하는 실행은
+    여전히 없다 — `gait` 도 D-080 으로 **이미 계산된 비교를 해설하는** 실행 하나만 열렸다."""
     assert set(SkinPayload.model_fields) == {"question", "screening", "history"}
     assert SkinPayload.model_fields["screening"].annotation is ScreeningContext
     with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
         SkinPayload.model_validate(
             {"question": "q", "screening": {"verdict": "abnormal", "days_ago": 0}, "top1": "A6"}
         )
-    assert "gait" not in {capability.value for capability in CapabilityName}
+
+
+def test_gait_executes_only_as_an_explainer_of_an_already_computed_comparison() -> None:
+    """D-080 이 D-036 의 `Gait EXECUTE = NO` 를 좁게 열었다 — **이미 계산된 비교**를
+    해설하는 실행 하나다. 영상·관절 좌표·수치가 들어갈 칸이 없고(D-058), 방향(좋아졌다·
+    나빠졌다)도 계약에 없다. 분석을 새로 내는 실행은 여전히 HANDOFF 다."""
+    from daengs_backend.orchestration.contracts import GaitCompareContext, GaitComparePayload
+
+    assert set(GaitComparePayload.model_fields) == {"question", "compare", "unavailable"}
+    assert GaitComparePayload.model_fields["compare"].annotation == GaitCompareContext | None
+    with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
+        GaitCompareContext.model_validate(
+            {
+                "change_kind": "no_change",
+                "flagged_sides": [],
+                "left_measured": 3,
+                "left_joints": 3,
+                "right_measured": 3,
+                "right_joints": 3,
+                "days_between": 1,
+                "reliability": "ok",
+                "version_mismatch": False,
+                "summary_for_ui": {"L_Hip": {"x_range": 1.0}},
+            }
+        )
 
 
 # ---------------------------------------------- 능력 이름의 사본 (#269)
@@ -152,7 +177,8 @@ def test_capability_names_have_exactly_three_copies_and_they_agree() -> None:
     # `care_log` (D-075) 도 라우터 밖이고, 한 겹 더 좁다 — 명시 신호로도 못 부르고,
     # 사용자가 앞 턴의 제안에 승낙했을 때만 들어온다.
     # `skin` (D-079) 도 라우터 밖이다 — 판정 기록이 붙은 `skin` 명시 신호로만 들어온다.
-    router_reachable = names - {"vet_contact", "care_log", "skin"}
+    # `gait` (D-080) 도 같다 — 비교 참조가 붙은 `gait` 명시 신호로만 들어온다.
+    router_reachable = names - {"vet_contact", "care_log", "skin", "gait"}
     assert set(get_args(ExecuteName)) == router_reachable, "라우터가 고를 수 있는 목적지가 어긋났다"
     # **꼬리표는 안 좁힌다.** 라우터가 못 고르는 능력이라도 결과가 OK 면 `categories_of()` 가
     # 이름을 그대로 넣고, 그 행을 읽을 때 `AgentCategory` 가 좁으면 500 이 난다 — 그것이

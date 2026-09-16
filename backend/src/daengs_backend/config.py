@@ -182,6 +182,14 @@ class Settings(BaseSettings):
     # HANDOFF 로 돌아간다. 장애 대응·비용 급증 때 한 줄로 끄는 자리다.
     skin_agent: bool = Field(default=True, validation_alias=AliasChoices("DAENGS_SKIN_AGENT"))
 
+    # ── 보행 변화 관찰 해설 킬 스위치 (D-080) ───────────────────────────
+    # `skin_agent` 와 같은 자리, 같은 기본값(**켜짐**)이다. 켜 둬도 운영이 달라지지 않는
+    # 이유도 같다 — 이 능력은 앱이 `requested_capability="gait"` 와 비교 참조
+    # (`gait_compare`)를 **함께** 보내고 서버가 두 기록의 소유를 확인했을 때만 돈다
+    # (`planner.resolve_gait_route`). 그 조합을 보내는 클라이언트가 생기기 전까지는 오늘과
+    # 같은 HANDOFF 이고, 끄면 그 뒤에도 HANDOFF 로 돌아간다.
+    gait_agent: bool = Field(default=True, validation_alias=AliasChoices("DAENGS_GAIT_AGENT"))
+
     # ── Turn Resolver 킬 스위치 (#416, R16) ────────────────────────────
     # `general_fallback` 과 정반대 기본값: 이건 **기본이 켜짐**입니다. 리졸버는 이미
     # 승인된 기능(Task 1~5)이라 배포 즉시 도는 것이 맞고, 끄는 쪽이 예외 상황(장애

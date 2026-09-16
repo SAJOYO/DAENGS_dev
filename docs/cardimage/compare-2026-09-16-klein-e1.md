@@ -15,6 +15,7 @@
 | ③ 둘 다 | 1280×2048 | ① 문장 추가 | `e1-both/` |
 
 - 공통: 서비스 `daengs-cardgen-klein`(이미지 `c917c96`, L4), 4 step · guidance 1.0, **seed 1**, 사진 3장(`KakaoTalk_…335` · `_03` · `_08`) × 4·9월.
+  모델은 **증류판 FLUX.2-klein-4B 하나**이고 4 step · guidance 1.0 은 그 모델 카드의 권장값이다 — base(비증류) 체크포인트와 비교한 실험이 아니다. 아래 표의 「기준」도 모델이 아니라 **아무것도 안 바꾼 대조군**을 뜻한다(격자 라벨 `base`).
 - 조건당 6장, 새로 만든 것 18장. 강아지 이름은 `MOMO`(기준은 09-15 의 `테스트`).
 - 도구: `tools/cardgen_compare.py --panel-text / --gen-size 1280x2048`, 격자 `tools/cardgen_grid.py`.
 - 판정은 **아래 패널을 원본 크기로 잘라 눈으로** 봤다(`cardimage/out/_cardgen/e1_panels_4.png` · `e1_panels_9.png`, 전체 카드 격자 `e1_grid_4.png` · `e1_grid_9.png`). 검수의 `text_ok` 는 참고만 — 같은 단어를 "틀렸다"고 적는 등 흔들렸다.

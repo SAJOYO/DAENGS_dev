@@ -34,6 +34,12 @@ OWNER = uuid.uuid4()
 JPEG = {"Content-Type": "image/jpeg"}
 
 
+def _two_card_gpu_path(monkeypatch: pytest.MonkeyPatch) -> None:
+    """한 요청에 두 장은 `FLUX.2-klein-4B` GPU 경로(`cardgen_url` 있음)에서만 나온다(#572 Task 8)."""
+    monkeypatch.setattr(settings, "cardimage_pick_count", 2)
+    monkeypatch.setattr(settings, "cardgen_url", "http://cardgen.example")
+
+
 class _SessionFactory:
     def __call__(self):
         return self
@@ -71,6 +77,8 @@ def jobs(monkeypatch: pytest.MonkeyPatch) -> Iterator[list]:
     # 이 파일의 기존 테스트는 모두 "카드 한 장" 세상(#537·#543)을 본다 — 여러 장(#572 Task 4)은
     # 아래 전용 테스트에서만 pick_count 를 따로 올린다.
     monkeypatch.setattr(settings, "cardimage_pick_count", 1)
+    # 기본은 지금 운영과 같은 Nano Banana 2 경로(`cardgen_url` 빈 값, #572 Task 8).
+    monkeypatch.setattr(settings, "cardgen_url", "")
     monkeypatch.setattr(ai_card_engine, "default_engine", lambda: FakeEngine())
     monkeypatch.setattr(ai_card_engine, "default_judge", lambda: FakeJudge([4]))
     yield collected
@@ -309,14 +317,14 @@ def test_with_topic(name: str, expected: str) -> None:
 
 
 def test_post_response_has_pick_group_and_progress(client: TestClient, jobs: list, monkeypatch) -> None:
-    monkeypatch.setattr(settings, "cardimage_pick_count", 2)
+    _two_card_gpu_path(monkeypatch)
     body = _post(client).json()
     assert body["pick_group"] is not None
     assert (body["done"], body["total"], body["finished"]) == (0, 2, False)
 
 
 def test_get_reports_done_and_total_after_generation(client: TestClient, jobs: list, monkeypatch) -> None:
-    monkeypatch.setattr(settings, "cardimage_pick_count", 2)
+    _two_card_gpu_path(monkeypatch)
     card_id = _post(client).json()["id"]
     _run_all(jobs)
     detail = client.get(f"/app/ai-cards/{card_id}").json()
@@ -324,11 +332,25 @@ def test_get_reports_done_and_total_after_generation(client: TestClient, jobs: l
     assert (detail["done"], detail["total"], detail["finished"]) == (2, 2, True)
 
 
+def test_nano_banana_path_reports_one_card_even_if_pick_count_is_two(
+    client: TestClient, jobs: list, monkeypatch
+) -> None:
+    """운영(Nano Banana 2, `cardgen_url` 빈 값)은 앱에 고르기 화면이 없으므로 한 요청에 한 장이다(#572 Task 8)."""
+    monkeypatch.setattr(settings, "cardimage_pick_count", 2)
+    body = _post(client).json()
+    assert (body["done"], body["total"], body["finished"]) == (0, 1, False)
+    _run_all(jobs)
+    detail = client.get(f"/app/ai-cards/{body['id']}").json()
+    assert detail["status"] == "ready"
+    assert (detail["done"], detail["total"], detail["finished"]) == (1, 1, True)
+    assert len(client.get("/app/ai-cards").json()["cards"]) == 1
+
+
 def test_get_reports_finished_true_after_second_card_fails(
     client: TestClient, jobs: list, monkeypatch
 ) -> None:
     """`finished` 는 `done == total` 이 아니라 "더 만들 카드가 없다" 를 본다(fix round 1 Important 1)."""
-    monkeypatch.setattr(settings, "cardimage_pick_count", 2)
+    _two_card_gpu_path(monkeypatch)
 
     class _FailSecondCallEngine(FakeEngine):
         def generate(self, *, template_png, photo_jpeg, prompt, seed=None):
@@ -349,7 +371,7 @@ def test_get_reports_finished_true_after_second_card_fails(
 
 
 def test_list_shows_both_cards_from_one_request(client: TestClient, jobs: list, monkeypatch) -> None:
-    monkeypatch.setattr(settings, "cardimage_pick_count", 2)
+    _two_card_gpu_path(monkeypatch)
     body = _post(client).json()
     _run_all(jobs)
     cards = client.get("/app/ai-cards").json()["cards"]
@@ -358,7 +380,7 @@ def test_list_shows_both_cards_from_one_request(client: TestClient, jobs: list, 
 
 
 def test_choose_keeps_the_picked_card_and_deletes_its_siblings(client: TestClient, jobs: list, monkeypatch) -> None:
-    monkeypatch.setattr(settings, "cardimage_pick_count", 2)
+    _two_card_gpu_path(monkeypatch)
     posted = _post(client).json()
     _run_all(jobs)
     assert len(client.get("/app/ai-cards").json()["cards"]) == 2
@@ -385,7 +407,7 @@ def test_choose_a_failed_card_is_409_and_deletes_nothing(
     client: TestClient, store: Store, jobs: list, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """#572 Task 4 fix round 2 R2-3 — `failed` 카드를 고르면 `ready` 형제를 지워 버릴 수 있다."""
-    monkeypatch.setattr(settings, "cardimage_pick_count", 2)
+    _two_card_gpu_path(monkeypatch)
 
     class _FailSecondCallEngine(FakeEngine):
         def generate(self, *, template_png, photo_jpeg, prompt, seed=None):
@@ -412,7 +434,7 @@ def test_choose_a_generating_card_is_409_and_deletes_nothing(
 ) -> None:
     """#572 Task 4 fix round 2 R2-3 — 아직 `generating` 인 카드를 고르면 이미 `ready` 인
     형제를 지워 버릴 수 있다."""
-    monkeypatch.setattr(settings, "cardimage_pick_count", 2)
+    _two_card_gpu_path(monkeypatch)
     posted = _post(client)
     primary_id = uuid.UUID(posted.json()["id"])
     sibling = next(c for c in store.ai_cards if c.id != primary_id)

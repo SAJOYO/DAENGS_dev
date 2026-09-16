@@ -277,6 +277,8 @@ class Settings(BaseSettings):
     cardimage_concurrency: int = Field(default=2, ge=1, validation_alias=AliasChoices("DAENGS_CARDIMAGE_CONCURRENCY"))
     #: 한 요청에 만들 장수. 사용자가 2장으로 정했다(#557 E2, 사용자 09-16) — 그 이상을 설정으로
     #: 열어 주면 돈을 두 번 내는 것(#572 Task 4 fix round 1 Important 2)까지 함께 열게 된다.
+    #: **`FLUX.2-klein-4B` GPU 경로(`cardgen_url` 있음)에서만 쓴다** — Nano Banana 2 경로(지금 운영)는
+    #: 이 값과 상관없이 한 장 + 재시도다(#572 Task 8, `ai_card_engine.plan_request_seeds`).
     cardimage_pick_count: int = Field(default=2, ge=1, le=2,
                                       validation_alias=AliasChoices("DAENGS_CARDIMAGE_PICK_COUNT"))
 

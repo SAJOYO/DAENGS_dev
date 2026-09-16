@@ -90,3 +90,18 @@ def test_plan_seeds_delegates_to_cardimage() -> None:
 
 def test_plan_seeds_without_rng_still_works() -> None:
     assert len(ai_card_engine.plan_seeds(4, 1)) == 1
+
+
+@pytest.mark.parametrize(("url", "gpu"), [("https://cardgen.example", True), (" https://x ", True), ("", False), ("  ", False)])
+def test_plan_request_seeds_follows_gpu_path_active(monkeypatch: pytest.MonkeyPatch, url: str, gpu: bool) -> None:
+    """#572 Task 8 — Nano Banana 2 경로는 seed 없는 한 장(재시도 경로), GPU 경로는 서로 다른 seed 로 pick_count 장."""
+    import random
+
+    monkeypatch.setattr(settings, "cardgen_url", url)
+    monkeypatch.setattr(settings, "cardimage_pick_count", 2)
+    assert ai_card_engine.gpu_path_active() is gpu
+    seeds = ai_card_engine.plan_request_seeds(4, random.Random(0))
+    if gpu:
+        assert len(seeds) == 2 and None not in seeds and len(set(seeds)) == 2
+    else:
+        assert seeds == [None]

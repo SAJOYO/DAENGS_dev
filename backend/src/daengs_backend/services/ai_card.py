@@ -12,6 +12,12 @@
 호출 전) 시도 표시, 닮음이 기준 이상인 카드가 처음 `ready` 가 되면 그것을 사용 기록으로 바꿉니다
 (카드 수가 아니라 요청 수를 셉니다).
 
+**행이 몇 개인지는 엔진이 정합니다** (#572 Task 8, 사용자 결정 2026-09-17 — 판정은
+`ai_card_engine.gpu_path_active` 한 곳). Nano Banana 2 경로(`DAENGS_CARDGEN_URL` 빈 값, 지금 운영)는
+한 요청에 **한 장**이고 seed 없이 불러 `generate_card` 의 재시도(닮음 미달이면 한 번 더)가 돕니다 — 앱에
+두 장 중 고르는 화면이 아직 없기 때문입니다. `FLUX.2-klein-4B` GPU 경로는 `cardimage_pick_count` 장
+(최대 2)을 행마다 미리 뽑은 seed 로, 재시도 없이 만듭니다.
+
 ⚠️ **백그라운드는 요청 세션을 쓰지 않습니다** — 요청이 끝나면 그 세션은 닫힙니다.
 ⚠️ **배포 재시작과 겹친 작업은 사라집니다.** 행은 `stale_after()` 가 지난 뒤 조회에서
    `failed`/`interrupted` 가 됩니다. 그것이 실제로 자주 보이면 워커로 옮길 때입니다 (D-076).
@@ -158,10 +164,12 @@ async def start(
     )
 
     title = title_text(meta.card_name, title_source)[:_TITLE_MAX]  # ß → SS 처럼 자를 수 있다.
-    # 장마다 쓸 seed 를 지금 한 번에 뽑습니다 — 이 달의 겹치지 않는 seed 가 설정값보다 적으면
-    # (fix round 1 Important 2) 행도 그만큼만 만듭니다. 같은 seed 로 두 번 만들면(엔진이
-    # 결정적이다) 완전히 같은 이미지 두 장에 돈을 두 번 내는 것이기 때문입니다.
-    seeds = ai_card_engine.plan_seeds(month, settings.cardimage_pick_count, rng or random.Random())
+    # 장수는 엔진이 정합니다(#572 Task 8, 사용자 결정 2026-09-17) — `plan_request_seeds` 의 길이가 곧
+    # 행 수입니다. Nano Banana 2 경로(지금 운영)는 `[None]`: 한 장, seed 없이 불러 재시도가 돕니다(앱에
+    # 두 장 중 고르는 화면이 아직 없습니다). GPU 경로(`FLUX.2-klein-4B`)는 장마다 쓸 seed 를 지금 한 번에
+    # 뽑습니다 — 이 달의 겹치지 않는 seed 가 설정값보다 적으면(fix round 1 Important 2) 행도 그만큼만
+    # 만듭니다. 같은 seed 로 두 번 만들면(엔진이 결정적이다) 완전히 같은 이미지 두 장에 돈을 두 번 냅니다.
+    seeds = ai_card_engine.plan_request_seeds(month, rng or random.Random())
     # 요청의 대표 행은 **자기 id 를 pick_group 으로 씁니다** — `idx_ai_cards_one_generating` 이
     # 그 한 행만 보고 「사용자별 동시 1요청」을 지키게 하기 위해서입니다(fix round 1 Critical).
     primary_id = uuid.uuid4()
@@ -253,7 +261,7 @@ async def _claim_slot(card_id: uuid.UUID, *, mark_attempt: bool) -> bool:
 
 async def _run(
     card_ids: list[uuid.UUID],
-    seeds: list[int],
+    seeds: list[int | None],
     app_user_id: uuid.UUID,
     photo_jpeg: bytes,
     month: int,
@@ -264,9 +272,17 @@ async def _run(
     행은 **이미 전부 있습니다** — `start` 가 미리 만들었습니다(#572 Task 4 fix round 1 controller
     ruling A). 여기서는 그 행을 하나씩 순서대로 채웁니다: ①`_claim_slot` 으로 그 행이 아직
     `generating` 인지 재확인(돈이 나가는 호출 **직전** 마지막 방어선 — 사용자가 그 사이 지웠으면
-    엔진을 부르지 않습니다) → ②`generate_card(seed=...)` 한 번(이미 seed 를 못박았으니 재시도가
-    없습니다 — 카드 여러 장을 만드는 것 자체가 재시도의 대안입니다) → ③결과를 그 행에 씁니다.
+    엔진을 부르지 않습니다) → ②`generate_card(seed=...)` 한 번 → ③결과를 그 행에 씁니다.
     카드 하나의 실패·취소가 **다음 카드 시도를 막지 않습니다** — 행마다 독립입니다.
+
+    ②는 엔진마다 다릅니다(#572 Task 8 — `ai_card_engine.plan_request_seeds` 가 정한 `seeds`):
+    - **GPU 경로(`FLUX.2-klein-4B`)** — 행마다 seed 를 못박았으니 재시도가 없습니다(카드 여러 장을
+      만드는 것 자체가 재시도의 대안입니다). 유료 호출은 행마다 한 번입니다.
+    - **Nano Banana 2 경로(지금 운영)** — 행은 하나, `seed=None` 이라 `generate_card` 가 첫 장의 닮음이
+      `cardimage_judge_min` 미만이면 **같은 행 안에서** 한 번 더 만들고 나은 쪽을 돌려줍니다(`attempts`
+      2). 유료 호출이 최대 두 번(엔진·검수 각각)이지만 슬롯은 한 번만 잡으므로 시도 표시도 첫 호출
+      전에 한 번만 남고, 정리 기준(`stale_after`)의 예산 `4 × cardimage_timeout_ms + 60초` 가 바로
+      이 두 번(엔진·검수 × 2)을 덮도록 잡힌 값입니다.
 
     한도 기록은 **요청마다 한 줄**입니다 (D-084). 처음 슬롯을 잡을 때(유료 호출 전) 시도 표시를
     남기고(`_claim_slot(mark_attempt=True)`), 닮음이 기준 이상인 카드(`_meets_judge_min`)가 처음
@@ -378,12 +394,11 @@ async def _finish_ready(
         card.width, card.height = width, height
         card.likeness = generated.judge.likeness if generated.judge else None
         card.attempts = generated.attempts
-        # Nano Banana 2(`cardgen_url` 빈 값)는 seed 인자를 받고도 무시합니다 — 뽑은 값을 그대로
-        # 저장하면 "이 카드는 이 seed 로 만들어졌다"는 거짓 기록이 되고, 어느 엔진이 만들었는지
-        # 칸이 없어 나중에 가려낼 수도 없습니다(최종 리뷰 minor 3). GPU 엔진(`cardgen_url` 있음)만
-        # seed 를 실제로 씁니다 — `strip()` 판정은 `ai_card_engine.default_engine` 과 같게 맞춥니다.
-        # 엔진에 넘기는 seed 자체(위 `generate` 호출)는 그대로입니다 — 여기서 바뀌는 것은 기록뿐입니다.
-        card.seed = generated.seed if settings.cardgen_url.strip() else None
+        # Nano Banana 2 는 seed 인자를 받고도 무시합니다 — `generate_card` 가 안에서 뽑은 값
+        # (`generated.seed`)을 그대로 저장하면 "이 카드는 이 seed 로 만들어졌다"는 거짓 기록이 되고,
+        # 어느 엔진이 만들었는지 칸이 없어 나중에 가려낼 수도 없습니다(최종 리뷰 minor 3). GPU 엔진만
+        # seed 를 실제로 씁니다. 판정은 엔진 선택·장수와 **같은 함수** `gpu_path_active` 입니다(#572 Task 8).
+        card.seed = generated.seed if ai_card_engine.gpu_path_active() else None
         now = datetime.now(UTC)
         card.updated_at = now
         if record_usage:

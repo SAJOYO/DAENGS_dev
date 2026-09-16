@@ -25,13 +25,24 @@ from daengs_cardimage.engine import CardImageEngine, GeminiCardImageEngine, Http
 from daengs_cardimage.judge import CardJudge, GeminiCardJudge
 
 
+def gpu_path_active() -> bool:
+    """`FLUX.2-klein-4B` GPU 서비스 경로(D-078)가 켜졌나 — `DAENGS_CARDGEN_URL` 을 `strip()` 한 값이
+    비어 있지 않으면 참이다. 거짓이면 Nano Banana 2 경로(지금 운영)다.
+
+    **이 판정은 여기 한 곳뿐이다** (#572 Task 8). 엔진 선택(`default_engine`), 한 요청의 장수와 seed
+    명시 여부(`plan_request_seeds`), `ready` 행에 seed 를 기록할지(`services/ai_card.py::_finish_ready`),
+    정리 기준의 예산(`ai_card_quota.stale_after`), 키 확인(`ready_check`)이 전부 이것을 부른다 — 한쪽만
+    `strip()` 을 빠뜨리면 공백뿐인 URL 에서 Nano Banana 2 로 두 장을 뽑거나 엔진이 버린 seed 를 기록하게
+    된다."""
+    return bool(settings.cardgen_url.strip())
+
+
 def default_engine() -> CardImageEngine:
-    """설정에서 실제 엔진을 만든다. `DAENGS_CARDGEN_URL` 이 있으면 GPU 서비스(D-078), 없으면
+    """설정에서 실제 엔진을 만든다. `gpu_path_active()` 면 GPU 서비스(D-078), 아니면
     Nano Banana 2 — D-070 의 `DAENGS_REALTIME_URL` 갈림길과 같은 모양이다.
     전역 `settings.gemini_api_key` 로 대체하지 않는다 — 카드 생성 키는 `DAENGS_CARDIMAGE_GEMINI_API_KEY` 하나뿐이다."""
-    url = settings.cardgen_url.strip()
-    if url:
-        return HttpCardImageEngine(base_url=url, timeout_s=settings.cardgen_timeout_s,
+    if gpu_path_active():
+        return HttpCardImageEngine(base_url=settings.cardgen_url.strip(), timeout_s=settings.cardgen_timeout_s,
                                    auth=realtime_client.id_token)
     return GeminiCardImageEngine(
         api_key=settings.cardimage_gemini_api_key.get_secret_value(),
@@ -62,8 +73,9 @@ def generate(
     """동기 호출(20~60초)이다. 이벤트 루프에서는 `asyncio.to_thread` 로 부른다.
 
     `seed` 를 주면(#572 Task 4 fix round 1 controller ruling A — `start` 가 행마다 미리 뽑아 둔
-    값) `generate_card` 가 그 값을 그대로, 재시도 없이 쓴다. 관리자 콘솔은 여전히 `seed` 없이
-    부른다(재시도 있는 옛 경로 그대로)."""
+    값, GPU 경로에서만) `generate_card` 가 그 값을 그대로, 재시도 없이 쓴다. 관리자 콘솔과 앱의
+    Nano Banana 2 경로(#572 Task 8 — `plan_request_seeds` 가 `None` 을 준다)는 `seed` 없이 부른다
+    (재시도 있는 옛 경로 그대로)."""
     return generate_card(
         photo=photo,
         content_type=content_type,
@@ -85,6 +97,23 @@ def plan_seeds(month: int, count: int, rng: random.Random | None = None) -> list
     return _plan_seeds(month, count, rng or random.Random())
 
 
+def plan_request_seeds(month: int, rng: random.Random | None = None) -> list[int | None]:
+    """앱 요청 하나에서 만들 카드마다 엔진에 넘길 seed. **길이가 곧 그 요청의 카드(행) 수다** (#572 Task 8,
+    사용자 결정 2026-09-17).
+
+    - **Nano Banana 2 경로**(`gpu_path_active()` 가 거짓, 지금 운영): `[None]` — 한 장, seed 를 명시하지
+      않는다. 그래야 `generate_card` 가 seed 없는 `count == 1` 경로로 가서 첫 장의 닮음이
+      `cardimage_judge_min` 미만이면 **한 번 더** 만든다. Nano Banana 2 는 seed 를 어차피 버린다. 두 장을
+      안 뽑는 이유는 앱에 두 장 중 고르는 화면이 아직 없어서다 — 두 장은 그 화면과 함께 GPU 경로를 켤 때
+      나간다.
+    - **GPU 경로**(`FLUX.2-klein-4B`): `plan_seeds(month, cardimage_pick_count)` — 한 번에 뽑은 서로 다른
+      seed 로 `cardimage_pick_count` 장(최대 2), 겹치지 않는 seed 가 모자라면 그만큼 적게. seed 를 명시하므로
+      재시도는 없다."""
+    if not gpu_path_active():
+        return [None]
+    return list(plan_seeds(month, settings.cardimage_pick_count, rng))
+
+
 def ready_check(month: int) -> catalog.MonthCard:
     """**돈이 나가기 전에** 거를 수 있는 설정 문제를 먼저 본다.
 
@@ -93,7 +122,7 @@ def ready_check(month: int) -> catalog.MonthCard:
     """
     card = catalog.require_open(month, settings.cardimage_months)
     # URL 이 있으면 생성엔 키가 필요 없지만 default_judge() 는 여전히 이 키를 쓴다 — 없으면 카드가 채점 없이 통과한다.
-    if not settings.cardgen_url.strip() and not settings.cardimage_gemini_api_key.get_secret_value().strip():
+    if not gpu_path_active() and not settings.cardimage_gemini_api_key.get_secret_value().strip():
         raise CardImageUnavailable("DAENGS_CARDIMAGE_GEMINI_API_KEY 가 비어 있습니다")
     for path in (
         catalog.template_path(month, settings.cardimage_dir),

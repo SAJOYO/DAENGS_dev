@@ -3,7 +3,57 @@
 세션이 끝날 때마다 한 절씩 위에 추가한다 (최신이 위). 무엇을 했고, 무엇을 정했고, 무엇을
 다음 세션에 넘기는지. 조사 내용 자체는 `research-*.md` 에, 요약·현재 상태는 `README.md` 에.
 
-## 2026-09-16 — #572 최종 리뷰 수정 파동 (Critical 0, 머지 전 마지막 손질)
+## 2026-09-16~17 — #572 12달 열기 + 뽑기 (Task 1~8 · 최종 리뷰 수정 파동, 머지 대기)
+
+`docs/superpowers/plans/2026-09-16-ai-card-12months-and-two-picks.md` 를 subagent-driven-development 로
+실행한 카드 하나의 기록이다(원장은 SDD 폴더 `progress.md`). 한때 「최종 리뷰 수정 파동」과 「Task 1~7」
+두 절로 나뉘어 있던 것을 Task 8 에서 한 절로 합쳤다(최신이 위).
+
+### 2026-09-17 — Task 8: 한 요청의 장수는 엔진이 정한다 (사람 결정)
+
+**왜.** 최종 리뷰 Important 2 가 「머지 즉시 운영 앱 동작이 바뀐다」를 사람 결정으로 올렸다. 운영은
+`DAENGS_CARDGEN_URL` 이 비어 `ai_card_engine.default_engine()` 이 Nano Banana 2 를 쓰는데,
+`cardimage_pick_count` 기본값 2 라 요청마다 Nano Banana 2 2회 + 검수 2회를 부르게 된다. 앱에는 두 장 중
+고르는 화면이 없어 같은 달 카드 두 장이 보이고, 하나를 지워도 나머지 때문에 `month_taken` 이며, 대표가
+`ready` 인데 둘째가 도는 중 다시 누르면 409 다. `PICK_COUNT=1` 로 좁혀도 안 됐다 — 서비스가 항상
+`generate(seed=...)` 로 불러 명시 seed 는 재시도가 없으므로(`generate.py` 의 `seed is not None` 분기),
+이 브랜치는 앱 경로의 닮음 미달 재시도를 없앤 상태였다.
+
+**사람 결정 (2026-09-17).** 2장은 `FLUX.2-klein-4B` GPU 경로에서만, 운영 Nano Banana 2 는 「1장 + 닮음
+미달이면 재시도」 유지. 사용자: 「어차피 2장으로 바꾸면 앱도 같이 손 봐야」 — 두 장은 앱의 고르기 화면과
+`DAENGS_CARDGEN_URL` 켜기와 한 묶음으로 나간다. 함께 정한 것: 10달 Nano Banana 2 스모크는 안 한다,
+개발서버 DB 는 `dev` 머지 직전에, GCP DB 는 dev→main 때 마이그레이션을 적용한다.
+
+**바꾼 것.**
+
+- **판정 한 곳** — `services/ai_card_engine.py::gpu_path_active()`(`settings.cardgen_url.strip()` 이
+  비어 있지 않으면 참). `default_engine()` · 새 `plan_request_seeds()`(장수) ·
+  `services/ai_card.py::_finish_ready`(seed 기록) · `ai_card_quota.stale_after()`(예산) ·
+  `ready_check()`(키 확인)가 전부 이것을 부른다. 수정 파동이 `_finish_ready` 에 넣었던 인라인
+  `strip()` 판정은 지웠다
+- **`plan_request_seeds(month, rng)`** — 길이가 곧 행 수다. Nano Banana 2 경로는 `[None]`(한 장, seed
+  미지정), GPU 경로는 `plan_seeds(month, cardimage_pick_count, rng)`(서로 다른 seed 만큼, 최대 2)
+- **`start`** 는 그 목록으로 행을 만든다 — Nano Banana 2 경로는 행 하나, `seed` 칸은 처음부터 `None`
+- **`_run`** 은 목록의 seed 를 그대로 넘긴다. `None` 이면 `generate_card` 가 seed 없는 `count == 1`
+  경로로 가서 첫 장의 닮음이 `cardimage_judge_min` 미만이면 **같은 행 안에서** 한 번 더 만들고 나은
+  쪽을 남긴다(`attempts` 2). 슬롯은 행마다 한 번만 잡으므로 시도 표시는 첫 유료 호출 전에 한 번만
+  남는다. `stale_after()` 의 `4 × cardimage_timeout_ms + 60초` 가 원래 이 두 시도(엔진·검수 × 2)를
+  덮도록 잡힌 값이라 예산은 그대로다
+- `cardimage_pick_count` 의 기본값·범위, 관리자 콘솔 `/admin/cardimage/generate`, DB 스키마·마이그레이션은
+  안 바꿨다
+- **테스트** — Nano Banana 2 경로(행 1개·seed `None`·기준 이상이면 엔진 1회·미달이면 2회 + `attempts`
+  2·표시는 첫 호출 전 한 번·`total == 1`·`finished`), GPU 경로 명시 seed·재시도 없음, 그리고 URL 이
+  있음/앞뒤 공백/빈 값/공백뿐일 때 판정·엔진 선택·장수·seed 기록이 함께 가는지. 두 장을 보던 기존
+  테스트는 `cardgen_url` 을 명시로 켜서(`_two_card_gpu_path`) 계속 두 장 경로를 본다
+- **문서** — README 「지금 상태」·「정해진 것」, roadmap 3번 행, D-084, PR 본문 초안의 「요청마다 2장」
+  서술을 엔진별로 고쳤다. PR 본문 「배포 영향」은 위 결정대로 다시 썼다: 개발서버 DB 는 `dev` 머지 직전
+  (`.github/workflows/deploy.yml` 이 `dev` push 로 배포), GCP DB 는 dev→main 머지 뒤 GCP 로 올리기 전.
+  수정 파동이 적은 「`db-migrate.yml` 로 개발서버·GCP DB 양쪽에」는 틀렸다 — 그 워크플로는
+  `runs-on: [self-hosted, Windows, X64]`(개발서버)라 GCP VM 의 DB 에는 닿지 않는다. GCP 는
+  `docs/deploy/runbook.md` §6 절차(① `git push gcp main` → ② VM `git fetch` → ③ 마이그레이션 →
+  ④ `git merge --ff-only origin/main` = 배포)를 따른다
+
+### 2026-09-16 — 최종 리뷰 수정 파동 (Critical 0, 머지 전 마지막 손질)
 
 전체 브랜치 리뷰(opus, `review-d0c707ac..ea7e921c.diff`)가 READY AFTER FIXES 로 승인하며 남긴
 Important 1건(배포 영향 서술)·minor 5건을 한 번에 처리했다.
@@ -36,7 +86,7 @@ Important 1건(배포 영향 서술)·minor 5건을 한 번에 처리했다.
 - **4월 강아지 교체 실패 주석** — 모델 이름 없이 적혀 있어 운영 엔진(Nano Banana 2)의 결함으로 읽힐
   수 있었다. `FLUX.2-klein-4B` 를 명시하고 운영(Nano Banana 2)은 영향받지 않는다고 적었다
 
-### 최종 리뷰가 남기기로 한 것 (LEAVE)
+#### 최종 리뷰가 남기기로 한 것 (LEAVE)
 
 머지를 막지 않는 minor. 위 FIX 항목과 겹치지 않는다.
 
@@ -63,7 +113,10 @@ Important 1건(배포 영향 서술)·minor 5건을 한 번에 처리했다.
 - **T7 — `5feaeab7` 커밋의 트레일러** — "Claude Sonnet 5" 그대로 둔다. `HEAD` 가 아니라 고치려면
   리베이스가 필요하고, 실제로 Sonnet 에이전트가 쓴 커밋이라 트레일러가 사실과 맞다
 
-## 2026-09-16 — #572 12달 열기 + 2장 뽑기 (Task 1~7, 구현·리뷰 완료·머지 대기)
+### 2026-09-16 — Task 1~7 (12달 열기 + 2장 뽑기, 구현·리뷰 완료)
+
+> Task 8(위)이 「한 요청에 2장」을 `FLUX.2-klein-4B` GPU 경로로 좁혔다 — 아래 「2장」·「요청당 엔진
+> 호출 최대 `cardimage_pick_count`」 서술은 그 경로의 이야기다. Nano Banana 2 경로는 한 장 + 재시도다.
 
 `docs/superpowers/plans/2026-09-16-ai-card-12months-and-two-picks.md` 를 subagent-driven-development 로
 Task 1~7 을 순서대로 실행했다(구현자 → 리뷰어 → 수정 라운드, 원장은 SDD 폴더 `progress.md`). 목적은
@@ -106,7 +159,7 @@ Task 1~7 을 순서대로 실행했다(구현자 → 리뷰어 → 수정 라운
   테스트가 깨져 있었다 — 다른 테스트 파일과 같은 방식으로 `cardimage_months` 를 `{4,9}` 로
   좁혀 고쳤다)
 
-## GPU 실험 (Task 3b, `compare-2026-09-16-months-seeds.md`)
+#### GPU 실험 (Task 3b, `compare-2026-09-16-months-seeds.md`)
 
 **조건:** 사진 `KakaoTalk_20260827_120826215_03.jpg`(정면) × 12달 × seed 1~6 = 72장, 크기 1024×1632.
 
@@ -157,7 +210,7 @@ E4 미실측·가중치 잡 단가를 옮겨 쓴 값)으로 72장이면 약 ₩3
    옛 인덱스(컬럼 없음) 앞에서 돌면 모든 요청의 둘째 행이 걸려 POST 가 전부 `409
    already_generating` 이 된다.
 
-## 한도 변경 (Task 5, D-084)
+#### 한도 변경 (Task 5, D-084)
 
 D-077(하루 1회, 카드 장수 기준)이 "요청 하나에 카드 여러 장" 을 전제하지 않아 세 군데가 깨졌었다
 — 닮음 미달 카드가 `ready` 라 한도에 안 걸려 나쁜 사진이 하루치를 공짜로 반복 소모하고, 유료 실패
@@ -181,12 +234,13 @@ unfulfilled_attempt`)이라 `db/migrations/2026-09-15_ai_card_usage.sql` 의 옛
 **고치지 않고 남긴 것 (D-084 명시):** 요청의 첫 카드가 생성 슬롯(`cardimage_concurrency`)을 기다리는
 동안 정리되면 돈은 안 나가지만 사용자는 요청을 잃는다.
 
-## 남은 것 (다음 세션)
+### 남은 것 (다음 세션)
 
 - **4월 강아지 정체성 결함** — `DAENGS_CARDGEN_URL` 을 켜기 전에 반드시 해결. 아직 원인 미분석
 - **여러 사진으로 seed 목록 재검증** — 사진이 결과에 영향을 준다는 것이 확인됐다(발견 3). 지금
   목록은 사진 1장 스윕으로만 확정
-- **앱 고르기 화면** — `SAJOYO/DAENGS_APP` 과 계약 조율, 2장을 보여 주고 고르는 UI
+- **앱 고르기 화면** — `SAJOYO/DAENGS_APP` 과 계약 조율, 2장을 보여 주고 고르는 UI. **`DAENGS_CARDGEN_URL`
+  을 넣는 것과 함께 나가야 한다**(Task 8) — 그 값이 들어가는 순간 한 요청이 두 장이 된다
 - **E4 비용 실측** — 여전히 미측정. 장당 ₩43 은 가중치 잡 단가를 옮겨 쓴 추정
 - **과일·채소 카드** (로드맵 4번) — 아래 참고
 - `DAENGS_CARDGEN_URL` 운영 반영 여부 — 4월 결함이 풀린 뒤 별도 판단

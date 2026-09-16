@@ -3,8 +3,9 @@
 **제품 규칙입니다** (사용자 결정 2026-09-15, #572 에서 D-084 로 개정). 부르는 쪽(`services/ai_card.py`)은
 세 예외만 압니다.
 
-- 사용자별 **동시 1요청** — `AiCardBusyError` (409 `already_generating`). 한 요청은 카드 여러 장
-  (`cardimage_pick_count`)이고 그 행들이 `pick_group` 하나를 공유합니다.
+- 사용자별 **동시 1요청** — `AiCardBusyError` (409 `already_generating`). 한 요청의 행들이 `pick_group`
+  하나를 공유합니다. 행 수는 엔진이 정합니다(#572 Task 8): Nano Banana 2 경로(지금 운영)는 한 장,
+  `FLUX.2-klein-4B` GPU 경로는 `cardimage_pick_count` 장.
 - **강아지마다 달마다 한 장**, 보호자마다 따로 — 같은 `dog_id`·`month` 의 `ready`/`generating` 카드가
   있으면 `AiCardMonthTakenError` (409 `month_taken`). 그 카드를 지우면 그 달은 다시 열립니다.
   `dog_id` 가 없으면 보지 않습니다.
@@ -27,7 +28,8 @@
   행(`ai_cards`)으로 셌다면 생성 중에 지우는 것만으로 셈이 사라져 시작→삭제를 끝없이 되풀이할 수 있었습니다.
 
 그래서 KST 하루에 유료 호출까지 가는 요청은 **좋은 뽑기 `DAENGS_CARDIMAGE_DAILY_LIMIT` 번 + 좋은 카드를
-못 얻은 요청 최대 5번**이고, 요청 하나가 부르는 엔진은 최대 `cardimage_pick_count` 번입니다. 한도
+못 얻은 요청 최대 5번**이고, 요청 하나가 부르는 엔진은 최대 두 번입니다 — Nano Banana 2 경로는 한 장에
+재시도 한 번, GPU 경로는 `cardimage_pick_count`(최대 2) 장에 재시도 없음(#572 Task 8). 한도
 검사를 통과한 요청이 슬롯을 잡기 전에는 표시가 없지만, 그 요청이 살아 있는 동안은 동시 1요청이 다음
 요청을 막고, 지워지면 엔진을 안 부르므로 이 셈을 넘지 않습니다. 전체 지출의 바닥은 카드 생성 키의
 별도 GCP 프로젝트 지출 상한입니다.
@@ -43,6 +45,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from daengs_backend.config import settings
 from daengs_backend.repositories import ai_card as ai_card_repo
+from daengs_backend.services import ai_card_engine
 
 KST = ZoneInfo("Asia/Seoul")
 
@@ -68,7 +71,9 @@ def stale_after() -> timedelta:
     (`repositories/ai_card.py::expire_generating`).
 
     한 건의 최악은 슬롯을 잡은 뒤 엔진·검수가 각각 `cardimage_timeout_ms` 를 다 쓰고
-    재시도까지 하는 경우(2 × 2 × timeout)다. 그보다 짧으면 정상 진행 중인 작업을 실패로
+    재시도까지 하는 경우(2 × 2 × timeout)다. 그 재시도는 Nano Banana 2 경로(지금 운영)에서 **한 행
+    안에서** 일어난다(#572 Task 8 — 그 경로는 seed 없이 한 장을 부르므로 `generate_card` 가 닮음 미달이면
+    한 번 더 만든다). 슬롯은 행마다 한 번만 잡으므로 이 예산이 두 시도를 통째로 덮어야 한다. 그보다 짧으면 정상 진행 중인 작업을 실패로
     덮으므로 1분을 더 둔다. **세마포어를 기다리는 대기열 시간은 이 예산 밖이다** —
     `services/ai_card.py::_claim_slot` 이 슬롯을 잡고 돈이 나가는 호출(엔진) 직전에 행을
     다시 보아 `updated_at` 을 그 시각으로 찍으므로, 대기 중에 지워지거나 이미 정리된 행은
@@ -82,10 +87,10 @@ def stale_after() -> timedelta:
     포함, `ai_card_engine.default_engine`)이므로 그 값을 그대로 더한다 — 이 예산이 콜드 스타트보다
     짧으면 멀쩡히 도는 카드가 사라진 것으로 정리된다. **꺼져 있으면(지금 운영, Nano Banana 2) 예산은
     그대로다** — 늘리면 죽은 작업이 그만큼 오래 `generating` 으로 남는다. 켜짐의 판단은
-    `default_engine` 과 같게 `strip()` 한 값으로 한다.
+    `default_engine`·장수와 같은 함수 `ai_card_engine.gpu_path_active` 로 한다(#572 Task 8).
     """
     budget = timedelta(milliseconds=4 * settings.cardimage_timeout_ms) + timedelta(seconds=60)
-    if settings.cardgen_url.strip():
+    if ai_card_engine.gpu_path_active():
         budget += timedelta(seconds=settings.cardgen_timeout_s)
     return budget
 

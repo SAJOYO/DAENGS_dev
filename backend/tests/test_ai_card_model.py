@@ -31,7 +31,10 @@ def test_named_constraints_and_indexes() -> None:
     } <= names
     indexes = {i.name: i for i in AiCard.__table__.indexes}
     assert indexes["idx_ai_cards_one_generating"].unique
-    assert "generating" in str(indexes["idx_ai_cards_one_generating"].dialect_options["postgresql"]["where"])
+    one_generating_where = str(indexes["idx_ai_cards_one_generating"].dialect_options["postgresql"]["where"])
+    assert "generating" in one_generating_where
+    # #572 Task 4 fix round 1 Critical — 행 하나가 아니라 요청의 대표 행 하나만 본다.
+    assert "id = pick_group" in one_generating_where
     assert indexes["idx_ai_cards_storage_key"].unique
     assert not indexes["ix_ai_cards_pick_group"].unique  # 형제 행이 같은 값을 공유하는 것이 정상이다
 

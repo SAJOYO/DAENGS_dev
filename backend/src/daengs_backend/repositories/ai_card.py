@@ -129,12 +129,20 @@ async def list_siblings(
     return list(await session.scalars(stmt))
 
 
-async def count_ready_in_group(session: AsyncSession, app_user_id: uuid.UUID, pick_group: uuid.UUID) -> int:
-    """`pick_group` 안에서 지금까지 `ready` 로 끝난 장수. 진행률(`done`)이 이것을 쓴다."""
-    stmt = select(func.count()).select_from(AiCard).where(
-        AiCard.app_user_id == app_user_id, AiCard.pick_group == pick_group, AiCard.status == "ready"
-    )
-    return int(await session.scalar(stmt) or 0)
+async def group_counts(session: AsyncSession, app_user_id: uuid.UUID, pick_group: uuid.UUID) -> tuple[int, int, int]:
+    """`(total, ready, generating)` — 이 pick_group 에 **실제로 있는** 행 수·완료 수·진행중 수.
+
+    `total` 은 설정값이 아니라 실제 행 수다 — seed 가 모자란 달은 요청보다 적은 장이 만들어질
+    수 있다(#572 Task 4 fix round 1 Important 2). `generating` 이 0이면 이 요청은 더 나올 카드가
+    없다는 뜻이다 — `services/ai_card.py::group_progress` 의 `finished` 가 이것을 쓴다.
+    """
+    stmt = select(
+        func.count(),
+        func.count().filter(AiCard.status == "ready"),
+        func.count().filter(AiCard.status == "generating"),
+    ).select_from(AiCard).where(AiCard.app_user_id == app_user_id, AiCard.pick_group == pick_group)
+    row = (await session.execute(stmt)).one()
+    return int(row[0] or 0), int(row[1] or 0), int(row[2] or 0)
 
 
 async def find_ready_by_storage_key(session: AsyncSession, storage_key: str) -> AiCard | None:

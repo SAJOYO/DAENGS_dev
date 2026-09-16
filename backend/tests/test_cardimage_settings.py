@@ -1,3 +1,6 @@
+import pytest
+from pydantic import ValidationError
+
 from daengs_backend.config import Settings
 
 
@@ -36,3 +39,16 @@ def test_cardgen_defaults_keep_gemini_path(monkeypatch):
     s = Settings(_env_file=None)
     assert s.cardgen_url == ""          # 비어 있으면 Nano Banana 2 (D-074) 그대로
     assert s.cardgen_timeout_s == 900.0  # 콜드 스타트(가중치 로드) + 생성
+
+
+def test_cardimage_pick_count_defaults_to_two(monkeypatch):
+    monkeypatch.delenv("DAENGS_CARDIMAGE_PICK_COUNT", raising=False)
+    assert Settings(_env_file=None).cardimage_pick_count == 2
+
+
+def test_cardimage_pick_count_above_two_is_rejected(monkeypatch):
+    """#572 Task 4 fix round 1 controller ruling B — 사용자가 2장으로 정했다. 그 이상을 설정으로
+    열면 (겹치는 seed 로) 같은 이미지 두 장에 돈을 두 번 내는 길도 같이 열린다."""
+    monkeypatch.setenv("DAENGS_CARDIMAGE_PICK_COUNT", "3")
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)

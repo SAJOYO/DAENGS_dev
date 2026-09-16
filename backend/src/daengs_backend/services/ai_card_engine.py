@@ -10,6 +10,8 @@ D-070 이 `DAENGS_REALTIME_URL` 값에 따라 같은 프로세스 호출과 HTTP
 
 from __future__ import annotations
 
+import random
+
 from daengs_backend.config import settings
 from daengs_backend.services import realtime_client
 from daengs_cardimage import (
@@ -17,8 +19,8 @@ from daengs_cardimage import (
     GeneratedCard,
     catalog,
     generate_card,
-    generate_cards,
 )
+from daengs_cardimage import plan_seeds as _plan_seeds
 from daengs_cardimage.engine import CardImageEngine, GeminiCardImageEngine, HttpCardImageEngine
 from daengs_cardimage.judge import CardJudge, GeminiCardJudge
 
@@ -55,8 +57,13 @@ def generate(
     dog_name: str,
     engine: CardImageEngine,
     judge: CardJudge | None,
+    seed: int | None = None,
 ) -> GeneratedCard:
-    """동기 호출(20~60초)이다. 이벤트 루프에서는 `asyncio.to_thread` 로 부른다."""
+    """동기 호출(20~60초)이다. 이벤트 루프에서는 `asyncio.to_thread` 로 부른다.
+
+    `seed` 를 주면(#572 Task 4 fix round 1 controller ruling A — `start` 가 행마다 미리 뽑아 둔
+    값) `generate_card` 가 그 값을 그대로, 재시도 없이 쓴다. 관리자 콘솔은 여전히 `seed` 없이
+    부른다(재시도 있는 옛 경로 그대로)."""
     return generate_card(
         photo=photo,
         content_type=content_type,
@@ -67,33 +74,15 @@ def generate(
         base_dir=settings.cardimage_dir,
         open_months=settings.cardimage_months,
         judge_min=settings.cardimage_judge_min,
+        seed=seed,
     )
 
 
-def generate_many(
-    *,
-    photo: bytes,
-    content_type: str,
-    month: int,
-    dog_name: str,
-    engine: CardImageEngine,
-    judge: CardJudge | None,
-    count: int,
-) -> list[GeneratedCard]:
-    """카드 `count` 장을 순차로 만든다 (#572 Task 4, `/app/ai-cards` 전용). 동기 호출(20~60초 × count)
-    이라 이벤트 루프에서는 `asyncio.to_thread` 로 부른다. 관리자 콘솔은 여전히 `generate` 하나만 쓴다."""
-    return generate_cards(
-        count=count,
-        photo=photo,
-        content_type=content_type,
-        month=month,
-        dog_name=dog_name,
-        engine=engine,
-        judge=judge,
-        base_dir=settings.cardimage_dir,
-        open_months=settings.cardimage_months,
-        judge_min=settings.cardimage_judge_min,
-    )
+def plan_seeds(month: int, count: int, rng: random.Random | None = None) -> list[int]:
+    """`daengs_cardimage.plan_seeds` 로 위임한다 — 다른 모듈이 `daengs_cardimage` 를 직접 부르지
+    않고 이 모듈 하나로 묶기 위해서다(모듈 docstring 참고). `/app/ai-cards` 가 요청을 받는
+    순간(#572 Task 4 fix round 1) 이것으로 행마다 쓸 seed 를 미리, 한 번에 정한다."""
+    return _plan_seeds(month, count, rng or random.Random())
 
 
 def ready_check(month: int) -> catalog.MonthCard:

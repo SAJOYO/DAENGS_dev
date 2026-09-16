@@ -1,3 +1,4 @@
+import dataclasses
 import io
 import random
 from pathlib import Path
@@ -206,6 +207,39 @@ def test_generate_cards_no_retry_even_with_low_judge_score():
         rng=random.Random(0),
     )
     assert len(cards) == 2 and len(eng.calls) == 2  # 점수가 낮아도 카드당 한 번뿐이다
+
+
+def test_generate_cards_caps_to_distinct_seed_pool(monkeypatch, caplog):
+    """#572 Task 4 fix round 1 Important 2 — 겹치지 않는 seed 가 count 보다 적으면 있는 만큼만
+    만든다(같은 seed 두 번은 완전히 같은 이미지 두 장에 돈을 두 번 내는 것이다). 4월 풀은
+    {3,4}(2개) 인데, 하나만 검증된 것처럼 흉내 낸다."""
+    monkeypatch.setitem(catalog._CARDS, 4, dataclasses.replace(catalog.get(4), seeds=(7,)))
+    eng = FakeEngine()
+    with caplog.at_level("WARNING"):
+        cards = generate.generate_cards(
+            count=2, photo=_photo(), content_type="image/jpeg", month=4, dog_name="네오",
+            engine=eng, judge=None, base_dir=CARDIMAGE, open_months=frozenset({4}), judge_min=3,
+            rng=random.Random(0),
+        )
+    assert len(cards) == 1 and cards[0].seed == 7
+    assert len(eng.calls) == 1
+    assert "distinct seed" in caplog.text
+
+
+def test_plan_seeds_caps_to_pool_size_instead_of_repeating():
+    """4월 풀은 {3,4}(2개) 뿐이다 — 5장을 부탁해도 2개만, 중복 없이 돌려준다."""
+    seeds = generate.plan_seeds(4, 5, random.Random(0))
+    assert len(seeds) == 2 and set(seeds) == set(catalog.get(4).seeds)
+
+
+def test_generate_cards_with_seed_and_count_over_one_raises():
+    """#572 Task 4 fix round 1 controller ruling C — 조용히 한 장으로 줄이지 않고 알린다."""
+    with pytest.raises(ValueError, match="count"):
+        generate.generate_cards(
+            count=2, photo=_photo(), content_type="image/jpeg", month=4, dog_name="네오",
+            engine=FakeEngine(), judge=None, base_dir=CARDIMAGE, open_months=frozenset({4}), judge_min=3,
+            seed=3,
+        )
 
 
 def test_generate_cards_single_count_keeps_generate_card_behavior():

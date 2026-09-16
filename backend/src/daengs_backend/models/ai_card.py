@@ -51,10 +51,14 @@ class AiCard(Base):
             "idx_ai_cards_storage_key", "storage_key", unique=True,
             postgresql_where=text("storage_key IS NOT NULL"),
         ),
-        #: 사용자별 동시 1장. 서비스가 add+commit 을 같은 try 로 감싸 IntegrityError → 409 로 바꿉니다.
+        #: 사용자별 동시 **요청** 1개(행 1개가 아닙니다 — #572 Task 4 fix round 1 Critical).
+        #: 한 요청의 행은 전부 `pick_group` 을 공유하고, 그 대표 행(`id = pick_group`)만 이
+        #: 인덱스가 봅니다 — 그래야 같은 요청의 형제 행 여럿이 동시에 `generating` 이어도
+        #: 걸리지 않으면서, 다른(진짜 동시) 요청은 여전히 막습니다. 서비스가 add+commit 을
+        #: 같은 try 로 감싸 IntegrityError → 409 로 바꿉니다.
         Index(
             "idx_ai_cards_one_generating", "app_user_id", unique=True,
-            postgresql_where=text("status = 'generating'"),
+            postgresql_where=text("status = 'generating' AND id = pick_group"),
         ),
         #: 「고른 카드만 남기고 형제를 지운다」 가 pick_group 으로 형제를 찾을 때 쓴다.
         Index("ix_ai_cards_pick_group", "pick_group"),
@@ -94,7 +98,10 @@ class AiCard(Base):
     seed: Mapped[int | None] = mapped_column(Integer)
 
     #: 같은 요청에서 나온 장들을 묶는다. 사용자가 하나를 고르면 나머지 형제 행은 지운다 (#572 Task 4).
-    #: 단일 카드로 만들어진 옛 행·관리자 콘솔 카드는 `NULL` — 묶을 형제가 없다는 뜻이다.
+    #: **요청의 대표(첫) 행은 자기 `id` 를 그대로 쓴다** (`pick_group == id`) — `idx_ai_cards_one_
+    #: generating` 이 그 한 행만 보고 「사용자별 동시 1장」을 지키게 하기 위해서다(fix round 1
+    #: Critical). 그래서 카드가 한 장뿐이어도 `pick_group` 은 항상 채워진다 — `NULL` 은 이
+    #: 기능이 생기기 전(마이그레이션 이전)의 옛 행에만 남는다.
     pick_group: Mapped[uuid.UUID | None] = mapped_column(Uuid)
 
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), server_default=text("NOW()"))

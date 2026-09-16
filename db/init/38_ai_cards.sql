@@ -36,7 +36,9 @@ CREATE TABLE IF NOT EXISTS ai_cards (
     -- SMALLINT 가 아니다 — seed 는 32767 을 넘을 수 있다.
     seed INTEGER,
     -- 같은 요청에서 나온 장들을 묶는다(#572 Task 4). 사용자가 하나를 고르면 나머지 형제 행은
-    -- 지운다. 단일 카드로 만들어진 옛 행·관리자 콘솔 카드는 NULL — 묶을 형제가 없다는 뜻이다.
+    -- 지운다. 요청의 대표(첫) 행은 자기 id 를 그대로 쓴다(pick_group = id, fix round 1
+    -- Critical) — 그래야 idx_ai_cards_one_generating 이 그 한 행만 보고 「사용자별 동시 1
+    -- 요청」을 지킬 수 있다. NULL 은 이 기능이 생기기 전 옛 행에만 남는다.
     pick_group UUID,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -66,10 +68,12 @@ CREATE INDEX IF NOT EXISTS idx_ai_cards_owner_created
 CREATE UNIQUE INDEX IF NOT EXISTS idx_ai_cards_storage_key
     ON ai_cards (storage_key) WHERE storage_key IS NOT NULL;
 
--- **사용자별 동시 1장을 DB 가 보장한다.** 앱이 두 번 누른 요청이 동시에 들어와도 한 행만 선다.
--- WHERE 가 빠지면 카드를 평생 한 장밖에 못 만든다.
+-- **사용자별 동시 요청 1개를 DB 가 보장한다** (행 1개가 아니다 — fix round 1 Critical). 앱이 두
+-- 번 누른 요청이 동시에 들어와도 한 요청만 선다. 한 요청의 행은 전부 pick_group 을 공유하고
+-- 대표 행만 id = pick_group 이라 이 인덱스에 걸린다 — 그래서 같은 요청의 형제 행 여럿이 동시에
+-- generating 이어도 막히지 않는다. WHERE 가 빠지면 카드를 평생 한 장밖에 못 만든다.
 CREATE UNIQUE INDEX IF NOT EXISTS idx_ai_cards_one_generating
-    ON ai_cards (app_user_id) WHERE status = 'generating';
+    ON ai_cards (app_user_id) WHERE status = 'generating' AND id = pick_group;
 
 -- 「고른 카드만 남기고 형제를 지운다」 가 pick_group 으로 형제를 찾을 때 쓴다.
 CREATE INDEX IF NOT EXISTS ix_ai_cards_pick_group

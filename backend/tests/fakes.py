@@ -1869,10 +1869,14 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
     # 탈퇴가 이것도 명시로 지웁니다. 대역이 없으면 탈퇴 테스트가 진짜 DB 를 찾다가 깨집니다.
 
     def ai_card_add(session, card):
-        # `idx_ai_cards_one_generating` 부분 UNIQUE 를 흉내 냅니다. 진짜 DB 는 commit 에서
-        # 터지고, 서비스가 add 와 commit 을 **같은 try** 로 감싸므로 여기서 내도 같은 길을 탑니다.
-        if card.status == "generating" and any(
-            c.app_user_id == card.app_user_id and c.status == "generating" for c in store.ai_cards
+        # `idx_ai_cards_one_generating` 부분 UNIQUE 를 흉내 냅니다 — **요청의 대표 행
+        # (id == pick_group)만** 봅니다(#572 Task 4 fix round 1 Critical). 형제 행은 같은
+        # app_user_id·status='generating' 이어도 걸리지 않아야, 한 요청이 만드는 여러 행이
+        # 한꺼번에 들어갈 수 있습니다. 진짜 DB 는 commit 에서 터지고, 서비스가 add 와 commit 을
+        # **같은 try** 로 감싸므로 여기서 내도 같은 길을 탑니다.
+        if card.status == "generating" and card.id == card.pick_group and any(
+            c.app_user_id == card.app_user_id and c.status == "generating" and c.id == c.pick_group
+            for c in store.ai_cards
         ):
             # 진짜 드라이버 예외 문구에도 제약 이름이 들어 있습니다 — 서비스가 `exc.orig` 에서 그 이름을 봅니다.
             raise IntegrityError(
@@ -1964,10 +1968,12 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
             if c.app_user_id == app_user_id and c.pick_group == pick_group and c.id != exclude_id
         ]
 
-    async def ai_card_count_ready_in_group(session, app_user_id, pick_group):
-        return sum(
-            1 for c in store.ai_cards
-            if c.app_user_id == app_user_id and c.pick_group == pick_group and c.status == "ready"
+    async def ai_card_group_counts(session, app_user_id, pick_group):
+        mine = [c for c in store.ai_cards if c.app_user_id == app_user_id and c.pick_group == pick_group]
+        return (
+            len(mine),
+            sum(1 for c in mine if c.status == "ready"),
+            sum(1 for c in mine if c.status == "generating"),
         )
 
     monkeypatch.setattr(ai_card_repo, "add", ai_card_add)
@@ -1986,7 +1992,7 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
     monkeypatch.setattr(ai_card_repo, "delete", ai_card_delete)
     monkeypatch.setattr(ai_card_repo, "delete_all_for_owner", ai_card_delete_all_for_owner)
     monkeypatch.setattr(ai_card_repo, "list_siblings", ai_card_list_siblings)
-    monkeypatch.setattr(ai_card_repo, "count_ready_in_group", ai_card_count_ready_in_group)
+    monkeypatch.setattr(ai_card_repo, "group_counts", ai_card_group_counts)
 
     async def audit_add(session, **kw):
         entry = FakeAuditEntry(

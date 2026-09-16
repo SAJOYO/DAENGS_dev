@@ -487,17 +487,17 @@ def test_long_uppercased_title_name_is_clamped(store, jobs) -> None:
 
 
 def _spy_generate(recorded: dict, monkeypatch: pytest.MonkeyPatch) -> None:
-    """`ai_card_engine.generate_many` 를 가로채 `dog_name` 인자와 실제로 그려진 제목을 기록한다.
-    `_run` 이 `ai_card_engine.generate_many` 를 속성으로 부르므로(모듈째 import) 여기서 바꿔치기가 먹는다."""
-    original = ai_card_engine.generate_many
+    """`ai_card_engine.generate` 를 가로채 `dog_name` 인자와 실제로 그려진 제목을 기록한다.
+    `_run` 이 `ai_card_engine.generate` 를 속성으로 부르므로(모듈째 import) 여기서 바꿔치기가 먹는다."""
+    original = ai_card_engine.generate
 
     def spy(**kw):
         recorded["dog_name"] = kw["dog_name"]
         generated = original(**kw)
-        recorded["title"] = generated[0].title
+        recorded["title"] = generated.title
         return generated
 
-    monkeypatch.setattr(ai_card_engine, "generate_many", spy)
+    monkeypatch.setattr(ai_card_engine, "generate", spy)
 
 
 def test_title_name_reaches_generation(store, jobs, monkeypatch) -> None:
@@ -573,55 +573,154 @@ class _FailSecondCallEngine(FakeEngine):
         return self.outputs[0]
 
 
-def test_start_sets_pick_group_before_generation(store, jobs) -> None:
-    """`pick_group` 은 `start` 가 미리 정한다 — 백그라운드가 돌기 전에도 있어야 한다."""
+def test_start_creates_all_rows_up_front(store, jobs, monkeypatch) -> None:
+    """행은 `start` 가 전부 미리 만든다(controller ruling A) — 백그라운드가 돌기 전에도 둘 다 있다.
+
+    대표 행은 자기 id 를 `pick_group` 으로 쓴다 — `idx_ai_cards_one_generating` 이 그 한 행만
+    보게 하기 위해서다(fix round 1 Critical)."""
+    monkeypatch.setattr(settings, "cardimage_pick_count", 2)
     card = _start()
-    assert card.pick_group is not None
+    assert card.pick_group == card.id
+    assert len(store.ai_cards) == 2
+    primary, sibling = store.ai_cards
+    assert primary is card and primary.status == "generating" and sibling.status == "generating"
+    assert sibling.pick_group == primary.pick_group
+    assert sibling.id != primary.id and sibling.seed != primary.seed
+    assert sibling.app_user_id == OWNER and sibling.dog_name == "네오" and sibling.title == card.title
+    assert len(jobs) == 1  # 요청 하나에 백그라운드 작업 하나 — 그 안에서 행마다 순서대로 돈다
 
 
-def test_two_cards_share_pick_group_and_only_first_records_usage(store, storage, jobs, monkeypatch) -> None:
-    """두 장이 성공하면 같은 `pick_group` 의 행 두 개가 남는다 — 사용 기록은 한 번만."""
+def test_two_cards_become_ready_and_only_first_records_usage(store, storage, jobs, monkeypatch) -> None:
+    """두 장 다 성공하면 둘 다 `ready` 가 된다 — 사용 기록은 한 번만(요청을 센다, 카드 수가 아니다)."""
     monkeypatch.setattr(settings, "cardimage_pick_count", 2)
     card = _start()
     _run_all(jobs)
 
     assert len(store.ai_cards) == 2
     primary, sibling = store.ai_cards
-    assert primary is card and primary.status == "ready"
-    assert sibling.status == "ready" and sibling.id != primary.id
-    assert sibling.pick_group == primary.pick_group == card.pick_group
-    assert sibling.app_user_id == OWNER and sibling.dog_name == "네오" and sibling.title == card.title
-    assert sibling.month == 4 and sibling.storage_key != primary.storage_key
+    assert primary is card and primary.status == "ready" and sibling.status == "ready"
+    assert sibling.storage_key != primary.storage_key
     assert Image.open(storage.local_path(sibling.storage_key)).size == (994, 1582)
-    # 한도는 "요청 한 번" 을 센다 — 카드 두 장을 만들었다고 두 번 세지 않는다.
     assert len(store.ai_card_usage) == 1 and store.ai_card_usage[0].card_id == primary.id
 
 
-def test_second_generation_failing_still_leaves_one_ready_card(store, storage, jobs, monkeypatch) -> None:
-    """두 장 중 하나만 성공해도 실패로 떨어지지 않는다 — 고를 카드가 하나는 남는다."""
+def test_second_generation_failing_leaves_one_ready_and_one_failed(store, storage, jobs, monkeypatch) -> None:
+    """두 장 중 하나만 성공해도 실패로 떨어지지 않는다 — 실패한 행도 남는다(지워지지 않는다),
+    고를 카드는 하나 있다."""
     monkeypatch.setattr(settings, "cardimage_pick_count", 2)
     monkeypatch.setattr(ai_card_engine, "default_engine", lambda: _FailSecondCallEngine())
     card = _start()
     _run_all(jobs)
 
-    assert len(store.ai_cards) == 1
-    assert card.status == "ready" and len(store.ai_card_usage) == 1
+    assert len(store.ai_cards) == 2
+    primary, sibling = store.ai_cards
+    assert primary is card and primary.status == "ready"
+    assert sibling.status == "failed" and sibling.error_code == "upstream"
+    assert len(store.ai_card_usage) == 1
+
+
+def test_one_seed_month_makes_exactly_one_row_and_one_card(store, jobs, monkeypatch) -> None:
+    """겹치지 않는 seed 가 하나뿐인 달은 `cardimage_pick_count=2` 여도 행을 하나만 만든다
+    (controller ruling B — 같은 이미지 두 장에 돈을 두 번 내지 않는다)."""
+    import dataclasses
+
+    from daengs_cardimage import catalog
+
+    monkeypatch.setattr(settings, "cardimage_pick_count", 2)
+    monkeypatch.setitem(catalog._CARDS, 4, dataclasses.replace(catalog.get(4), seeds=(7,)))
+    card = _start()
+    assert len(store.ai_cards) == 1 and card.seed == 7
+    _run_all(jobs)
+    assert len(store.ai_cards) == 1 and card.status == "ready"
+
+
+def test_deleting_generating_card_stops_the_next_card_and_records_no_usage(
+    store, storage, jobs, monkeypatch
+) -> None:
+    """생성 중에(첫 장이 아직 도는 사이) 카드를 지우면 형제도 같이 지워지고, `_run` 이 그 형제를
+    다시 만들지 않는다 — 취소된 요청은 만들지 않는다(#572 Task 4 fix round 1 Critical)."""
+    monkeypatch.setattr(settings, "cardimage_pick_count", 2)
+    engine = FakeEngine()
+    monkeypatch.setattr(ai_card_engine, "default_engine", lambda: engine)
+    card = _start()
+    assert len(store.ai_cards) == 2
+    asyncio.run(service.delete_card(FakeSession(), OWNER, card.id))
+    assert store.ai_cards == []  # 형제도 같이 지워졌다
+
+    _run_all(jobs)
+
+    assert engine.calls == []  # 엔진이 한 번도 안 불렸다 — 돈이 안 나갔다
+    assert store.ai_card_usage == []
 
 
 def test_group_progress_before_and_after_generation(store, storage, jobs, monkeypatch) -> None:
     monkeypatch.setattr(settings, "cardimage_pick_count", 2)
     card = _start()
-    assert asyncio.run(service.group_progress(FakeSession(), OWNER, card)) == (0, 2)
+    assert asyncio.run(service.group_progress(FakeSession(), OWNER, card)) == (0, 2, False)
     _run_all(jobs)
-    assert asyncio.run(service.group_progress(FakeSession(), OWNER, card)) == (2, 2)
+    assert asyncio.run(service.group_progress(FakeSession(), OWNER, card)) == (2, 2, True)
 
 
-def test_group_progress_is_none_without_pick_group(store, jobs) -> None:
-    """옛 카드(마이그레이션 이전)는 `pick_group` 이 없다 — 그룹 개념이 없다는 뜻으로 `(None, None)`."""
+def test_finished_is_false_while_generating_and_true_once_second_card_fails(
+    store, storage, jobs, monkeypatch
+) -> None:
+    """`finished` 는 `done == total` 이 아니라 "더 만들 카드가 없다" 를 본다 — 둘째 장이
+    실패해도(`done` 이 영영 `total` 에 못 미쳐도) `finished` 는 참이 된다(fix round 1 Important 1)."""
+    monkeypatch.setattr(settings, "cardimage_pick_count", 2)
+    monkeypatch.setattr(ai_card_engine, "default_engine", lambda: _FailSecondCallEngine())
+    card = _start()
+    assert asyncio.run(service.group_progress(FakeSession(), OWNER, card))[2] is False
+
+    _run_all(jobs)
+
+    done, total, finished = asyncio.run(service.group_progress(FakeSession(), OWNER, card))
+    assert (done, total, finished) == (1, 2, True)
+
+
+def test_multi_row_request_still_blocks_a_concurrent_request(store, jobs, monkeypatch) -> None:
+    """`has_generating` 은 행 수가 아니라 "generating 인 행이 있나" 를 본다 — 대표 행이든
+    형제 행이든 하나라도 있으면 여전히 막는다."""
+    monkeypatch.setattr(settings, "cardimage_pick_count", 2)
+    _start()
+    with pytest.raises(quota.AiCardBusyError):
+        _start()
+
+
+def test_multi_row_request_still_takes_the_month_once_ready(store, jobs, monkeypatch) -> None:
+    """두 장 다 `ready` 가 된 뒤에도 `has_month_card` 는 여전히 그 달을 막는다 — 행이 여럿이어도
+    조건(같은 dog_id·month·ready/generating)을 만족하는 행이 하나라도 있으면 걸린다."""
+    monkeypatch.setattr(settings, "cardimage_daily_limit", 0)
+    monkeypatch.setattr(settings, "cardimage_pick_count", 2)
+    pet = FakePet(app_user_id=OWNER, name="네옹", breed="mix")
+    store.pets.append(pet)
+    _start(dog_id=pet.id, month=4)
+    _run_all(jobs)
+    with pytest.raises(quota.AiCardMonthTakenError):
+        _start(dog_id=pet.id, month=4)
+
+
+def test_expire_generating_expires_every_row_of_an_abandoned_group(store, jobs, monkeypatch) -> None:
+    """정리 기준을 넘기면 그룹의 행 **전부**가 `failed`/`interrupted` 가 된다 — 대표 행만이 아니다."""
+    monkeypatch.setattr(settings, "cardimage_pick_count", 2)
+    card = _start()
+    primary, sibling = store.ai_cards
+    old = datetime.now(UTC) - timedelta(minutes=10)
+    primary.updated_at = old
+    sibling.updated_at = old
+
+    asyncio.run(service.list_cards(FakeSession(), OWNER))
+
+    assert primary.status == "failed" and primary.error_code == "interrupted"
+    assert sibling.status == "failed" and sibling.error_code == "interrupted"
+    assert card is primary
+
+
+def test_group_progress_is_finished_without_pick_group(store, jobs) -> None:
+    """옛 카드(마이그레이션 이전)는 `pick_group` 이 없다 — 기다릴 그룹이 없으니 `finished=True`."""
     card = AiCard(
         id=uuid.uuid4(), app_user_id=OWNER, month=4, dog_name="네오", title="BLOSSOM 네오", status="ready",
     )
-    assert asyncio.run(service.group_progress(FakeSession(), OWNER, card)) == (None, None)
+    assert asyncio.run(service.group_progress(FakeSession(), OWNER, card)) == (None, None, True)
 
 
 def test_choose_keeps_picked_card_and_deletes_sibling_object(store, storage, jobs, monkeypatch) -> None:

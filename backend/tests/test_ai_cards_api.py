@@ -27,6 +27,7 @@ from daengs_backend.repositories import app_user as app_user_repo
 from daengs_backend.routers import ai_card as ai_card_router
 from daengs_backend.services import ai_card as service
 from daengs_backend.services import ai_card_engine
+from daengs_cardimage.engine import EngineError
 from daengs_cardimage.photo import MAX_PHOTO_BYTES
 
 OWNER = uuid.uuid4()
@@ -305,7 +306,7 @@ def test_post_response_has_pick_group_and_progress(client: TestClient, jobs: lis
     monkeypatch.setattr(settings, "cardimage_pick_count", 2)
     body = _post(client).json()
     assert body["pick_group"] is not None
-    assert (body["done"], body["total"]) == (0, 2)
+    assert (body["done"], body["total"], body["finished"]) == (0, 2, False)
 
 
 def test_get_reports_done_and_total_after_generation(client: TestClient, jobs: list, monkeypatch) -> None:
@@ -314,7 +315,31 @@ def test_get_reports_done_and_total_after_generation(client: TestClient, jobs: l
     _run_all(jobs)
     detail = client.get(f"/app/ai-cards/{card_id}").json()
     assert detail["status"] == "ready"
-    assert (detail["done"], detail["total"]) == (2, 2)
+    assert (detail["done"], detail["total"], detail["finished"]) == (2, 2, True)
+
+
+def test_get_reports_finished_true_after_second_card_fails(
+    client: TestClient, jobs: list, monkeypatch
+) -> None:
+    """`finished` 는 `done == total` 이 아니라 "더 만들 카드가 없다" 를 본다(fix round 1 Important 1)."""
+    monkeypatch.setattr(settings, "cardimage_pick_count", 2)
+
+    class _FailSecondCallEngine(FakeEngine):
+        def generate(self, *, template_png, photo_jpeg, prompt, seed=None):
+            self.calls.append({"template": template_png, "photo": photo_jpeg, "prompt": prompt, "seed": seed})
+            if len(self.calls) == 2:
+                raise EngineError("upstream", "두 번째 호출 실패")
+            return self.outputs[0]
+
+    monkeypatch.setattr(ai_card_engine, "default_engine", lambda: _FailSecondCallEngine())
+    card_id = _post(client).json()["id"]
+    interim = client.get(f"/app/ai-cards/{card_id}").json()
+    assert interim["finished"] is False
+
+    _run_all(jobs)
+
+    detail = client.get(f"/app/ai-cards/{card_id}").json()
+    assert (detail["done"], detail["total"], detail["finished"]) == (1, 2, True)
 
 
 def test_list_shows_both_cards_from_one_request(client: TestClient, jobs: list, monkeypatch) -> None:

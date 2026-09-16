@@ -58,7 +58,12 @@ def _with_topic(name: str) -> str:
 
 
 def _to_response(
-    card: AiCard, image_url: str | None = None, *, done: int | None = None, total: int | None = None
+    card: AiCard,
+    image_url: str | None = None,
+    *,
+    done: int | None = None,
+    total: int | None = None,
+    finished: bool | None = None,
 ) -> AiCardResponse:
     return AiCardResponse(
         id=card.id,
@@ -76,6 +81,7 @@ def _to_response(
         pick_group=card.pick_group,
         done=done,
         total=total,
+        finished=finished,
         image_url=image_url,
     )
 
@@ -141,8 +147,8 @@ async def create_card(
         raise _error(
             status.HTTP_429_TOO_MANY_REQUESTS, "limit_reached", "오늘은 카드를 더 만들 수 없어요. 내일 다시 시도해 주세요."
         ) from None
-    done, total = await ai_card_service.group_progress(session, user.app_user_id, card)
-    return _to_response(card, done=done, total=total)
+    done, total, finished = await ai_card_service.group_progress(session, user.app_user_id, card)
+    return _to_response(card, done=done, total=total, finished=finished)
 
 
 @router.get("", response_model=AiCardListResponse)
@@ -164,8 +170,8 @@ async def get_card(card_id: uuid.UUID, user: CurrentAppUser, session: Session) -
     except StorageNotConfiguredError as exc:
         log.warning("AI 카드 저장소가 준비되지 않았습니다: %s", exc)
         raise _error(status.HTTP_503_SERVICE_UNAVAILABLE, "storage", "카드 보관은 아직 준비 중이에요.") from None
-    done, total = await ai_card_service.group_progress(session, user.app_user_id, card)
-    return _to_response(card, url, done=done, total=total)
+    done, total, finished = await ai_card_service.group_progress(session, user.app_user_id, card)
+    return _to_response(card, url, done=done, total=total, finished=finished)
 
 
 @router.post("/{card_id}/choose", response_model=AiCardResponse)
@@ -178,8 +184,8 @@ async def choose_card(card_id: uuid.UUID, user: CurrentAppUser, session: Session
     except StorageNotConfiguredError as exc:
         log.warning("AI 카드 저장소가 준비되지 않았습니다: %s", exc)
         raise _error(status.HTTP_503_SERVICE_UNAVAILABLE, "storage", "카드 보관은 아직 준비 중이에요.") from None
-    done, total = await ai_card_service.group_progress(session, user.app_user_id, card)
-    return _to_response(card, url, done=done, total=total)
+    done, total, finished = await ai_card_service.group_progress(session, user.app_user_id, card)
+    return _to_response(card, url, done=done, total=total, finished=finished)
 
 
 @router.delete("/{card_id}", status_code=status.HTTP_204_NO_CONTENT)

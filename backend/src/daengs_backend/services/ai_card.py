@@ -1,12 +1,15 @@
 """앱 사용자 AI 도감 카드의 규칙. 트랜잭션 경계도 여기입니다 (`/app/ai-cards/*`, #537, D-076).
 
 **비동기입니다.** `start` 는 돈이 나가기 전에 거를 수 있는 것(닫힌 달·키·저장소·사진·탈퇴·
-남의 강아지·한도)을 전부 동기로 거른 뒤 행을 `generating` 으로 커밋하고 바로 돌아갑니다.
-POST 는 토큰만 확인하고(`CurrentAppMemberTokenOnly`) **사진을 다 받은 뒤** `start` 가 사용자 행을
-잠급니다 — 잠금 → 한도 → INSERT → commit 이 짧은 한 트랜잭션입니다. 생성은 같은
-backend 프로세스 안의 백그라운드 작업(`_run`)이 하고, 끝나면 **새 세션으로** 행을 `ready`/`failed`
-로 바꿉니다. 한도 규칙은 `services/ai_card_quota.py` 가 정하고(D-077), 여기서는 카드가 `ready` 가
-되는 같은 트랜잭션에서 사용 기록(`ai_card_usage`)을 남깁니다.
+남의 강아지·한도)을 전부 동기로 거른 뒤, **이 요청에서 나올 행을 전부** `generating` 으로
+커밋하고 바로 돌아갑니다(#572 Task 4 — 한 요청에 여러 장, fix round 1 controller ruling A:
+행을 나중에 하나씩 만들지 않고 미리 다 만듭니다). POST 는 토큰만 확인하고
+(`CurrentAppMemberTokenOnly`) **사진을 다 받은 뒤** `start` 가 사용자 행을 잠급니다 — 잠금 →
+한도 → INSERT(전부) → commit 이 짧은 한 트랜잭션입니다. 생성은 같은 backend 프로세스 안의
+백그라운드 작업(`_run`)이 그 행들을 **하나씩 순서대로** 채우고, 끝날 때마다 **새 세션으로**
+그 행을 `ready`/`failed` 로 바꿉니다. 한도 규칙은 `services/ai_card_quota.py` 가 정하고
+(D-077), 이 요청에서 **처음** `ready` 가 되는 카드에서만 사용 기록(`ai_card_usage`)을 남깁니다
+(카드 수가 아니라 요청 수를 셉니다).
 
 ⚠️ **백그라운드는 요청 세션을 쓰지 않습니다** — 요청이 끝나면 그 세션은 닫힙니다.
 ⚠️ **배포 재시작과 겹친 작업은 사라집니다.** 행은 `stale_after()` 가 지난 뒤 조회에서
@@ -14,7 +17,9 @@ backend 프로세스 안의 백그라운드 작업(`_run`)이 하고, 끝나면 
 ⚠️ **생성 중에 행이 지워질 수 있습니다**(삭제·탈퇴). 세마포어를 기다리는 동안 그리 됐으면
    `_claim_slot` 이 돈이 나가는 호출(엔진) 전에 멈춥니다. 끝난 작업은 행이 없거나 이미
    `generating` 이 아니면 방금 쓴 객체를 지웁니다 — 안 그러면 FK 없는 저장소에 영구 고아가
-   남습니다.
+   남습니다. **행이 여럿이므로 카드 하나의 취소·실패가 다른 행의 시도를 막지 않습니다** —
+   다만 `delete_card` 는 지우는 행이 속한 요청의 아직 `generating` 인 형제도 함께 지웁니다
+   (fix round 1 Critical) — 안 그러면 취소한 뒤에도 나머지 카드가 계속 만들어집니다.
 """
 
 from __future__ import annotations
@@ -22,6 +27,7 @@ from __future__ import annotations
 import asyncio
 import io
 import logging
+import random
 import uuid
 import weakref
 from datetime import UTC, datetime
@@ -113,7 +119,13 @@ async def start(
     dog_id: uuid.UUID | None,
     title_name: str | None = None,
     now: datetime | None = None,
+    rng: random.Random | None = None,
 ) -> AiCard:
+    """카드 만들기를 시작합니다. **이 요청에서 나올 행을 전부 지금 만듭니다** (#572 Task 4 fix
+    round 1 controller ruling A) — 나중에 백그라운드가 만드는 게 아닙니다. 그래서 사용자가 그
+    직후 대표 행을 지우면(취소) 나머지 행도 이 자리에서 이미 존재하므로 함께 지워집니다
+    (`delete_card`) — 백그라운드가 뒤늦게 형제 카드를 만들어 취소를 무시하는 일이 없습니다.
+    """
     name = " ".join(dog_name.split())
     # 제목에만 쓰는 이름 (#543). 비면 `dog_name` 그대로 — `dog_name` 은 늘 그대로 저장합니다.
     title_source = " ".join((title_name or "").split()) or name
@@ -123,7 +135,7 @@ async def start(
         raise StorageNotConfiguredError("AI 카드 저장소가 설정되지 않았습니다 (GAIT_STORAGE)")
     photo_jpeg = await asyncio.to_thread(prepare_photo, photo, content_type)
 
-    # ── 짧은 한 트랜잭션: 사용자 잠금 → 강아지 → 한도 → INSERT → commit.
+    # ── 짧은 한 트랜잭션: 사용자 잠금 → 강아지 → 한도 → INSERT(전부) → commit.
     # 잠금이 **이 세션의 첫 문장**입니다 — 탈퇴와 직렬화되고, 업로드 동안에는 잡지 않습니다.
     if await app_user_repo.get_active_for_update(session, app_user_id) is None:
         raise AiCardUserNotActiveError
@@ -136,22 +148,32 @@ async def start(
     )
 
     title = title_text(meta.card_name, title_source)[:_TITLE_MAX]  # ß → SS 처럼 자를 수 있다.
-    # 이 요청에서 나올 장들을 묶는 값. 첫 장(이 행)도, 나중에 만들 형제 행도 같은 값을 든다 (#572 Task 4).
-    pick_group = uuid.uuid4()
-    card = AiCard(
-        id=uuid.uuid4(),
-        app_user_id=app_user_id,
-        dog_id=dog_id,
-        month=month,
-        dog_name=name,
-        title=title,
-        status="generating",
-        pick_group=pick_group,
-        created_at=now,
-        updated_at=now,
-    )
+    # 장마다 쓸 seed 를 지금 한 번에 뽑습니다 — 이 달의 겹치지 않는 seed 가 설정값보다 적으면
+    # (fix round 1 Important 2) 행도 그만큼만 만듭니다. 같은 seed 로 두 번 만들면(엔진이
+    # 결정적이다) 완전히 같은 이미지 두 장에 돈을 두 번 내는 것이기 때문입니다.
+    seeds = ai_card_engine.plan_seeds(month, settings.cardimage_pick_count, rng or random.Random())
+    # 요청의 대표 행은 **자기 id 를 pick_group 으로 씁니다** — `idx_ai_cards_one_generating` 이
+    # 그 한 행만 보고 「사용자별 동시 1요청」을 지키게 하기 위해서입니다(fix round 1 Critical).
+    primary_id = uuid.uuid4()
+    cards = [
+        AiCard(
+            id=primary_id if i == 0 else uuid.uuid4(),
+            app_user_id=app_user_id,
+            dog_id=dog_id,
+            month=month,
+            dog_name=name,
+            title=title,
+            status="generating",
+            seed=seed,
+            pick_group=primary_id,
+            created_at=now,
+            updated_at=now,
+        )
+        for i, seed in enumerate(seeds)
+    ]
     try:
-        ai_card_repo.add(session, card)
+        for card in cards:
+            ai_card_repo.add(session, card)
         await session.commit()
     except IntegrityError as exc:
         await session.rollback()
@@ -161,9 +183,8 @@ async def start(
             raise AiCardBusyError from None
         raise
 
-    _spawn(_run(card.id, app_user_id, photo_jpeg, month, title_source, dog_id=dog_id, dog_name=name,
-               title=title, pick_group=pick_group))
-    return card
+    _spawn(_run([c.id for c in cards], seeds, app_user_id, photo_jpeg, month, title_source))
+    return cards[0]
 
 
 def _error_code(exc: BaseException) -> str:
@@ -210,135 +231,90 @@ async def _claim_slot(card_id: uuid.UUID) -> bool:
 
 
 async def _run(
-    card_id: uuid.UUID,
+    card_ids: list[uuid.UUID],
+    seeds: list[int],
     app_user_id: uuid.UUID,
     photo_jpeg: bytes,
     month: int,
     title_name: str,
-    *,
-    dog_id: uuid.UUID | None,
-    dog_name: str,
-    title: str,
-    pick_group: uuid.UUID,
 ) -> None:
     """백그라운드 한 건. **예외를 밖으로 내지 않습니다** — 낼 곳이 없고, 행에 결과를 남깁니다.
 
-    한 요청에 `settings.cardimage_pick_count` 장을 **순차로** 만듭니다(#572 Task 4). 첫 장은
-    `start` 가 미리 만들어 둔 행(`card_id`)을 채우고, 나머지는 같은 `pick_group` 으로 새 행을
-    만듭니다(`_add_sibling`). `generate_many` 는 한 장이 실패해도 나머지는 돌려주고, **전부**
-    실패했을 때만 예외를 올립니다 — 그때만 이 행을 `failed` 로 남깁니다.
+    행은 **이미 전부 있습니다** — `start` 가 미리 만들었습니다(#572 Task 4 fix round 1 controller
+    ruling A). 여기서는 그 행을 하나씩 순서대로 채웁니다: ①`_claim_slot` 으로 그 행이 아직
+    `generating` 인지 재확인(돈이 나가는 호출 **직전** 마지막 방어선 — 사용자가 그 사이 지웠으면
+    엔진을 부르지 않습니다) → ②`generate_card(seed=...)` 한 번(이미 seed 를 못박았으니 재시도가
+    없습니다 — 카드 여러 장을 만드는 것 자체가 재시도의 대안입니다) → ③결과를 그 행에 씁니다.
+    카드 하나의 실패·취소가 **다음 카드 시도를 막지 않습니다** — 행마다 독립입니다. 하루 한도
+    사용 기록은 **이 요청에서 처음 `ready` 가 되는 카드에서 딱 한 번만** 남깁니다.
     """
+    usage_recorded = False
+    # 요청 하나에 엔진·검수 하나 — 카드마다 새로 만들지 않는다(행마다 다시 만들면 호출별 상태
+    # (예: HTTP 엔진의 `last_meta`)가 카드 사이에서 안 이어진다).
+    engine = ai_card_engine.default_engine()
+    judge = ai_card_engine.default_judge()
     try:
         async with _slot():
-            if not await _claim_slot(card_id):
-                # 큐에서 기다리는 동안 지워졌거나 이미 정리됐습니다 — 엔진을 부르지 않습니다.
-                return
-            try:
-                generated_cards = await asyncio.to_thread(
-                    ai_card_engine.generate_many,
-                    photo=photo_jpeg,
-                    content_type="image/jpeg",
-                    month=month,
-                    # `generate_many` 는 이 이름을 그림 제목에만 쓴다 — `ai_cards.title` 과 같은 글자여야 한다 (#543).
-                    dog_name=title_name,
-                    engine=ai_card_engine.default_engine(),
-                    judge=ai_card_engine.default_judge(),
-                    count=settings.cardimage_pick_count,
-                )
-            except Exception as exc:
-                code = _error_code(exc)
-                if code == "internal":
-                    log.exception("AI 카드 생성 실패 (card=%s)", card_id)
-                else:
-                    log.warning("AI 카드 생성 실패 (card=%s, %s): %s", card_id, code, exc)
-                await _finish_failed(card_id, code)
-                return
-
-            primary, *siblings = generated_cards
-            key = build_ai_card_key(app_user_id, card_id)
-            try:
-                stored = await asyncio.to_thread(_store_png, key, primary.png)
-            except Exception:
-                log.exception("AI 카드 저장 실패 (card=%s)", card_id)
-                await _finish_failed(card_id, "storage")
-                return
-
-            try:
-                await _finish_ready(card_id, key, stored, primary)
-            except Exception:
-                # 객체는 저장됐는데 행을 못 바꿨습니다. 키를 아는 곳이 여기뿐이라 지우지 않으면 영구 고아입니다.
-                # 행은 `generating` 으로 남고 정리 기준이 지나면 `interrupted` 가 됩니다.
-                log.exception("AI 카드 완료 기록 실패 — 저장한 객체를 지웁니다 (card=%s)", card_id)
+            for card_id, seed in zip(card_ids, seeds, strict=True):
+                if not await _claim_slot(card_id):
+                    # 이 행이 사라졌거나(삭제·탈퇴) 이미 정리됐습니다 — 이 카드는 건너뜁니다
+                    # (엔진을 부르지 않습니다, 돈이 나가지 않습니다). 다른 행은 독립이니 계속 시도합니다.
+                    continue
                 try:
-                    await asyncio.to_thread(get_storage().delete, key)
+                    generated = await asyncio.to_thread(
+                        ai_card_engine.generate,
+                        photo=photo_jpeg,
+                        content_type="image/jpeg",
+                        month=month,
+                        # `generate_card` 는 이 이름을 그림 제목에만 쓴다 — `ai_cards.title` 과 같은 글자여야 한다 (#543).
+                        dog_name=title_name,
+                        engine=engine,
+                        judge=judge,
+                        seed=seed,
+                    )
+                except Exception as exc:
+                    code = _error_code(exc)
+                    if code == "internal":
+                        log.exception("AI 카드 생성 실패 (card=%s)", card_id)
+                    else:
+                        log.warning("AI 카드 생성 실패 (card=%s, %s): %s", card_id, code, exc)
+                    await _finish_failed(card_id, code)
+                    continue
+
+                key = build_ai_card_key(app_user_id, card_id)
+                try:
+                    stored = await asyncio.to_thread(_store_png, key, generated.png)
                 except Exception:
-                    log.exception("AI 카드 고아 객체 삭제도 실패했습니다 (card=%s, key=%s)", card_id, key)
-                return
+                    log.exception("AI 카드 저장 실패 (card=%s)", card_id)
+                    await _finish_failed(card_id, "storage")
+                    continue
 
-            # 나머지 장. 있으면 같은 pick_group 으로 새 행을 만듭니다 — 하나가 실패해도 첫 장은 그대로 남습니다.
-            for extra in siblings:
-                await _add_sibling(app_user_id, dog_id, month, dog_name, title, pick_group, extra)
+                try:
+                    updated = await _finish_ready(card_id, key, stored, generated, record_usage=not usage_recorded)
+                except Exception:
+                    # 객체는 저장됐는데 행을 못 바꿨습니다. 키를 아는 곳이 여기뿐이라 지우지 않으면 영구 고아입니다.
+                    # 행은 `generating` 으로 남고 정리 기준이 지나면 `interrupted` 가 됩니다.
+                    log.exception("AI 카드 완료 기록 실패 — 저장한 객체를 지웁니다 (card=%s)", card_id)
+                    try:
+                        await asyncio.to_thread(get_storage().delete, key)
+                    except Exception:
+                        log.exception("AI 카드 고아 객체 삭제도 실패했습니다 (card=%s, key=%s)", card_id, key)
+                    continue
+                if updated:
+                    usage_recorded = True
     except Exception:
-        log.exception("AI 카드 백그라운드 작업이 정리 중에 실패했습니다 (card=%s)", card_id)
+        log.exception("AI 카드 백그라운드 작업이 정리 중에 실패했습니다 (cards=%s)", card_ids)
 
 
-async def _add_sibling(
-    app_user_id: uuid.UUID,
-    dog_id: uuid.UUID | None,
-    month: int,
-    dog_name: str,
-    title: str,
-    pick_group: uuid.UUID,
-    generated: GeneratedCard,
-) -> None:
-    """형제 카드 한 장을 저장하고 `ready` 행을 새로 만듭니다(#572 Task 4).
+async def _finish_ready(
+    card_id: uuid.UUID, key: str, stored: StoredObject, generated: GeneratedCard, *, record_usage: bool
+) -> bool:
+    """이 행을 `ready` 로 채웁니다. **실제로 채웠으면 `True`.**
 
-    **하루 한도 사용 기록을 남기지 않습니다** — 한도는 "요청 한 번" 을 세지 "요청이 만든 카드 수"
-    를 세지 않습니다(`_finish_ready` 가 첫 장에서 이미 한 번 기록합니다). 저장·기록 중 실패해도
-    여기서 삼키고 건너뜁니다 — 이미 `ready` 가 된 첫 장을 통째로 잃을 이유가 아닙니다.
+    행이 그 사이 사라졌거나(삭제·탈퇴) 이미 `generating` 이 아니면(정리 기준 초과 등) 방금 만든
+    객체를 지우고 `False` 를 돌려줍니다 — 고아를 남기지 않습니다. `record_usage=True` 일 때만
+    (이 요청에서 처음 `ready` 가 되는 카드) 하루 한도 사용 기록을 같은 트랜잭션에서 남깁니다.
     """
-    sib_id = uuid.uuid4()
-    key = build_ai_card_key(app_user_id, sib_id)
-    try:
-        stored = await asyncio.to_thread(_store_png, key, generated.png)
-    except Exception:
-        log.exception("AI 카드 추가 장 저장 실패, 건너뜁니다 (sibling=%s)", sib_id)
-        return
-    width, height = Image.open(io.BytesIO(generated.png)).size
-    now = datetime.now(UTC)
-    try:
-        async with _session_factory() as session:
-            sibling = AiCard(
-                id=sib_id,
-                app_user_id=app_user_id,
-                dog_id=dog_id,
-                month=month,
-                dog_name=dog_name,
-                title=title,
-                status="ready",
-                storage_key=key,
-                generation=stored.generation,
-                size_bytes=stored.size_bytes,
-                width=width,
-                height=height,
-                likeness=generated.judge.likeness if generated.judge else None,
-                attempts=generated.attempts,
-                seed=generated.seed,
-                pick_group=pick_group,
-                created_at=now,
-                updated_at=now,
-            )
-            ai_card_repo.add(session, sibling)
-            await session.commit()
-    except Exception:
-        log.exception("AI 카드 추가 장 완료 기록 실패 — 저장한 객체를 지웁니다 (sibling=%s)", sib_id)
-        try:
-            await asyncio.to_thread(get_storage().delete, key)
-        except Exception:
-            log.exception("AI 카드 추가 장 고아 객체 삭제도 실패했습니다 (sibling=%s, key=%s)", sib_id, key)
-
-
-async def _finish_ready(card_id: uuid.UUID, key: str, stored: StoredObject, generated: GeneratedCard) -> None:
     width, height = Image.open(io.BytesIO(generated.png)).size
     async with _session_factory() as session:
         card = await ai_card_repo.get_for_update(session, card_id)
@@ -346,7 +322,7 @@ async def _finish_ready(card_id: uuid.UUID, key: str, stored: StoredObject, gene
             # 생성 중에 지워졌거나(삭제·탈퇴) 정리 기준이 지나 실패로 덮였습니다. 객체를 남기지 않습니다.
             await asyncio.to_thread(get_storage().delete, key)
             await session.rollback()
-            return
+            return False
         card.status = "ready"
         card.storage_key = key
         card.generation = stored.generation
@@ -357,22 +333,26 @@ async def _finish_ready(card_id: uuid.UUID, key: str, stored: StoredObject, gene
         card.seed = generated.seed
         now = datetime.now(UTC)
         card.updated_at = now
-        # **같은 트랜잭션에서** 사용 기록을 남깁니다 (#543, D-077). 카드를 지워도 이 줄은 남아 하루 한도가
-        # 돌아오지 않습니다. ready 가 못 된 카드(실패·중간 삭제)는 여기까지 안 오므로 세지 않습니다.
-        ai_card_repo.add_usage(session, AiCardUsage(card_id=card.id, app_user_id=card.app_user_id, used_at=now))
+        if record_usage:
+            # **같은 트랜잭션에서** 사용 기록을 남깁니다 (#543, D-077). 카드를 지워도 이 줄은 남아
+            # 하루 한도가 돌아오지 않습니다. 한 요청에 한 번뿐입니다 — 카드 수가 아니라 요청을 셉니다.
+            ai_card_repo.add_usage(session, AiCardUsage(card_id=card.id, app_user_id=card.app_user_id, used_at=now))
         await session.commit()
+        return True
 
 
-async def _finish_failed(card_id: uuid.UUID, code: str) -> None:
+async def _finish_failed(card_id: uuid.UUID, code: str) -> bool:
+    """이 행을 `failed` 로 채웁니다. 행이 이미 사라졌거나 `generating` 이 아니면 아무것도 안 하고 `False`."""
     async with _session_factory() as session:
         card = await ai_card_repo.get_for_update(session, card_id)
         if card is None or card.status != "generating":
             await session.rollback()
-            return
+            return False
         card.status = "failed"
         card.error_code = code
         card.updated_at = datetime.now(UTC)
         await session.commit()
+        return True
 
 
 async def _expire_stale(session: AsyncSession, app_user_id: uuid.UUID, now: datetime) -> None:
@@ -413,18 +393,28 @@ async def get_card(
     return card, url
 
 
-async def group_progress(session: AsyncSession, app_user_id: uuid.UUID, card: AiCard) -> tuple[int | None, int | None]:
-    """`card` 가 속한 요청(`pick_group`)의 진행률 `(done, total)` (#572 Task 4).
+async def group_progress(
+    session: AsyncSession, app_user_id: uuid.UUID, card: AiCard
+) -> tuple[int | None, int | None, bool]:
+    """`card` 가 속한 요청(`pick_group`)의 진행률 `(done, total, finished)` (#572 Task 4).
 
-    `total` 은 **지금** 설정값입니다 — 요청 당시 값을 카드에 남기지 않으므로, 생성 도중에
-    `DAENGS_CARDIMAGE_PICK_COUNT` 를 바꾸면 그 요청의 total 도 바뀝니다(드문 운영 변경이라
-    감수합니다). `pick_group` 이 없으면(옛 카드·단일 생성 경로) `(None, None)` — 그룹 개념이
-    없다는 뜻입니다.
+    `done` 은 지금까지 `ready` 로 끝난 장수, `total` 은 이 그룹에 **실제로 만들어진 행 수**
+    (설정값이 아닙니다 — seed 가 모자란 달은 요청보다 적게 만들어질 수 있습니다, fix round 1
+    Important 2).
+
+    ⚠️ **클라이언트는 `done == total` 이 아니라 `finished` 로 멈춰야 합니다** (fix round 1
+    Important 1). 카드는 한 번에 하나씩 순서대로 만들어지므로 `done` 은 0에서 서서히 오르고,
+    카드가 실패하면 `done` 이 `total` 에 영영 못 미칠 수 있습니다. `finished` 는 "이 그룹에
+    아직 `generating` 인 행이 하나도 없다" 는 뜻이고, 성공이든 실패든 상관없이 더 나올 카드가
+    없으면 참입니다.
+
+    `pick_group` 이 없으면(마이그레이션 이전의 옛 행) `(None, None, True)` — 그룹이 없다는 것
+    자체가 더 기다릴 것도 없다는 뜻입니다.
     """
     if card.pick_group is None:
-        return None, None
-    done = await ai_card_repo.count_ready_in_group(session, app_user_id, card.pick_group)
-    return done, settings.cardimage_pick_count
+        return None, None, True
+    total, done, generating = await ai_card_repo.group_counts(session, app_user_id, card.pick_group)
+    return done, total, generating == 0
 
 
 async def choose_card(
@@ -458,10 +448,23 @@ async def choose_card(
 
 
 async def delete_card(session: AsyncSession, app_user_id: uuid.UUID, card_id: uuid.UUID) -> None:
-    """카드 하나를 지웁니다. **생성 중이어도 지웁니다** — 끝난 작업이 객체를 치웁니다."""
+    """카드 하나를 지웁니다. **생성 중이어도 지웁니다** — 끝난 작업이 객체를 치웁니다.
+
+    같은 요청(`pick_group`)에서 아직 `generating` 인 형제가 있으면 **그것도 같이 지웁니다**
+    (#572 Task 4 fix round 1 Critical) — 안 그러면 사용자가 취소한 뒤에도 백그라운드가 나머지
+    카드를 계속 만들어(`_run` 의 `_claim_slot` 이 그 행을 못 찾을 때까지) `month_taken` 을 막고
+    하루 한도를 공짜로 쓰게 됩니다. 이미 끝난(`ready`·`failed`) 형제는 건드리지 않습니다 —
+    그건 독립된 결과물입니다.
+    """
     card = await ai_card_repo.get_owned(session, app_user_id, card_id, for_update=True)
     if card is None:
         raise AiCardNotFoundError
+    if card.pick_group is not None:
+        siblings = await ai_card_repo.list_siblings(session, app_user_id, card.pick_group, exclude_id=card.id)
+        for sibling in siblings:
+            if sibling.status == "generating":
+                # generating 이면 storage_key 가 없다(ai_cards_ready_set) — 지울 객체가 없다.
+                await ai_card_repo.delete(session, sibling)
     if card.storage_key is not None:
         # **객체를 먼저 지웁니다.** 행을 먼저 지우면 키를 잃어 파일이 영구 고아입니다.
         get_storage().delete(card.storage_key)

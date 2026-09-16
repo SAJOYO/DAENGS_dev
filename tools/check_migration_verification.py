@@ -239,6 +239,22 @@ GAIT_RECORDS_POSE_MODEL_ROWS = (
 # **모듈 수준에 둔다** — `coverage_checks()` 가 "등록됐나"를 이 목록에서 읽는다. 함수 안에
 # 있으면 그 검사가 소스를 정규식으로 긁어야 하고, 그러면 목록을 고칠 때마다 정규식이 낡는다.
 CHECKS = (
+        # 「사용자별 동시 1장」을 요청의 대표 행 하나로 좁힌다(#572 Task 4 fix round 1
+        # Critical). 옛 predicate 로 되돌리는 변조가 이 항목의 핵심이다 — 형제 행이 하나만
+        # 더 생겨도 그 옛 정의가 막아 버린다.
+        ('2026-09-16', 'ai_card_generating_leader',
+         APP_USERS + PETS_ONLY + SET_UPDATED_AT + prerequisites('2026-09-14_ai_cards', '2026-09-16_ai_card_pick_group'),
+         'ai_cards', [
+            'DROP INDEX idx_ai_cards_one_generating',
+            # 옛 정의로 되돌리는 변조 — 형제 행 하나만 더 생겨도 이 인덱스가 막는다.
+            'DROP INDEX idx_ai_cards_one_generating;'
+            " CREATE UNIQUE INDEX idx_ai_cards_one_generating ON ai_cards (app_user_id)"
+            " WHERE status = 'generating'",
+            # 유일성을 잃는 변조.
+            'DROP INDEX idx_ai_cards_one_generating;'
+            " CREATE INDEX idx_ai_cards_one_generating ON ai_cards (app_user_id)"
+            " WHERE status = 'generating' AND id = pick_group",
+        ]),
         # 한 요청에서 나온 카드들을 묶는 칸(#572 Task 4). NOT NULL 로 좁히는 변조가 이 항목의
         # 핵심이다 — 단일 카드로 만들어진 옛 행·관리자 콘솔 카드는 묶을 형제가 없어 NULL 이다.
         ('2026-09-16', 'ai_card_pick_group',

@@ -13,4 +13,5 @@ from daengs_cardimage.generate import (  # noqa: F401
     GeneratedCard,
     generate_card,
     generate_cards,
+    plan_seeds,
 )

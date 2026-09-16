@@ -396,7 +396,7 @@ def resolve_care_log_route(
     now: datetime,
     care_log_write: bool,
 ) -> RoutePlan | None:
-    """"방금 밥 먹였어" 를 받는 자리 — 확인 되묻기, 아니면 기록 화면 HANDOFF (#331 후속).
+    """ "방금 밥 먹였어" 를 받는 자리 — 확인 되묻기, 아니면 기록 화면 HANDOFF (#331 후속).
 
     **아무것도 안 쓴다.** 이 함수가 내는 가장 센 것은 "이렇게 기록할까요?" 라는 질문이다.
     쓰기는 다음 턴의 `resolve_care_log_write` 가 하고, 그 사이에 사용자의 승낙이 있다.
@@ -436,9 +436,7 @@ def resolve_care_log_route(
             }
         )
 
-    proposal = CareLogProposal(
-        kind=kind, pet_id=pet_id, occurred_at=now, proposal_id=uuid.uuid4()
-    )
+    proposal = CareLogProposal(kind=kind, pet_id=pet_id, occurred_at=now, proposal_id=uuid.uuid4())
     return RoutePlan.model_validate(
         {
             "requests": [],
@@ -517,6 +515,38 @@ def resolve_deterministic_route(
     )
 
 
+#: 라우터가 낸 HANDOFF 를 해설 실행으로 바꿀 수 있는 목록 (#569).
+#:
+#: **왜 표인가.** `skin` 한 곳에 박으면 형제 기능(gait, D-080)이 같은 길을 쓰려 할 때 같은 모양의
+#: 분기가 두 벌이 된다. 여는 조건이 셋으로 똑같으므로(라우터가 그 HANDOFF 를 냈다 · 서버가 해소한
+#: 컨텍스트가 있다 · 킬 스위치가 켜져 있다) 표로 두고 한 줄로 늘린다.
+#:
+#: **payload 를 만드는 함수는 `resolve_*_route` 와 같은 것을 쓴다** — 진입이 둘이어도 계획은 한 곳에서
+#: 만들어져야 두 길이 다른 답을 낼 수 없다 (D-051 ② 와 같은 이유).
+#:
+#: gait 가 빠져 있는 것은 의도다. D-080 의 진입은 아직 신호 전용이고, 여는 것은 그쪽 담당자 결정이다.
+_HANDOFF_EXPLAINERS = (_SKIN,)
+
+
+def _explainer_plan_for(
+    target: str, *, query: str, context: dict[str, Any], enabled: bool
+) -> dict[str, Any] | None:
+    """라우터 HANDOFF 를 대신할 해설 요청. 조건이 안 맞으면 None 이고 HANDOFF 가 그대로 나간다."""
+    if target != _SKIN:
+        return None
+    plan = resolve_skin_route(
+        query=query, context=context, requested_capability=_SKIN, enabled=enabled
+    )
+    if plan is None:
+        return None
+    request = plan.requests[0]
+    return {
+        "capability": request.capability.value,
+        "payload": request.payload.model_dump(mode="json"),
+        "timeout_ms": None,
+    }
+
+
 def assemble_route_plan(
     decision: SemanticRoutingDecision,
     *,
@@ -526,6 +556,7 @@ def assemble_route_plan(
     model: str | None = ROUTER_MODEL_ID,
     prompt_version: str | None = PROMPT_VERSION,
     general_fallback: bool = False,
+    skin_agent: bool = False,
     resolved: ConversationContext | None = None,
 ) -> RoutePlan:
     """Build the real Card 1 RoutePlan using only trusted query/context values.
@@ -586,6 +617,33 @@ def assemble_route_plan(
         # chose nothing: a specialized selection is never padded with `general` by rule —
         # the router adds it explicitly when a care intent is mixed in (D-057 ①).
         selected = [_GENERAL]
+
+    # ── 라우터 HANDOFF → 해설 실행 (#569) ─────────────────────────────
+    # 라우터가 "이건 피부 이야기" 라고 판단했고 서버가 소유를 확인한 판정 기록이 컨텍스트에
+    # 있으면, "사진을 등록해 주세요" 대신 그 판정을 **해설**한다. 사용자는 방금 판정을 봤고
+    # 이어서 물은 것이라, 같은 화면으로 다시 보내는 것이 답이 아니다.
+    #
+    # **배타다.** 해설이 열리면 다른 선택은 버린다 — `resolve_skin_route` 가 명시 신호로 열릴
+    # 때와 같은 규칙이고, 판정 이야기에 산책 조건이 섞이면 이어 물은 답이 흐려진다.
+    #
+    # **라우터가 고르지 않은 것은 열리지 않는다.** 이 규칙은 라우터의 판단을 바꾸지 않고, 그
+    # 판단이 HANDOFF 일 때 목적지만 바꾼다 — 그래서 산책 질문은 그대로 산책이 답한다.
+    for target in decision.handoffs:
+        if target not in _HANDOFF_EXPLAINERS:
+            continue
+        explainer = _explainer_plan_for(target, query=query, context=context, enabled=skin_agent)
+        if explainer is None:
+            continue
+        return RoutePlan.model_validate(
+            {
+                "requests": [explainer],
+                "handoffs": [],
+                "clarify": None,
+                "router": router,
+                "model": model,
+                "prompt_version": prompt_version,
+            }
+        )
 
     requests: list[dict[str, Any]] = []
     # An unrecognized name sorts last rather than raising here, so the precise

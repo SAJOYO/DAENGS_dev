@@ -234,9 +234,7 @@ class AssistantOrchestrationService:
             pending_proposal = (
                 pending_clarification.care_log if pending_clarification is not None else None
             )
-            route_plan = resolve_care_log_write(
-                query=query, pending=pending_proposal, now=now_kst
-            )
+            route_plan = resolve_care_log_write(query=query, pending=pending_proposal, now=now_kst)
             # 승낙이 아니었다. 거절은 고정 문구로 끝내고, 그 밖의 발화는 제안을 흘려
             # 평소대로 라우팅한다 — 대기 되묻기를 안 이어받는 기존 동작과 같다.
             if (
@@ -365,6 +363,9 @@ class AssistantOrchestrationService:
                 # 읽는 자리가 여기(요청 시점)인 것은 의도다 — 모듈 최상단에서 읽으면 테스트가
                 # 플래그를 켜고 끌 수 없고, 서버는 `.env` 한 줄로 켜고 재시작한다 (#279).
                 general_fallback=settings.general_fallback,
+                # 라우터가 낸 skin HANDOFF 를 해설로 바꿀지 (#569). 같은 킬 스위치를 읽는다 —
+                # 끄면 명시 신호 경로와 함께 예전 HANDOFF 로 돌아간다.
+                skin_agent=settings.skin_agent,
                 resolved=conversation,
             )
         response = await self._engine.run(

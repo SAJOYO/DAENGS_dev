@@ -22,6 +22,7 @@ from fakes import (
     FakeAppUser,
     FakeIdentity,
     FakePet,
+    FakeSession,
     FakeWalk,
     FakeWalkPet,
     Store,
@@ -34,6 +35,7 @@ from daengs_backend.core.deps import AppPrincipal, CurrentAppUser
 from daengs_backend.repositories import care_event as care_repo
 from daengs_backend.routers import care_event as care_router
 from daengs_backend.services import care_event as care_service
+from daengs_backend.services import pet_member as member_service
 
 A = uuid.uuid4()  # 그룹 주보호자
 B = uuid.uuid4()  # 연결한 공동 보호자
@@ -394,3 +396,48 @@ async def test_삭제_권한은_안_넓어진다(store: Store, linked):
     res = client_as(B).delete(f"/app/care-events/{event.id}")
     assert res.status_code == 404
     assert event in store.care_events
+
+
+# ── 나가기 뒤 — 끊기는 것은 "그때까지" 가 아니다 ───────────────────────────
+
+
+async def test_자기_카드_id_로_나가면_그룹_케어가_끊긴다(store: Store, linked):
+    """B 가 자기 카드 id 로 나간다(`display_pet_id`). 나간 **뒤에 생긴** 기록까지 안 보여야
+    한다 — 멤버십·연결이 함께 풀리므로 공동 조회의 `pet_id` 묶음이 자기 행 하나로 줄어든다.
+
+    반대로 **B 가 적은 자기 행의 기록은 그대로 남는다** — 나가기는 기록을 옮기거나 지우지
+    않는다 (docs/co-care.md 「퇴장·내보내기」).
+    """
+    a_pet, b_pet = linked
+    store.care_events += [
+        FakeCareEvent(pet_id=a_pet.id, kind="meal", occurred_at=SEOUL_MORNING, actor_app_user_id=A),
+        FakeCareEvent(pet_id=b_pet.id, kind="meal", occurred_at=SEOUL_MORNING, actor_app_user_id=B),
+    ]
+
+    await member_service.remove_member(FakeSession(store), B, b_pet.id, B)
+
+    # 나간 뒤에 A 가 새로 남긴 것.
+    store.care_events.append(
+        FakeCareEvent(pet_id=a_pet.id, kind="snack", occurred_at=SEOUL_EVENING, actor_app_user_id=A)
+    )
+
+    after = client_as(B).get(f"/app/care-events/today?pet_id={b_pet.id}").json()
+    assert (after["meal"], after["snack"]) == (1, 0), "나간 사람이 그룹 기록을 계속 본다"
+    assert len(after["events"]) == 1
+    # 앵커 행 id 로 직접 물어도 못 읽는다.
+    assert client_as(B).get(f"/app/care-events/today?pet_id={a_pet.id}").status_code == 404
+    # A 쪽에서도 나간 사람 행의 기록이 더는 안 섞인다.
+    mine = client_as(A).get(f"/app/care-events/today?pet_id={a_pet.id}").json()
+    assert (mine["meal"], mine["snack"]) == (1, 1)
+
+
+async def test_내보내진_보호자도_그룹_케어를_못_본다(store: Store, linked):
+    a_pet, b_pet = linked
+    store.care_events.append(
+        FakeCareEvent(pet_id=a_pet.id, kind="meal", occurred_at=SEOUL_MORNING, actor_app_user_id=A)
+    )
+
+    await member_service.remove_member(FakeSession(store), A, a_pet.id, B)
+
+    assert client_as(B).get(f"/app/care-events/today?pet_id={b_pet.id}").json()["meal"] == 0
+    assert client_as(B).get(f"/app/care-events/today?pet_id={a_pet.id}").status_code == 404

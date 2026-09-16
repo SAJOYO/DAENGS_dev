@@ -33,6 +33,7 @@ __all__ = [
     "common_of",
     "detach_user",
     "group_pet_ids_of",
+    "guardians_of",
     "link",
     "lock_user",
     "require_group_owner",
@@ -208,6 +209,30 @@ async def group_pet_ids_of(session: AsyncSession, pet: Pet) -> list[uuid.UUID]:
         return [pet.id]
     ids = await identity_repo.pet_ids_for(session, pet.identity_id)
     return ids or [pet.id]
+
+
+async def guardians_of(session: AsyncSession, pet: Pet) -> set[uuid.UUID]:
+    """이 카드가 가리키는 **논리 강아지의 보호자 사용자 id 전부** (대표 ∪ 돌보미).
+
+    연결 안 된 강아지는 그 행 하나의 대표 ∪ 돌보미라, 이 함수를 끼워도 지금 동작이
+    안 바뀝니다. 연결됐으면 그룹 전체를 **한 사람당 한 번**만 셉니다 — 한 사람이 자기
+    행의 대표이면서 앵커 행의 돌보미인 것이 연결의 정상 모양입니다.
+
+    `has_other_carers` 와 **같은 정의·같은 쿼리**를 씁니다
+    (`identity_repo.guardian_ids_many`). 두 벌로 쓰면 "누가 이 그룹 사람인가" 의 답이
+    화면과 권한 판정에서 갈라집니다.
+
+    나가기·내보내기가 이것으로 **대상이 애초에 이 그룹 사람인지**를 봅니다. 그 검사가
+    없으면 남의 사용자 id 를 넣어도 조용히 204 가 나가, 지운 것과 원래 없던 것이 같아
+    보입니다.
+    """
+    linked = pet.identity_id is not None
+    found = await identity_repo.guardian_ids_many(
+        session,
+        pet_ids=[] if linked else [pet.id],
+        identity_ids=[pet.identity_id] if linked else [],
+    )
+    return found.get(pet.identity_id or pet.id, set())
 
 
 async def has_other_carers(

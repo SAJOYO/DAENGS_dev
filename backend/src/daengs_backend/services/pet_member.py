@@ -79,11 +79,23 @@ class PetFarewelledError(Exception):
 
 
 class CannotRemoveOwnerError(Exception):
-    """대표는 이 경로로 못 나갑니다. 승계 엔드포인트로 가야 합니다."""
+    """**그룹 주보호자가 자기 자신**을 지목했습니다. 승계 엔드포인트로 가야 합니다.
+
+    남이 그룹 주보호자를 지목한 경우는 이것이 아니라 `NotAllowedError` 입니다 — 그 사람은
+    애초에 남을 내보낼 수 없고, 여기서 409 를 주면 "지목한 그 사람이 이 그룹의 주보호자다"
+    가 새 나갑니다.
+    """
 
 
 class NotAllowedError(Exception):
-    """남을 내보낼 수 있는 것은 대표뿐입니다."""
+    """**남을 내보낼 수 있는 것은 그룹 주보호자뿐입니다.** 라우터가 403 으로 바꿉니다.
+
+    ⚠️ **요청한 행의 대표인지로 갈리지 않습니다.** 예전에는 그 행의 대표이기만 한 사람
+    (= 연결한 공동 보호자가 자기 카드 id 로 부른 경우)에게만 409 `not_group_owner` 를
+    주고 생 돌보미에게는 403 을 줬는데, 사용자 눈에는 둘 다 "공동 보호자가 남을 내보내려
+    한 것" 하나입니다. 행 소유라는 **내부 사정**이 상태 코드를 가르면 앱이 같은 상황을 두
+    갈래로 그려야 하고, 응답만 보고 "나는 이 행의 대표다" 를 알아낼 수 있습니다.
+    """
 
 
 class NotAMemberError(Exception):
@@ -772,7 +784,8 @@ async def remove_member(
     공동 조회로 **남의 집 기록을 계속 읽습니다.** 둘이 갈라지는 순간이 있으면 안 됩니다.
 
     내보내기는 **그룹 주보호자만** 합니다 — 연결된 아이에서 행 대표라는 것만으로 남을
-    내보내면, 그룹의 주인이 아닌 사람이 그룹 구성을 바꾸게 됩니다.
+    내보내면, 그룹의 주인이 아닌 사람이 그룹 구성을 바꾸게 됩니다. **그룹 주보호자가
+    아닌 사람이 남을 지목하면 행 소유와 무관하게 전부 403 입니다** (`NotAllowedError`).
 
     ⚠️ **판단은 전부 논리 그룹 기준입니다. 요청한 행의 대표가 누구인지로 정하지 않습니다.**
     `pet_id` 로 오는 것은 부른 사람이 화면에서 쥐고 있는 id, 즉 **자기 표시용 행**
@@ -790,19 +803,19 @@ async def remove_member(
         raise PetNotFoundError
 
     common = await identity_service.common_of(session, pet)
-    # **그룹 주보호자만** 이 길로 못 나갑니다 (승계로 가야 합니다). 연결한 공동 보호자는
-    # 자기 행의 대표이지만 그룹 주보호자가 아니므로 여기 안 걸립니다.
+
+    # ① 권한. **남을 내보내는 것은 그룹 주보호자뿐이고, 아니면 전부 403 입니다.**
+    #    `pet.app_user_id`(요청한 행의 대표)는 **안 봅니다** — 연결한 공동 보호자는 자기
+    #    카드 행의 대표라, 행 소유로 가르면 같은 상황이 부른 id 에 따라 409 와 403 으로
+    #    갈렸습니다. 행 소유는 사용자가 모르는 내부 사정입니다.
+    if app_user_id != target_id and app_user_id != common.app_user_id:
+        raise NotAllowedError
+
+    # ② 대표 보호. ① 을 지났으므로 여기 걸리는 것은 **그룹 주보호자가 자기를 지목한 것**
+    #    하나뿐입니다 (남이 주보호자를 지목한 것은 ① 에서 403 으로 끝났습니다). 승계로
+    #    가라는 안내라, 자기 자신에게만 주는 것이 맞습니다.
     if target_id == common.app_user_id:
         raise CannotRemoveOwnerError
-
-    if app_user_id != target_id:
-        # 남을 내보내는 것은 그룹 주보호자만. 행 대표이기만 한 사람은 409 입니다 —
-        # 그 사람에게는 감출 것이 없고("내 아이 화면에서 부른 것이다"), 왜 안 되는지를
-        # 이름과 함께 알려 줘야 앱이 맞는 안내를 그립니다 (`NotGroupOwnerError`).
-        if app_user_id != pet.app_user_id:
-            raise NotAllowedError
-        if common.app_user_id != app_user_id:
-            raise identity_service.NotGroupOwnerError(common.name)
 
     # ⚠️ **연결을 풀기 전에** 그룹 행 id 를 뽑습니다 — `detach_user` 가 `identity_id` 를
     #    비우고 나면 같은 질문에 다른 답이 나옵니다.

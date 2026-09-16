@@ -366,13 +366,25 @@ async def remove_member(
     `pet_id` 는 **부른 사람의 카드 id**(`display_pet_id`)입니다. 연결한 공동 보호자에게 그
     id 는 자기가 대표인 자기 행이고, 앵커 행 id 는 앱에 안 내려갑니다 — 그래서 판정은 행이
     아니라 **논리 그룹** 기준입니다 (docs/co-care.md §3 「퇴장 · 내보내기」 표).
+
+    | 부른 사람 | 대상 | 코드 |
+    | --- | --- | --- |
+    | 그룹 주보호자 | 그룹의 다른 보호자 | 204 |
+    | 공동 보호자 (연결했든 안 했든) | 자기 자신 | 204 |
+    | **그룹 주보호자가 아닌 누구든** | 남 | **403** |
+    | 그룹 주보호자 | 자기 자신 | 409 (승계로) |
+    | 누구든 | 못 보는 `petId` · 그룹 보호자가 아닌 사용자 id | 404 |
+
+    ⚠️ **여기에는 `not_group_owner`(409)가 없습니다.** 이 경로만 그렇습니다 — 초대·
+    공통 프로필 PUT·삭제·승계는 그대로 409 입니다. 저쪽은 "내 아이 화면에서 그룹 관리를
+    눌렀다" 라 이름과 함께 이유를 줘야 하지만, 여기서 거부당하는 사람은 **남을 내보내려
+    한 공동 보호자** 하나이고, 행 소유(앱이 모르는 내부 사정)로 409/403 을 가르면 같은
+    상황이 두 갈래로 그려집니다.
     """
     try:
         await member_service.remove_member(session, user.app_user_id, pet_id, target_id)
     except PetNotFoundError:
         raise HTTPException(status.HTTP_404_NOT_FOUND, _PET_NOT_FOUND) from None
-    except identity_service.NotGroupOwnerError as exc:
-        raise _not_group_owner(exc) from None
     except member_service.CannotRemoveOwnerError:
         raise HTTPException(
             status.HTTP_409_CONFLICT,

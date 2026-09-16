@@ -835,33 +835,73 @@ async def test_그룹_주보호자는_자기를_못_뺀다(store: Store, linked)
     assert store.pet_members == [(a_pet.id, B)]
 
 
-async def test_행_대표이기만_한_사람의_내보내기는_409_고_생_돌보미는_403_이다(store: Store, linked):
-    """둘 다 "너는 못 한다" 지만 이유가 다르다 — 행 대표에게는 감출 것이 없어 이름과
-    함께 `not_group_owner` 를 주고, 생 돌보미에게는 403 만 준다."""
+async def test_남을_내보내려는_공동_보호자는_연결_여부와_무관하게_403_이다(store: Store, linked):
+    """**행 소유가 상태 코드를 가르지 않는다.**
+
+    예전에는 연결한 B 가 자기 카드 id 로 부르면 그 행의 대표라는 이유로 409
+    `not_group_owner`, 연결 없이 참여한 C 는 403 이었다. 사용자 눈에는 둘 다 "공동
+    보호자가 남을 내보내려 했다" 하나이고, 행 소유는 앱도 사용자도 모르는 내부 사정이다.
+    코드가 갈리면 앱이 같은 상황을 두 갈래로 그려야 하고, 응답만 보고 자기가 그 행의
+    대표인지를 알아낼 수 있다.
+    """
     a_pet, b_pet = linked
     store.pet_members.append((a_pet.id, C))
 
-    row_owner = _leave(B, b_pet.id, C)
-    assert row_owner.status_code == 409
-    assert row_owner.json()["detail"]["code"] == "not_group_owner"
-    assert _leave(C, a_pet.id, B).status_code == 403
+    # 연결한 공동 보호자가 자기 카드 id(= 자기가 대표인 행)로 부른 것.
+    linked_carer = _leave(B, b_pet.id, C)
+    # 연결 없이 참여한 돌보미가 앵커 행 id 로 부른 것.
+    plain_carer = _leave(C, a_pet.id, B)
 
+    assert linked_carer.status_code == plain_carer.status_code == 403
+    assert "code" not in linked_carer.json()["detail"], "not_group_owner 가 남아 있다"
     assert (a_pet.id, C) in store.pet_members and (a_pet.id, B) in store.pet_members
+
+
+async def test_공동_보호자가_그룹_주보호자를_지목해도_403_이다(store: Store, linked):
+    """대표 보호(409)는 **주보호자 자신에게만** 준다.
+
+    권한보다 먼저 보면, 공동 보호자가 사용자 id 를 하나씩 넣어 보는 것만으로 409 가
+    돌아오는 id 를 찾아 "이 사람이 이 그룹의 주보호자다" 를 확인할 수 있다.
+    """
+    a_pet, b_pet = linked
+    store.pet_members.append((a_pet.id, C))
+
+    assert _leave(B, b_pet.id, A).status_code == 403
+    assert _leave(C, a_pet.id, A).status_code == 403
+    assert (a_pet.id, B) in store.pet_members
 
 
 async def test_그룹_밖_사용자_id_는_404_다(store: Store, linked):
     """IDOR — 없는 사람을 지목해도 204 가 나가면 "지웠다" 와 "원래 없었다" 가 같아 보인다.
 
-    권한을 **먼저** 보므로 그룹 주보호자가 아닌 사람은 이 검사에 닿지도 못한다(409/403).
-    그래서 남은 사람이 이 그룹 보호자인지를 **떠보는 창구가 되지 않는다.**
+    권한을 **먼저** 보므로 그룹 주보호자가 아닌 사람은 이 검사에 닿지도 못한다(전부 403).
+    그래서 남이 이 그룹 보호자인지를 **떠보는 창구가 되지 않는다.**
     """
     a_pet, b_pet = linked
 
     assert _leave(A, a_pet.id, STRANGER).status_code == 404
     assert _leave(A, a_pet.id, uuid.uuid4()).status_code == 404
-    assert _leave(B, b_pet.id, STRANGER).status_code == 409
+    assert _leave(B, b_pet.id, STRANGER).status_code == 403
     assert store.pet_members == [(a_pet.id, B)]
     assert store.pet_identities != []
+
+
+async def test_주보호자가_아니면_보호자인지_아닌지를_구별할_수_없다(store: Store, linked):
+    """404(그룹 밖)와 403(그룹 안 남)이 **같은 응답**이어야 한다.
+
+    갈리면 공동 보호자가 임의의 사용자 id 를 넣어 보는 것만으로 "이 사람이 이 그룹의
+    보호자인가" 를 알아내는 창구가 된다. 권한 검사가 보호자/404 검사보다 **먼저** 도는
+    것이 그 보장이다.
+    """
+    _a, b_pet = linked
+    store.pet_members.append((_a.id, C))
+
+    guardian = _leave(B, b_pet.id, C)  # C 는 이 그룹의 보호자다
+    outsider = _leave(B, b_pet.id, STRANGER)  # STRANGER 는 아니다
+    ghost = _leave(B, b_pet.id, uuid.uuid4())  # 아예 없는 사용자다
+
+    assert guardian.status_code == outsider.status_code == ghost.status_code == 403
+    assert guardian.json() == outsider.json() == ghost.json()
 
 
 async def test_못_보는_강아지_id_로는_404_다(store: Store, linked):

@@ -212,7 +212,7 @@ def test_generate_cards_no_retry_even_with_low_judge_score():
 def test_generate_cards_caps_to_distinct_seed_pool(monkeypatch, caplog):
     """#572 Task 4 fix round 1 Important 2 — 겹치지 않는 seed 가 count 보다 적으면 있는 만큼만
     만든다(같은 seed 두 번은 완전히 같은 이미지 두 장에 돈을 두 번 내는 것이다). 4월 풀은
-    {3,4}(2개) 인데, 하나만 검증된 것처럼 흉내 낸다."""
+    {2,3}(2개) 인데, 하나만 검증된 것처럼 흉내 낸다."""
     monkeypatch.setitem(catalog._CARDS, 4, dataclasses.replace(catalog.get(4), seeds=(7,)))
     eng = FakeEngine()
     with caplog.at_level("WARNING"):
@@ -227,7 +227,7 @@ def test_generate_cards_caps_to_distinct_seed_pool(monkeypatch, caplog):
 
 
 def test_plan_seeds_caps_to_pool_size_instead_of_repeating():
-    """4월 풀은 {3,4}(2개) 뿐이다 — 5장을 부탁해도 2개만, 중복 없이 돌려준다."""
+    """4월 풀은 {2,3}(2개) 뿐이다 — 5장을 부탁해도 2개만, 중복 없이 돌려준다."""
     seeds = generate.plan_seeds(4, 5, random.Random(0))
     assert len(seeds) == 2 and set(seeds) == set(catalog.get(4).seeds)
 

@@ -120,6 +120,7 @@ _CARDS: dict[int, MonthCard] = {
         "JANUARY SPECIAL",
         JANUARY_OUTFIT,
         Plate(center_y=99, edge=((55, 749), (142, 678)), top_y=52),
+        seeds=(1, 2, 3, 4, 6),  # 09-16 12달×seed 실험, 눈으로 확인 (task-3b-visual-report.md)
     ),
     2: MonthCard(
         2, "2_love", "LOVE", "26FEB",
@@ -130,6 +131,7 @@ _CARDS: dict[int, MonthCard] = {
         "FEBRUARY SPECIAL",
         NO_OUTFIT,
         Plate(center_y=99, edge=((55, 775), (142, 703)), top_y=52),
+        seeds=(1, 6),  # 09-16 12달×seed 실험, 눈으로 확인 — 나머지는 부제 배너 자체가 통째로 안 나온다
     ),
     3: MonthCard(
         3, "3_first_day", "FIRST DAY", "26MAR",
@@ -140,13 +142,22 @@ _CARDS: dict[int, MonthCard] = {
         "MARCH SPECIAL",
         MARCH_OUTFIT,
         Plate(center_y=99, edge=((55, 776), (142, 706)), top_y=52),
+        seeds=(1, 3),  # 09-16 12달×seed 실험, 눈으로 확인 (task-3b-visual-report.md)
     ),
     4: MonthCard(
         4, "4_blossom", "BLOSSOM", "26APR",
         "the pose (sitting on the picnic blanket looking up at a falling petal), "
         "the green-and-white checked picnic blanket (keep this exact color and pattern), the wicker basket",
         "APRIL SPECIAL",
-        seeds=(3, 4),  # #557 실험에서 확인됨
+        # 09-16 12달×seed 실험으로 (3, 4) → (2, 3) 로 바뀜: 이번 사진에서는 seed 4 가 부제
+        # "APRIIAL"(SPECIAL 통째로 소실)로 깨졌고 seed 2 는 깨끗했다. #557 의 (3, 4) 는 다른
+        # 사진(정면 `_03`)에서 확인된 값이라 재현되지 않았다 — seed 는 (틀, 크기) 뿐 아니라
+        # 사진에도 영향을 받는다는 뜻이라, 이 목록은 "깨짐을 줄이는 필터"이지 "보증"이 아니다.
+        # ⚠ 별개의 미해결 결함: seed 와 무관하게 6장 전부 강아지가 사용자 사진이 아니라 원본
+        # 참조 카드의 주인공 「네오」(크림색 곱슬 푸들)로 나온다. production 에서
+        # DAENGS_CARDGEN_URL 을 켜기 전에 반드시 확인해야 한다 — 지금 운영은 여전히
+        # Nano Banana 2 를 쓴다.
+        seeds=(2, 3),
     ),
     5: MonthCard(
         5, "5_home_team", "HOME TEAM", "26MAY",
@@ -157,6 +168,7 @@ _CARDS: dict[int, MonthCard] = {
         "MAY SPECIAL",
         NO_OUTFIT,
         Plate(center_y=99, edge=((55, 748), (142, 677)), top_y=52),
+        seeds=(1, 3, 4),  # 09-16 12달×seed 실험, 눈으로 확인 (task-3b-visual-report.md)
     ),
     6: MonthCard(
         6, "6_pool", "POOL", "26JUN",
@@ -167,6 +179,7 @@ _CARDS: dict[int, MonthCard] = {
         "JUNE SPECIAL",
         JUNE_OUTFIT,
         Plate(center_y=99, edge=((55, 745), (142, 677)), top_y=52),
+        seeds=(1, 2, 3, 5, 6),  # 09-16 12달×seed 실험, 눈으로 확인 (task-3b-visual-report.md)
     ),
     7: MonthCard(
         7, "7_beach", "BEACH", "26JUL",
@@ -177,6 +190,7 @@ _CARDS: dict[int, MonthCard] = {
         "JULY SPECIAL",
         JULY_OUTFIT,
         Plate(center_y=99, edge=((55, 774), (142, 702)), top_y=52),
+        seeds=(1, 2, 3, 4, 6),  # 09-16 12달×seed 실험, 눈으로 확인 (task-3b-visual-report.md)
     ),
     8: MonthCard(
         8, "8_rain", "RAIN", "26AUG",
@@ -187,6 +201,7 @@ _CARDS: dict[int, MonthCard] = {
         "AUGUST SPECIAL",
         AUGUST_OUTFIT,
         Plate(center_y=99, edge=((55, 804), (142, 733)), top_y=52),
+        seeds=(1, 2, 3, 4, 5, 6),  # 09-16 12달×seed 실험, 눈으로 확인 — 6장 전부 깨끗했다
     ),
     9: MonthCard(
         9, "9_harvest_moon", "CHUSEOK", "26SEP",   # 원본 제목은 HARVEST MOON — 너무 길어 사용자가 CHUSEOK 으로 (09-14)
@@ -199,7 +214,11 @@ _CARDS: dict[int, MonthCard] = {
         "sage-green ribbon, coral-pink skirt with gold flowers and the tassel ornament) and hold the same tray of "
         "songpyeon. Do not carry over any accessories from image 2 — no collar, no leash, no harness.",
         SEPTEMBER_PLATE,
-        seeds=(1, 4),  # #557 실험에서 확인됨
+        # 09-16 12달×seed 실험으로 (1, 4) → (1, 2, 3, 4, 5) 로 바뀜: 이번 사진에서는 seed 6 이
+        # 캡션 "surprise"→"surprie" 로 깨졌고 나머지 다섯은 깨끗했다. #557 의 (1, 4) 는 다른
+        # 사진에서 확인된 값이라 그대로 재현되지는 않았다 — 이 목록은 깨짐을 줄이는 필터일 뿐,
+        # 사진이 바뀌면 같은 seed 도 결과가 달라질 수 있다는 뜻이다(4월도 같은 이유로 바뀜).
+        seeds=(1, 2, 3, 4, 5),
     ),
     10: MonthCard(
         10, "10_ghost", "GHOST", "26OCT",
@@ -210,6 +229,7 @@ _CARDS: dict[int, MonthCard] = {
         "OCTOBER SPECIAL",
         OCTOBER_OUTFIT,
         Plate(center_y=99, edge=((55, 784), (142, 713)), top_y=52),
+        seeds=(2, 4, 5, 6),  # 09-16 12달×seed 실험, 눈으로 확인 (task-3b-visual-report.md)
     ),
     11: MonthCard(
         11, "11_thanks", "THANKS", "26NOV",
@@ -222,6 +242,7 @@ _CARDS: dict[int, MonthCard] = {
         "NOVEMBER SPECIAL",
         NOVEMBER_OUTFIT,
         Plate(center_y=99, edge=((55, 771), (142, 701)), top_y=52),
+        seeds=(1, 2, 3, 6),  # 09-16 12달×seed 실험, 눈으로 확인 (task-3b-visual-report.md)
     ),
     12: MonthCard(
         12, "12_santa", "SANTA", "26DEC",
@@ -232,6 +253,7 @@ _CARDS: dict[int, MonthCard] = {
         "DECEMBER SPECIAL",
         DECEMBER_OUTFIT,
         Plate(center_y=99, edge=((55, 771), (142, 712)), top_y=52),
+        seeds=(1, 3, 5, 6),  # 09-16 12달×seed 실험, 눈으로 확인 (task-3b-visual-report.md)
     ),
 }
 

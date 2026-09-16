@@ -1,3 +1,4 @@
+import dataclasses
 import logging
 import random
 from pathlib import Path
@@ -76,14 +77,18 @@ def test_every_month_has_its_own_measured_plate():
 # --- #572 Task 3a: seeds / pick_seeds -------------------------------------------------
 
 
-def test_only_months_four_and_nine_have_verified_seeds():
-    """#557 실험에서 확인된 두 달만 채워져 있다 — 나머지 열은 3b 가 채우기 전까지 비어 있다(R5)."""
-    assert catalog.get(4).seeds == (3, 4)
-    assert catalog.get(9).seeds == (1, 4)
+def test_every_month_has_at_least_two_distinct_verified_seeds():
+    """#572 Task 3b — 12달 전부 눈으로 확인한 seed 를 갖는다(task-3b-visual-report.md).
+
+    2개를 기준으로 삼는 이유: 한 요청이 카드 2장을 만드는데, 생성기는 같은 이미지에 두 번
+    돈을 내지 않으려고 겹치는 seed 를 거부한다(#572 Task 4 fix round 1 Important 2). 검증된
+    seed 가 2개 미만인 달은 이 규칙 때문에 조용히 카드 1장만 나가게 된다.
+    """
     for m in range(1, 13):
-        if m in (4, 9):
-            continue
-        assert catalog.get(m).seeds == (), m
+        seeds = catalog.get(m).seeds
+        assert len(seeds) >= 2, m
+        assert len(set(seeds)) == len(seeds), m
+        assert all(isinstance(s, int) and s > 0 for s in seeds), m
 
 
 def test_pick_seeds_returns_distinct_values_from_the_month_list():
@@ -99,8 +104,13 @@ def test_pick_seeds_repeats_when_asked_for_more_than_the_list_has():
     assert len(catalog.pick_seeds(4, 4, rng)) == 4
 
 
-def test_pick_seeds_falls_back_to_default_seeds_and_warns_for_unverified_month(caplog):
-    """검증 전 달(예: 5월)은 raise 하지 않는다 — DEFAULT_SEEDS 로 대신하고 warning 을 남긴다(R5)."""
+def test_pick_seeds_falls_back_to_default_seeds_and_warns_for_unverified_month(monkeypatch, caplog):
+    """검증 전 달은 raise 하지 않는다 — DEFAULT_SEEDS 로 대신하고 warning 을 남긴다(R5).
+
+    #572 Task 3b 로 12달이 전부 검증돼 실제로 빈 달이 없어졌다 — 5월을 흉내 낸
+    빈 `MonthCard` 를 직접 끼워 넣어 이 경로를 계속 검사한다.
+    """
+    monkeypatch.setitem(catalog._CARDS, 5, dataclasses.replace(catalog.get(5), seeds=()))
     rng = random.Random(0)
     with caplog.at_level(logging.WARNING, logger="daengs_cardimage.catalog"):
         picked = catalog.pick_seeds(5, 3, rng)

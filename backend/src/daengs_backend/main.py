@@ -202,6 +202,8 @@ app.include_router(pet.router)
 app.include_router(pet_member.router)
 # 산책 기록 공동 조회(`/app/pets/{pet_id}/walks`) — 읽기만. 쓰기·개인 목록은 `/app/walks` 그대로.
 app.include_router(pet_walks.router)
+# 산책 기록 화면의 통합 목록(`/app/pet-walks`) — 볼 수 있는 강아지 전부의 공동 보호자 산책·합계.
+app.include_router(pet_walks.feed_router)
 # 케어 로그(`/app/care-events` · #332) — 밥·약·간식 기록. 산책은 `walks` 가 진실이라 여기 없고,
 # 하루 요약이 세어 같이 보여 줍니다. 오케스트레이터는 이 표를 아직 안 읽습니다(후속 카드).
 app.include_router(care_event.router)

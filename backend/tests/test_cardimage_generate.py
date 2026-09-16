@@ -143,6 +143,82 @@ def test_low_likeness_retries_with_a_different_seed():
     assert out.seed == eng.calls[1]["seed"]
 
 
+# ── generate_cards: 한 요청에 여러 장 (#572 Task 4) ──────────────────────
+
+
+class _FailSecondCallEngine(FakeEngine):
+    """두 번째 호출만 실패하는 엔진 — "한 장 실패해도 나머지는 돌려준다" 테스트용."""
+
+    def generate(self, *, template_png, photo_jpeg, prompt, seed=None):
+        self.calls.append({"template": template_png, "photo": photo_jpeg, "prompt": prompt, "seed": seed})
+        if len(self.calls) == 2:
+            raise EngineError("upstream", "두 번째 호출 실패")
+        return self.outputs[0]
+
+
+def test_generate_cards_makes_each_card_with_a_different_seed():
+    """L4 는 한 번에 2장부터 CUDA OOM 이다(#557 E2) — 반드시 순차 호출이어야 한다."""
+    eng = FakeEngine()
+    cards = generate.generate_cards(
+        count=2, photo=_photo(), content_type="image/jpeg", month=4, dog_name="네오",
+        engine=eng, judge=None, base_dir=CARDIMAGE, open_months=frozenset({4}), judge_min=3,
+        rng=random.Random(0),
+    )
+    assert len(cards) == 2
+    assert cards[0].seed != cards[1].seed
+    assert {cards[0].seed, cards[1].seed} == set(catalog.get(4).seeds)
+    assert len(eng.calls) == 2      # 한 번에 두 장이 아니라 두 번 부른다
+    assert eng.calls[0]["seed"] != eng.calls[1]["seed"]
+
+
+def test_generate_cards_keeps_going_when_one_attempt_fails():
+    """두 장 중 한 장이 실패해도 나머지 한 장은 돌려준다 — 사용자가 고를 게 남는다."""
+    eng = _FailSecondCallEngine()
+    cards = generate.generate_cards(
+        count=2, photo=_photo(), content_type="image/jpeg", month=4, dog_name="네오",
+        engine=eng, judge=None, base_dir=CARDIMAGE, open_months=frozenset({4}), judge_min=3,
+        rng=random.Random(0),
+    )
+    assert len(cards) == 1
+    assert len(eng.calls) == 2  # 둘 다 시도는 했다 — 두 번째만 실패했다
+
+
+def test_generate_cards_raises_last_exception_when_all_fail():
+    """전부 실패하면(고를 게 하나도 없으면) 마지막 예외를 그대로 올린다."""
+    eng = FakeEngine(error=EngineError("upstream", "x"))
+    with pytest.raises(EngineError) as exc_info:
+        generate.generate_cards(
+            count=2, photo=_photo(), content_type="image/jpeg", month=4, dog_name="네오",
+            engine=eng, judge=None, base_dir=CARDIMAGE, open_months=frozenset({4}), judge_min=3,
+            rng=random.Random(0),
+        )
+    assert exc_info.value.code == "upstream"
+    assert len(eng.calls) == 2  # 둘 다 시도했다 — 첫 실패에서 멈추지 않는다
+
+
+def test_generate_cards_no_retry_even_with_low_judge_score():
+    """카드가 여럿이면(count>1) 검수 점수가 낮아도 재시도하지 않는다 — 이미 여러 장을 만드는
+    것 자체가 재시도의 대안이고, 재시도를 더하면 최악 2×count 번 돈이 나간다."""
+    eng, jd = FakeEngine(), FakeJudge([1, 1])
+    cards = generate.generate_cards(
+        count=2, photo=_photo(), content_type="image/jpeg", month=4, dog_name="네오",
+        engine=eng, judge=jd, base_dir=CARDIMAGE, open_months=frozenset({4}), judge_min=3,
+        rng=random.Random(0),
+    )
+    assert len(cards) == 2 and len(eng.calls) == 2  # 점수가 낮아도 카드당 한 번뿐이다
+
+
+def test_generate_cards_single_count_keeps_generate_card_behavior():
+    """`count=1` 이면 옛 `generate_card` 와 같다 — 재시도가 살아 있다."""
+    eng, jd = FakeEngine([png(color=(1, 1, 1)), png(color=(2, 2, 2))]), FakeJudge([2, 4])
+    cards = generate.generate_cards(
+        count=1, photo=_photo(), content_type="image/jpeg", month=4, dog_name="네오",
+        engine=eng, judge=jd, base_dir=CARDIMAGE, open_months=frozenset({4}), judge_min=3,
+        rng=random.Random(0),
+    )
+    assert len(cards) == 1 and cards[0].attempts == 2 and len(eng.calls) == 2
+
+
 def test_explicit_seed_is_used_verbatim_and_skips_retry(monkeypatch):
     """#572 fix round 1 F1 — 호출자가 seed 를 못박으면 pick_seeds 를 부르지 않고 재시도도 없다."""
 

@@ -239,6 +239,20 @@ GAIT_RECORDS_POSE_MODEL_ROWS = (
 # **모듈 수준에 둔다** — `coverage_checks()` 가 "등록됐나"를 이 목록에서 읽는다. 함수 안에
 # 있으면 그 검사가 소스를 정규식으로 긁어야 하고, 그러면 목록을 고칠 때마다 정규식이 낡는다.
 CHECKS = (
+        # 한 요청에서 나온 카드들을 묶는 칸(#572 Task 4). NOT NULL 로 좁히는 변조가 이 항목의
+        # 핵심이다 — 단일 카드로 만들어진 옛 행·관리자 콘솔 카드는 묶을 형제가 없어 NULL 이다.
+        ('2026-09-16', 'ai_card_pick_group',
+         APP_USERS + PETS_ONLY + SET_UPDATED_AT + prerequisites('2026-09-14_ai_cards'),
+         'ai_cards', [
+            'ALTER TABLE ai_cards DROP COLUMN pick_group',
+            'ALTER TABLE ai_cards ALTER COLUMN pick_group TYPE text',
+            'ALTER TABLE ai_cards ALTER COLUMN pick_group SET NOT NULL',
+            'DROP INDEX ix_ai_cards_pick_group',
+            # 유일성이 잘못 붙는 변조 — 같은 pick_group 값을 공유하는 형제 행이 정상인데,
+            # UNIQUE 면 두 번째 형제를 만드는 순간 이 인덱스가 막는다.
+            'DROP INDEX ix_ai_cards_pick_group;'
+            ' CREATE UNIQUE INDEX ix_ai_cards_pick_group ON ai_cards (pick_group)',
+        ]),
         # seed 한 칸(#572 Task 3a). SmallInteger 로 좁아지는 변조가 이 항목의 핵심이다 —
         # 카드 생성기가 32767 을 넘는 seed 를 쓸 수 있다.
         ('2026-09-16', 'ai_card_seed',

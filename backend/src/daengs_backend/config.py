@@ -274,6 +274,9 @@ class Settings(BaseSettings):
     cardimage_daily_limit: int = Field(default=1, ge=0, validation_alias=AliasChoices("DAENGS_CARDIMAGE_DAILY_LIMIT"))
     # 서버 전체 동시 생성 수. backend 프로세스 안 백그라운드 작업이라 스레드를 씁니다 (D-076).
     cardimage_concurrency: int = Field(default=2, ge=1, validation_alias=AliasChoices("DAENGS_CARDIMAGE_CONCURRENCY"))
+    #: 한 요청에 만들 장수. 사용자가 고른다. 4장은 서로 차이가 작아 2장으로 정했다 (#557 E2, 사용자 09-16).
+    cardimage_pick_count: int = Field(default=2, ge=1, le=4,
+                                      validation_alias=AliasChoices("DAENGS_CARDIMAGE_PICK_COUNT"))
 
     # GPU 카드 생성 서비스(D-078, Cloud Run asia-southeast1 L4). **비어 있으면 Nano Banana 2(D-074)
     # 그대로** — 되돌리기가 이 한 줄이다. ⚠ 앱 경로(`/app/ai-cards`)의 정리 기준은 아직

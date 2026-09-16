@@ -23,6 +23,12 @@ class AiCardResponse(BaseModel):
     width: int | None
     height: int | None
     created_at: datetime.datetime
+    #: 같은 요청에서 나온 장들을 묶는 값. 단일 생성 경로·옛 카드는 `null` (#572 Task 4).
+    pick_group: uuid.UUID | None = None
+    #: 이 요청에서 지금까지 `ready` 로 끝난 장수·전체 목표 장수. 단건 조회(POST 포함)에서만
+    #: 채운다 — 목록에는 싣지 않는다(카드마다 따로 세면 N 번 두드리게 된다).
+    done: int | None = None
+    total: int | None = None
     #: 단건 조회에서 `ready` 일 때만 채운다. 목록에는 싣지 않는다.
     image_url: str | None = None
 

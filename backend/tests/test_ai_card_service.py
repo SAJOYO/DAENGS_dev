@@ -77,6 +77,9 @@ def jobs(monkeypatch: pytest.MonkeyPatch, store: Store, storage: LocalBridgeStor
     monkeypatch.setattr(settings, "cardimage_gemini_api_key", SecretStr("test-key"))
     monkeypatch.setattr(settings, "cardimage_months", frozenset({4, 9}))
     monkeypatch.setattr(settings, "cardimage_daily_limit", 1)
+    # 이 파일의 기존 테스트는 모두 "카드 한 장" 세상(#537·#543)을 본다 — 여러 장(#572 Task 4)은
+    # 아래 전용 테스트에서만 pick_count 를 따로 올린다.
+    monkeypatch.setattr(settings, "cardimage_pick_count", 1)
     monkeypatch.setattr(ai_card_engine, "default_engine", lambda: FakeEngine())
     monkeypatch.setattr(ai_card_engine, "default_judge", lambda: FakeJudge([5]))
     yield collected
@@ -484,17 +487,17 @@ def test_long_uppercased_title_name_is_clamped(store, jobs) -> None:
 
 
 def _spy_generate(recorded: dict, monkeypatch: pytest.MonkeyPatch) -> None:
-    """`ai_card_engine.generate` 를 가로채 `dog_name` 인자와 실제로 그려진 제목을 기록한다.
-    `_run` 이 `ai_card_engine.generate` 를 속성으로 부르므로(모듈째 import) 여기서 바꿔치기가 먹는다."""
-    original = ai_card_engine.generate
+    """`ai_card_engine.generate_many` 를 가로채 `dog_name` 인자와 실제로 그려진 제목을 기록한다.
+    `_run` 이 `ai_card_engine.generate_many` 를 속성으로 부르므로(모듈째 import) 여기서 바꿔치기가 먹는다."""
+    original = ai_card_engine.generate_many
 
     def spy(**kw):
         recorded["dog_name"] = kw["dog_name"]
         generated = original(**kw)
-        recorded["title"] = generated.title
+        recorded["title"] = generated[0].title
         return generated
 
-    monkeypatch.setattr(ai_card_engine, "generate", spy)
+    monkeypatch.setattr(ai_card_engine, "generate_many", spy)
 
 
 def test_title_name_reaches_generation(store, jobs, monkeypatch) -> None:
@@ -555,3 +558,97 @@ def test_cleanup_kst_boundary(store, jobs) -> None:
     store.ai_card_usage.extend([before_midnight, at_midnight])
     asyncio.run(service.cleanup_for_owner(FakeSession(), OWNER, now=now))
     assert store.ai_card_usage == [at_midnight]
+
+
+# ── #572 Task 4 — 한 요청에 2장, 고른 한 장만 저장 ──────────────────────
+
+
+class _FailSecondCallEngine(FakeEngine):
+    """두 번째 호출만 실패하는 엔진 — "한 장 실패해도 나머지 한 장은 남는다" 테스트용."""
+
+    def generate(self, *, template_png, photo_jpeg, prompt, seed=None):
+        self.calls.append({"template": template_png, "photo": photo_jpeg, "prompt": prompt, "seed": seed})
+        if len(self.calls) == 2:
+            raise EngineError("upstream", "두 번째 호출 실패")
+        return self.outputs[0]
+
+
+def test_start_sets_pick_group_before_generation(store, jobs) -> None:
+    """`pick_group` 은 `start` 가 미리 정한다 — 백그라운드가 돌기 전에도 있어야 한다."""
+    card = _start()
+    assert card.pick_group is not None
+
+
+def test_two_cards_share_pick_group_and_only_first_records_usage(store, storage, jobs, monkeypatch) -> None:
+    """두 장이 성공하면 같은 `pick_group` 의 행 두 개가 남는다 — 사용 기록은 한 번만."""
+    monkeypatch.setattr(settings, "cardimage_pick_count", 2)
+    card = _start()
+    _run_all(jobs)
+
+    assert len(store.ai_cards) == 2
+    primary, sibling = store.ai_cards
+    assert primary is card and primary.status == "ready"
+    assert sibling.status == "ready" and sibling.id != primary.id
+    assert sibling.pick_group == primary.pick_group == card.pick_group
+    assert sibling.app_user_id == OWNER and sibling.dog_name == "네오" and sibling.title == card.title
+    assert sibling.month == 4 and sibling.storage_key != primary.storage_key
+    assert Image.open(storage.local_path(sibling.storage_key)).size == (994, 1582)
+    # 한도는 "요청 한 번" 을 센다 — 카드 두 장을 만들었다고 두 번 세지 않는다.
+    assert len(store.ai_card_usage) == 1 and store.ai_card_usage[0].card_id == primary.id
+
+
+def test_second_generation_failing_still_leaves_one_ready_card(store, storage, jobs, monkeypatch) -> None:
+    """두 장 중 하나만 성공해도 실패로 떨어지지 않는다 — 고를 카드가 하나는 남는다."""
+    monkeypatch.setattr(settings, "cardimage_pick_count", 2)
+    monkeypatch.setattr(ai_card_engine, "default_engine", lambda: _FailSecondCallEngine())
+    card = _start()
+    _run_all(jobs)
+
+    assert len(store.ai_cards) == 1
+    assert card.status == "ready" and len(store.ai_card_usage) == 1
+
+
+def test_group_progress_before_and_after_generation(store, storage, jobs, monkeypatch) -> None:
+    monkeypatch.setattr(settings, "cardimage_pick_count", 2)
+    card = _start()
+    assert asyncio.run(service.group_progress(FakeSession(), OWNER, card)) == (0, 2)
+    _run_all(jobs)
+    assert asyncio.run(service.group_progress(FakeSession(), OWNER, card)) == (2, 2)
+
+
+def test_group_progress_is_none_without_pick_group(store, jobs) -> None:
+    """옛 카드(마이그레이션 이전)는 `pick_group` 이 없다 — 그룹 개념이 없다는 뜻으로 `(None, None)`."""
+    card = AiCard(
+        id=uuid.uuid4(), app_user_id=OWNER, month=4, dog_name="네오", title="BLOSSOM 네오", status="ready",
+    )
+    assert asyncio.run(service.group_progress(FakeSession(), OWNER, card)) == (None, None)
+
+
+def test_choose_keeps_picked_card_and_deletes_sibling_object(store, storage, jobs, monkeypatch) -> None:
+    monkeypatch.setattr(settings, "cardimage_pick_count", 2)
+    _start()
+    _run_all(jobs)
+    primary, sibling = store.ai_cards
+    sibling_path = storage.local_path(sibling.storage_key)
+    assert sibling_path.exists()
+
+    chosen, url = asyncio.run(service.choose_card(FakeSession(), OWNER, primary.id))
+
+    assert chosen is primary
+    assert store.ai_cards == [primary]
+    assert not sibling_path.exists()
+    assert "/app/ai-cards/_bridge/download/" in url
+
+
+def test_choose_without_siblings_is_a_no_op(store, storage, jobs) -> None:
+    """형제가 없으면(단일 생성 경로) 고른 카드를 그대로 돌려준다."""
+    card = _start()
+    _run_all(jobs)
+    chosen, _url = asyncio.run(service.choose_card(FakeSession(), OWNER, card.id))
+    assert chosen is card and store.ai_cards == [card]
+
+
+def test_choose_strangers_card_is_not_found(store, jobs) -> None:
+    card = _start()
+    with pytest.raises(service.AiCardNotFoundError):
+        asyncio.run(service.choose_card(FakeSession(), STRANGER, card.id))

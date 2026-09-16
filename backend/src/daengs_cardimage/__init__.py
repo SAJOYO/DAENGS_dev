@@ -12,4 +12,5 @@ from daengs_cardimage.generate import (  # noqa: F401
     CardImageUnavailable,
     GeneratedCard,
     generate_card,
+    generate_cards,
 )

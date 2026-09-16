@@ -35,6 +35,9 @@ CREATE TABLE IF NOT EXISTS ai_cards (
     -- 이 카드를 만든 seed. 같은 seed 가 같은 자리를 깨뜨리므로(#557 E1) 기록해 둔다.
     -- SMALLINT 가 아니다 — seed 는 32767 을 넘을 수 있다.
     seed INTEGER,
+    -- 같은 요청에서 나온 장들을 묶는다(#572 Task 4). 사용자가 하나를 고르면 나머지 형제 행은
+    -- 지운다. 단일 카드로 만들어진 옛 행·관리자 콘솔 카드는 NULL — 묶을 형제가 없다는 뜻이다.
+    pick_group UUID,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
@@ -67,6 +70,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_ai_cards_storage_key
 -- WHERE 가 빠지면 카드를 평생 한 장밖에 못 만든다.
 CREATE UNIQUE INDEX IF NOT EXISTS idx_ai_cards_one_generating
     ON ai_cards (app_user_id) WHERE status = 'generating';
+
+-- 「고른 카드만 남기고 형제를 지운다」 가 pick_group 으로 형제를 찾을 때 쓴다.
+CREATE INDEX IF NOT EXISTS ix_ai_cards_pick_group
+    ON ai_cards (pick_group);
 
 DROP TRIGGER IF EXISTS trg_ai_cards_updated_at ON ai_cards;
 CREATE TRIGGER trg_ai_cards_updated_at

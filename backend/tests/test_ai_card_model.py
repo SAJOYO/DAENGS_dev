@@ -9,7 +9,7 @@ def test_columns_follow_sql() -> None:
     assert set(AiCard.__table__.c.keys()) == {
         "id", "app_user_id", "dog_id", "month", "dog_name", "title", "status", "error_code",
         "storage_key", "generation", "size_bytes", "width", "height", "likeness", "attempts", "seed",
-        "created_at", "updated_at",
+        "pick_group", "created_at", "updated_at",
     }
 
 
@@ -33,6 +33,7 @@ def test_named_constraints_and_indexes() -> None:
     assert indexes["idx_ai_cards_one_generating"].unique
     assert "generating" in str(indexes["idx_ai_cards_one_generating"].dialect_options["postgresql"]["where"])
     assert indexes["idx_ai_cards_storage_key"].unique
+    assert not indexes["ix_ai_cards_pick_group"].unique  # 형제 행이 같은 값을 공유하는 것이 정상이다
 
 
 def test_statuses() -> None:

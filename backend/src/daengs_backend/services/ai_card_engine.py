@@ -12,7 +12,13 @@ from __future__ import annotations
 
 from daengs_backend.config import settings
 from daengs_backend.services import realtime_client
-from daengs_cardimage import CardImageUnavailable, GeneratedCard, catalog, generate_card
+from daengs_cardimage import (
+    CardImageUnavailable,
+    GeneratedCard,
+    catalog,
+    generate_card,
+    generate_cards,
+)
 from daengs_cardimage.engine import CardImageEngine, GeminiCardImageEngine, HttpCardImageEngine
 from daengs_cardimage.judge import CardJudge, GeminiCardJudge
 
@@ -52,6 +58,32 @@ def generate(
 ) -> GeneratedCard:
     """동기 호출(20~60초)이다. 이벤트 루프에서는 `asyncio.to_thread` 로 부른다."""
     return generate_card(
+        photo=photo,
+        content_type=content_type,
+        month=month,
+        dog_name=dog_name,
+        engine=engine,
+        judge=judge,
+        base_dir=settings.cardimage_dir,
+        open_months=settings.cardimage_months,
+        judge_min=settings.cardimage_judge_min,
+    )
+
+
+def generate_many(
+    *,
+    photo: bytes,
+    content_type: str,
+    month: int,
+    dog_name: str,
+    engine: CardImageEngine,
+    judge: CardJudge | None,
+    count: int,
+) -> list[GeneratedCard]:
+    """카드 `count` 장을 순차로 만든다 (#572 Task 4, `/app/ai-cards` 전용). 동기 호출(20~60초 × count)
+    이라 이벤트 루프에서는 `asyncio.to_thread` 로 부른다. 관리자 콘솔은 여전히 `generate` 하나만 쓴다."""
+    return generate_cards(
+        count=count,
         photo=photo,
         content_type=content_type,
         month=month,

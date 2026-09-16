@@ -22,6 +22,7 @@ from daengs_backend.config import settings
 from daengs_backend.core import storage as storage_module
 from daengs_backend.core.deps import AppPrincipal, current_app_member_token_only, current_app_user
 from daengs_backend.core.storage import LocalBridgeStorage
+from daengs_backend.models import AiCard
 from daengs_backend.repositories import app_user as app_user_repo
 from daengs_backend.routers import ai_card as ai_card_router
 from daengs_backend.services import ai_card as service
@@ -66,6 +67,9 @@ def jobs(monkeypatch: pytest.MonkeyPatch) -> Iterator[list]:
     monkeypatch.setattr(settings, "cardimage_gemini_api_key", SecretStr("test-key"))
     monkeypatch.setattr(settings, "cardimage_months", frozenset({4, 9}))
     monkeypatch.setattr(settings, "cardimage_daily_limit", 1)
+    # 이 파일의 기존 테스트는 모두 "카드 한 장" 세상(#537·#543)을 본다 — 여러 장(#572 Task 4)은
+    # 아래 전용 테스트에서만 pick_count 를 따로 올린다.
+    monkeypatch.setattr(settings, "cardimage_pick_count", 1)
     monkeypatch.setattr(ai_card_engine, "default_engine", lambda: FakeEngine())
     monkeypatch.setattr(ai_card_engine, "default_judge", lambda: FakeJudge([4]))
     yield collected
@@ -212,7 +216,12 @@ def test_post_uses_token_only_auth() -> None:
     assert "current_app_member_token_only" in names
     assert "current_app_user" not in names
     # 본문이 없는 짧은 요청은 그대로 요청 경계에서 active 를 본다.
-    for path, method in [("/app/ai-cards", "GET"), ("/app/ai-cards/{card_id}", "GET"), ("/app/ai-cards/{card_id}", "DELETE")]:
+    for path, method in [
+        ("/app/ai-cards", "GET"),
+        ("/app/ai-cards/{card_id}", "GET"),
+        ("/app/ai-cards/{card_id}", "DELETE"),
+        ("/app/ai-cards/{card_id}/choose", "POST"),
+    ]:
         assert "current_app_user" in _dependency_names(_route(path, method)), (path, method)
 
 
@@ -287,3 +296,70 @@ def test_list_unlimited_is_null(client: TestClient, monkeypatch: pytest.MonkeyPa
 )
 def test_with_topic(name: str, expected: str) -> None:
     assert ai_card_router._with_topic(name) == expected
+
+
+# ── #572 Task 4 — 한 요청에 2장, 고른 한 장만 저장 ──────────────────────
+
+
+def test_post_response_has_pick_group_and_progress(client: TestClient, jobs: list, monkeypatch) -> None:
+    monkeypatch.setattr(settings, "cardimage_pick_count", 2)
+    body = _post(client).json()
+    assert body["pick_group"] is not None
+    assert (body["done"], body["total"]) == (0, 2)
+
+
+def test_get_reports_done_and_total_after_generation(client: TestClient, jobs: list, monkeypatch) -> None:
+    monkeypatch.setattr(settings, "cardimage_pick_count", 2)
+    card_id = _post(client).json()["id"]
+    _run_all(jobs)
+    detail = client.get(f"/app/ai-cards/{card_id}").json()
+    assert detail["status"] == "ready"
+    assert (detail["done"], detail["total"]) == (2, 2)
+
+
+def test_list_shows_both_cards_from_one_request(client: TestClient, jobs: list, monkeypatch) -> None:
+    monkeypatch.setattr(settings, "cardimage_pick_count", 2)
+    body = _post(client).json()
+    _run_all(jobs)
+    cards = client.get("/app/ai-cards").json()["cards"]
+    assert len(cards) == 2
+    assert {c["pick_group"] for c in cards} == {body["pick_group"]}
+
+
+def test_choose_keeps_the_picked_card_and_deletes_its_siblings(client: TestClient, jobs: list, monkeypatch) -> None:
+    monkeypatch.setattr(settings, "cardimage_pick_count", 2)
+    posted = _post(client).json()
+    _run_all(jobs)
+    assert len(client.get("/app/ai-cards").json()["cards"]) == 2
+    picked_id = posted["id"]
+
+    resp = client.post(f"/app/ai-cards/{picked_id}/choose")
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["id"] == picked_id
+
+    remaining = client.get("/app/ai-cards").json()["cards"]
+    assert [c["id"] for c in remaining] == [picked_id]
+
+
+def test_choose_without_siblings_keeps_the_single_card(client: TestClient, jobs: list) -> None:
+    """`pick_count=1`(기존 기본 경로)이면 형제가 없다 — 고른 카드를 그대로 돌려준다."""
+    card_id = _post(client).json()["id"]
+    _run_all(jobs)
+    resp = client.post(f"/app/ai-cards/{card_id}/choose")
+    assert resp.status_code == 200
+    assert [c["id"] for c in client.get("/app/ai-cards").json()["cards"]] == [card_id]
+
+
+def test_choose_rejects_a_card_that_belongs_to_another_user(client: TestClient, store: Store) -> None:
+    """없는 것과 남의 것은 같은 404 다 (`_not_found`)."""
+    other_card = AiCard(
+        id=uuid.uuid4(), app_user_id=uuid.uuid4(), month=4, dog_name="남", title="BLOSSOM 남",
+        status="ready", storage_key="ai-cards/other/x.png", generation="g", size_bytes=1, width=994, height=1582,
+    )
+    store.ai_cards.append(other_card)
+    resp = client.post(f"/app/ai-cards/{other_card.id}/choose")
+    assert resp.status_code == 404
+
+
+def test_choose_unknown_card_is_404(client: TestClient) -> None:
+    assert client.post(f"/app/ai-cards/{uuid.uuid4()}/choose").status_code == 404

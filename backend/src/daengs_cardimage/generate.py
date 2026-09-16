@@ -76,22 +76,10 @@ def _attempt(engine: CardImageEngine, judge: CardJudge | None, *, template: byte
         return png, None
 
 
-def generate_card(*, photo: bytes, content_type: str, month: int, dog_name: str, engine: CardImageEngine,
-                  judge: CardJudge | None, base_dir: Path, open_months: frozenset[int], judge_min: int,
-                  rng: random.Random | None = None, seed: int | None = None) -> GeneratedCard:
-    """사진 한 장으로 달 카드 한 장을 만든다. 검수 점수가 `judge_min` 미만이면 한 번 더 만들어
-    보고 둘 중 점수 높은 쪽을 돌려준다(동점이면 첫 번째). 검수가 없거나 실패하면 재시도 없이
-    그 한 장을 그대로 돌려준다.
-
-    `seed` 를 주면(비교 도구가 특정 seed 를 재도록 쓴다, #572 fix round 1 F1) **그 값을 그대로
-    쓰고 재시도하지 않는다** — cardgen 엔진은 seed·프롬프트·입력이 같으면 바이트까지 같은
-    이미지를 내놓으므로(FLUX.2-klein-4B 는 결정적이다) 같은 seed 로 다시 만들면 판정이 절대
-    못 바뀌면서 돈만 한 번 더 나간다. `attempts` 는 이때 늘 1이다.
-
-    `seed` 가 없으면(운영 경로) `rng` 로 **서로 다른 두 seed**(`catalog.pick_seeds(month, 2, ...)`)
-    를 미리 뽑아 두고, 첫 시도가 기준 미만이면 두 번째 seed 로 재시도한다 — 같은 seed 로
-    재시도하면 이 경로도 위와 같은 무의미한 재생성이 된다(#572 fix round 1 F2). `rng` 는
-    테스트에서 `random.Random(0)` 을 넘기면 고정된다."""
+def _setup(*, month: int, dog_name: str, photo: bytes, content_type: str, base_dir: Path,
+           open_months: frozenset[int]) -> tuple[bytes, bytes, Path, str, str, title_mod.Plate]:
+    """카드마다 달라지지 않는 것들을 한 번만 준비한다 — 틀·사진·프롬프트·제목은 장을 몇 장을
+    만들든 같으므로, 여러 장을 만들 때 이걸 장마다 다시 하지 않는다."""
     card_meta = catalog.require_open(month, open_months)
     photo_jpeg = photo_mod.prepare_photo(photo, content_type)
     template = _load_template(month, base_dir)
@@ -104,21 +92,82 @@ def generate_card(*, photo: bytes, content_type: str, month: int, dog_name: str,
     prompt = build_prompt(scene=card_meta.scene, badge=card_meta.badge, subtitle=card_meta.subtitle,
                           outfit=card_meta.outfit)
     text = title_mod.title_text(card_meta.card_name, dog_name)
-    plate = card_meta.plate
+    return template, photo_jpeg, font, prompt, text, card_meta.plate
+
+
+def generate_cards(*, count: int, photo: bytes, content_type: str, month: int, dog_name: str,
+                   engine: CardImageEngine, judge: CardJudge | None, base_dir: Path,
+                   open_months: frozenset[int], judge_min: int,
+                   rng: random.Random | None = None, seed: int | None = None) -> list[GeneratedCard]:
+    """사진 한 장으로 카드 `count` 장을 **순차로** 만든다.
+
+    한 번에 여러 장(`num_images_per_prompt`)은 L4 에서 2장부터 CUDA OOM 이다 (#557 E2 실측).
+    장마다 다른 seed 를 쓰고, 한 장이 실패해도 나머지는 돌려준다 — 고를 게 하나라도 남는 편이 낫다.
+    전부 실패하면 마지막 예외를 올린다.
+
+    `seed` 를 주면(비교 도구가 특정 seed 를 재도록 쓴다, #572 fix round 1 F1) `count` 와 무관하게
+    카드 한 장을 그 값 그대로, 재시도 없이 만든다 — `generate_card` 가 이 경로로 위임한다.
+
+    `seed` 가 없고 `count == 1` 이면(관리자 콘솔 등 카드가 한 장뿐인 경로) 옛 `generate_card` 와
+    똑같이 동작한다: `rng` 로 **서로 다른 두 seed**를 미리 뽑아 두고, 첫 시도의 검수 점수가
+    `judge_min` 미만이면 두 번째 seed 로 한 번 더 만들어 보고 둘 중 나은 쪽을 쓴다.
+
+    `count > 1` 이면(앱 경로, #572 Task 4) 재시도를 하지 않는다 — 카드 하나마다 재시도까지
+    넣으면 최악 2×`count` 번 돈이 나가는데, 이미 고를 카드를 여러 장 만드는 것 자체가 재시도의
+    대안이기 때문이다. 대신 `catalog.pick_seeds(month, count, rng)` 를 **한 번**만 불러 카드
+    수만큼 서로 다른 seed 를 미리 뽑는다 — 카드마다 따로 뽑으면(`rng` 상태가 이어지므로) 검증된
+    seed 가 둘뿐인 달에서 서로 다른 카드가 같은 seed 를 뽑을 수 있다(실측: 4월 풀 {3,4}, 두
+    카드를 각각 `pick_seeds(4, 2, rng)` 로 뽑으면 rng 값에 따라 둘 다 첫 seed 가 3이 될 수
+    있다). 한 번에 `count` 개를 뽑으면 풀 크기 이상 요구하지 않는 한 겹치지 않는다."""
+    template, photo_jpeg, font, prompt, text, plate = _setup(
+        month=month, dog_name=dog_name, photo=photo, content_type=content_type,
+        base_dir=base_dir, open_months=open_months,
+    )
 
     if seed is not None:
         # 호출자가 seed 를 못박았다 — pick_seeds 를 아예 부르지 않고 그 값 그대로, 한 번만.
         png1, j1 = _attempt(engine, judge, template=template, photo_jpeg=photo_jpeg, prompt=prompt, text=text,
                             font=font, plate=plate, seed=seed)
-        return GeneratedCard(png=png1, judge=j1, attempts=1, month=month, title=text, seed=seed)
+        return [GeneratedCard(png=png1, judge=j1, attempts=1, month=month, title=text, seed=seed)]
 
-    seed1, seed2 = catalog.pick_seeds(month, 2, rng or random.Random())
-    png1, j1 = _attempt(engine, judge, template=template, photo_jpeg=photo_jpeg, prompt=prompt, text=text,
-                        font=font, plate=plate, seed=seed1)
-    if j1 is None or j1.likeness >= judge_min:
-        return GeneratedCard(png=png1, judge=j1, attempts=1, month=month, title=text, seed=seed1)
-    png2, j2 = _attempt(engine, judge, template=template, photo_jpeg=photo_jpeg, prompt=prompt, text=text,
-                        font=font, plate=plate, seed=seed2)
-    if j2 is not None and j2.likeness > j1.likeness:
-        return GeneratedCard(png=png2, judge=j2, attempts=2, month=month, title=text, seed=seed2)
-    return GeneratedCard(png=png1, judge=j1, attempts=2, month=month, title=text, seed=seed1)
+    rng = rng or random.Random()
+
+    if count == 1:
+        seed1, seed2 = catalog.pick_seeds(month, 2, rng)
+        png1, j1 = _attempt(engine, judge, template=template, photo_jpeg=photo_jpeg, prompt=prompt, text=text,
+                            font=font, plate=plate, seed=seed1)
+        if j1 is None or j1.likeness >= judge_min:
+            return [GeneratedCard(png=png1, judge=j1, attempts=1, month=month, title=text, seed=seed1)]
+        png2, j2 = _attempt(engine, judge, template=template, photo_jpeg=photo_jpeg, prompt=prompt, text=text,
+                            font=font, plate=plate, seed=seed2)
+        if j2 is not None and j2.likeness > j1.likeness:
+            return [GeneratedCard(png=png2, judge=j2, attempts=2, month=month, title=text, seed=seed2)]
+        return [GeneratedCard(png=png1, judge=j1, attempts=2, month=month, title=text, seed=seed1)]
+
+    seeds = catalog.pick_seeds(month, count, rng)
+    cards: list[GeneratedCard] = []
+    last_exc: Exception | None = None
+    for card_seed in seeds:
+        try:
+            png, j = _attempt(engine, judge, template=template, photo_jpeg=photo_jpeg, prompt=prompt, text=text,
+                              font=font, plate=plate, seed=card_seed)
+        except Exception as exc:  # noqa: BLE001 — 한 장 실패해도 나머지는 돌려준다.
+            last_exc = exc
+            log.warning("cardimage 여러 장 중 한 장 생성 실패, 계속 진행합니다 (seed=%s): %s", card_seed, exc)
+            continue
+        cards.append(GeneratedCard(png=png, judge=j, attempts=1, month=month, title=text, seed=card_seed))
+    if not cards:
+        assert last_exc is not None  # count >= 1 이므로 seeds 도 최소 1개 — 여기 오면 전부 실패한 것이다.
+        raise last_exc
+    return cards
+
+
+def generate_card(*, photo: bytes, content_type: str, month: int, dog_name: str, engine: CardImageEngine,
+                  judge: CardJudge | None, base_dir: Path, open_months: frozenset[int], judge_min: int,
+                  rng: random.Random | None = None, seed: int | None = None) -> GeneratedCard:
+    """사진 한 장으로 달 카드 한 장을 만든다. `generate_cards(count=1, ...)` 의 얇은 위임이다 —
+    관리자 콘솔(`/admin/cardimage/generate`)이 그대로 쓴다. 동작은 `generate_cards` 의 문서를 본다."""
+    return generate_cards(
+        count=1, photo=photo, content_type=content_type, month=month, dog_name=dog_name, engine=engine,
+        judge=judge, base_dir=base_dir, open_months=open_months, judge_min=judge_min, rng=rng, seed=seed,
+    )[0]

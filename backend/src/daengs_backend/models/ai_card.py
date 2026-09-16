@@ -56,6 +56,8 @@ class AiCard(Base):
             "idx_ai_cards_one_generating", "app_user_id", unique=True,
             postgresql_where=text("status = 'generating'"),
         ),
+        #: 「고른 카드만 남기고 형제를 지운다」 가 pick_group 으로 형제를 찾을 때 쓴다.
+        Index("ix_ai_cards_pick_group", "pick_group"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
@@ -90,6 +92,10 @@ class AiCard(Base):
     #: 09-15 에 `PETL PPAUSE` 3건이 전부 같은 seed 였는데 기록이 없어 나중에야 알았다.
     #: SmallInteger 가 아니다 — seed 는 32767 을 넘을 수 있다.
     seed: Mapped[int | None] = mapped_column(Integer)
+
+    #: 같은 요청에서 나온 장들을 묶는다. 사용자가 하나를 고르면 나머지 형제 행은 지운다 (#572 Task 4).
+    #: 단일 카드로 만들어진 옛 행·관리자 콘솔 카드는 `NULL` — 묶을 형제가 없다는 뜻이다.
+    pick_group: Mapped[uuid.UUID | None] = mapped_column(Uuid)
 
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), server_default=text("NOW()"))
     updated_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), server_default=text("NOW()"))

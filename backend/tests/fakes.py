@@ -1958,6 +1958,18 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
         store.ai_card_usage = [u for u in store.ai_card_usage if u not in gone]
         return len(gone)
 
+    async def ai_card_list_siblings(session, app_user_id, pick_group, *, exclude_id):
+        return [
+            c for c in store.ai_cards
+            if c.app_user_id == app_user_id and c.pick_group == pick_group and c.id != exclude_id
+        ]
+
+    async def ai_card_count_ready_in_group(session, app_user_id, pick_group):
+        return sum(
+            1 for c in store.ai_cards
+            if c.app_user_id == app_user_id and c.pick_group == pick_group and c.status == "ready"
+        )
+
     monkeypatch.setattr(ai_card_repo, "add", ai_card_add)
     monkeypatch.setattr(ai_card_repo, "get_owned", ai_card_get_owned)
     monkeypatch.setattr(ai_card_repo, "get_for_update", ai_card_get_for_update)
@@ -1973,6 +1985,8 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
     monkeypatch.setattr(ai_card_repo, "list_for_owner_for_update", ai_card_list_for_owner_for_update)
     monkeypatch.setattr(ai_card_repo, "delete", ai_card_delete)
     monkeypatch.setattr(ai_card_repo, "delete_all_for_owner", ai_card_delete_all_for_owner)
+    monkeypatch.setattr(ai_card_repo, "list_siblings", ai_card_list_siblings)
+    monkeypatch.setattr(ai_card_repo, "count_ready_in_group", ai_card_count_ready_in_group)
 
     async def audit_add(session, **kw):
         entry = FakeAuditEntry(

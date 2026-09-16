@@ -114,6 +114,29 @@ async def expire_generating(
     return result.rowcount or 0
 
 
+async def list_siblings(
+    session: AsyncSession, app_user_id: uuid.UUID, pick_group: uuid.UUID, *, exclude_id: uuid.UUID
+) -> list[AiCard]:
+    """같은 요청(`pick_group`)에서 나온 **다른** 카드들. 「고른 카드만 남긴다」가 지울 대상을 찾을 때 쓴다.
+
+    `for_update` 로 잠근다 — 지우는 동안 다른 조회가 끼어들지 않게.
+    """
+    stmt = (
+        select(AiCard)
+        .where(AiCard.app_user_id == app_user_id, AiCard.pick_group == pick_group, AiCard.id != exclude_id)
+        .with_for_update()
+    )
+    return list(await session.scalars(stmt))
+
+
+async def count_ready_in_group(session: AsyncSession, app_user_id: uuid.UUID, pick_group: uuid.UUID) -> int:
+    """`pick_group` 안에서 지금까지 `ready` 로 끝난 장수. 진행률(`done`)이 이것을 쓴다."""
+    stmt = select(func.count()).select_from(AiCard).where(
+        AiCard.app_user_id == app_user_id, AiCard.pick_group == pick_group, AiCard.status == "ready"
+    )
+    return int(await session.scalar(stmt) or 0)
+
+
 async def find_ready_by_storage_key(session: AsyncSession, storage_key: str) -> AiCard | None:
     """bridge 전용. ⚠️ 소유자 조건이 없습니다 — 대신 **backend 가 실제로 저장한 키인지**를 봅니다."""
     return await session.scalar(

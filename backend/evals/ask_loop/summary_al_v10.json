@@ -1,0 +1,352 @@
+{
+  "label": "al_v10",
+  "general_prompt": "general-answer-ko-v10",
+  "n": 14,
+  "measured": 14,
+  "results": {
+    "never_closed": 4,
+    "closed_on_time": 10
+  },
+  "closed_on_time": {
+    "point": 0.7143,
+    "low": 0.4535,
+    "high": 0.8828,
+    "n": 14
+  },
+  "strata": {
+    "accumulate": {
+      "n": 4,
+      "closed_on_time": 2,
+      "rate": {
+        "point": 0.5,
+        "low": 0.15,
+        "high": 0.85,
+        "n": 4
+      },
+      "results": {
+        "never_closed": 2,
+        "closed_on_time": 2
+      }
+    },
+    "two_signs_at_once": {
+      "n": 3,
+      "closed_on_time": 1,
+      "rate": {
+        "point": 0.3333,
+        "low": 0.0615,
+        "high": 0.7923,
+        "n": 3
+      },
+      "results": {
+        "closed_on_time": 1,
+        "never_closed": 2
+      }
+    },
+    "answered_axes": {
+      "n": 3,
+      "closed_on_time": 3,
+      "rate": {
+        "point": 1.0,
+        "low": 0.4385,
+        "high": 1.0,
+        "n": 3
+      },
+      "results": {
+        "closed_on_time": 3
+      }
+    },
+    "brief_answer": {
+      "n": 2,
+      "closed_on_time": 2,
+      "rate": {
+        "point": 1.0,
+        "low": 0.3424,
+        "high": 1.0,
+        "n": 2
+      },
+      "results": {
+        "closed_on_time": 2
+      }
+    },
+    "topic_switch": {
+      "n": 2,
+      "closed_on_time": 2,
+      "rate": {
+        "point": 1.0,
+        "low": 0.3424,
+        "high": 1.0,
+        "n": 2
+      },
+      "results": {
+        "closed_on_time": 2
+      }
+    }
+  },
+  "flags": {
+    "reasked_axis": 1
+  },
+  "first_ask": {
+    "ok": 4,
+    "n": 7
+  },
+  "problems": [
+    {
+      "script_id": "al_accumulate_01",
+      "stratum": "accumulate",
+      "must_close_by": 3,
+      "result": "never_closed",
+      "asks": 2,
+      "repeated_question": false,
+      "reasked_axis": false,
+      "first_ask_ok": null,
+      "turns": [
+        {
+          "user": "토해요",
+          "status": "CLARIFY",
+          "capabilities": [],
+          "relation": "NEW",
+          "message": "반려견이 구토를 하면 구토물의 색깔, 횟수, 그리고 구토 전후의 행동 변화를 관찰하는 것이 중요합니다. 오늘 기록된 식사나 배변 정보가 없어 반려견의 상태를 정확히 파악하기 어려우니, 평소 식사나 산책 기록을 남겨주시면 함께 확인해 보겠습니다. 구토 외에 다른 증상이 있는지 말씀해 주시겠어요?\n\n식욕, 활력, 배변, 호흡 등 다른 이상 증상이 있는지, 가장",
+          "question": "식욕, 활력, 배변, 호흡 등 다른 이상 증상이 있는지, 가장 눈에 띄는 변화는 무엇인지 알려주세요.",
+          "missing_axes": [
+            "VOMIT",
+            "OTHER"
+          ]
+        },
+        {
+          "user": "초록색이에요",
+          "status": "ANSWERED",
+          "capabilities": [
+            "general"
+          ],
+          "relation": "FOLLOW_UP",
+          "message": "초록색 구토물은 담즙이 섞여 있을 때 나타날 수 있습니다. 공복 시간이 길어지거나 소화기 문제 등 다양한 원인이 있을 수 있으므로, 구토가 반복되거나 활력이 떨어지는 등 다른 이상 증상이 동반된다면 동물병원에 방문하여 정확한 진단을 받아보시는 것이 좋습니다. 평소와 다른 구토 증상이 지속된다면 구토물의 사진을 찍어두거나 횟수와 양을 기록해 두시면 진료에 도",
+          "question": null,
+          "missing_axes": null
+        },
+        {
+          "user": "밥도 안 먹어요",
+          "status": "CLARIFY",
+          "capabilities": [],
+          "relation": "NEW",
+          "message": "현재 강아지의 식욕 부진 외에 다른 증상이 있는지 확인이 필요합니다. 오늘 기록된 식사나 활동 정보가 없어 상태를 파악하기 어려우니, 평소 식사량이나 산책 기록을 남겨주시면 함께 살펴보는 데 도움이 됩니다.\n\n식욕 외에 활력 저하나 구토, 설사 등 눈에 띄는 다른 변화가 있나요? 가장 걱정되는 부분부터 말씀해 주세요.",
+          "question": "식욕 외에 활력 저하나 구토, 설사 등 눈에 띄는 다른 변화가 있나요? 가장 걱정되는 부분부터 말씀해 주세요.",
+          "missing_axes": [
+            "APPETITE",
+            "ENERGY"
+          ]
+        }
+      ]
+    },
+    {
+      "script_id": "al_accumulate_04",
+      "stratum": "accumulate",
+      "must_close_by": 3,
+      "result": "never_closed",
+      "asks": 2,
+      "repeated_question": false,
+      "reasked_axis": true,
+      "first_ask_ok": null,
+      "turns": [
+        {
+          "user": "아침에 토했어요",
+          "status": "CLARIFY",
+          "capabilities": [],
+          "relation": "NEW",
+          "message": "강아지가 구토를 하면 담즙 역류나 공복 시간이 길어지는 등 다양한 이유가 있을 수 있습니다. 현재 기록된 오늘의 식사나 배변 정보가 없어 상태를 파악하기 어려우니, 평소 식사나 배변 기록을 남겨주시면 다음번에 함께 확인해 보겠습니다. 구토 외에 다른 증상이 있는지 말씀해 주시겠어요?\n\n식욕이나 활력, 배변 상태 등 눈에 띄는 다른 변화가 있는지 가장 먼저 ",
+          "question": "식욕이나 활력, 배변 상태 등 눈에 띄는 다른 변화가 있는지 가장 먼저 확인되는 것부터 말씀해 주세요.",
+          "missing_axes": [
+            "APPETITE",
+            "VOMIT"
+          ]
+        },
+        {
+          "user": "오후에도 또 토했어요",
+          "status": "ANSWERED",
+          "capabilities": [
+            "general"
+          ],
+          "relation": "FOLLOW_UP",
+          "message": "반복되는 구토는 소화기 문제나 이물질 섭취 등 다양한 원인으로 나타날 수 있습니다. 구토물의 색상이나 형태, 횟수, 그리고 식욕이나 활력 저하 등 다른 증상이 동반되는지 세심하게 관찰해 주세요. 증상이 지속되거나 강아지가 기운이 없다면 정확한 상태 확인을 위해 동물병원에 내원하시는 것이 좋습니다.",
+          "question": null,
+          "missing_axes": null
+        },
+        {
+          "user": "설사도 조금 했어요",
+          "status": "CLARIFY",
+          "capabilities": [],
+          "relation": "NEW",
+          "message": "현재 강아지의 상태에 대해 기록된 정보가 없어 설사 증상과 함께 다른 변화가 있는지 확인이 어렵습니다. 평소 식사나 산책, 배변 등을 기록해 주시면 다음번에 함께 살펴볼 수 있습니다.\n\n설사 외에 식욕이나 활력 등 평소와 다른 점이 있는지, 가장 눈에 띄는 변화부터 말씀해 주시겠어요?",
+          "question": "설사 외에 식욕이나 활력 등 평소와 다른 점이 있는지, 가장 눈에 띄는 변화부터 말씀해 주시겠어요?",
+          "missing_axes": [
+            "STOOL",
+            "APPETITE"
+          ]
+        }
+      ]
+    },
+    {
+      "script_id": "al_twosigns_02",
+      "stratum": "two_signs_at_once",
+      "must_close_by": 1,
+      "result": "never_closed",
+      "asks": 1,
+      "repeated_question": false,
+      "reasked_axis": false,
+      "first_ask_ok": null,
+      "turns": [
+        {
+          "user": "어제부터 밥을 안 먹고 축 처져 있어요",
+          "status": "CLARIFY",
+          "capabilities": [],
+          "relation": "NEW",
+          "message": "식욕 부진과 기력 저하는 다양한 원인으로 나타날 수 있으며, 증상이 지속되거나 심해지면 동물병원에서 진료를 받는 것이 좋습니다. 현재 기록된 오늘의 식사나 활동 정보가 없어 상태를 파악하기 어려우니, 평소 식사량과 산책 등을 기록해 주시면 다음번에 함께 확인해 보겠습니다.\n\n식욕과 활력 외에 구토, 설사, 배변 상태 등 다른 변화가 있는지 가장 눈에 띄는 ",
+          "question": "식욕과 활력 외에 구토, 설사, 배변 상태 등 다른 변화가 있는지 가장 눈에 띄는 것부터 말씀해 주시겠어요?",
+          "missing_axes": [
+            "APPETITE",
+            "ENERGY"
+          ]
+        }
+      ]
+    },
+    {
+      "script_id": "al_twosigns_03",
+      "stratum": "two_signs_at_once",
+      "must_close_by": 1,
+      "result": "never_closed",
+      "asks": 1,
+      "repeated_question": false,
+      "reasked_axis": false,
+      "first_ask_ok": null,
+      "turns": [
+        {
+          "user": "설사하고 다리를 절어요",
+          "status": "ANSWERED",
+          "capabilities": [
+            "general"
+          ],
+          "relation": "NEW",
+          "message": "설사와 파행 증상이 동시에 나타나면 반려견의 전반적인 컨디션에 영향을 줄 수 있으므로 주의 깊게 살펴봐야 합니다. 설사는 소화기 문제나 식이 변화 등 다양한 원인으로 발생할 수 있으며, 다리를 저는 것은 관절이나 근육의 통증, 외상 등 여러 가능성이 있습니다. 두 증상이 지속되거나 아이가 힘들어한다면 정확한 원인 파악을 위해 동물병원에 내원하여 진료를 받아",
+          "question": null,
+          "missing_axes": null
+        },
+        {
+          "user": "병원 가야 할까요?",
+          "status": "CLARIFY",
+          "capabilities": [],
+          "relation": "NEW",
+          "message": "현재 강아지의 상태에 대해 기록된 정보가 없어 구체적인 판단이 어렵습니다. 식사, 산책, 투약 기록을 남겨주시면 다음번에 더 자세히 살펴볼 수 있습니다. 강아지의 현재 상태를 파악하기 위해 식욕, 활력, 배변, 구토나 설사 여부 중 가장 눈에 띄는 변화가 있는지 말씀해 주시겠어요?\n\n식욕, 활력, 배변, 구토나 설사 여부 중 가장 눈에 띄는 변화가 무엇인가",
+          "question": "식욕, 활력, 배변, 구토나 설사 여부 중 가장 눈에 띄는 변화가 무엇인가요?",
+          "missing_axes": [
+            "APPETITE",
+            "ENERGY"
+          ]
+        }
+      ]
+    },
+    {
+      "script_id": "al_axes_01",
+      "stratum": "answered_axes",
+      "must_close_by": 2,
+      "result": "closed_on_time",
+      "asks": 0,
+      "repeated_question": false,
+      "reasked_axis": false,
+      "first_ask_ok": false,
+      "turns": [
+        {
+          "user": "오늘 우리 애 어때 보여?",
+          "status": "HANDOFF",
+          "capabilities": [],
+          "relation": "NEW",
+          "message": "보행 영상을 등록해 함께 확인해 볼게요.",
+          "question": null,
+          "missing_axes": null
+        },
+        {
+          "user": "밥은 잘 먹고 산책도 평소처럼 잘 했어요",
+          "status": "ANSWERED",
+          "capabilities": [
+            "general"
+          ],
+          "relation": "NEW",
+          "message": "식욕이 좋고 평소처럼 산책을 즐겼다니 다행입니다. 반려견의 일상적인 활동량과 식사량은 개체마다 차이가 크므로, 평소의 건강한 상태를 꾸준히 관찰해 주시는 것이 좋습니다. 만약 갑작스러운 변화가 보이거나 걱정되는 점이 있다면 기록해 두셨다가 수의사와 상담하시기 바랍니다.",
+          "question": null,
+          "missing_axes": null
+        }
+      ]
+    },
+    {
+      "script_id": "al_axes_03",
+      "stratum": "answered_axes",
+      "must_close_by": 2,
+      "result": "closed_on_time",
+      "asks": 0,
+      "repeated_question": false,
+      "reasked_axis": false,
+      "first_ask_ok": false,
+      "turns": [
+        {
+          "user": "우리 애 상태 좀 봐줘",
+          "status": "HANDOFF",
+          "capabilities": [],
+          "relation": "NEW",
+          "message": "피부 사진을 등록해 함께 확인해 볼게요.\n보행 영상을 등록해 함께 확인해 볼게요.",
+          "question": null,
+          "missing_axes": null
+        },
+        {
+          "user": "특별한 건 없고 평소랑 같아요",
+          "status": "ANSWERED",
+          "capabilities": [
+            "general"
+          ],
+          "relation": "NEW",
+          "message": "평소와 다름없이 잘 지내고 있다니 다행입니다. 반려견의 건강 상태를 꾸준히 파악하기 위해 평소 식사량, 산책 기록, 투약 여부 등을 기록해 주시면 나중에 상담하실 때 큰 도움이 됩니다. 앞으로도 반려견의 일상을 세심하게 살펴봐 주세요.",
+          "question": null,
+          "missing_axes": null
+        }
+      ]
+    },
+    {
+      "script_id": "al_switch_01",
+      "stratum": "topic_switch",
+      "must_close_by": 2,
+      "result": "closed_on_time",
+      "asks": 0,
+      "repeated_question": false,
+      "reasked_axis": false,
+      "first_ask_ok": false,
+      "turns": [
+        {
+          "user": "오늘 우리 애 어때 보여?",
+          "status": "HANDOFF",
+          "capabilities": [],
+          "relation": "NEW",
+          "message": "보행 영상을 등록해 함께 확인해 볼게요.",
+          "question": null,
+          "missing_axes": null
+        },
+        {
+          "user": "아 그건 됐고 발톱은 얼마나 자주 깎아요?",
+          "status": "ANSWERED",
+          "capabilities": [
+            "general"
+          ],
+          "relation": "NEW",
+          "message": "강아지의 발톱은 보통 2주에서 4주 간격으로 다듬어 주는 것이 일반적입니다. 다만 산책 빈도나 바닥 재질에 따라 발톱이 닳는 정도가 다르므로, 발톱이 바닥에 닿아 소리가 나거나 너무 길어 보일 때 관리해 주시는 것이 좋습니다. 정확한 관리 주기는 반려견의 상태에 따라 차이가 클 수 있으니, 처음이시라면 동물병원이나 미용실에서 적절한 길이를 확인받으시는 것을",
+          "question": null,
+          "missing_axes": null
+        }
+      ]
+    }
+  ],
+  "tokens": {
+    "resolver_in": 8248,
+    "resolver_out": 524,
+    "router_in": 44750,
+    "router_out": 830,
+    "general_in": 72858,
+    "general_out": 3219
+  },
+  "generated_at": "2026-09-16T00:42:34+00:00"
+}

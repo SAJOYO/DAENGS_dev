@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="520" height="300" font-family="sans-serif" font-size="12">
+<text x="50" y="24" font-size="15" font-weight="bold">changed 비율 — N &lt; S ≪ P 인가</text>
+<line x1="50" y1="250" x2="510" y2="250" stroke="#ddd"/>
+<text x="20" y="254">0%</text>
+<line x1="50" y1="150" x2="510" y2="150" stroke="#ddd"/>
+<text x="20" y="154">50%</text>
+<line x1="50" y1="50" x2="510" y2="50" stroke="#ddd"/>
+<text x="20" y="54">100%</text>
+<rect x="180" y="125" width="80" height="125" fill="#4a7ebb"/>
+<line x1="220.0" y1="77" x2="220.0" y2="189" stroke="#222" stroke-width="2"/>
+<text x="220.0" y="268" text-anchor="middle">S 법령</text>
+<text x="220.0" y="119" text-anchor="middle">62% (n=8)</text>
+<rect x="290" y="150" width="80" height="100" fill="#4a7ebb"/>
+<line x1="330.0" y1="88" x2="330.0" y2="212" stroke="#222" stroke-width="2"/>
+<text x="330.0" y="268" text-anchor="middle">P 절제</text>
+<text x="330.0" y="144" text-anchor="middle">50% (n=6)</text>
+<rect x="400" y="107" width="80" height="143" fill="#4a7ebb"/>
+<line x1="440.0" y1="66" x2="440.0" y2="178" stroke="#222" stroke-width="2"/>
+<text x="440.0" y="268" text-anchor="middle">본 비교</text>
+<text x="440.0" y="101" text-anchor="middle">71% (n=7)</text>
+</svg>

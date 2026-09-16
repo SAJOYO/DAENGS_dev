@@ -10,7 +10,7 @@ from threading import Barrier
 
 import pytest
 
-from daengs_backend.core.storage import LocalBridgeStorage
+from daengs_backend.core.storage import LocalBridgeStorage, StorageNotConfiguredError
 
 KEY = "territory/user/attempt/capture.jpg"
 PHOTO = b"abcdefghijklmnopqrstuvwxyz!"
@@ -109,6 +109,39 @@ def test_concurrent_writers_publish_exactly_one_complete_photo(tmp_path, monkeyp
     assert storage.local_path(KEY).read_bytes() == winners[0]
     assert storage.stat(KEY).generation == sha256(winners[0]).hexdigest()
     assert [path for path in tmp_path.rglob("*") if path.is_file()] == [storage.local_path(KEY)]
+
+
+@pytest.mark.parametrize(
+    "escape",
+    [
+        "../escape.jpg",
+        "territory/../../escape.jpg",
+        "territory/user/../../../../escape.jpg",
+        "territory/./../../escape.jpg",
+    ],
+)
+def test_storage_key_cannot_leave_the_root(tmp_path, escape):
+    """키가 루트를 벗어나면 거부합니다 — `_path()` 가 `resolve()` 를 안 쓰게 된 뒤에도 (#566 ⓒ).
+
+    동시 `mkdir` 중에 `resolve()` 가 흔들려서 멀쩡한 업로드가 503 을 받던 것을 고치며
+    검사를 사전식 정규화로 바꿨습니다. 그때 **같이 사라지면 안 되는 것**이 이 성질이라
+    여기서 못 박습니다. 이 방어는 그전까지 테스트가 없었습니다.
+    """
+    storage = LocalBridgeStorage(str(tmp_path))
+    with pytest.raises(StorageNotConfiguredError):
+        storage.local_path(escape)
+
+
+def test_absolute_storage_key_cannot_replace_the_root(tmp_path):
+    # pathlib 은 `root / "/절대경로"` 에서 루트를 통째로 **갈아치웁니다**. 그것도 막습니다.
+    storage = LocalBridgeStorage(str(tmp_path))
+    with pytest.raises(StorageNotConfiguredError):
+        storage.local_path(str(Path(tmp_path.anchor, "escape.jpg")))
+
+
+def test_ordinary_storage_key_stays_under_the_root(tmp_path):
+    storage = LocalBridgeStorage(str(tmp_path))
+    assert storage.local_path(KEY).is_relative_to(Path(tmp_path).resolve())
 
 
 @pytest.mark.parametrize("operation", ["fsync", "link"])

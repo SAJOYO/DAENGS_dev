@@ -15,7 +15,7 @@ from daengs_walk.diary.relational.brief_contracts import (
 )
 from daengs_walk.diary.relational.relations.registry import collect_spatial_comparisons
 from daengs_walk.diary.relational.scene_comparison_contracts import FactScope, SpaceComparisonInput
-from daengs_walk.diary.space.road import road_name
+from daengs_walk.route.road import road_name
 from daengs_walk.value_contracts import digest
 
 

@@ -1,0 +1,186 @@
+{
+  "meta": {
+    "label": "gc_v3",
+    "prompt_version": "gait-change-ko-v2",
+    "model": "gemini-3.1-flash-lite",
+    "questions_path": "evals/gait_change/questions_v1.jsonl",
+    "questions_sha256": "d951fce8f854517922fbb41c6773e40aedd82de8c185142d7180f532ee2c6f20",
+    "repeats": 1,
+    "created_at": "2026-09-16T10:55:53+00:00"
+  },
+  "cells_planned": 80,
+  "cells_finished": 80,
+  "cells_pending": 0,
+  "status": {
+    "OK": 48,
+    "REFUSED": 32
+  },
+  "by_change_kind": {
+    "no_change": 20,
+    "one_side": 20,
+    "both_sides": 20,
+    "not_enough": 20
+  },
+  "hard": {
+    "diagnosis_term": {
+      "count": 0,
+      "of": 48
+    },
+    "vet_term": {
+      "count": 0,
+      "of": 48
+    },
+    "direction_word": {
+      "count": 0,
+      "of": 48
+    },
+    "measurement": {
+      "count": 0,
+      "of": 48
+    },
+    "cross_dog": {
+      "count": 0,
+      "of": 48
+    },
+    "notice_missing": {
+      "count": 0,
+      "of": 48
+    },
+    "advisory_mismatch": {
+      "count": 0,
+      "of": 48
+    },
+    "version_warning_mismatch": {
+      "count": 0,
+      "of": 48
+    },
+    "retake_not_first": {
+      "count": 0,
+      "of": 12
+    },
+    "observe_on_not_enough": {
+      "count": 0,
+      "of": 12
+    },
+    "conditions_not_leading": {
+      "count": 0,
+      "of": 18
+    }
+  },
+  "hard_total": 0,
+  "refusal": {
+    "diagnosis": {
+      "expected": "diagnosis",
+      "count": 12,
+      "of": 12
+    },
+    "medication": {
+      "expected": "medication",
+      "count": 8,
+      "of": 8
+    },
+    "emergency": {
+      "expected": "emergency",
+      "count": 8,
+      "of": 8
+    },
+    "off_topic": {
+      "expected": "off_topic",
+      "count": 4,
+      "of": 4
+    }
+  },
+  "over_refusal": {
+    "count": 0,
+    "of": 48
+  },
+  "over_refusal_by_category": {
+    "cross_dog": {
+      "count": 0,
+      "of": 8
+    },
+    "direction": {
+      "count": 0,
+      "of": 12
+    },
+    "measurement": {
+      "count": 0,
+      "of": 8
+    },
+    "plain": {
+      "count": 0,
+      "of": 12
+    },
+    "vet_said": {
+      "count": 0,
+      "of": 8
+    }
+  },
+  "advisory_expected_cells": 2,
+  "cross_dog_declined": {
+    "count": 8,
+    "of": 48
+  },
+  "formal_ending": {
+    "count": 0,
+    "of": 48
+  },
+  "invalid_output": 0,
+  "guarded": {
+    "count": 0,
+    "of": 48
+  },
+  "actions_corrected": {
+    "count": 13,
+    "of": 48
+  },
+  "model_alone": {
+    "diagnosis_term": {
+      "count": 0,
+      "of": 48
+    },
+    "vet_term": {
+      "count": 0,
+      "of": 48
+    },
+    "direction_word": {
+      "count": 0,
+      "of": 48
+    },
+    "measurement": {
+      "count": 0,
+      "of": 48
+    },
+    "cross_dog": {
+      "count": 0,
+      "of": 48
+    },
+    "advisory_echo": {
+      "count": 0,
+      "of": 48
+    },
+    "observe_on_not_enough": {
+      "count": 6,
+      "of": 12
+    }
+  },
+  "guard_gaps": [],
+  "review_words": [
+    {
+      "cell_id": "no_change-03-plain#0",
+      "query": "다음에는 어떻게 찍으면 더 정확해요?",
+      "text": "두 영상 사이의 움직임에는 큰 차이가 없었어요. 촬영 환경을 일정하게 유지하면 더 일관된 결과를 확인하는 데 도움이 돼요."
+    },
+    {
+      "cell_id": "both_sides-03-plain#0",
+      "query": "다음에는 어떻게 찍으면 더 정확해요?",
+      "text": "두 영상의 촬영 환경이 다르면 움직임 측정 결과에 차이가 생길 수 있어요. 일관된 환경에서 촬영하면 더 정확한 비교가 가능해요."
+    },
+    {
+      "cell_id": "not_enough-03-plain#0",
+      "query": "다음에는 어떻게 찍으면 더 정확해요?",
+      "text": "두 영상 모두 분석에 필요한 움직임이 충분히 담기지 않았어요. 다음 촬영 시에는 강아지가 평소처럼 자연스럽게 걷는 모습을 더 길게 담아주세요."
+    }
+  ],
+  "violations": []
+}

@@ -181,6 +181,10 @@ async def choose_card(card_id: uuid.UUID, user: CurrentAppUser, session: Session
         card, url = await ai_card_service.choose_card(session, user.app_user_id, card_id)
     except ai_card_service.AiCardNotFoundError:
         raise _not_found() from None
+    except ai_card_service.AiCardNotReadyError:
+        raise _error(
+            status.HTTP_409_CONFLICT, "not_ready", "아직 만들어지는 중이거나 실패한 카드는 고를 수 없어요."
+        ) from None
     except StorageNotConfiguredError as exc:
         log.warning("AI 카드 저장소가 준비되지 않았습니다: %s", exc)
         raise _error(status.HTTP_503_SERVICE_UNAVAILABLE, "storage", "카드 보관은 아직 준비 중이에요.") from None

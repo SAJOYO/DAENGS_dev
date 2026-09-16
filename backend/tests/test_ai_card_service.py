@@ -653,6 +653,22 @@ def test_deleting_generating_card_stops_the_next_card_and_records_no_usage(
     assert store.ai_card_usage == []
 
 
+def test_deleting_ready_card_does_not_cancel_generating_sibling(store, storage, jobs, monkeypatch) -> None:
+    """카드 1이 이미 `ready` 면 아직 `generating` 인 카드 2 를 지우지 않는다(#572 Task 4 fix
+    round 2 R2-2) — 하루 한도는 이미 그 `ready` 카드로 다 썼으므로 형제를 지워도 한도가
+    돌아오지 않고, `month_taken` 도 그대로다. 오히려 지우면 사용자에게 카드가 하나도 안 남을
+    수 있다."""
+    monkeypatch.setattr(settings, "cardimage_pick_count", 2)
+    _start()
+    primary, sibling = store.ai_cards
+    primary.status = "ready"  # 실제로 만들어졌다고 흉내 낸다 — sibling 은 아직 generating.
+
+    asyncio.run(service.delete_card(FakeSession(), OWNER, primary.id))
+
+    assert store.ai_cards == [sibling]  # 형제는 살아 있다
+    assert sibling.status == "generating"
+
+
 def test_group_progress_before_and_after_generation(store, storage, jobs, monkeypatch) -> None:
     monkeypatch.setattr(settings, "cardimage_pick_count", 2)
     card = _start()
@@ -751,3 +767,33 @@ def test_choose_strangers_card_is_not_found(store, jobs) -> None:
     card = _start()
     with pytest.raises(service.AiCardNotFoundError):
         asyncio.run(service.choose_card(FakeSession(), STRANGER, card.id))
+
+
+def test_choose_a_failed_card_is_rejected_and_deletes_nothing(store, storage, jobs, monkeypatch) -> None:
+    """#572 Task 4 fix round 2 R2-3 — `failed` 카드를 고르면 형제(그중 `ready` 인 좋은 카드일
+    수 있다)를 지워 사용자에게 카드가 하나도 안 남을 수 있다. 그래서 막는다."""
+    monkeypatch.setattr(settings, "cardimage_pick_count", 2)
+    monkeypatch.setattr(ai_card_engine, "default_engine", lambda: _FailSecondCallEngine())
+    _start()
+    _run_all(jobs)
+    primary, sibling = store.ai_cards
+    assert primary.status == "ready" and sibling.status == "failed"
+
+    with pytest.raises(service.AiCardNotReadyError):
+        asyncio.run(service.choose_card(FakeSession(), OWNER, sibling.id))
+
+    assert store.ai_cards == [primary, sibling]  # 아무것도 안 지워졌다
+
+
+def test_choose_a_generating_card_is_rejected_and_deletes_nothing(store, storage, jobs, monkeypatch) -> None:
+    """#572 Task 4 fix round 2 R2-3 — 아직 `generating` 인(형제가 먼저 `ready` 가 됐을 수 있는)
+    카드를 고르면 그 `ready` 형제를 지워 버릴 수 있다. 그래서 막는다."""
+    monkeypatch.setattr(settings, "cardimage_pick_count", 2)
+    _start()
+    primary, sibling = store.ai_cards
+    primary.status = "ready"  # sibling 은 아직 generating 인 채로 둔다.
+
+    with pytest.raises(service.AiCardNotReadyError):
+        asyncio.run(service.choose_card(FakeSession(), OWNER, sibling.id))
+
+    assert store.ai_cards == [primary, sibling]  # 아무것도 안 지워졌다

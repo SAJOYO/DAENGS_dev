@@ -239,12 +239,28 @@ GAIT_RECORDS_POSE_MODEL_ROWS = (
 # **모듈 수준에 둔다** — `coverage_checks()` 가 "등록됐나"를 이 목록에서 읽는다. 함수 안에
 # 있으면 그 검사가 소스를 정규식으로 긁어야 하고, 그러면 목록을 고칠 때마다 정규식이 낡는다.
 CHECKS = (
-        # 「사용자별 동시 1장」을 요청의 대표 행 하나로 좁힌다(#572 Task 4 fix round 1
-        # Critical). 옛 predicate 로 되돌리는 변조가 이 항목의 핵심이다 — 형제 행이 하나만
-        # 더 생겨도 그 옛 정의가 막아 버린다.
-        ('2026-09-16', 'ai_card_generating_leader',
-         APP_USERS + PETS_ONLY + SET_UPDATED_AT + prerequisites('2026-09-14_ai_cards', '2026-09-16_ai_card_pick_group'),
+        # 한 요청에서 나온 카드들을 묶는 칸(#572 Task 4) + 「사용자별 동시 1장」을 요청의
+        # 대표 행(id = pick_group) 하나로 좁힌다(fix round 1 Critical). 컬럼·인덱스 전환이
+        # 한 파일·한 트랜잭션에 있다(fix round 2 R2-1 — 갈라져 있으면 적용 순서에 따라
+        # ai_cards 에 「동시 1장」 인덱스가 하나도 없는 채로 남을 수 있었다). NOT NULL 로
+        # 좁히는 변조·옛 predicate 로 되돌리는 변조가 이 항목의 핵심이다.
+        ('2026-09-16', 'ai_card_pick_group',
+         APP_USERS + PETS_ONLY + SET_UPDATED_AT + prerequisites('2026-09-14_ai_cards'),
          'ai_cards', [
+            'ALTER TABLE ai_cards DROP COLUMN pick_group CASCADE',
+            # idx_ai_cards_one_generating 의 predicate(id = pick_group)가 uuid 비교라, 그 인덱스가
+            # 있는 채로 타입을 바꾸면 ALTER 자체가 "operator does not exist: uuid = text" 로 죽는다
+            # (verifier 가 잡은 것이 아니라 ALTER 가 실패한 것이 된다 — #271 의 NOT VALID 와
+            # 같은 함정). 인덱스를 먼저 지워야 타입 변경 자체는 성공하고, 그다음에야 verify 가
+            # "칸이 uuid 가 아니다" 로 잡는다.
+            'DROP INDEX idx_ai_cards_one_generating;'
+            ' ALTER TABLE ai_cards ALTER COLUMN pick_group TYPE text',
+            'ALTER TABLE ai_cards ALTER COLUMN pick_group SET NOT NULL',
+            'DROP INDEX ix_ai_cards_pick_group',
+            # 유일성이 잘못 붙는 변조 — 같은 pick_group 값을 공유하는 형제 행이 정상인데,
+            # UNIQUE 면 두 번째 형제를 만드는 순간 이 인덱스가 막는다.
+            'DROP INDEX ix_ai_cards_pick_group;'
+            ' CREATE UNIQUE INDEX ix_ai_cards_pick_group ON ai_cards (pick_group)',
             'DROP INDEX idx_ai_cards_one_generating',
             # 옛 정의로 되돌리는 변조 — 형제 행 하나만 더 생겨도 이 인덱스가 막는다.
             'DROP INDEX idx_ai_cards_one_generating;'
@@ -254,20 +270,10 @@ CHECKS = (
             'DROP INDEX idx_ai_cards_one_generating;'
             " CREATE INDEX idx_ai_cards_one_generating ON ai_cards (app_user_id)"
             " WHERE status = 'generating' AND id = pick_group",
-        ]),
-        # 한 요청에서 나온 카드들을 묶는 칸(#572 Task 4). NOT NULL 로 좁히는 변조가 이 항목의
-        # 핵심이다 — 단일 카드로 만들어진 옛 행·관리자 콘솔 카드는 묶을 형제가 없어 NULL 이다.
-        ('2026-09-16', 'ai_card_pick_group',
-         APP_USERS + PETS_ONLY + SET_UPDATED_AT + prerequisites('2026-09-14_ai_cards'),
-         'ai_cards', [
-            'ALTER TABLE ai_cards DROP COLUMN pick_group',
-            'ALTER TABLE ai_cards ALTER COLUMN pick_group TYPE text',
-            'ALTER TABLE ai_cards ALTER COLUMN pick_group SET NOT NULL',
-            'DROP INDEX ix_ai_cards_pick_group',
-            # 유일성이 잘못 붙는 변조 — 같은 pick_group 값을 공유하는 형제 행이 정상인데,
-            # UNIQUE 면 두 번째 형제를 만드는 순간 이 인덱스가 막는다.
-            'DROP INDEX ix_ai_cards_pick_group;'
-            ' CREATE UNIQUE INDEX ix_ai_cards_pick_group ON ai_cards (pick_group)',
+            # predicate 를 통째로 잃는 변조 — WHERE 가 없으면 사용자 전체에서 generating 상태와
+            # 무관하게 유일해야 하므로, 카드를 하나라도 두 번째 만드는 순간(무슨 상태든) 막힌다.
+            'DROP INDEX idx_ai_cards_one_generating;'
+            ' CREATE UNIQUE INDEX idx_ai_cards_one_generating ON ai_cards (app_user_id)',
         ]),
         # seed 한 칸(#572 Task 3a). SmallInteger 로 좁아지는 변조가 이 항목의 핵심이다 —
         # 카드 생성기가 32767 을 넘는 seed 를 쓸 수 있다.

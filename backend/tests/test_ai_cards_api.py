@@ -375,6 +375,49 @@ def test_choose_without_siblings_keeps_the_single_card(client: TestClient, jobs:
     assert [c["id"] for c in client.get("/app/ai-cards").json()["cards"]] == [card_id]
 
 
+def test_choose_a_failed_card_is_409_and_deletes_nothing(
+    client: TestClient, store: Store, jobs: list, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#572 Task 4 fix round 2 R2-3 — `failed` 카드를 고르면 `ready` 형제를 지워 버릴 수 있다."""
+    monkeypatch.setattr(settings, "cardimage_pick_count", 2)
+
+    class _FailSecondCallEngine(FakeEngine):
+        def generate(self, *, template_png, photo_jpeg, prompt, seed=None):
+            self.calls.append({"template": template_png, "photo": photo_jpeg, "prompt": prompt, "seed": seed})
+            if len(self.calls) == 2:
+                raise EngineError("upstream", "두 번째 호출 실패")
+            return self.outputs[0]
+
+    monkeypatch.setattr(ai_card_engine, "default_engine", lambda: _FailSecondCallEngine())
+    _post(client)
+    _run_all(jobs)
+    cards = client.get("/app/ai-cards").json()["cards"]
+    assert len(cards) == 2
+    failed = next(c for c in cards if c["status"] == "failed")
+
+    resp = client.post(f"/app/ai-cards/{failed['id']}/choose")
+
+    assert resp.status_code == 409 and resp.json()["detail"]["code"] == "not_ready"
+    assert len(client.get("/app/ai-cards").json()["cards"]) == 2  # 아무것도 안 지워졌다
+
+
+def test_choose_a_generating_card_is_409_and_deletes_nothing(
+    client: TestClient, store: Store, jobs: list, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#572 Task 4 fix round 2 R2-3 — 아직 `generating` 인 카드를 고르면 이미 `ready` 인
+    형제를 지워 버릴 수 있다."""
+    monkeypatch.setattr(settings, "cardimage_pick_count", 2)
+    posted = _post(client)
+    primary_id = uuid.UUID(posted.json()["id"])
+    sibling = next(c for c in store.ai_cards if c.id != primary_id)
+    assert sibling.status == "generating"
+
+    resp = client.post(f"/app/ai-cards/{sibling.id}/choose")
+
+    assert resp.status_code == 409 and resp.json()["detail"]["code"] == "not_ready"
+    assert len(store.ai_cards) == 2  # 아무것도 안 지워졌다
+
+
 def test_choose_rejects_a_card_that_belongs_to_another_user(client: TestClient, store: Store) -> None:
     """없는 것과 남의 것은 같은 404 다 (`_not_found`)."""
     other_card = AiCard(

@@ -86,6 +86,15 @@ class AiCardNotFoundError(Exception):
     """내 카드(또는 내가 돌보는 강아지)가 아니거나 없습니다. **남의 것일 때도 이 예외입니다.**"""
 
 
+class AiCardNotReadyError(Exception):
+    """`ready` 가 아닌 카드를 고르려 했습니다(#572 Task 4 fix round 2 R2-3). 라우터가 409 로 바꿉니다.
+
+    `generating`·`failed` 카드를 고르면(예: 목록에서 아직 안 끝난 카드를 잘못 눌렀을 때) 형제
+    (그중 이미 `ready` 인 좋은 카드일 수 있습니다)를 지워 버려 사용자에게 좋은 카드가 하나도
+    안 남을 수 있습니다 — 그래서 `ready` 인 카드만 고를 수 있습니다.
+    """
+
+
 class AiCardUserNotActiveError(Exception):
     """토큰은 맞지만 회원이 이제 active 가 아닙니다(탈퇴 등). 라우터가 401 `not_active` 로 바꿉니다.
 
@@ -422,12 +431,18 @@ async def choose_card(
 ) -> tuple[AiCard, str | None]:
     """`card_id` 를 남기고, 같은 요청(`pick_group`)에서 나온 형제 카드를 지웁니다(#572 Task 4).
 
-    형제가 없으면(단일 생성·옛 카드) 고른 카드를 그대로 돌려줍니다. **객체를 먼저 지웁니다** —
-    `delete_card` 와 같은 순서(행을 먼저 지우면 키를 잃어 파일이 영구 고아입니다).
+    **`ready` 인 카드만 고를 수 있습니다** (fix round 2 R2-3) — `generating`·`failed` 카드를
+    고르면 형제(이미 `ready` 인 좋은 카드일 수 있습니다)를 지워 버려 사용자에게 카드가 하나도
+    안 남을 수 있습니다. 형제가 없으면(단일 생성·옛 카드) 고른 카드를 그대로 돌려줍니다.
+    **객체를 먼저 지웁니다** — `delete_card` 와 같은 순서(행을 먼저 지우면 키를 잃어 파일이
+    영구 고아입니다).
     """
     card = await ai_card_repo.get_owned(session, app_user_id, card_id, for_update=True)
     if card is None:
         raise AiCardNotFoundError
+    if card.status != "ready":
+        await session.rollback()
+        raise AiCardNotReadyError
     if card.pick_group is not None:
         siblings = await ai_card_repo.list_siblings(session, app_user_id, card.pick_group, exclude_id=card.id)
         storage = get_storage()
@@ -450,16 +465,19 @@ async def choose_card(
 async def delete_card(session: AsyncSession, app_user_id: uuid.UUID, card_id: uuid.UUID) -> None:
     """카드 하나를 지웁니다. **생성 중이어도 지웁니다** — 끝난 작업이 객체를 치웁니다.
 
-    같은 요청(`pick_group`)에서 아직 `generating` 인 형제가 있으면 **그것도 같이 지웁니다**
-    (#572 Task 4 fix round 1 Critical) — 안 그러면 사용자가 취소한 뒤에도 백그라운드가 나머지
-    카드를 계속 만들어(`_run` 의 `_claim_slot` 이 그 행을 못 찾을 때까지) `month_taken` 을 막고
-    하루 한도를 공짜로 쓰게 됩니다. 이미 끝난(`ready`·`failed`) 형제는 건드리지 않습니다 —
-    그건 독립된 결과물입니다.
+    **지우는 카드 자신이 `generating` 일 때만** 같은 요청(`pick_group`)의 아직 `generating` 인
+    형제도 함께 지웁니다(#572 Task 4 fix round 1 Critical, fix round 2 R2-2). 취소는 "아직 진행
+    중인 요청을 그만둔다" 는 뜻이라 이 조건이 필요합니다 — 지우는 카드가 이미 `ready` 라면
+    하루 한도는 **그 카드로 이미 다 썼으므로**(사용 기록은 첫 `ready` 에서 한 번만 남습니다),
+    형제까지 지워도 한도가 공짜로 돌아오지 않고 `month_taken` 도 그대로입니다. 오히려 형제를
+    지우면 사용자에게 카드가 하나도 안 남을 수 있으므로(#572 Task 4 fix round 2 재검토) 지우지
+    않습니다 — 이미 끝난(`ready`·`failed`) 형제는 그 카드를 지울 때만 건드립니다(독립된
+    결과물입니다).
     """
     card = await ai_card_repo.get_owned(session, app_user_id, card_id, for_update=True)
     if card is None:
         raise AiCardNotFoundError
-    if card.pick_group is not None:
+    if card.status == "generating" and card.pick_group is not None:
         siblings = await ai_card_repo.list_siblings(session, app_user_id, card.pick_group, exclude_id=card.id)
         for sibling in siblings:
             if sibling.status == "generating":

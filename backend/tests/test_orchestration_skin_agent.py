@@ -646,3 +646,86 @@ def test_emergency_resolver_is_untouched_by_the_skin_signal() -> None:
         )
         is None
     )
+
+
+# ── 진입: general 하나뿐인 계획 → 해설 (#573, D-083) ───────────────────
+#
+# 실기기에서 판정을 보고 이어 물었는데 "피부" 라는 말을 다시 안 쓰면 답이 해설 밖으로 샜다.
+# `며칠 지켜보면 돼?` 는 앞 답의 "며칠 지켜보시고" 를 모르는 되묻기가 됐고, `아토피래 어떡해`
+# 는 보호자가 말한 병명을 그대로 따라 썼다 — #570 의 규칙 8 과 넓힌 가드가 해설 안에만 있어서다.
+
+
+def general_only(
+    *,
+    execute: list[str] | None = None,
+    handoffs: list[str] | None = None,
+    context=None,
+    skin_agent: bool = True,
+    resolved: ConversationContext | None = CONVERSATION,
+    general_fallback: bool = True,
+):
+    """`general` 하나로 조립되는 계획. `routed` 와 달리 `resolved` 와 폴백 플래그를 넘긴다."""
+    return assemble_route_plan(
+        SemanticRoutingDecision(execute=execute or [], handoffs=handoffs or []),
+        query=QUERY,
+        context=dict(SCREENED) if context is None else context,
+        router=RouterKind.LLM,
+        general_fallback=general_fallback,
+        skin_agent=skin_agent,
+        resolved=resolved,
+    )
+
+
+@pytest.mark.parametrize("execute", [[], ["general"]])
+def test_a_general_only_follow_up_with_a_record_becomes_the_explainer(execute: list[str]) -> None:
+    """라우터가 general 을 대놓고 골랐는지, 아무것도 못 골라 폴백됐는지는 **구분하지 않는다** —
+    두 경우 모두 계획은 `general` 하나로 같고, 어느 쪽이었는지는 이 판단을 바꾸지 않는다."""
+    plan = general_only(execute=execute)
+    [only] = plan.requests
+    assert only.capability == CapabilityName.SKIN
+    assert only.payload.screening.verdict == "abnormal"
+    assert plan.handoffs == [] and plan.clarify is None
+
+
+def test_the_converted_follow_up_carries_the_conversation() -> None:
+    """이어 묻기라서 열린 길이다 — 앞 대화가 payload 에 실려야 앞 답을 알아듣는다."""
+    carried = general_only().requests[0].payload.conversation
+    assert carried is not None
+    assert carried.referenced_assistant_answer == CONVERSATION.referenced_assistant_answer
+
+
+def test_a_new_question_right_after_a_verdict_is_not_converted() -> None:
+    """**경계가 여기다.** `service` 가 NEW · 저확신 턴을 `resolved = None` 으로 버리므로, 판정
+    직후 새로 꺼낸 밥 이야기는 이 규칙에 안 걸리고 평소대로 일반 답변이 답한다."""
+    plan = general_only(resolved=None)
+    assert [r.capability for r in plan.requests] == [CapabilityName.GENERAL]
+
+
+def test_without_a_record_the_general_plan_stays_general() -> None:
+    plan = general_only(context={})
+    assert [r.capability for r in plan.requests] == [CapabilityName.GENERAL]
+
+
+def test_the_kill_switch_also_turns_off_this_entry() -> None:
+    plan = general_only(skin_agent=False)
+    assert [r.capability for r in plan.requests] == [CapabilityName.GENERAL]
+
+
+def test_a_handoff_in_the_same_turn_keeps_the_router_choice() -> None:
+    """핸드오프는 라우터가 목적지를 고른 것이다 — 위 HANDOFF 규칙이 이미 자기 몫을 처리했다."""
+    plan = general_only(execute=["general"], handoffs=["gait"])
+    assert [r.capability for r in plan.requests] == [CapabilityName.GENERAL]
+    assert [h.target for h in plan.handoffs] == ["gait"]
+
+
+def test_a_specialized_selection_is_never_converted() -> None:
+    """가로채기가 없다는 것이 이 설계의 요점이다 — 산책 질문은 이어 묻기여도 산책이 답한다."""
+    context = {**SCREENED, "location": {"lat": 37.5, "lon": 127.0}}
+    plan = general_only(execute=["walk"], context=context)
+    assert [r.capability for r in plan.requests] == [CapabilityName.WALK]
+
+
+def test_the_fallback_flag_off_leaves_the_old_empty_plan() -> None:
+    """플래그가 꺼져 있으면 `general` 은 애초에 조립되지 않는다 — 이 규칙이 그 뒤를 바꾸지 않는다."""
+    plan = general_only(execute=["general"], general_fallback=False)
+    assert plan.requests == [] and plan.handoffs == []

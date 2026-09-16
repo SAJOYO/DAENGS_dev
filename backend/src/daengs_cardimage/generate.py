@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import logging
+import random
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -37,6 +38,8 @@ class GeneratedCard:
     attempts: int
     month: int
     title: str
+    #: 이 카드를 만들 때 쓴 seed. `catalog.pick_seeds` 가 뽑은 값이다 (#572 Task 3a).
+    seed: int | None = None
 
 
 def _load_template(month: int, base_dir: Path) -> bytes:
@@ -49,11 +52,12 @@ def _load_template(month: int, base_dir: Path) -> bytes:
 
 
 def _attempt(engine: CardImageEngine, judge: CardJudge | None, *, template: bytes, photo_jpeg: bytes,
-             prompt: str, text: str, font: Path, plate: title_mod.Plate) -> tuple[bytes, JudgeResult | None]:
+             prompt: str, text: str, font: Path, plate: title_mod.Plate,
+             seed: int | None) -> tuple[bytes, JudgeResult | None]:
     """한 번의 생성 시도: 엔진 호출 → 제목 얹기 → (있으면) 검수. 검수가 없거나 실패해도
     카드 자체는 만들어 돌려준다 — 점수는 `None` 이 될 뿐 이 함수가 실패하지는 않는다."""
     try:
-        raw = engine.generate(template_png=template, photo_jpeg=photo_jpeg, prompt=prompt)
+        raw = engine.generate(template_png=template, photo_jpeg=photo_jpeg, prompt=prompt, seed=seed)
     except EngineError as exc:
         if exc.code == "no_key":
             raise CardImageUnavailable(exc.detail) from exc
@@ -73,10 +77,14 @@ def _attempt(engine: CardImageEngine, judge: CardJudge | None, *, template: byte
 
 
 def generate_card(*, photo: bytes, content_type: str, month: int, dog_name: str, engine: CardImageEngine,
-                  judge: CardJudge | None, base_dir: Path, open_months: frozenset[int], judge_min: int) -> GeneratedCard:
+                  judge: CardJudge | None, base_dir: Path, open_months: frozenset[int], judge_min: int,
+                  rng: random.Random | None = None) -> GeneratedCard:
     """사진 한 장으로 달 카드 한 장을 만든다. 검수 점수가 `judge_min` 미만이면 한 번 더 만들어
     보고 둘 중 점수 높은 쪽을 돌려준다(동점이면 첫 번째). 검수가 없거나 실패하면 재시도 없이
-    그 한 장을 그대로 돌려준다."""
+    그 한 장을 그대로 돌려준다.
+
+    `rng` 는 seed 를 뽑는 데만 쓴다 — 테스트에서 `random.Random(0)` 을 넘기면 고정된다. 두 시도
+    모두 같은 seed 를 쓴다(재시도의 목적은 판·구도 변화가 아니라 검수 재시도이기 때문이다)."""
     card_meta = catalog.require_open(month, open_months)
     photo_jpeg = photo_mod.prepare_photo(photo, content_type)
     template = _load_template(month, base_dir)
@@ -90,13 +98,14 @@ def generate_card(*, photo: bytes, content_type: str, month: int, dog_name: str,
                           outfit=card_meta.outfit)
     text = title_mod.title_text(card_meta.card_name, dog_name)
     plate = card_meta.plate
+    seed = catalog.pick_seeds(month, 1, rng or random.Random())[0]
 
     png1, j1 = _attempt(engine, judge, template=template, photo_jpeg=photo_jpeg, prompt=prompt, text=text,
-                        font=font, plate=plate)
+                        font=font, plate=plate, seed=seed)
     if j1 is None or j1.likeness >= judge_min:
-        return GeneratedCard(png=png1, judge=j1, attempts=1, month=month, title=text)
+        return GeneratedCard(png=png1, judge=j1, attempts=1, month=month, title=text, seed=seed)
     png2, j2 = _attempt(engine, judge, template=template, photo_jpeg=photo_jpeg, prompt=prompt, text=text,
-                        font=font, plate=plate)
+                        font=font, plate=plate, seed=seed)
     if j2 is not None and j2.likeness > j1.likeness:
-        return GeneratedCard(png=png2, judge=j2, attempts=2, month=month, title=text)
-    return GeneratedCard(png=png1, judge=j1, attempts=2, month=month, title=text)
+        return GeneratedCard(png=png2, judge=j2, attempts=2, month=month, title=text, seed=seed)
+    return GeneratedCard(png=png1, judge=j1, attempts=2, month=month, title=text, seed=seed)

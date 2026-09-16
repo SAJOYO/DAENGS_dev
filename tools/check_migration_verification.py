@@ -239,6 +239,15 @@ GAIT_RECORDS_POSE_MODEL_ROWS = (
 # **모듈 수준에 둔다** — `coverage_checks()` 가 "등록됐나"를 이 목록에서 읽는다. 함수 안에
 # 있으면 그 검사가 소스를 정규식으로 긁어야 하고, 그러면 목록을 고칠 때마다 정규식이 낡는다.
 CHECKS = (
+        # seed 한 칸(#572 Task 3a). SmallInteger 로 좁아지는 변조가 이 항목의 핵심이다 —
+        # 카드 생성기가 32767 을 넘는 seed 를 쓸 수 있다.
+        ('2026-09-16', 'ai_card_seed',
+         APP_USERS + PETS_ONLY + SET_UPDATED_AT + prerequisites('2026-09-14_ai_cards'),
+         'ai_cards', [
+            'ALTER TABLE ai_cards DROP COLUMN seed',
+            'ALTER TABLE ai_cards ALTER COLUMN seed TYPE smallint',
+            'ALTER TABLE ai_cards ALTER COLUMN seed SET NOT NULL',
+        ]),
         # 사용 기록(#543). 픽스처에 ready 카드 한 장을 넣어 **백필이 실제로 돈다** — 'DELETE' 변조가 그것을 잰다.
         ('2026-09-15', 'ai_card_usage',
          APP_USERS + PETS_ONLY + SET_UPDATED_AT + prerequisites('2026-09-14_ai_cards')

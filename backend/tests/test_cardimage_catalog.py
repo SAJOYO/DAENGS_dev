@@ -1,3 +1,5 @@
+import logging
+import random
 from pathlib import Path
 
 import pytest
@@ -69,3 +71,39 @@ def test_every_month_has_its_own_measured_plate():
     """제목판은 달마다 다르다. 4월 말고 다른 달이 APRIL_PLATE 를 그대로 쓰면 제목이 어긋난다."""
     others = [catalog.get(m).plate for m in range(1, 13) if m != 4]
     assert all(p != catalog.APRIL_PLATE for p in others)
+
+
+# --- #572 Task 3a: seeds / pick_seeds -------------------------------------------------
+
+
+def test_only_months_four_and_nine_have_verified_seeds():
+    """#557 실험에서 확인된 두 달만 채워져 있다 — 나머지 열은 3b 가 채우기 전까지 비어 있다(R5)."""
+    assert catalog.get(4).seeds == (3, 4)
+    assert catalog.get(9).seeds == (1, 4)
+    for m in range(1, 13):
+        if m in (4, 9):
+            continue
+        assert catalog.get(m).seeds == (), m
+
+
+def test_pick_seeds_returns_distinct_values_from_the_month_list():
+    rng = random.Random(0)
+    picked = catalog.pick_seeds(4, 2, rng)
+    assert len(picked) == len(set(picked)) == 2
+    assert set(picked) <= set(catalog.get(4).seeds)
+
+
+def test_pick_seeds_repeats_when_asked_for_more_than_the_list_has():
+    """목록이 2개인데 4장을 뽑으면 되풀이한다 — 장수가 seed 수에 갇히지 않게."""
+    rng = random.Random(0)
+    assert len(catalog.pick_seeds(4, 4, rng)) == 4
+
+
+def test_pick_seeds_falls_back_to_default_seeds_and_warns_for_unverified_month(caplog):
+    """검증 전 달(예: 5월)은 raise 하지 않는다 — DEFAULT_SEEDS 로 대신하고 warning 을 남긴다(R5)."""
+    rng = random.Random(0)
+    with caplog.at_level(logging.WARNING, logger="daengs_cardimage.catalog"):
+        picked = catalog.pick_seeds(5, 3, rng)
+    assert len(picked) == 3
+    assert set(picked) <= set(catalog.DEFAULT_SEEDS)
+    assert any("month 5" in r.getMessage() for r in caplog.records)

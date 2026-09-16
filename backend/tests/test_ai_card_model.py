@@ -1,14 +1,26 @@
 """`models/ai_card.py` 가 `db/init/38_ai_cards.sql` 을 따라가는지 (모델은 SQL 을 따라가는 쪽)."""
 
+from sqlalchemy import Integer
+
 from daengs_backend.models import AI_CARD_STATUSES, AiCard, AiCardUsage
 
 
 def test_columns_follow_sql() -> None:
     assert set(AiCard.__table__.c.keys()) == {
         "id", "app_user_id", "dog_id", "month", "dog_name", "title", "status", "error_code",
-        "storage_key", "generation", "size_bytes", "width", "height", "likeness", "attempts",
+        "storage_key", "generation", "size_bytes", "width", "height", "likeness", "attempts", "seed",
         "created_at", "updated_at",
     }
+
+
+def test_seed_column_is_integer_not_smallinteger() -> None:
+    """seed 는 32767 을 넘을 수 있다 — SmallInteger 로 되돌아가면 조용히 잘린다(#572 Task 3a)."""
+    assert type(AiCard.__table__.c.seed.type) is Integer
+
+
+def test_seed_round_trips_on_the_model() -> None:
+    card = AiCard(month=4, dog_name="네오", title="BLOSSOM 네오", status="ready", seed=1234567890)
+    assert card.seed == 1234567890
 
 
 def test_named_constraints_and_indexes() -> None:

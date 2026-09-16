@@ -271,6 +271,7 @@ async def _finish_ready(card_id: uuid.UUID, key: str, stored: StoredObject, gene
         card.width, card.height = width, height
         card.likeness = generated.judge.likeness if generated.judge else None
         card.attempts = generated.attempts
+        card.seed = generated.seed
         now = datetime.now(UTC)
         card.updated_at = now
         # **같은 트랜잭션에서** 사용 기록을 남깁니다 (#543, D-077). 카드를 지워도 이 줄은 남아 하루 한도가

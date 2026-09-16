@@ -1,4 +1,5 @@
 import io
+import random
 from pathlib import Path
 
 import pytest
@@ -114,3 +115,17 @@ def test_missing_template_dir_is_unavailable(tmp_path):
     with pytest.raises(generate.CardImageUnavailable):
         generate.generate_card(photo=_photo(), content_type="image/jpeg", month=4, dog_name="x", engine=FakeEngine(),
                                judge=None, base_dir=tmp_path, open_months=frozenset({4}), judge_min=3)
+
+
+def test_generated_card_records_the_seed_it_used():
+    """#572 Task 3a — 뽑은 seed 가 카드에 남고, 엔진이 실제로 그 값을 받는다."""
+    eng, jd = FakeEngine(), FakeJudge([5])
+    out = _run(eng, jd, rng=random.Random(0))
+    assert out.seed in catalog.get(4).seeds
+    assert eng.calls[0]["seed"] == out.seed
+
+
+def test_generate_card_without_rng_still_works():
+    """`rng` 를 안 넘기면(운영 경로) 내부에서 새 `random.Random()` 을 만들어 쓴다."""
+    out = _run(FakeEngine(), FakeJudge([5]))
+    assert out.seed in catalog.get(4).seeds

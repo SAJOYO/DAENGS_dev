@@ -27,7 +27,8 @@ class EngineError(Exception):
 
 
 class CardImageEngine(Protocol):
-    def generate(self, *, template_png: bytes, photo_jpeg: bytes, prompt: str) -> bytes:
+    def generate(self, *, template_png: bytes, photo_jpeg: bytes, prompt: str,
+                 seed: int | None = None) -> bytes:
         """틀 PNG + 사진 JPEG → 강아지가 바뀐 카드 PNG (994×1582)."""
         ...
 
@@ -114,7 +115,9 @@ class GeminiCardImageEngine:
     def __init__(self, *, api_key: str, model: str, size: str, timeout_ms: int) -> None:
         self._api_key, self._model, self._size, self._timeout_ms = api_key.strip(), model, size, timeout_ms
 
-    def generate(self, *, template_png: bytes, photo_jpeg: bytes, prompt: str) -> bytes:
+    def generate(self, *, template_png: bytes, photo_jpeg: bytes, prompt: str,
+                 seed: int | None = None) -> bytes:
+        # Nano Banana 2 는 seed 를 받지 않는다. 인자를 받되 버린다 — 프로토콜을 하나로 두기 위해서다.
         if not self._api_key:
             raise EngineError("no_key", "DAENGS_CARDIMAGE_GEMINI_API_KEY 가 비어 있습니다")
         from google import genai
@@ -164,10 +167,11 @@ class HttpCardImageEngine:
         self._gen_size = gen_size
         self.last_meta: dict | None = None
 
-    def _post(self, *, template_png: bytes, photo_jpeg: bytes, prompt: str, count: int) -> tuple[int, httpx.Response]:
+    def _post(self, *, template_png: bytes, photo_jpeg: bytes, prompt: str, count: int,
+              seed: int | None) -> tuple[int, httpx.Response]:
         if not self._base:
             raise EngineError("no_key", "DAENGS_CARDGEN_URL 이 비어 있습니다")
-        seed = self._seed if self._seed is not None else random.randrange(2**31)
+        seed = seed if seed is not None else random.randrange(2**31)
         body = {
             "images_b64": [base64.b64encode(template_png).decode(), base64.b64encode(photo_jpeg).decode()],
             "prompt": prompt, "seed": seed, "width": self._gen_size[0], "height": self._gen_size[1],
@@ -184,8 +188,12 @@ class HttpCardImageEngine:
             raise EngineError("upstream", f"카드 생성 서비스가 {resp.status_code} 을 돌려줬습니다: {resp.text[:200]!r}")
         return seed, resp
 
-    def generate(self, *, template_png: bytes, photo_jpeg: bytes, prompt: str) -> bytes:
-        seed, resp = self._post(template_png=template_png, photo_jpeg=photo_jpeg, prompt=prompt, count=1)
+    def generate(self, *, template_png: bytes, photo_jpeg: bytes, prompt: str,
+                 seed: int | None = None) -> bytes:
+        # 호출 인자가 있으면 그것을 쓰고, 없으면 생성자 값을 쓴다.
+        effective_seed = seed if seed is not None else self._seed
+        seed, resp = self._post(template_png=template_png, photo_jpeg=photo_jpeg, prompt=prompt, count=1,
+                                seed=effective_seed)
         self.last_meta = {"seed": seed, "seconds": resp.headers.get("X-Cardgen-Seconds"),
                           "model": resp.headers.get("X-Cardgen-Model"),
                           "size": f"{self._gen_size[0]}x{self._gen_size[1]}"}
@@ -193,7 +201,8 @@ class HttpCardImageEngine:
 
     def generate_batch(self, *, template_png: bytes, photo_jpeg: bytes, prompt: str, count: int) -> list[bytes]:
         """한 요청에 `count` 장(서비스 `count`, #557 E2). 장마다 카드 크기 PNG, 장별 seed 는 `last_meta["seeds"]`."""
-        _, resp = self._post(template_png=template_png, photo_jpeg=photo_jpeg, prompt=prompt, count=count)
+        _, resp = self._post(template_png=template_png, photo_jpeg=photo_jpeg, prompt=prompt, count=count,
+                             seed=self._seed)
         try:
             data = resp.json()
             images = [base64.b64decode(b) for b in data["images_png_b64"]]

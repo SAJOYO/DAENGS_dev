@@ -2,14 +2,23 @@
 
 from __future__ import annotations
 
+import logging
+import random
 from dataclasses import dataclass
 from pathlib import Path
 
 from daengs_cardimage.title import APRIL_PLATE, Plate
 
+log = logging.getLogger(__name__)
+
 
 class MonthNotOpenError(Exception):
     """틀은 있지만 설정(DAENGS_CARDIMAGE_MONTHS)으로 잠긴 달. 라우터가 404 로 바꾼다."""
+
+
+#: 아직 실험으로 검증되지 않은 달이 fallback 으로 쓰는 seed 목록 (#572 Task 3a, R5).
+#: 검증된 목록이 없다고 생성을 막지 않는다 — 12달이 이미 열려 있어서 막으면 10/12 달이 500 이 된다.
+DEFAULT_SEEDS: tuple[int, ...] = (1, 2, 3, 4, 5, 6)
 
 
 #: 9월 틀의 검은 제목판 — 4월보다 11px 위에 있다(y 40~135, 4월은 53~145) 그리고 약 40px 좁다.
@@ -86,6 +95,10 @@ class MonthCard:
     subtitle: str = ""             # 틀에 구워진 부제. 프롬프트가 "그대로 두라"고 가리킨다
     outfit: str = NO_OUTFIT        # 의상 문장. 한복 같은 옷이 있는 달은 "이미지 1 의 옷 그대로" 로 바꾼다
     plate: Plate = APRIL_PLATE     # 제목판 기하 — 세로 중심·오른쪽 경계 (달마다 틀에서 잰다)
+    #: 이 달 틀에서 제목·아래 패널 글씨가 안 깨진다고 실험으로 확인된 seed (#557 E1·E2, #572 Task 3).
+    #: 글씨 깨짐은 사진이 아니라 (틀, seed, 크기) 로 정해지므로 여기서 뽑으면 깨진 장이 안 나온다.
+    #: 비어 있으면(`()`) 아직 실험으로 확인되지 않았다는 뜻이다 — `pick_seeds` 가 DEFAULT_SEEDS 로 대신한다.
+    seeds: tuple[int, ...] = ()
 
 
 # scene 은 실험(worklog 09-13~14)에서 검증된 달만 채워져 있다. 다른 달을 열 때는 그 달의
@@ -133,6 +146,7 @@ _CARDS: dict[int, MonthCard] = {
         "the pose (sitting on the picnic blanket looking up at a falling petal), "
         "the green-and-white checked picnic blanket (keep this exact color and pattern), the wicker basket",
         "APRIL SPECIAL",
+        seeds=(3, 4),  # #557 실험에서 확인됨
     ),
     5: MonthCard(
         5, "5_home_team", "HOME TEAM", "26MAY",
@@ -185,6 +199,7 @@ _CARDS: dict[int, MonthCard] = {
         "sage-green ribbon, coral-pink skirt with gold flowers and the tassel ornament) and hold the same tray of "
         "songpyeon. Do not carry over any accessories from image 2 — no collar, no leash, no harness.",
         SEPTEMBER_PLATE,
+        seeds=(1, 4),  # #557 실험에서 확인됨
     ),
     10: MonthCard(
         10, "10_ghost", "GHOST", "26OCT",
@@ -223,6 +238,24 @@ _CARDS: dict[int, MonthCard] = {
 
 def get(month: int) -> MonthCard:
     return _CARDS[month]
+
+
+def pick_seeds(month: int, count: int, rng: random.Random) -> list[int]:
+    """그 달의 검증된 seed 에서 `count` 개를 겹치지 않게 뽑는다. 목록이 모자라면 되풀이한다.
+
+    아직 실험으로 확인되지 않은 달(`seeds == ()`)은 예외를 내지 않는다 — 12달이 이미 열려 있어서
+    막으면 검증이 끝나지 않은 열 달이 전부 500 이 된다(#572 Task 3a, controller ruling R5). 대신
+    DEFAULT_SEEDS 로 대신하고, 나중에 실험 결과를 보고 이 로그를 찾을 수 있게 warning 을 남긴다.
+    """
+    pool = list(get(month).seeds)
+    if not pool:
+        log.warning("cardimage month %s has no verified seeds — using unverified defaults %s", month, DEFAULT_SEEDS)
+        pool = list(DEFAULT_SEEDS)
+    picked: list[int] = []
+    while len(picked) < count:
+        rng.shuffle(pool)
+        picked.extend(pool[: count - len(picked)])
+    return picked
 
 
 def require_open(month: int, open_months: frozenset[int]) -> MonthCard:

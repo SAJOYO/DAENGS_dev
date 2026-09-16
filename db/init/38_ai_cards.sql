@@ -32,6 +32,9 @@ CREATE TABLE IF NOT EXISTS ai_cards (
     height SMALLINT,
     likeness SMALLINT,
     attempts SMALLINT,
+    -- 이 카드를 만든 seed. 같은 seed 가 같은 자리를 깨뜨리므로(#557 E1) 기록해 둔다.
+    -- SMALLINT 가 아니다 — seed 는 32767 을 넘을 수 있다.
+    seed INTEGER,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 

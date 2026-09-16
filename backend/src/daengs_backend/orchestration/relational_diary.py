@@ -13,10 +13,11 @@ from daengs_backend.services.walk_diary.relational_execution import (
 from daengs_backend.services.walk_diary.writing.relational import (
     generate_relation_part,
 )
-from daengs_backend.services.walk_diary.writing.relational_title import write_relational_title
 from daengs_backend.services.walk_diary.writing.relational_transport import CallCoordinator
+from daengs_backend.services.walk_diary.writing.scene_titles import write_scene_titles
 from daengs_backend.services.walk_diary.writing.short_memory import write_with_short_memory
-from daengs_walk.diary.relational.title_context import TITLE_CONTRACT, validate_title_publication
+from daengs_walk.diary.relational.scene_title_context import SCENE_TITLE_CONTRACT
+from daengs_walk.diary.relational.title_context import validate_title_publication
 
 
 async def generate_prepared_relational_diary(
@@ -47,8 +48,8 @@ async def generate_prepared_relational_diary(
     )
     result = await write_with_short_memory(prepared, send=coordinator, review=review, model=model)
     receipt = result["receipt"]
-    receipt["title"] = await write_relational_title(receipt, send=coordinator, review=review)
-    receipt["title_contract"] = TITLE_CONTRACT
+    receipt["scene_titles"] = await write_scene_titles(receipt, send=coordinator)
+    receipt["title_contract"] = SCENE_TITLE_CONTRACT
     validate_title_publication(receipt)
     receipt["execution"] = {
         "model": model,

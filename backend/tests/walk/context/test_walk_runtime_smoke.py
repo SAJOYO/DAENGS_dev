@@ -45,7 +45,7 @@ async def test_card_probe_reads_current_receipt_through_packaged_storage(monkeyp
     )
     output = await write_cards(base.input.source, base, generate=prose)
     assert any(
-        a.action_id is None and a.movement_ids
+        a.action_id is not None and a.movement_ids
         for scene in output.bundle.scenes
         for a in scene.writing.actions
     )

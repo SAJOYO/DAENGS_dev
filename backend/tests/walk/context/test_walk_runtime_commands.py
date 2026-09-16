@@ -18,7 +18,7 @@ def powershell_command(executable, script, *arguments):
     return [*command, "-File", str(script), *arguments]
 
 
-def run_powershell(command, **kwargs):
+def run_powershell(command, *, check=False, **kwargs):
     """PowerShell 출력은 **UTF-8 이 아닐 수 있습니다** — 그래서 깨진 바이트를 버립니다.
 
     `pwsh`(PowerShell 7)는 UTF-8 로 쓰지만 Windows PowerShell 5.1(`powershell.exe`)은
@@ -32,7 +32,13 @@ def run_powershell(command, **kwargs):
     ⚠️ `docker compose config` 는 **진짜 UTF-8** 이라 이 함수를 쓰지 않습니다.
     """
     return subprocess.run(
-        command, text=True, encoding="utf-8", errors="replace", capture_output=True, **kwargs
+        command,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        capture_output=True,
+        check=check,
+        **kwargs,
     )
 
 

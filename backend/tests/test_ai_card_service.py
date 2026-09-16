@@ -134,6 +134,24 @@ def test_start_then_background_makes_ready_card(store, storage, jobs) -> None:
     assert got is card and "/app/ai-cards/_bridge/download/" in url
 
 
+def test_ready_card_records_seed_when_cardgen_url_is_set(store, storage, jobs, monkeypatch) -> None:
+    """GPU 엔진(`cardgen_url` 있음)은 seed 를 실제로 쓰므로 그대로 기록한다(최종 리뷰 minor 3)."""
+    monkeypatch.setattr(settings, "cardgen_url", "http://cardgen.example")
+    card = _start()
+    drawn_seed = card.seed
+    assert drawn_seed is not None
+    _run_all(jobs)
+    assert card.status == "ready" and card.seed == drawn_seed
+
+
+def test_ready_card_seed_is_none_when_cardgen_url_is_empty(store, storage, jobs) -> None:
+    """Nano Banana 2(`cardgen_url` 빈 값)는 seed 를 버리므로 거짓 기록을 남기지 않는다."""
+    card = _start()
+    assert card.seed is not None  # 생성 중에는 엔진에 넘길 값이 여전히 있다
+    _run_all(jobs)
+    assert card.status == "ready" and card.seed is None
+
+
 def test_engine_failure_marks_failed_without_object(store, storage, jobs, monkeypatch) -> None:
     monkeypatch.setattr(ai_card_engine, "default_engine", lambda: FakeEngine(error=EngineError("upstream", "x")))
     card = _start()

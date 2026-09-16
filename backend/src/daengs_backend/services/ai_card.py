@@ -378,7 +378,12 @@ async def _finish_ready(
         card.width, card.height = width, height
         card.likeness = generated.judge.likeness if generated.judge else None
         card.attempts = generated.attempts
-        card.seed = generated.seed
+        # Nano Banana 2(`cardgen_url` 빈 값)는 seed 인자를 받고도 무시합니다 — 뽑은 값을 그대로
+        # 저장하면 "이 카드는 이 seed 로 만들어졌다"는 거짓 기록이 되고, 어느 엔진이 만들었는지
+        # 칸이 없어 나중에 가려낼 수도 없습니다(최종 리뷰 minor 3). GPU 엔진(`cardgen_url` 있음)만
+        # seed 를 실제로 씁니다 — `strip()` 판정은 `ai_card_engine.default_engine` 과 같게 맞춥니다.
+        # 엔진에 넘기는 seed 자체(위 `generate` 호출)는 그대로입니다 — 여기서 바뀌는 것은 기록뿐입니다.
+        card.seed = generated.seed if settings.cardgen_url.strip() else None
         now = datetime.now(UTC)
         card.updated_at = now
         if record_usage:

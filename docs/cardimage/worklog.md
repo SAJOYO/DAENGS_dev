@@ -3,6 +3,66 @@
 세션이 끝날 때마다 한 절씩 위에 추가한다 (최신이 위). 무엇을 했고, 무엇을 정했고, 무엇을
 다음 세션에 넘기는지. 조사 내용 자체는 `research-*.md` 에, 요약·현재 상태는 `README.md` 에.
 
+## 2026-09-16 — #572 최종 리뷰 수정 파동 (Critical 0, 머지 전 마지막 손질)
+
+전체 브랜치 리뷰(opus, `review-d0c707ac..ea7e921c.diff`)가 READY AFTER FIXES 로 승인하며 남긴
+Important 1건(배포 영향 서술)·minor 5건을 한 번에 처리했다.
+
+- **PR 본문 「배포 영향」** — 실제 사고는 409 가 아니라, 09-16 마이그레이션 전에 새 코드가 뜨면
+  `select(AiCard)` 가 없는 컬럼을 읽어 `/app/ai-cards` 전체와 **모든 사용자의 회원 탈퇴**가 500 이
+  되는 것이다(`services/app_auth.py:370` · `repositories/ai_card.py:211` 확인). 마이그레이션 목록을
+  참 파일 이름 순서로 바로잡고, `.github/workflows/db-migrate.yml`(self-hosted, `ref`·`verify`
+  입력 확인)로 머지 전에 개발서버·GCP DB 양쪽에 적용하는 절차를 적었다. 옛 코드로 롤백하면 옛
+  `count_usage_since` 가 오늘 미달·실패·삭제 시도까지 세어 429 를 낼 수 있다는 것도 남겼다
+  (초과해서 세는 것뿐, 데이터 손실은 없다)
+- **`ai_cards.seed` 거짓 기록** — Nano Banana 2 는 seed 인자를 받고도 무시하는데 뽑은 값을 그대로
+  저장하고 있었다. `services/ai_card.py::_finish_ready` 에서 `cardgen_url` 이 비어 있으면(엔진
+  팩토리와 같은 `strip()` 판정) `card.seed = None` 으로 저장하도록 고쳤다 — 엔진에 넘기는 seed
+  자체는 그대로다. 두 경우(GPU 엔진 있음/Nano Banana 2) 테스트를 추가했다
+- **콜드 스타트 수치 출처** — `ai_card_quota.py::stale_after` docstring 과 D-084 가 340.7·374.9·
+  403.1초를 전부 #557 E3 탓으로 돌리고 있었다. `worklog`·`roadmap.md`·
+  `compare-2026-09-16-klein-e2-e3.md` 를 다시 찾아 403.1초는 E1(옛 이미지로 재기동), 374.9초는
+  이미지 교체 뒤 첫 기동, 340.7초는 E3(기준 리비전으로 되돌려 재측정)로 바로잡고 끊긴 문장에
+  마침표를 붙였다
+- **`plate_probe.py` 주석 둘** — 탐침 열 범위 `230~296` → 실제 `range(230, 300, 4)` 끝값인 `298`
+  로, 「과반수가 어둡다」→ 코드(`>= len(PROBE_XS) // 2`, 정확히 절반도 통과)에 맞게
+  「절반 이상이 어둡다」로. **코드는 그대로 뒀다** — 사람이 이미 승인한 12개 plate 가 다시 재질 수
+  있어서다
+- **`test_every_month_has_its_own_measured_plate`** — `!= APRIL_PLATE` 만 보던 것을
+  `len({...}) == 12`(전부 서로 다름)로 강화. 돌려 보니 12달 plate 가 이미 전부 달라 그대로 통과했다
+- **7·10·12월 `scene` 육안 대조** — 아무도 이미지와 비교한 적이 없었다(예산 부족, 11월 turkey/rooster
+  전례). `7_beach`·`10_ghost`·`12_santa` 의 틀·완성 이미지를 열어 소품·의상 문장을 하나씩 대조 —
+  세 달 모두 `scene`·`outfit` 이 이미지와 정확히 일치해 고칠 것이 없었다
+- **4월 강아지 교체 실패 주석** — 모델 이름 없이 적혀 있어 운영 엔진(Nano Banana 2)의 결함으로 읽힐
+  수 있었다. `FLUX.2-klein-4B` 를 명시하고 운영(Nano Banana 2)은 영향받지 않는다고 적었다
+
+### 최종 리뷰가 남기기로 한 것 (LEAVE)
+
+머지를 막지 않는 minor. 위 FIX 항목과 겹치지 않는다.
+
+- **T2 — 손측정 edge 여유** — `APRIL_PLATE`·`SEPTEMBER_PLATE` 의 손측정 edge 가 실제보다
+  8~17px(4월)·6~8px(9월) 넉넉하다. 도구로 재측정하면 제목이 판 밖으로 번지는 것을 더 막지만,
+  사람이 눈으로 승인한 상수라 재측정 여부는 별도 판단이 필요하다
+- **T2 — settings 테스트 중복 단언** — `test_cardimage_settings.py` 의 12달 기본값 단언이 계획이
+  시킨 중복이다
+- **T3a — CHECKS 항목 순서** — 새 `CHECKS` 항목이 날짜 순서에서 벗어나 있다(기능과는 무관)
+- **T4 — verify 스크립트의 컬럼·조건 확인 두 건** — `verify_..._pick_group.sql` 이 인덱스 정의는
+  읽지만 그것이 `(pick_group)` 컬럼 위인지는 보지 않고, 인덱스 대상 컬럼과 AND/OR 조건도 보지 않는다
+- **T4 — `choose_card` 가 커밋 전에 저장소 객체를 지운다** — `delete_card` 와 같은 기존 패턴이라
+  이 카드가 새로 만든 문제는 아니다
+- **T5 — 세마포어 대기 중 첫 카드 만료** — 빈 생성 슬롯을 기다리는 첫 카드가 정리 기준을 넘겨
+  만료될 수 있다(돈은 안 나간다). 요청 하나가 이제 카드 최대 2장 동안 생성 슬롯(세마포어)을 쥐므로
+  대기열이 그만큼 길어진다는 점도 함께 남긴다
+- **T5 — `to_regclass` 의 `search_path`** — `search_path` 의 모든 스키마를 본다(옛
+  `CREATE TABLE IF NOT EXISTS` 는 첫 스키마만 봤다). 운영은 스키마가 `public` 하나뿐이라 무관하다
+- **T6 — 안내 문구가 `aria-describedby` 로 안 묶임** — `#cardimage-photo` 입력에 안내 `<p>` 가
+  연결돼 있지 않아 스크린리더가 입력만 읽을 때는 안 들린다. 옛 문구도 같았으니 회귀는 아니다
+- **T6 — 안내 문구 두 상수의 손 동기화** — 서버(`PHOTO_GUIDANCE`)와 콘솔 문구를 손으로 맞춰야
+  한다. 새 엔드포인트 없이, 백엔드 테스트가 프런트 파일을 텍스트로 읽어 `PHOTO_GUIDANCE` 를
+  그대로 포함하는지 단언하는 정도면 싸게 방어할 수 있다
+- **T7 — `5feaeab7` 커밋의 트레일러** — "Claude Sonnet 5" 그대로 둔다. `HEAD` 가 아니라 고치려면
+  리베이스가 필요하고, 실제로 Sonnet 에이전트가 쓴 커밋이라 트레일러가 사실과 맞다
+
 ## 2026-09-16 — #572 12달 열기 + 2장 뽑기 (Task 1~7, 구현·리뷰 완료·머지 대기)
 
 `docs/superpowers/plans/2026-09-16-ai-card-12months-and-two-picks.md` 를 subagent-driven-development 로

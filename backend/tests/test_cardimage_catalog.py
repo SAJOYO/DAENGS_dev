@@ -69,9 +69,9 @@ def test_every_month_is_openable():
 
 
 def test_every_month_has_its_own_measured_plate():
-    """제목판은 달마다 다르다. 4월 말고 다른 달이 APRIL_PLATE 를 그대로 쓰면 제목이 어긋난다."""
-    others = [catalog.get(m).plate for m in range(1, 13) if m != 4]
-    assert all(p != catalog.APRIL_PLATE for p in others)
+    """제목판은 달마다 다르다. `!= APRIL_PLATE` 만 보면 두 달이 같은 틀린 plate 를 공유해도 못
+    잡는다(최종 리뷰 minor) — 12달 plate 가 전부 서로 달라야 한다."""
+    assert len({catalog.get(m).plate for m in range(1, 13)}) == 12
 
 
 # --- #572 Task 3a: seeds / pick_seeds -------------------------------------------------

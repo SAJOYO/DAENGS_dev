@@ -40,9 +40,10 @@ class RelationalExecutionPolicy:
             or action_count > scene_count
         ):
             raise ValueError("invalid scene/action counts")
-        # Any space introduction may need recovery; one title follows the bodies.
+        # Reserve bodies first, then one title per scene. Titles have no review call.
         return min(
-            self.max_calls, (scene_count + action_count + 1) * (2 if self.semantic_review else 1)
+            self.max_calls,
+            (scene_count + action_count) * (2 if self.semantic_review else 1) + scene_count,
         )
 
     def resolve(self, scene_count, action_count):

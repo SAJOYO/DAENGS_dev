@@ -161,3 +161,39 @@ def test_store_rejects_changed_result_and_other_reservation(written, base):
             revision=body["source_revision"],
             generation=3,
         )
+
+
+async def test_scene_titles_survive_public_roundtrip_and_legacy_defaults(written, base):
+    from daengs_backend.services.walk_diary.storage.relational_db import project
+    from daengs_backend.services.walk_diary.writing.relational_title import write_relational_title
+    from daengs_walk.diary.relational.title_context import TITLE_CONTRACT
+
+    raw = store(written, base)
+    public = load(json.loads(json.dumps(raw)))
+    assert public.title is None and public.title_status == "not_requested"
+    assert [c.title for c in public.cards] == [
+        written.receipt["scene_titles"][c.scene_id]["text"] for c in public.cards
+    ]
+    assert all(c.title_status == "returned" for c in public.cards)
+    changed = deepcopy(raw)
+    changed["payload"]["public"]["cards"][0]["title"] = "다른 제목"
+    changed["digest"] = digest(changed["payload"])
+    with pytest.raises(ValueError, match="projection"):
+        load(changed)
+
+    # Reconstruct the historical writer contract and its title-less public cards.
+    old_receipt = deepcopy(written.receipt)
+    del old_receipt["scene_titles"]
+    old_receipt["title_contract"] = TITLE_CONTRACT
+    old_receipt["title"] = await write_relational_title(old_receipt, send=brief_send)
+    old = deepcopy(raw)
+    old["payload"]["receipt"] = old_receipt
+    old["payload"]["public"] = project(old_receipt, base.input.source.client_session_id).model_dump(
+        mode="json"
+    )
+    for card in old["payload"]["public"]["cards"]:
+        del card["title"], card["title_status"]
+    old["digest"] = digest(old["payload"])
+    restored = load(json.loads(json.dumps(old)))
+    assert restored.title == old_receipt["title"]["text"]
+    assert all(c.title is None and c.title_status == "not_requested" for c in restored.cards)

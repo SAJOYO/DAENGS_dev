@@ -103,8 +103,8 @@ async def test_default_service_factory_uses_our_preparation_and_receipt(base, pr
     assert isinstance(result, RelationalDiaryResult)
     assert result.receipt["version"] == "relational-diary-skeleton-v7"
     assert result.input_revision == base.input.source.revision()
-    assert result.receipt["title"]["status"] == "returned"
-    assert seen[-2][0] == "title" and seen[-1][0] == "review"
+    assert all(t["status"] == "returned" for t in result.receipt["scene_titles"].values())
+    assert seen[-1][0] == "title"
     assert all(r["status"] == "returned" for r in result.receipt["writing"]["results"])
     assert len(seen) == result.receipt["execution"]["model_call_attempts"]
     assert (
@@ -306,10 +306,10 @@ async def test_current_action_goes_through_same_service(prepare):
 @pytest.mark.parametrize(
     "review,scenes,actions,calls,seconds",
     [
-        (True, 3, 1, 10, 255),
-        (True, 12, 0, 26, 655),
-        (False, 12, 0, 13, 330),
-        (True, 12, 12, 50, 1255),
+        (True, 3, 1, 11, 280),
+        (True, 12, 0, 36, 905),
+        (False, 12, 0, 24, 605),
+        (True, 12, 12, 60, 1505),
     ],
 )
 def test_auto_budget_includes_writing_review_title_and_completion_gaps(
@@ -352,9 +352,9 @@ async def test_twelve_scenes_can_finish_with_pacing_and_review_without_real_wait
         call_timeout_s=policy.call_timeout_s,
         total_timeout_s=policy.generation_timeout_s,
     )
-    for stage in ["space", "review"] * 12 + ["title", "review"]:
+    for stage in ["space", "review"] * 12 + ["title"] * 12:
         await coordinator(stage, {}, {})
-    assert len(started) == 26 and not coordinator.deadline_reached
+    assert len(started) == 36 and not coordinator.deadline_reached
     assert all(b - a >= 24 for a, b in pairwise(started))
     assert now[0] < policy.generation_timeout_s
 

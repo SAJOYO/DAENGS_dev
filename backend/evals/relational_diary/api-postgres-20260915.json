@@ -1,0 +1,4170 @@
+{
+  "synthetic_route": true,
+  "real_llm": true,
+  "real_postgres": true,
+  "http_post_equals_get": true,
+  "response": {
+    "format": "walk-relational-diary-response-v1",
+    "session_id": "a5b2db69-af07-425b-8933-ecdcb9c54ad8",
+    "generation": 1,
+    "input_revision": "939fb96d01afef7ea611d4e457f0e23859483de5e01393f9363acd09a2d4b371",
+    "status": "ready",
+    "entry_revisions": {
+      "4a40ba1c-47a6-4e70-b756-6b06c730db27": 1
+    },
+    "photos_status": "not_available",
+    "photo_manifest": null,
+    "target_scene_count": 1,
+    "bundle": {
+      "format": "walk-relational-diary-v1",
+      "client_session_id": "a5b2db69-af07-425b-8933-ecdcb9c54ad8",
+      "title": "사평대로28길과 반포대로 산책",
+      "title_status": "returned",
+      "cards": [
+        {
+          "scene_id": "stamp:5a4a32e366c643058dbce28a9fad6de6ff19891ecb6070cd10c790f86a21a672",
+          "anchor": {
+            "event_at": "2026-09-09T00:00:00Z",
+            "time_basis": "route_observation",
+            "point": {
+              "lat": 37.5,
+              "lng": 127.0
+            },
+            "location_at": "2026-09-09T00:00:00Z",
+            "accuracy_m": 5.0,
+            "position_state": "resolved",
+            "method": "observed",
+            "source_fixes": [
+              {
+                "client_seq": 0,
+                "chain_index": 0,
+                "at": "2026-09-09T00:00:00Z"
+              }
+            ]
+          },
+          "header": {
+            "scene_id": "stamp:5a4a32e366c643058dbce28a9fad6de6ff19891ecb6070cd10c790f86a21a672",
+            "dong": "반포4동",
+            "weather": null
+          },
+          "space": {
+            "status": "returned",
+            "text": "사평대로28길 인근을 지나며 산책을 시작했다.",
+            "semantic_status": "model_reviewed"
+          },
+          "action": {
+            "status": "not_requested",
+            "text": "",
+            "semantic_status": "not_published"
+          },
+          "body": "사평대로28길 인근을 지나며 산책을 시작했다.",
+          "current_context": {
+            "scene_id": "stamp:5a4a32e366c643058dbce28a9fad6de6ff19891ecb6070cd10c790f86a21a672",
+            "walk_id": "e37c8a7168bf758a234cde888fa5571a3a034a323595e2bbb3b2e003c99b00c3",
+            "recorded_at": "2026-09-09T00:00:00Z",
+            "point": {
+              "lat": 37.5,
+              "lng": 127.0
+            },
+            "accuracy_m": 5.0,
+            "position_basis": "observed",
+            "facts": [
+              {
+                "id": "stamp:5a4a32e366c643058dbce28a9fad6de6ff19891ecb6070cd10c790f86a21a672:road:843ae4f1ab91d1c6d1d826a6069a7e1d4bb330f47e4c358ceb55a41b8efba3d2",
+                "family": "road",
+                "value": {
+                  "name": "사평대로28길"
+                },
+                "scope": {
+                  "kind": "record_point",
+                  "description": "좌표에 대응한 주소의 도로명. 실제 통과·진입 도로는 미확인",
+                  "coverage_key": "bb9c2cc1173b85e4662ea0b28ca57972c5968f5fa137b4cf8e5f56713e3412f2"
+                },
+                "subject_key": null,
+                "source_refs": [
+                  "sgis:road:6469687ece4a332b6cb837f19c62f9c078f38ebe201e7f8717c79b46828facb8"
+                ],
+                "observed_at": null,
+                "retrieved_at": "2026-09-15T05:32:44.136622Z",
+                "reference_date": null,
+                "time_meaning": "조회 시점의 주소 대응. 도로의 관측 시점은 미확인"
+              }
+            ],
+            "collection": {
+              "road": "complete",
+              "land_cover": "unknown",
+              "surrounding_object": "unknown",
+              "area_context": "unknown"
+            },
+            "collection_reasons": {
+              "road": [
+                "road_name_only"
+              ],
+              "land_cover": [
+                "source_unavailable"
+              ],
+              "surrounding_object": [
+                "source_unavailable"
+              ],
+              "area_context": [
+                "source_unavailable"
+              ]
+            }
+          },
+          "comparison_scene_id": null,
+          "originals": []
+        },
+        {
+          "scene_id": "stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e",
+          "anchor": {
+            "event_at": "2026-09-09T00:05:00Z",
+            "time_basis": "recorded_at",
+            "point": {
+              "lat": 37.503238,
+              "lng": 127.0
+            },
+            "location_at": "2026-09-09T00:05:00Z",
+            "accuracy_m": 5.0,
+            "position_state": "legacy",
+            "method": "last_known",
+            "source_fixes": []
+          },
+          "header": {
+            "scene_id": "stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e",
+            "dong": "반포2동",
+            "weather": null
+          },
+          "space": {
+            "status": "failed",
+            "text": "",
+            "semantic_status": "not_published"
+          },
+          "action": {
+            "status": "returned",
+            "text": "반포대로 인근 풀밭에서 곧게 이동하던 산책 대상이 멈춰 서서 냄새를 맡았다.",
+            "semantic_status": "model_reviewed"
+          },
+          "body": "반포대로 인근 풀밭에서 곧게 이동하던 산책 대상이 멈춰 서서 냄새를 맡았다.",
+          "current_context": {
+            "scene_id": "stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e",
+            "walk_id": "e37c8a7168bf758a234cde888fa5571a3a034a323595e2bbb3b2e003c99b00c3",
+            "recorded_at": "2026-09-09T00:05:00Z",
+            "point": {
+              "lat": 37.503238,
+              "lng": 127.0
+            },
+            "accuracy_m": 5.0,
+            "position_basis": "last_known",
+            "facts": [
+              {
+                "id": "stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e:road:530422b2c15f95a92c19e0fb81228fb9179f0a1fcd642ab1fc664848398bccf4",
+                "family": "road",
+                "value": {
+                  "name": "반포대로"
+                },
+                "scope": {
+                  "kind": "record_point",
+                  "description": "좌표에 대응한 주소의 도로명. 실제 통과·진입 도로는 미확인",
+                  "coverage_key": "e71582e46b9abfc3668e84de18bbb2bde0af7ef86c12564f105e7159ec0a4150"
+                },
+                "subject_key": null,
+                "source_refs": [
+                  "sgis:road:d78716fa99a4017d65f23c75b5adff9f55d1814882d223b56ad05d6939dff2ae"
+                ],
+                "observed_at": null,
+                "retrieved_at": "2026-09-15T05:32:44.149629Z",
+                "reference_date": null,
+                "time_meaning": "조회 시점의 주소 대응. 도로의 관측 시점은 미확인"
+              },
+              {
+                "id": "stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e:slot:33f6927dc809fc817542451b7d930d4707f7ac8ae6300a6a41e75263aff31266",
+                "family": "land_cover",
+                "value": {
+                  "피복": "풀밭",
+                  "classification": {
+                    "피복": "기타초지"
+                  },
+                  "layer": "EGIS:lv3_2025y"
+                },
+                "scope": {
+                  "kind": "record_point",
+                  "description": "이 위치의 배경 유형. 실제 통과·현장 풍경·식생의 밀도는 미확인",
+                  "coverage_key": "3b554bd5ed9981a3b3558c581adaa63493bdd93b9347b78d2470c88808b5b8be"
+                },
+                "subject_key": "public-normalized-land_cover:EGIS:lv3_2025y:lv3_2025y.7301518",
+                "source_refs": [
+                  "normalized:63c7783ea635aa66678fd70b162584de4568406eab7d51cebc9d7187ead5213d@6c2d6bc66b1882250053bdb2bdbcc00908af131d29ee32f7c9c446c2de25c5df"
+                ],
+                "observed_at": null,
+                "retrieved_at": "2026-09-15T05:32:43.958559Z",
+                "reference_date": "2024-12-30Z",
+                "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인"
+              }
+            ],
+            "collection": {
+              "road": "complete",
+              "land_cover": "partial",
+              "surrounding_object": "unknown",
+              "area_context": "unknown"
+            },
+            "collection_reasons": {
+              "road": [
+                "road_name_only"
+              ],
+              "land_cover": [
+                "feature_does_not_cover_query"
+              ],
+              "surrounding_object": [
+                "source_unavailable"
+              ],
+              "area_context": [
+                "source_unavailable"
+              ]
+            }
+          },
+          "comparison_scene_id": "stamp:5a4a32e366c643058dbce28a9fad6de6ff19891ecb6070cd10c790f86a21a672",
+          "originals": []
+        },
+        {
+          "scene_id": "stamp:fd8ef4df5d22db3990a1b038a20e27333f51dd43abc8617d2d61b63765d5ba6c",
+          "anchor": {
+            "event_at": "2026-09-09T00:10:00Z",
+            "time_basis": "route_observation",
+            "point": {
+              "lat": 37.506475,
+              "lng": 127.0
+            },
+            "location_at": "2026-09-09T00:10:00Z",
+            "accuracy_m": 5.0,
+            "position_state": "resolved",
+            "method": "observed",
+            "source_fixes": [
+              {
+                "client_seq": 60,
+                "chain_index": 0,
+                "at": "2026-09-09T00:10:00Z"
+              }
+            ]
+          },
+          "header": {
+            "scene_id": "stamp:fd8ef4df5d22db3990a1b038a20e27333f51dd43abc8617d2d61b63765d5ba6c",
+            "dong": "반포2동",
+            "weather": null
+          },
+          "space": {
+            "status": "failed",
+            "text": "",
+            "semantic_status": "not_published"
+          },
+          "action": {
+            "status": "not_requested",
+            "text": "",
+            "semantic_status": "not_published"
+          },
+          "body": "",
+          "current_context": {
+            "scene_id": "stamp:fd8ef4df5d22db3990a1b038a20e27333f51dd43abc8617d2d61b63765d5ba6c",
+            "walk_id": "e37c8a7168bf758a234cde888fa5571a3a034a323595e2bbb3b2e003c99b00c3",
+            "recorded_at": "2026-09-09T00:10:00Z",
+            "point": {
+              "lat": 37.506475,
+              "lng": 127.0
+            },
+            "accuracy_m": 5.0,
+            "position_basis": "observed",
+            "facts": [
+              {
+                "id": "stamp:fd8ef4df5d22db3990a1b038a20e27333f51dd43abc8617d2d61b63765d5ba6c:road:ded01d161589dbe668568fdea4026daecb42649b85b90f87957ad510451e2049",
+                "family": "road",
+                "value": {
+                  "name": "반포대로"
+                },
+                "scope": {
+                  "kind": "record_point",
+                  "description": "좌표에 대응한 주소의 도로명. 실제 통과·진입 도로는 미확인",
+                  "coverage_key": "f27ecf2a98e0a10d96e518169b375f639290da7e2f4c6cf13fdb45bf644f8429"
+                },
+                "subject_key": null,
+                "source_refs": [
+                  "sgis:road:126278d7e5d76d4d20ba5e2f12887892048211f15b42ccc254155d94e1ab2391"
+                ],
+                "observed_at": null,
+                "retrieved_at": "2026-09-15T05:32:44.160369Z",
+                "reference_date": null,
+                "time_meaning": "조회 시점의 주소 대응. 도로의 관측 시점은 미확인"
+              },
+              {
+                "id": "stamp:fd8ef4df5d22db3990a1b038a20e27333f51dd43abc8617d2d61b63765d5ba6c:slot:b9841d2f2af5fd604e5ba17ab82114cfe2a692ee89f042c76dd8c6493fadb45c",
+                "family": "land_cover",
+                "value": {
+                  "피복": "길",
+                  "classification": {
+                    "피복": "도로"
+                  },
+                  "layer": "EGIS:lv3_2025y"
+                },
+                "scope": {
+                  "kind": "record_point",
+                  "description": "이 위치의 배경 유형. 실제 통과·현장 풍경·식생의 밀도는 미확인",
+                  "coverage_key": "be7d65682ce5b036624cc917e25d0f8ed43ef75bfe1d3b791e39a2c7764693fa"
+                },
+                "subject_key": "public-normalized-land_cover:EGIS:lv3_2025y:lv3_2025y.7301442",
+                "source_refs": [
+                  "normalized:855f0f3a670e31d755d04adf8f2035d8c72dae041684ae53f38d8a0cddd398a6@65fcca06341877d7407593565e1b6ac13db1410240875cd27d0342960139d2c7"
+                ],
+                "observed_at": null,
+                "retrieved_at": "2026-09-15T05:32:44.052985Z",
+                "reference_date": "2024-12-30Z",
+                "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인"
+              }
+            ],
+            "collection": {
+              "road": "complete",
+              "land_cover": "partial",
+              "surrounding_object": "unknown",
+              "area_context": "unknown"
+            },
+            "collection_reasons": {
+              "road": [
+                "road_name_only"
+              ],
+              "land_cover": [
+                "feature_does_not_cover_query"
+              ],
+              "surrounding_object": [
+                "source_unavailable"
+              ],
+              "area_context": [
+                "source_unavailable"
+              ]
+            }
+          },
+          "comparison_scene_id": "stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e",
+          "originals": []
+        }
+      ]
+    },
+    "error_code": null,
+    "execution_limits": {}
+  },
+  "execution": {
+    "calls": [
+      {
+        "stage": "space",
+        "status": "returned",
+        "started_s": 106583.062,
+        "completed_s": 106585.515
+      },
+      {
+        "stage": "review",
+        "status": "returned",
+        "started_s": 106595.515,
+        "completed_s": 106597.437
+      },
+      {
+        "stage": "space",
+        "status": "returned",
+        "started_s": 106607.437,
+        "completed_s": 106609.515
+      },
+      {
+        "stage": "action",
+        "status": "returned",
+        "started_s": 106619.515,
+        "completed_s": 106621.937
+      },
+      {
+        "stage": "review",
+        "status": "returned",
+        "started_s": 106631.937,
+        "completed_s": 106639.843
+      },
+      {
+        "stage": "review",
+        "status": "returned",
+        "started_s": 106649.843,
+        "completed_s": 106652.125
+      },
+      {
+        "stage": "space",
+        "status": "returned",
+        "started_s": 106662.125,
+        "completed_s": 106663.468
+      },
+      {
+        "stage": "review",
+        "status": "returned",
+        "started_s": 106673.468,
+        "completed_s": 106675.468
+      },
+      {
+        "stage": "title",
+        "status": "returned",
+        "started_s": 106685.468,
+        "completed_s": 106687.468
+      },
+      {
+        "stage": "review",
+        "status": "returned",
+        "started_s": 106697.484,
+        "completed_s": 106698.812
+      }
+    ],
+    "model": "gemini-3.1-flash-lite",
+    "policy": {
+      "max_calls": 64,
+      "call_timeout_s": 15.0,
+      "semantic_review": true,
+      "minimum_interval_s": 10.0,
+      "generation_timeout_s": 180.0,
+      "preparation_timeout_s": 12.0
+    },
+    "sender_kind": "configured_provider",
+    "call_timeout_s": 15.0,
+    "max_model_calls": 10,
+    "total_timeout_s": 180.0,
+    "automatic_retries": 0,
+    "minimum_interval_s": 10.0,
+    "model_call_attempts": 10,
+    "stopped_on_deadline": false,
+    "stopped_on_rate_limit": false,
+    "semantic_review_enabled": true
+  },
+  "receipt": {
+    "cards": [
+      {
+        "body": "사평대로28길 인근을 지나며 산책을 시작했다.",
+        "parts": {
+          "space": {
+            "text": "사평대로28길 인근을 지나며 산책을 시작했다.",
+            "status": "returned",
+            "task_id": "space:stamp:5a4a32e366c643058dbce28a9fad6de6ff19891ecb6070cd10c790f86a21a672"
+          },
+          "action": {
+            "text": "",
+            "status": "not_requested",
+            "task_id": null
+          }
+        },
+        "anchor": {
+          "point": {
+            "lat": 37.5,
+            "lng": 127.0
+          },
+          "method": "observed",
+          "event_at": "2026-09-09T00:00:00Z",
+          "accuracy_m": 5.0,
+          "time_basis": "route_observation",
+          "location_at": "2026-09-09T00:00:00Z",
+          "source_fixes": [
+            {
+              "at": "2026-09-09T00:00:00Z",
+              "client_seq": 0,
+              "chain_index": 0
+            }
+          ],
+          "position_state": "resolved"
+        },
+        "scene_id": "stamp:5a4a32e366c643058dbce28a9fad6de6ff19891ecb6070cd10c790f86a21a672",
+        "originals": [],
+        "comparison": {
+          "header": {
+            "dong": "반포4동",
+            "weather": null,
+            "scene_id": "stamp:5a4a32e366c643058dbce28a9fad6de6ff19891ecb6070cd10c790f86a21a672"
+          },
+          "context": {
+            "current": {
+              "facts": [
+                {
+                  "id": "stamp:5a4a32e366c643058dbce28a9fad6de6ff19891ecb6070cd10c790f86a21a672:road:843ae4f1ab91d1c6d1d826a6069a7e1d4bb330f47e4c358ceb55a41b8efba3d2",
+                  "scope": {
+                    "kind": "record_point",
+                    "description": "좌표에 대응한 주소의 도로명. 실제 통과·진입 도로는 미확인",
+                    "coverage_key": "bb9c2cc1173b85e4662ea0b28ca57972c5968f5fa137b4cf8e5f56713e3412f2"
+                  },
+                  "value": {
+                    "name": "사평대로28길"
+                  },
+                  "family": "road",
+                  "observed_at": null,
+                  "source_refs": [
+                    "sgis:road:6469687ece4a332b6cb837f19c62f9c078f38ebe201e7f8717c79b46828facb8"
+                  ],
+                  "subject_key": null,
+                  "retrieved_at": "2026-09-15T05:32:44.136622Z",
+                  "time_meaning": "조회 시점의 주소 대응. 도로의 관측 시점은 미확인",
+                  "reference_date": null
+                }
+              ],
+              "point": {
+                "lat": 37.5,
+                "lng": 127.0
+              },
+              "walk_id": "e37c8a7168bf758a234cde888fa5571a3a034a323595e2bbb3b2e003c99b00c3",
+              "scene_id": "stamp:5a4a32e366c643058dbce28a9fad6de6ff19891ecb6070cd10c790f86a21a672",
+              "accuracy_m": 5.0,
+              "collection": {
+                "road": "complete",
+                "land_cover": "unknown",
+                "area_context": "unknown",
+                "surrounding_object": "unknown"
+              },
+              "recorded_at": "2026-09-09T00:00:00Z",
+              "position_basis": "observed",
+              "collection_reasons": {
+                "road": [
+                  "road_name_only"
+                ],
+                "land_cover": [
+                  "source_unavailable"
+                ],
+                "area_context": [
+                  "source_unavailable"
+                ],
+                "surrounding_object": [
+                  "source_unavailable"
+                ]
+              }
+            },
+            "earlier": null,
+            "version": "scene-comparison-v1",
+            "narration": {
+              "scope": "현재 장면",
+              "narrator": "이 산책을 기록한 보호자(나)",
+              "companions": []
+            },
+            "connection": null,
+            "relation_slots": {
+              "proximity": {
+                "items": [],
+                "reason": "initial_scene",
+                "status": "not_applicable",
+                "policy_version": "scene-comparison-v1"
+              },
+              "background": {
+                "items": [],
+                "reason": "initial_scene",
+                "status": "not_applicable",
+                "policy_version": "scene-comparison-v1"
+              },
+              "area_context": {
+                "items": [],
+                "reason": "initial_scene",
+                "status": "not_applicable",
+                "policy_version": "scene-comparison-v1"
+              }
+            },
+            "route_evidence": null
+          },
+          "version": "scene-comparison-publication-v1",
+          "selection": {
+            "text": "사평대로28길 인근을 지나며 산책을 시작했다.",
+            "focus": "현재 위치의 도로명 확인",
+            "evidence_ids": [
+              "stamp:5a4a32e366c643058dbce28a9fad6de6ff19891ecb6070cd10c790f86a21a672:road:843ae4f1ab91d1c6d1d826a6069a7e1d4bb330f47e4c358ceb55a41b8efba3d2"
+            ],
+            "relation_ids": []
+          },
+          "delivery_after": {
+            "recent_deliveries": [
+              {
+                "focus": "현재 위치의 도로명 확인",
+                "task_id": "space:stamp:5a4a32e366c643058dbce28a9fad6de6ff19891ecb6070cd10c790f86a21a672",
+                "scene_id": "stamp:5a4a32e366c643058dbce28a9fad6de6ff19891ecb6070cd10c790f86a21a672",
+                "evidence_ids": [
+                  "stamp:5a4a32e366c643058dbce28a9fad6de6ff19891ecb6070cd10c790f86a21a672:road:843ae4f1ab91d1c6d1d826a6069a7e1d4bb330f47e4c358ceb55a41b8efba3d2"
+                ],
+                "relation_ids": [],
+                "semantic_status": "model_reviewed",
+                "context_signature": "4421e0266d45058d8ac731d18a1ec21c3511c25bb1ef1326600a8c072780d3f4"
+              }
+            ],
+            "active_introduction": {
+              "focus": "현재 위치의 도로명 확인",
+              "task_id": "space:stamp:5a4a32e366c643058dbce28a9fad6de6ff19891ecb6070cd10c790f86a21a672",
+              "scene_id": "stamp:5a4a32e366c643058dbce28a9fad6de6ff19891ecb6070cd10c790f86a21a672",
+              "evidence_ids": [
+                "stamp:5a4a32e366c643058dbce28a9fad6de6ff19891ecb6070cd10c790f86a21a672:road:843ae4f1ab91d1c6d1d826a6069a7e1d4bb330f47e4c358ceb55a41b8efba3d2"
+              ],
+              "relation_ids": [],
+              "semantic_status": "model_reviewed",
+              "context_signature": "4421e0266d45058d8ac731d18a1ec21c3511c25bb1ef1326600a8c072780d3f4"
+            },
+            "all_context_facts_delivered": false
+          },
+          "delivery_before": {
+            "recent_deliveries": [],
+            "active_introduction": null,
+            "all_context_facts_delivered": false
+          },
+          "semantic_status": "model_reviewed",
+          "context_revision": "b956f6e202d4294965576486f5f72f923f2b1f683296226812d77de03c6d1fc7"
+        },
+        "relation_slots": {
+          "movement": {
+            "items": [],
+            "reason": "No preceding record interval",
+            "status": "not_applicable",
+            "policy_version": "relation-slots-v1"
+          },
+          "route_revisit": {
+            "items": [],
+            "reason": "No preceding record interval",
+            "status": "not_applicable",
+            "policy_version": "relation-slots-v1"
+          },
+          "spatial_comparison": {
+            "proximity": {
+              "items": [],
+              "reason": "initial_scene",
+              "status": "not_applicable",
+              "policy_version": "scene-comparison-v1"
+            },
+            "background": {
+              "items": [],
+              "reason": "initial_scene",
+              "status": "not_applicable",
+              "policy_version": "scene-comparison-v1"
+            },
+            "area_context": {
+              "items": [],
+              "reason": "initial_scene",
+              "status": "not_applicable",
+              "policy_version": "scene-comparison-v1"
+            }
+          }
+        },
+        "relation_selection": {
+          "space": [],
+          "action": [],
+          "device_observations": []
+        },
+        "standalone_context": {
+          "space": [],
+          "road_reference": {
+            "id": "stamp:5a4a32e366c643058dbce28a9fad6de6ff19891ecb6070cd10c790f86a21a672:road:843ae4f1ab91d1c6d1d826a6069a7e1d4bb330f47e4c358ceb55a41b8efba3d2",
+            "scope": "좌표에 대응한 주소의 도로명. 실제 통과·진입 도로는 미확인",
+            "road_nm": "사평대로28길"
+          }
+        },
+        "movement_observations": []
+      },
+      {
+        "body": "반포대로 인근 풀밭에서 곧게 이동하던 산책 대상이 멈춰 서서 냄새를 맡았다.",
+        "parts": {
+          "space": {
+            "text": "",
+            "status": "failed",
+            "task_id": "space:stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e"
+          },
+          "action": {
+            "text": "반포대로 인근 풀밭에서 곧게 이동하던 산책 대상이 멈춰 서서 냄새를 맡았다.",
+            "status": "returned",
+            "task_id": "action:stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e"
+          }
+        },
+        "anchor": {
+          "point": {
+            "lat": 37.503238,
+            "lng": 127.0
+          },
+          "method": "last_known",
+          "event_at": "2026-09-09T00:05:00Z",
+          "accuracy_m": 5.0,
+          "time_basis": "recorded_at",
+          "location_at": "2026-09-09T00:05:00Z",
+          "source_fixes": [],
+          "position_state": "legacy"
+        },
+        "scene_id": "stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e",
+        "originals": [],
+        "comparison": {
+          "header": {
+            "dong": "반포2동",
+            "weather": null,
+            "scene_id": "stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e"
+          },
+          "context": {
+            "current": {
+              "facts": [
+                {
+                  "id": "stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e:road:530422b2c15f95a92c19e0fb81228fb9179f0a1fcd642ab1fc664848398bccf4",
+                  "scope": {
+                    "kind": "record_point",
+                    "description": "좌표에 대응한 주소의 도로명. 실제 통과·진입 도로는 미확인",
+                    "coverage_key": "e71582e46b9abfc3668e84de18bbb2bde0af7ef86c12564f105e7159ec0a4150"
+                  },
+                  "value": {
+                    "name": "반포대로"
+                  },
+                  "family": "road",
+                  "observed_at": null,
+                  "source_refs": [
+                    "sgis:road:d78716fa99a4017d65f23c75b5adff9f55d1814882d223b56ad05d6939dff2ae"
+                  ],
+                  "subject_key": null,
+                  "retrieved_at": "2026-09-15T05:32:44.149629Z",
+                  "time_meaning": "조회 시점의 주소 대응. 도로의 관측 시점은 미확인",
+                  "reference_date": null
+                },
+                {
+                  "id": "stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e:slot:33f6927dc809fc817542451b7d930d4707f7ac8ae6300a6a41e75263aff31266",
+                  "scope": {
+                    "kind": "record_point",
+                    "description": "이 위치의 배경 유형. 실제 통과·현장 풍경·식생의 밀도는 미확인",
+                    "coverage_key": "3b554bd5ed9981a3b3558c581adaa63493bdd93b9347b78d2470c88808b5b8be"
+                  },
+                  "value": {
+                    "layer": "EGIS:lv3_2025y",
+                    "피복": "풀밭",
+                    "classification": {
+                      "피복": "기타초지"
+                    }
+                  },
+                  "family": "land_cover",
+                  "observed_at": null,
+                  "source_refs": [
+                    "normalized:63c7783ea635aa66678fd70b162584de4568406eab7d51cebc9d7187ead5213d@6c2d6bc66b1882250053bdb2bdbcc00908af131d29ee32f7c9c446c2de25c5df"
+                  ],
+                  "subject_key": "public-normalized-land_cover:EGIS:lv3_2025y:lv3_2025y.7301518",
+                  "retrieved_at": "2026-09-15T05:32:43.958559Z",
+                  "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인",
+                  "reference_date": "2024-12-30Z"
+                }
+              ],
+              "point": {
+                "lat": 37.503238,
+                "lng": 127.0
+              },
+              "walk_id": "e37c8a7168bf758a234cde888fa5571a3a034a323595e2bbb3b2e003c99b00c3",
+              "scene_id": "stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e",
+              "accuracy_m": 5.0,
+              "collection": {
+                "road": "complete",
+                "land_cover": "partial",
+                "area_context": "unknown",
+                "surrounding_object": "unknown"
+              },
+              "recorded_at": "2026-09-09T00:05:00Z",
+              "position_basis": "last_known",
+              "collection_reasons": {
+                "road": [
+                  "road_name_only"
+                ],
+                "land_cover": [
+                  "feature_does_not_cover_query"
+                ],
+                "area_context": [
+                  "source_unavailable"
+                ],
+                "surrounding_object": [
+                  "source_unavailable"
+                ]
+              }
+            },
+            "earlier": {
+              "facts": [
+                {
+                  "id": "stamp:5a4a32e366c643058dbce28a9fad6de6ff19891ecb6070cd10c790f86a21a672:road:843ae4f1ab91d1c6d1d826a6069a7e1d4bb330f47e4c358ceb55a41b8efba3d2",
+                  "scope": {
+                    "kind": "record_point",
+                    "description": "좌표에 대응한 주소의 도로명. 실제 통과·진입 도로는 미확인",
+                    "coverage_key": "bb9c2cc1173b85e4662ea0b28ca57972c5968f5fa137b4cf8e5f56713e3412f2"
+                  },
+                  "value": {
+                    "name": "사평대로28길"
+                  },
+                  "family": "road",
+                  "observed_at": null,
+                  "source_refs": [
+                    "sgis:road:6469687ece4a332b6cb837f19c62f9c078f38ebe201e7f8717c79b46828facb8"
+                  ],
+                  "subject_key": null,
+                  "retrieved_at": "2026-09-15T05:32:44.136622Z",
+                  "time_meaning": "조회 시점의 주소 대응. 도로의 관측 시점은 미확인",
+                  "reference_date": null
+                }
+              ],
+              "point": {
+                "lat": 37.5,
+                "lng": 127.0
+              },
+              "walk_id": "e37c8a7168bf758a234cde888fa5571a3a034a323595e2bbb3b2e003c99b00c3",
+              "scene_id": "stamp:5a4a32e366c643058dbce28a9fad6de6ff19891ecb6070cd10c790f86a21a672",
+              "accuracy_m": 5.0,
+              "collection": {
+                "road": "complete",
+                "land_cover": "unknown",
+                "area_context": "unknown",
+                "surrounding_object": "unknown"
+              },
+              "recorded_at": "2026-09-09T00:00:00Z",
+              "position_basis": "observed",
+              "collection_reasons": {
+                "road": [
+                  "road_name_only"
+                ],
+                "land_cover": [
+                  "source_unavailable"
+                ],
+                "area_context": [
+                  "source_unavailable"
+                ],
+                "surrounding_object": [
+                  "source_unavailable"
+                ]
+              }
+            },
+            "version": "scene-comparison-v1",
+            "narration": {
+              "scope": "현재 장면",
+              "narrator": "이 산책을 기록한 보호자(나)",
+              "companions": []
+            },
+            "connection": {
+              "scope": "두 기록 사이의 경과 시간. 이동을 설명할 범위는 route_status와 관측 근거를 따른다",
+              "route_status": "partial",
+              "elapsed_seconds": 300.0,
+              "current_scene_id": "stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e",
+              "earlier_scene_id": "stamp:5a4a32e366c643058dbce28a9fad6de6ff19891ecb6070cd10c790f86a21a672",
+              "route_evidence_ids": [
+                "journey:f16c966733c81dffec73aecd44129f0671d59f5a835983f7b2d8c373c4b85b9b"
+              ]
+            },
+            "relation_slots": {
+              "proximity": {
+                "items": [],
+                "reason": "no_comparable_facts",
+                "status": "insufficient_evidence",
+                "policy_version": "scene-comparison-v1"
+              },
+              "background": {
+                "items": [
+                  {
+                    "id": "comparison:18a10804033cc0f2f408d0a2c4c3e3162acc552882203e811ca664a095138fc1",
+                    "axis": "record_location",
+                    "scope": "두 기록 위치에 연결된 주소·지도 분류의 비교. 동일 장소의 시간 변화·중간 통과는 미확인",
+                    "family": "road",
+                    "result": "different_values",
+                    "comparison_basis": {
+                      "reason": "normalized_values",
+                      "attribute": "name",
+                      "source_dates": [],
+                      "source_dates_differ": false,
+                      "source_time_unknown": true
+                    },
+                    "distance_delta_m": null,
+                    "current_evidence_ids": [
+                      "stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e:road:530422b2c15f95a92c19e0fb81228fb9179f0a1fcd642ab1fc664848398bccf4"
+                    ],
+                    "earlier_evidence_ids": [
+                      "stamp:5a4a32e366c643058dbce28a9fad6de6ff19891ecb6070cd10c790f86a21a672:road:843ae4f1ab91d1c6d1d826a6069a7e1d4bb330f47e4c358ceb55a41b8efba3d2"
+                    ],
+                    "composition_values_equal": null
+                  },
+                  {
+                    "id": "comparison:3dc9ad941cea0548f28d234210a9f5a37e8c026c9b4f732f7899afbd6d6ff3b5",
+                    "axis": "record_location",
+                    "scope": "한쪽 스냅샷에만 근거가 있음. 대상의 출현·소멸·이탈은 확정하지 않음",
+                    "family": "land_cover",
+                    "result": "only_one_snapshot_has_evidence",
+                    "comparison_basis": {},
+                    "distance_delta_m": null,
+                    "current_evidence_ids": [
+                      "stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e:slot:33f6927dc809fc817542451b7d930d4707f7ac8ae6300a6a41e75263aff31266"
+                    ],
+                    "earlier_evidence_ids": [],
+                    "composition_values_equal": null
+                  }
+                ],
+                "reason": "see_individual_correspondences",
+                "status": "insufficient_evidence",
+                "policy_version": "scene-comparison-v1"
+              },
+              "area_context": {
+                "items": [],
+                "reason": "no_comparable_facts",
+                "status": "insufficient_evidence",
+                "policy_version": "scene-comparison-v1"
+              }
+            },
+            "route_evidence": {
+              "id": "journey:f16c966733c81dffec73aecd44129f0671d59f5a835983f7b2d8c373c4b85b9b",
+              "status": "partial",
+              "ended_at": "2026-09-09T00:05:00+00:00",
+              "segments": [
+                {
+                  "chain": 0,
+                  "to_seq": 1,
+                  "from_seq": 0
+                },
+                {
+                  "chain": 0,
+                  "to_seq": 2,
+                  "from_seq": 1
+                },
+                {
+                  "chain": 0,
+                  "to_seq": 3,
+                  "from_seq": 2
+                },
+                {
+                  "chain": 0,
+                  "to_seq": 4,
+                  "from_seq": 3
+                },
+                {
+                  "chain": 0,
+                  "to_seq": 5,
+                  "from_seq": 4
+                },
+                {
+                  "chain": 0,
+                  "to_seq": 6,
+                  "from_seq": 5
+                },
+                {
+                  "chain": 0,
+                  "to_seq": 7,
+                  "from_seq": 6
+                },
+                {
+                  "chain": 0,
+                  "to_seq": 8,
+                  "from_seq": 7
+                },
+                {
+                  "chain": 0,
+                  "to_seq": 9,
+                  "from_seq": 8
+                },
+                {
+                  "chain": 0,
+                  "to_seq": 10,
+                  "from_seq": 9
+                },
+                {
+                  "chain": 0,
+                  "to_seq": 11,
+                  "from_seq": 10
+                },
+                {
+                  "chain": 0,
+                  "to_seq": 12,
+                  "from_seq": 11
+                },
+                {
+                  "chain": 0,
+                  "to_seq": 13,
+                  "from_seq": 12
+                },
+                {
+                  "chain": 0,
+                  "to_seq": 14,
+                  "from_seq": 13
+                },
+                {
+                  "chain": 0,
+                  "to_seq": 15,
+                  "from_seq": 14
+                },
+                {
+                  "chain": 0,
+                  "to_seq": 16,
+                  "from_seq": 15
+                },
+                {
+                  "chain": 0,
+                  "to_seq": 17,
+                  "from_seq": 16
+                },
+                {
+                  "chain": 0,
+                  "to_seq": 18,
+                  "from_seq": 17
+                },
+                {
+                  "chain": 0,
+                  "to_seq": 19,
+                  "from_seq": 18
+                },
+                {
+                  "chain": 0,
+                  "to_seq": 20,
+                  "from_seq": 19
+                },
+                {
+                  "chain": 0,
+                  "to_seq": 21,
+                  "from_seq": 20
+                },
+                {
+                  "chain": 0,
+                  "to_seq": 22,
+                  "from_seq": 21
+                },
+                {
+                  "chain": 0,
+                  "to_seq": 23,
+                  "from_seq": 22
+                },
+                {
+                  "chain": 0,
+                  "to_seq": 24,
+                  "from_seq": 23
+                },
+                {
+                  "chain": 0,
+                  "to_seq": 25,
+                  "from_seq": 24
+                },
+                {
+                  "chain": 0,
+                  "to_seq": 26,
+                  "from_seq": 25
+                },
+                {
+                  "chain": 0,
+                  "to_seq": 27,
+                  "from_seq": 26
+                },
+                {
+                  "chain": 0,
+                  "to_seq": 28,
+                  "from_seq": 27
+                },
+                {
+                  "chain": 0,
+                  "to_seq": 29,
+                  "from_seq": 28
+                },
+                {
+                  "chain": 0,
+                  "to_seq": 30,
+                  "from_seq": 29
+                }
+              ],
+              "started_at": "2026-09-09T00:00:00+00:00",
+              "elapsed_seconds": 300.0,
+              "source_revision": "5434b6ab9771165e07f794829c66b0a648cb99a2463cd8024199fa1eff371e41",
+              "endpoint_binding": {
+                "current": false,
+                "previous": true
+              },
+              "observed_seconds": 300.0,
+              "moving_distance_m": 360.0,
+              "observed_distance_m": 360.0,
+              "uncovered_intervals": []
+            }
+          },
+          "version": "scene-comparison-publication-v1",
+          "selection": null,
+          "delivery_after": {
+            "recent_deliveries": [
+              {
+                "focus": "현재 위치의 도로명 확인",
+                "task_id": "space:stamp:5a4a32e366c643058dbce28a9fad6de6ff19891ecb6070cd10c790f86a21a672",
+                "scene_id": "stamp:5a4a32e366c643058dbce28a9fad6de6ff19891ecb6070cd10c790f86a21a672",
+                "evidence_ids": [
+                  "stamp:5a4a32e366c643058dbce28a9fad6de6ff19891ecb6070cd10c790f86a21a672:road:843ae4f1ab91d1c6d1d826a6069a7e1d4bb330f47e4c358ceb55a41b8efba3d2"
+                ],
+                "relation_ids": [],
+                "semantic_status": "model_reviewed",
+                "context_signature": "4421e0266d45058d8ac731d18a1ec21c3511c25bb1ef1326600a8c072780d3f4"
+              }
+            ],
+            "active_introduction": null,
+            "all_context_facts_delivered": false
+          },
+          "delivery_before": {
+            "recent_deliveries": [
+              {
+                "focus": "현재 위치의 도로명 확인",
+                "task_id": "space:stamp:5a4a32e366c643058dbce28a9fad6de6ff19891ecb6070cd10c790f86a21a672",
+                "scene_id": "stamp:5a4a32e366c643058dbce28a9fad6de6ff19891ecb6070cd10c790f86a21a672",
+                "evidence_ids": [
+                  "stamp:5a4a32e366c643058dbce28a9fad6de6ff19891ecb6070cd10c790f86a21a672:road:843ae4f1ab91d1c6d1d826a6069a7e1d4bb330f47e4c358ceb55a41b8efba3d2"
+                ],
+                "relation_ids": [],
+                "semantic_status": "model_reviewed",
+                "context_signature": "4421e0266d45058d8ac731d18a1ec21c3511c25bb1ef1326600a8c072780d3f4"
+              }
+            ],
+            "active_introduction": {
+              "focus": "현재 위치의 도로명 확인",
+              "task_id": "space:stamp:5a4a32e366c643058dbce28a9fad6de6ff19891ecb6070cd10c790f86a21a672",
+              "scene_id": "stamp:5a4a32e366c643058dbce28a9fad6de6ff19891ecb6070cd10c790f86a21a672",
+              "evidence_ids": [
+                "stamp:5a4a32e366c643058dbce28a9fad6de6ff19891ecb6070cd10c790f86a21a672:road:843ae4f1ab91d1c6d1d826a6069a7e1d4bb330f47e4c358ceb55a41b8efba3d2"
+              ],
+              "relation_ids": [],
+              "semantic_status": "model_reviewed",
+              "context_signature": "4421e0266d45058d8ac731d18a1ec21c3511c25bb1ef1326600a8c072780d3f4"
+            },
+            "all_context_facts_delivered": false
+          },
+          "semantic_status": "not_published",
+          "context_revision": "e7ac1369fee37939d547c42af334763e56e6a87a7b974be6561eb0778b6efa29"
+        },
+        "relation_slots": {
+          "movement": {
+            "items": [
+              {
+                "id": "motion1",
+                "code": "straight_run",
+                "text": "현재 기록 300~0초 전: 대체로 곧게 이어지는 이동",
+                "origin": "computed_observation",
+                "meaning": "대체로 곧게 이어지는 이동",
+                "subject": "recording_device",
+                "to_pin_s": 0.0,
+                "duration_s": 300.0,
+                "from_pin_s": -300.0,
+                "source_ids": [
+                  "movement-shape:78ca18f7e483abdd4c44a985871b07532075508e10e60c08083f4d69c8889252"
+                ],
+                "source_claim": {
+                  "id": "movement-shape:78ca18f7e483abdd4c44a985871b07532075508e10e60c08083f4d69c8889252",
+                  "kind": "path",
+                  "block": 0,
+                  "end_s": 600.0,
+                  "proof": {
+                    "axis": "route_pattern",
+                    "kind": "path",
+                    "anchor": {
+                      "at": "2026-09-09T00:00:00+00:00",
+                      "lat": 37.5,
+                      "lng": 127.0,
+                      "client_seq": 0,
+                      "route_offset_m": 0.0
+                    },
+                    "status": "candidate",
+                    "meaning": "straight_run",
+                    "metrics": {
+                      "max_deviation_m": 1.1368683772161603e-13
+                    },
+                    "quality": {
+                      "fix_count": 61,
+                      "accuracy_p50_m": 5.0,
+                      "unknown_accuracy_count": 0
+                    },
+                    "subject": "recording_device",
+                    "support": {
+                      "to_seq": 60,
+                      "ended_at": "2026-09-09T00:10:00+00:00",
+                      "from_seq": 0,
+                      "window_s": 600.0,
+                      "started_at": "2026-09-09T00:00:00+00:00",
+                      "chain_index": 0,
+                      "time_meaning": "observed_support_window",
+                      "pattern_run_index": 0
+                    },
+                    "is_event": false
+                  },
+                  "meaning": "straight_run",
+                  "start_s": 0.0
+                }
+              }
+            ],
+            "reason": "Verified device observations only; no claim does not imply normal pace",
+            "status": "confirmed",
+            "policy_version": "relation-slots-v1"
+          },
+          "route_revisit": {
+            "items": [],
+            "reason": "Verified retrace claims in record interval; general route reconnection is not implemented",
+            "status": "no_change",
+            "policy_version": "relation-slots-v1"
+          },
+          "spatial_comparison": {
+            "proximity": {
+              "items": [],
+              "reason": "no_comparable_facts",
+              "status": "insufficient_evidence",
+              "policy_version": "scene-comparison-v1"
+            },
+            "background": {
+              "items": [
+                {
+                  "id": "comparison:18a10804033cc0f2f408d0a2c4c3e3162acc552882203e811ca664a095138fc1",
+                  "axis": "record_location",
+                  "scope": "두 기록 위치에 연결된 주소·지도 분류의 비교. 동일 장소의 시간 변화·중간 통과는 미확인",
+                  "family": "road",
+                  "result": "different_values",
+                  "comparison_basis": {
+                    "reason": "normalized_values",
+                    "attribute": "name",
+                    "source_dates": [],
+                    "source_dates_differ": false,
+                    "source_time_unknown": true
+                  },
+                  "distance_delta_m": null,
+                  "current_evidence_ids": [
+                    "stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e:road:530422b2c15f95a92c19e0fb81228fb9179f0a1fcd642ab1fc664848398bccf4"
+                  ],
+                  "earlier_evidence_ids": [
+                    "stamp:5a4a32e366c643058dbce28a9fad6de6ff19891ecb6070cd10c790f86a21a672:road:843ae4f1ab91d1c6d1d826a6069a7e1d4bb330f47e4c358ceb55a41b8efba3d2"
+                  ],
+                  "composition_values_equal": null
+                },
+                {
+                  "id": "comparison:3dc9ad941cea0548f28d234210a9f5a37e8c026c9b4f732f7899afbd6d6ff3b5",
+                  "axis": "record_location",
+                  "scope": "한쪽 스냅샷에만 근거가 있음. 대상의 출현·소멸·이탈은 확정하지 않음",
+                  "family": "land_cover",
+                  "result": "only_one_snapshot_has_evidence",
+                  "comparison_basis": {},
+                  "distance_delta_m": null,
+                  "current_evidence_ids": [
+                    "stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e:slot:33f6927dc809fc817542451b7d930d4707f7ac8ae6300a6a41e75263aff31266"
+                  ],
+                  "earlier_evidence_ids": [],
+                  "composition_values_equal": null
+                }
+              ],
+              "reason": "see_individual_correspondences",
+              "status": "insufficient_evidence",
+              "policy_version": "scene-comparison-v1"
+            },
+            "area_context": {
+              "items": [],
+              "reason": "no_comparable_facts",
+              "status": "insufficient_evidence",
+              "policy_version": "scene-comparison-v1"
+            }
+          }
+        },
+        "relation_selection": {
+          "space": [],
+          "action": [
+            "a1"
+          ],
+          "device_observations": [
+            "motion1"
+          ]
+        },
+        "standalone_context": {
+          "space": [
+            {
+              "id": "stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e:slot:33f6927dc809fc817542451b7d930d4707f7ac8ae6300a6a41e75263aff31266",
+              "role": "point_land_cover",
+              "material": {
+                "피복": "풀밭"
+              },
+              "relation": "이 위치의 배경 유형. 실제 통과·현장 풍경·식생의 밀도는 미확인"
+            }
+          ],
+          "road_reference": {
+            "id": "stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e:road:530422b2c15f95a92c19e0fb81228fb9179f0a1fcd642ab1fc664848398bccf4",
+            "scope": "좌표에 대응한 주소의 도로명. 실제 통과·진입 도로는 미확인",
+            "road_nm": "반포대로"
+          }
+        },
+        "movement_observations": [
+          {
+            "id": "motion1",
+            "code": "straight_run",
+            "text": "현재 기록 300~0초 전: 대체로 곧게 이어지는 이동",
+            "origin": "computed_observation",
+            "meaning": "대체로 곧게 이어지는 이동",
+            "subject": "recording_device",
+            "to_pin_s": 0.0,
+            "duration_s": 300.0,
+            "from_pin_s": -300.0,
+            "source_ids": [
+              "movement-shape:78ca18f7e483abdd4c44a985871b07532075508e10e60c08083f4d69c8889252"
+            ],
+            "source_claim": {
+              "id": "movement-shape:78ca18f7e483abdd4c44a985871b07532075508e10e60c08083f4d69c8889252",
+              "kind": "path",
+              "block": 0,
+              "end_s": 600.0,
+              "proof": {
+                "axis": "route_pattern",
+                "kind": "path",
+                "anchor": {
+                  "at": "2026-09-09T00:00:00+00:00",
+                  "lat": 37.5,
+                  "lng": 127.0,
+                  "client_seq": 0,
+                  "route_offset_m": 0.0
+                },
+                "status": "candidate",
+                "meaning": "straight_run",
+                "metrics": {
+                  "max_deviation_m": 1.1368683772161603e-13
+                },
+                "quality": {
+                  "fix_count": 61,
+                  "accuracy_p50_m": 5.0,
+                  "unknown_accuracy_count": 0
+                },
+                "subject": "recording_device",
+                "support": {
+                  "to_seq": 60,
+                  "ended_at": "2026-09-09T00:10:00+00:00",
+                  "from_seq": 0,
+                  "window_s": 600.0,
+                  "started_at": "2026-09-09T00:00:00+00:00",
+                  "chain_index": 0,
+                  "time_meaning": "observed_support_window",
+                  "pattern_run_index": 0
+                },
+                "is_event": false
+              },
+              "meaning": "straight_run",
+              "start_s": 0.0
+            }
+          }
+        ]
+      },
+      {
+        "body": "",
+        "parts": {
+          "space": {
+            "text": "",
+            "status": "failed",
+            "task_id": "space:stamp:fd8ef4df5d22db3990a1b038a20e27333f51dd43abc8617d2d61b63765d5ba6c"
+          },
+          "action": {
+            "text": "",
+            "status": "not_requested",
+            "task_id": null
+          }
+        },
+        "anchor": {
+          "point": {
+            "lat": 37.506475,
+            "lng": 127.0
+          },
+          "method": "observed",
+          "event_at": "2026-09-09T00:10:00Z",
+          "accuracy_m": 5.0,
+          "time_basis": "route_observation",
+          "location_at": "2026-09-09T00:10:00Z",
+          "source_fixes": [
+            {
+              "at": "2026-09-09T00:10:00Z",
+              "client_seq": 60,
+              "chain_index": 0
+            }
+          ],
+          "position_state": "resolved"
+        },
+        "scene_id": "stamp:fd8ef4df5d22db3990a1b038a20e27333f51dd43abc8617d2d61b63765d5ba6c",
+        "originals": [],
+        "comparison": {
+          "header": {
+            "dong": "반포2동",
+            "weather": null,
+            "scene_id": "stamp:fd8ef4df5d22db3990a1b038a20e27333f51dd43abc8617d2d61b63765d5ba6c"
+          },
+          "context": {
+            "current": {
+              "facts": [
+                {
+                  "id": "stamp:fd8ef4df5d22db3990a1b038a20e27333f51dd43abc8617d2d61b63765d5ba6c:road:ded01d161589dbe668568fdea4026daecb42649b85b90f87957ad510451e2049",
+                  "scope": {
+                    "kind": "record_point",
+                    "description": "좌표에 대응한 주소의 도로명. 실제 통과·진입 도로는 미확인",
+                    "coverage_key": "f27ecf2a98e0a10d96e518169b375f639290da7e2f4c6cf13fdb45bf644f8429"
+                  },
+                  "value": {
+                    "name": "반포대로"
+                  },
+                  "family": "road",
+                  "observed_at": null,
+                  "source_refs": [
+                    "sgis:road:126278d7e5d76d4d20ba5e2f12887892048211f15b42ccc254155d94e1ab2391"
+                  ],
+                  "subject_key": null,
+                  "retrieved_at": "2026-09-15T05:32:44.160369Z",
+                  "time_meaning": "조회 시점의 주소 대응. 도로의 관측 시점은 미확인",
+                  "reference_date": null
+                },
+                {
+                  "id": "stamp:fd8ef4df5d22db3990a1b038a20e27333f51dd43abc8617d2d61b63765d5ba6c:slot:b9841d2f2af5fd604e5ba17ab82114cfe2a692ee89f042c76dd8c6493fadb45c",
+                  "scope": {
+                    "kind": "record_point",
+                    "description": "이 위치의 배경 유형. 실제 통과·현장 풍경·식생의 밀도는 미확인",
+                    "coverage_key": "be7d65682ce5b036624cc917e25d0f8ed43ef75bfe1d3b791e39a2c7764693fa"
+                  },
+                  "value": {
+                    "layer": "EGIS:lv3_2025y",
+                    "피복": "길",
+                    "classification": {
+                      "피복": "도로"
+                    }
+                  },
+                  "family": "land_cover",
+                  "observed_at": null,
+                  "source_refs": [
+                    "normalized:855f0f3a670e31d755d04adf8f2035d8c72dae041684ae53f38d8a0cddd398a6@65fcca06341877d7407593565e1b6ac13db1410240875cd27d0342960139d2c7"
+                  ],
+                  "subject_key": "public-normalized-land_cover:EGIS:lv3_2025y:lv3_2025y.7301442",
+                  "retrieved_at": "2026-09-15T05:32:44.052985Z",
+                  "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인",
+                  "reference_date": "2024-12-30Z"
+                }
+              ],
+              "point": {
+                "lat": 37.506475,
+                "lng": 127.0
+              },
+              "walk_id": "e37c8a7168bf758a234cde888fa5571a3a034a323595e2bbb3b2e003c99b00c3",
+              "scene_id": "stamp:fd8ef4df5d22db3990a1b038a20e27333f51dd43abc8617d2d61b63765d5ba6c",
+              "accuracy_m": 5.0,
+              "collection": {
+                "road": "complete",
+                "land_cover": "partial",
+                "area_context": "unknown",
+                "surrounding_object": "unknown"
+              },
+              "recorded_at": "2026-09-09T00:10:00Z",
+              "position_basis": "observed",
+              "collection_reasons": {
+                "road": [
+                  "road_name_only"
+                ],
+                "land_cover": [
+                  "feature_does_not_cover_query"
+                ],
+                "area_context": [
+                  "source_unavailable"
+                ],
+                "surrounding_object": [
+                  "source_unavailable"
+                ]
+              }
+            },
+            "earlier": {
+              "facts": [
+                {
+                  "id": "stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e:road:530422b2c15f95a92c19e0fb81228fb9179f0a1fcd642ab1fc664848398bccf4",
+                  "scope": {
+                    "kind": "record_point",
+                    "description": "좌표에 대응한 주소의 도로명. 실제 통과·진입 도로는 미확인",
+                    "coverage_key": "e71582e46b9abfc3668e84de18bbb2bde0af7ef86c12564f105e7159ec0a4150"
+                  },
+                  "value": {
+                    "name": "반포대로"
+                  },
+                  "family": "road",
+                  "observed_at": null,
+                  "source_refs": [
+                    "sgis:road:d78716fa99a4017d65f23c75b5adff9f55d1814882d223b56ad05d6939dff2ae"
+                  ],
+                  "subject_key": null,
+                  "retrieved_at": "2026-09-15T05:32:44.149629Z",
+                  "time_meaning": "조회 시점의 주소 대응. 도로의 관측 시점은 미확인",
+                  "reference_date": null
+                },
+                {
+                  "id": "stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e:slot:33f6927dc809fc817542451b7d930d4707f7ac8ae6300a6a41e75263aff31266",
+                  "scope": {
+                    "kind": "record_point",
+                    "description": "이 위치의 배경 유형. 실제 통과·현장 풍경·식생의 밀도는 미확인",
+                    "coverage_key": "3b554bd5ed9981a3b3558c581adaa63493bdd93b9347b78d2470c88808b5b8be"
+                  },
+                  "value": {
+                    "layer": "EGIS:lv3_2025y",
+                    "피복": "풀밭",
+                    "classification": {
+                      "피복": "기타초지"
+                    }
+                  },
+                  "family": "land_cover",
+                  "observed_at": null,
+                  "source_refs": [
+                    "normalized:63c7783ea635aa66678fd70b162584de4568406eab7d51cebc9d7187ead5213d@6c2d6bc66b1882250053bdb2bdbcc00908af131d29ee32f7c9c446c2de25c5df"
+                  ],
+                  "subject_key": "public-normalized-land_cover:EGIS:lv3_2025y:lv3_2025y.7301518",
+                  "retrieved_at": "2026-09-15T05:32:43.958559Z",
+                  "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인",
+                  "reference_date": "2024-12-30Z"
+                }
+              ],
+              "point": {
+                "lat": 37.503238,
+                "lng": 127.0
+              },
+              "walk_id": "e37c8a7168bf758a234cde888fa5571a3a034a323595e2bbb3b2e003c99b00c3",
+              "scene_id": "stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e",
+              "accuracy_m": 5.0,
+              "collection": {
+                "road": "complete",
+                "land_cover": "partial",
+                "area_context": "unknown",
+                "surrounding_object": "unknown"
+              },
+              "recorded_at": "2026-09-09T00:05:00Z",
+              "position_basis": "last_known",
+              "collection_reasons": {
+                "road": [
+                  "road_name_only"
+                ],
+                "land_cover": [
+                  "feature_does_not_cover_query"
+                ],
+                "area_context": [
+                  "source_unavailable"
+                ],
+                "surrounding_object": [
+                  "source_unavailable"
+                ]
+              }
+            },
+            "version": "scene-comparison-v1",
+            "narration": {
+              "scope": "현재 장면",
+              "narrator": "이 산책을 기록한 보호자(나)",
+              "companions": []
+            },
+            "connection": {
+              "scope": "두 기록 사이의 경과 시간. 이동을 설명할 범위는 route_status와 관측 근거를 따른다",
+              "route_status": "partial",
+              "elapsed_seconds": 300.0,
+              "current_scene_id": "stamp:fd8ef4df5d22db3990a1b038a20e27333f51dd43abc8617d2d61b63765d5ba6c",
+              "earlier_scene_id": "stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e",
+              "route_evidence_ids": [
+                "journey:f14a58f6476484cfbb3178bf83093b07e4cddcd8a3bf4185e68915a1f7bad8dc"
+              ]
+            },
+            "relation_slots": {
+              "proximity": {
+                "items": [],
+                "reason": "no_comparable_facts",
+                "status": "insufficient_evidence",
+                "policy_version": "scene-comparison-v1"
+              },
+              "background": {
+                "items": [
+                  {
+                    "id": "comparison:11402c6d8c60be3da8330686fb379210b83dc3384bc112b3e9129a658f11e0a7",
+                    "axis": "record_location",
+                    "scope": "두 기록 위치에 연결된 주소·지도 분류의 비교. 동일 장소의 시간 변화·중간 통과는 미확인",
+                    "family": "road",
+                    "result": "same_value",
+                    "comparison_basis": {
+                      "reason": "normalized_values",
+                      "attribute": "name",
+                      "source_dates": [],
+                      "source_dates_differ": false,
+                      "source_time_unknown": true
+                    },
+                    "distance_delta_m": null,
+                    "current_evidence_ids": [
+                      "stamp:fd8ef4df5d22db3990a1b038a20e27333f51dd43abc8617d2d61b63765d5ba6c:road:ded01d161589dbe668568fdea4026daecb42649b85b90f87957ad510451e2049"
+                    ],
+                    "earlier_evidence_ids": [
+                      "stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e:road:530422b2c15f95a92c19e0fb81228fb9179f0a1fcd642ab1fc664848398bccf4"
+                    ],
+                    "composition_values_equal": null
+                  },
+                  {
+                    "id": "comparison:dffc3de7bb8798718b32395195b004875a26086a97a234169f08c4015bf18dbe",
+                    "axis": "record_location",
+                    "scope": "두 기록 위치에 연결된 주소·지도 분류의 비교. 동일 장소의 시간 변화·중간 통과는 미확인",
+                    "family": "land_cover",
+                    "result": "different_values",
+                    "comparison_basis": {
+                      "reason": "normalized_values",
+                      "attribute": "classification",
+                      "source_dates": [
+                        "2024-12-30Z"
+                      ],
+                      "source_dates_differ": false,
+                      "source_time_unknown": false
+                    },
+                    "distance_delta_m": null,
+                    "current_evidence_ids": [
+                      "stamp:fd8ef4df5d22db3990a1b038a20e27333f51dd43abc8617d2d61b63765d5ba6c:slot:b9841d2f2af5fd604e5ba17ab82114cfe2a692ee89f042c76dd8c6493fadb45c"
+                    ],
+                    "earlier_evidence_ids": [
+                      "stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e:slot:33f6927dc809fc817542451b7d930d4707f7ac8ae6300a6a41e75263aff31266"
+                    ],
+                    "composition_values_equal": null
+                  }
+                ],
+                "reason": "see_individual_correspondences",
+                "status": "confirmed",
+                "policy_version": "scene-comparison-v1"
+              },
+              "area_context": {
+                "items": [],
+                "reason": "no_comparable_facts",
+                "status": "insufficient_evidence",
+                "policy_version": "scene-comparison-v1"
+              }
+            },
+            "route_evidence": {
+              "id": "journey:f14a58f6476484cfbb3178bf83093b07e4cddcd8a3bf4185e68915a1f7bad8dc",
+              "status": "partial",
+              "ended_at": "2026-09-09T00:10:00+00:00",
+              "segments": [
+                {
+                  "chain": 0,
+                  "to_seq": 31,
+                  "from_seq": 30
+                },
+                {
+                  "chain": 0,
+                  "to_seq": 32,
+                  "from_seq": 31
+                },
+                {
+                  "chain": 0,
+                  "to_seq": 33,
+                  "from_seq": 32
+                },
+                {
+                  "chain": 0,
+                  "to_seq": 34,
+                  "from_seq": 33
+                },
+                {
+                  "chain": 0,
+                  "to_seq": 35,
+                  "from_seq": 34
+                },
+                {
+                  "chain": 0,
+                  "to_seq": 36,
+                  "from_seq": 35
+                },
+                {
+                  "chain": 0,
+                  "to_seq": 37,
+                  "from_seq": 36
+                },
+                {
+                  "chain": 0,
+                  "to_seq": 38,
+                  "from_seq": 37
+                },
+                {
+                  "chain": 0,
+                  "to_seq": 39,
+                  "from_seq": 38
+                },
+                {
+                  "chain": 0,
+                  "to_seq": 40,
+                  "from_seq": 39
+                },
+                {
+                  "chain": 0,
+                  "to_seq": 41,
+                  "from_seq": 40
+                },
+                {
+                  "chain": 0,
+                  "to_seq": 42,
+                  "from_seq": 41
+                },
+                {
+                  "chain": 0,
+                  "to_seq": 43,
+                  "from_seq": 42
+                },
+                {
+                  "chain": 0,
+                  "to_seq": 44,
+                  "from_seq": 43
+                },
+                {
+                  "chain": 0,
+                  "to_seq": 45,
+                  "from_seq": 44
+                },
+                {
+                  "chain": 0,
+                  "to_seq": 46,
+                  "from_seq": 45
+                },
+                {
+                  "chain": 0,
+                  "to_seq": 47,
+                  "from_seq": 46
+                },
+                {
+                  "chain": 0,
+                  "to_seq": 48,
+                  "from_seq": 47
+                },
+                {
+                  "chain": 0,
+                  "to_seq": 49,
+                  "from_seq": 48
+                },
+                {
+                  "chain": 0,
+                  "to_seq": 50,
+                  "from_seq": 49
+                },
+                {
+                  "chain": 0,
+                  "to_seq": 51,
+                  "from_seq": 50
+                },
+                {
+                  "chain": 0,
+                  "to_seq": 52,
+                  "from_seq": 51
+                },
+                {
+                  "chain": 0,
+                  "to_seq": 53,
+                  "from_seq": 52
+                },
+                {
+                  "chain": 0,
+                  "to_seq": 54,
+                  "from_seq": 53
+                },
+                {
+                  "chain": 0,
+                  "to_seq": 55,
+                  "from_seq": 54
+                },
+                {
+                  "chain": 0,
+                  "to_seq": 56,
+                  "from_seq": 55
+                },
+                {
+                  "chain": 0,
+                  "to_seq": 57,
+                  "from_seq": 56
+                },
+                {
+                  "chain": 0,
+                  "to_seq": 58,
+                  "from_seq": 57
+                },
+                {
+                  "chain": 0,
+                  "to_seq": 59,
+                  "from_seq": 58
+                },
+                {
+                  "chain": 0,
+                  "to_seq": 60,
+                  "from_seq": 59
+                }
+              ],
+              "started_at": "2026-09-09T00:05:00+00:00",
+              "elapsed_seconds": 300.0,
+              "source_revision": "5434b6ab9771165e07f794829c66b0a648cb99a2463cd8024199fa1eff371e41",
+              "endpoint_binding": {
+                "current": true,
+                "previous": false
+              },
+              "observed_seconds": 300.0,
+              "moving_distance_m": 359.9,
+              "observed_distance_m": 359.9,
+              "uncovered_intervals": []
+            }
+          },
+          "version": "scene-comparison-publication-v1",
+          "selection": null,
+          "delivery_after": {
+            "recent_deliveries": [
+              {
+                "focus": "현재 위치의 도로명 확인",
+                "task_id": "space:stamp:5a4a32e366c643058dbce28a9fad6de6ff19891ecb6070cd10c790f86a21a672",
+                "scene_id": "stamp:5a4a32e366c643058dbce28a9fad6de6ff19891ecb6070cd10c790f86a21a672",
+                "evidence_ids": [
+                  "stamp:5a4a32e366c643058dbce28a9fad6de6ff19891ecb6070cd10c790f86a21a672:road:843ae4f1ab91d1c6d1d826a6069a7e1d4bb330f47e4c358ceb55a41b8efba3d2"
+                ],
+                "relation_ids": [],
+                "semantic_status": "model_reviewed",
+                "context_signature": "4421e0266d45058d8ac731d18a1ec21c3511c25bb1ef1326600a8c072780d3f4"
+              }
+            ],
+            "active_introduction": null,
+            "all_context_facts_delivered": false
+          },
+          "delivery_before": {
+            "recent_deliveries": [
+              {
+                "focus": "현재 위치의 도로명 확인",
+                "task_id": "space:stamp:5a4a32e366c643058dbce28a9fad6de6ff19891ecb6070cd10c790f86a21a672",
+                "scene_id": "stamp:5a4a32e366c643058dbce28a9fad6de6ff19891ecb6070cd10c790f86a21a672",
+                "evidence_ids": [
+                  "stamp:5a4a32e366c643058dbce28a9fad6de6ff19891ecb6070cd10c790f86a21a672:road:843ae4f1ab91d1c6d1d826a6069a7e1d4bb330f47e4c358ceb55a41b8efba3d2"
+                ],
+                "relation_ids": [],
+                "semantic_status": "model_reviewed",
+                "context_signature": "4421e0266d45058d8ac731d18a1ec21c3511c25bb1ef1326600a8c072780d3f4"
+              }
+            ],
+            "active_introduction": null,
+            "all_context_facts_delivered": false
+          },
+          "semantic_status": "not_published",
+          "context_revision": "fbcb9c2f5835c7d44eab8d1d2b8fbb7515a92a6241695bc10f32e50b9c9370e1"
+        },
+        "relation_slots": {
+          "movement": {
+            "items": [
+              {
+                "id": "motion1",
+                "code": "straight_run",
+                "text": "현재 기록 300~0초 전: 대체로 곧게 이어지는 이동",
+                "origin": "computed_observation",
+                "meaning": "대체로 곧게 이어지는 이동",
+                "subject": "recording_device",
+                "to_pin_s": 0.0,
+                "duration_s": 300.0,
+                "from_pin_s": -300.0,
+                "source_ids": [
+                  "movement-shape:78ca18f7e483abdd4c44a985871b07532075508e10e60c08083f4d69c8889252"
+                ],
+                "source_claim": {
+                  "id": "movement-shape:78ca18f7e483abdd4c44a985871b07532075508e10e60c08083f4d69c8889252",
+                  "kind": "path",
+                  "block": 0,
+                  "end_s": 600.0,
+                  "proof": {
+                    "axis": "route_pattern",
+                    "kind": "path",
+                    "anchor": {
+                      "at": "2026-09-09T00:00:00+00:00",
+                      "lat": 37.5,
+                      "lng": 127.0,
+                      "client_seq": 0,
+                      "route_offset_m": 0.0
+                    },
+                    "status": "candidate",
+                    "meaning": "straight_run",
+                    "metrics": {
+                      "max_deviation_m": 1.1368683772161603e-13
+                    },
+                    "quality": {
+                      "fix_count": 61,
+                      "accuracy_p50_m": 5.0,
+                      "unknown_accuracy_count": 0
+                    },
+                    "subject": "recording_device",
+                    "support": {
+                      "to_seq": 60,
+                      "ended_at": "2026-09-09T00:10:00+00:00",
+                      "from_seq": 0,
+                      "window_s": 600.0,
+                      "started_at": "2026-09-09T00:00:00+00:00",
+                      "chain_index": 0,
+                      "time_meaning": "observed_support_window",
+                      "pattern_run_index": 0
+                    },
+                    "is_event": false
+                  },
+                  "meaning": "straight_run",
+                  "start_s": 0.0
+                }
+              }
+            ],
+            "reason": "Verified device observations only; no claim does not imply normal pace",
+            "status": "confirmed",
+            "policy_version": "relation-slots-v1"
+          },
+          "route_revisit": {
+            "items": [],
+            "reason": "Verified retrace claims in record interval; general route reconnection is not implemented",
+            "status": "no_change",
+            "policy_version": "relation-slots-v1"
+          },
+          "spatial_comparison": {
+            "proximity": {
+              "items": [],
+              "reason": "no_comparable_facts",
+              "status": "insufficient_evidence",
+              "policy_version": "scene-comparison-v1"
+            },
+            "background": {
+              "items": [
+                {
+                  "id": "comparison:11402c6d8c60be3da8330686fb379210b83dc3384bc112b3e9129a658f11e0a7",
+                  "axis": "record_location",
+                  "scope": "두 기록 위치에 연결된 주소·지도 분류의 비교. 동일 장소의 시간 변화·중간 통과는 미확인",
+                  "family": "road",
+                  "result": "same_value",
+                  "comparison_basis": {
+                    "reason": "normalized_values",
+                    "attribute": "name",
+                    "source_dates": [],
+                    "source_dates_differ": false,
+                    "source_time_unknown": true
+                  },
+                  "distance_delta_m": null,
+                  "current_evidence_ids": [
+                    "stamp:fd8ef4df5d22db3990a1b038a20e27333f51dd43abc8617d2d61b63765d5ba6c:road:ded01d161589dbe668568fdea4026daecb42649b85b90f87957ad510451e2049"
+                  ],
+                  "earlier_evidence_ids": [
+                    "stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e:road:530422b2c15f95a92c19e0fb81228fb9179f0a1fcd642ab1fc664848398bccf4"
+                  ],
+                  "composition_values_equal": null
+                },
+                {
+                  "id": "comparison:dffc3de7bb8798718b32395195b004875a26086a97a234169f08c4015bf18dbe",
+                  "axis": "record_location",
+                  "scope": "두 기록 위치에 연결된 주소·지도 분류의 비교. 동일 장소의 시간 변화·중간 통과는 미확인",
+                  "family": "land_cover",
+                  "result": "different_values",
+                  "comparison_basis": {
+                    "reason": "normalized_values",
+                    "attribute": "classification",
+                    "source_dates": [
+                      "2024-12-30Z"
+                    ],
+                    "source_dates_differ": false,
+                    "source_time_unknown": false
+                  },
+                  "distance_delta_m": null,
+                  "current_evidence_ids": [
+                    "stamp:fd8ef4df5d22db3990a1b038a20e27333f51dd43abc8617d2d61b63765d5ba6c:slot:b9841d2f2af5fd604e5ba17ab82114cfe2a692ee89f042c76dd8c6493fadb45c"
+                  ],
+                  "earlier_evidence_ids": [
+                    "stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e:slot:33f6927dc809fc817542451b7d930d4707f7ac8ae6300a6a41e75263aff31266"
+                  ],
+                  "composition_values_equal": null
+                }
+              ],
+              "reason": "see_individual_correspondences",
+              "status": "confirmed",
+              "policy_version": "scene-comparison-v1"
+            },
+            "area_context": {
+              "items": [],
+              "reason": "no_comparable_facts",
+              "status": "insufficient_evidence",
+              "policy_version": "scene-comparison-v1"
+            }
+          }
+        },
+        "relation_selection": {
+          "space": [],
+          "action": [],
+          "device_observations": [
+            "motion1"
+          ]
+        },
+        "standalone_context": {
+          "space": [
+            {
+              "id": "stamp:fd8ef4df5d22db3990a1b038a20e27333f51dd43abc8617d2d61b63765d5ba6c:slot:b9841d2f2af5fd604e5ba17ab82114cfe2a692ee89f042c76dd8c6493fadb45c",
+              "role": "point_land_cover",
+              "material": {
+                "피복": "길"
+              },
+              "relation": "이 위치의 배경 유형. 실제 통과·현장 풍경·식생의 밀도는 미확인"
+            }
+          ],
+          "road_reference": {
+            "id": "stamp:fd8ef4df5d22db3990a1b038a20e27333f51dd43abc8617d2d61b63765d5ba6c:road:ded01d161589dbe668568fdea4026daecb42649b85b90f87957ad510451e2049",
+            "scope": "좌표에 대응한 주소의 도로명. 실제 통과·진입 도로는 미확인",
+            "road_nm": "반포대로"
+          }
+        },
+        "movement_observations": [
+          {
+            "id": "motion1",
+            "code": "straight_run",
+            "text": "현재 기록 300~0초 전: 대체로 곧게 이어지는 이동",
+            "origin": "computed_observation",
+            "meaning": "대체로 곧게 이어지는 이동",
+            "subject": "recording_device",
+            "to_pin_s": 0.0,
+            "duration_s": 300.0,
+            "from_pin_s": -300.0,
+            "source_ids": [
+              "movement-shape:78ca18f7e483abdd4c44a985871b07532075508e10e60c08083f4d69c8889252"
+            ],
+            "source_claim": {
+              "id": "movement-shape:78ca18f7e483abdd4c44a985871b07532075508e10e60c08083f4d69c8889252",
+              "kind": "path",
+              "block": 0,
+              "end_s": 600.0,
+              "proof": {
+                "axis": "route_pattern",
+                "kind": "path",
+                "anchor": {
+                  "at": "2026-09-09T00:00:00+00:00",
+                  "lat": 37.5,
+                  "lng": 127.0,
+                  "client_seq": 0,
+                  "route_offset_m": 0.0
+                },
+                "status": "candidate",
+                "meaning": "straight_run",
+                "metrics": {
+                  "max_deviation_m": 1.1368683772161603e-13
+                },
+                "quality": {
+                  "fix_count": 61,
+                  "accuracy_p50_m": 5.0,
+                  "unknown_accuracy_count": 0
+                },
+                "subject": "recording_device",
+                "support": {
+                  "to_seq": 60,
+                  "ended_at": "2026-09-09T00:10:00+00:00",
+                  "from_seq": 0,
+                  "window_s": 600.0,
+                  "started_at": "2026-09-09T00:00:00+00:00",
+                  "chain_index": 0,
+                  "time_meaning": "observed_support_window",
+                  "pattern_run_index": 0
+                },
+                "is_event": false
+              },
+              "meaning": "straight_run",
+              "start_s": 0.0
+            }
+          }
+        ]
+      }
+    ],
+    "title": {
+      "text": "사평대로28길과 반포대로 산책",
+      "status": "returned",
+      "request": {
+        "scenes": [
+          {
+            "id": "scene:1",
+            "body": "사평대로28길 인근을 지나며 산책을 시작했다."
+          },
+          {
+            "id": "scene:2",
+            "body": "반포대로 인근 풀밭에서 곧게 이동하던 산책 대상이 멈춰 서서 냄새를 맡았다."
+          },
+          {
+            "id": "scene:3",
+            "device_observation": "현재 기록 300~0초 전: 대체로 곧게 이어지는 이동"
+          },
+          {
+            "id": "scene:4",
+            "device_observation": "현재 기록 300~0초 전: 대체로 곧게 이어지는 이동"
+          }
+        ]
+      },
+      "raw_text": "{\"title\": \"사평대로28길과 반포대로 산책\"}",
+      "candidate": "사평대로28길과 반포대로 산책",
+      "semantic_review": {
+        "method": "model_review_not_proof",
+        "status": "passed",
+        "request": {
+          "part": "title",
+          "evidence": {
+            "scenes": [
+              {
+                "id": "scene:1",
+                "body": "사평대로28길 인근을 지나며 산책을 시작했다."
+              },
+              {
+                "id": "scene:2",
+                "body": "반포대로 인근 풀밭에서 곧게 이동하던 산책 대상이 멈춰 서서 냄새를 맡았다."
+              },
+              {
+                "id": "scene:3",
+                "device_observation": "현재 기록 300~0초 전: 대체로 곧게 이어지는 이동"
+              },
+              {
+                "id": "scene:4",
+                "device_observation": "현재 기록 300~0초 전: 대체로 곧게 이어지는 이동"
+              }
+            ]
+          },
+          "candidate": {
+            "text": "사평대로28길과 반포대로 산책",
+            "evidence_ids": [
+              "scene:1",
+              "scene:2",
+              "scene:3",
+              "scene:4"
+            ]
+          },
+          "required_evidence_ids": []
+        },
+        "raw_text": "{\n  \"supported\": true,\n  \"preserves_subjects\": true,\n  \"preserves_relation_axis\": true,\n  \"preserves_scope\": true,\n  \"no_invented_experience\": true,\n  \"required_meanings_present\": true,\n  \"readable_as_diary\": true,\n  \"used_evidence_ids\": [\"scene:1\", \"scene:2\"],\n  \"issues\": []\n}",
+        "assessment": {
+          "issues": [],
+          "supported": true,
+          "preserves_scope": true,
+          "readable_as_diary": true,
+          "used_evidence_ids": [
+            "scene:1",
+            "scene:2"
+          ],
+          "preserves_subjects": true,
+          "no_invented_experience": true,
+          "preserves_relation_axis": true,
+          "required_meanings_present": true
+        },
+        "response_schema": {
+          "type": "object",
+          "title": "SemanticReview",
+          "required": [
+            "supported",
+            "preserves_subjects",
+            "preserves_relation_axis",
+            "preserves_scope",
+            "no_invented_experience",
+            "required_meanings_present",
+            "readable_as_diary",
+            "used_evidence_ids",
+            "issues"
+          ],
+          "properties": {
+            "issues": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "title": "Issues"
+            },
+            "supported": {
+              "type": "boolean",
+              "title": "Supported"
+            },
+            "preserves_scope": {
+              "type": "boolean",
+              "title": "Preserves Scope"
+            },
+            "readable_as_diary": {
+              "type": "boolean",
+              "title": "Readable As Diary"
+            },
+            "used_evidence_ids": {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "scene:1",
+                  "scene:2",
+                  "scene:3",
+                  "scene:4"
+                ],
+                "type": "string"
+              },
+              "title": "Used Evidence Ids"
+            },
+            "preserves_subjects": {
+              "type": "boolean",
+              "title": "Preserves Subjects"
+            },
+            "no_invented_experience": {
+              "type": "boolean",
+              "title": "No Invented Experience"
+            },
+            "preserves_relation_axis": {
+              "type": "boolean",
+              "title": "Preserves Relation Axis"
+            },
+            "required_meanings_present": {
+              "type": "boolean",
+              "title": "Required Meanings Present"
+            }
+          },
+          "description": "A model assessment, not a mathematical proof of natural-language truth.",
+          "additionalProperties": false
+        },
+        "request_revision": "b38a1c316aa320d3292aff31a12f675572e6dc9f012217bc0d31558914bc37d4"
+      },
+      "semantic_status": "model_reviewed",
+      "request_revision": "d127be6bdc2fb25e94dc101492c3d076dc04cbf746a5ae74a205fdf18bb2bae7"
+    },
+    "version": "relational-diary-skeleton-v7",
+    "writing": {
+      "model": "gemini-3.1-flash-lite",
+      "policy": "relational-publication-reviewed-v1",
+      "results": [
+        {
+          "stage": "space",
+          "answer": {
+            "text": "사평대로28길 인근을 지나며 산책을 시작했다.",
+            "focus": "현재 위치의 도로명 확인",
+            "evidence_ids": [
+              "stamp:5a4a32e366c643058dbce28a9fad6de6ff19891ecb6070cd10c790f86a21a672:road:843ae4f1ab91d1c6d1d826a6069a7e1d4bb330f47e4c358ceb55a41b8efba3d2"
+            ],
+            "relation_ids": []
+          },
+          "status": "returned",
+          "request": {
+            "current": {
+              "facts": [
+                {
+                  "id": "e1",
+                  "scope": {
+                    "kind": "record_point",
+                    "description": "좌표에 대응한 주소의 도로명. 실제 통과·진입 도로는 미확인",
+                    "coverage_key": "bb9c2cc1173b85e4662ea0b28ca57972c5968f5fa137b4cf8e5f56713e3412f2"
+                  },
+                  "value": {
+                    "name": "사평대로28길"
+                  },
+                  "family": "road",
+                  "observed_at": null,
+                  "subject_key": null,
+                  "time_meaning": "조회 시점의 주소 대응. 도로의 관측 시점은 미확인",
+                  "reference_date": null
+                }
+              ],
+              "point": {
+                "lat": 37.5,
+                "lng": 127.0
+              },
+              "walk_id": "e37c8a7168bf758a234cde888fa5571a3a034a323595e2bbb3b2e003c99b00c3",
+              "scene_id": "stamp:5a4a32e366c643058dbce28a9fad6de6ff19891ecb6070cd10c790f86a21a672",
+              "accuracy_m": 5.0,
+              "collection": {
+                "road": "complete",
+                "land_cover": "unknown",
+                "area_context": "unknown",
+                "surrounding_object": "unknown"
+              },
+              "recorded_at": "2026-09-09T00:00:00Z",
+              "position_basis": "observed",
+              "collection_reasons": {
+                "road": [
+                  "road_name_only"
+                ],
+                "land_cover": [
+                  "source_unavailable"
+                ],
+                "area_context": [
+                  "source_unavailable"
+                ],
+                "surrounding_object": [
+                  "source_unavailable"
+                ]
+              }
+            },
+            "earlier": null,
+            "version": "scene-comparison-v1",
+            "narration": {
+              "scope": "현재 장면",
+              "narrator": "이 산책을 기록한 보호자(나)",
+              "companions": []
+            },
+            "connection": null,
+            "citation_ids": [
+              "e1"
+            ],
+            "relation_ids": [],
+            "relation_slots": {
+              "proximity": {
+                "items": [],
+                "reason": "initial_scene",
+                "status": "not_applicable",
+                "policy_version": "scene-comparison-v1"
+              },
+              "background": {
+                "items": [],
+                "reason": "initial_scene",
+                "status": "not_applicable",
+                "policy_version": "scene-comparison-v1"
+              },
+              "area_context": {
+                "items": [],
+                "reason": "initial_scene",
+                "status": "not_applicable",
+                "policy_version": "scene-comparison-v1"
+              }
+            },
+            "route_evidence": null
+          },
+          "task_id": "space:stamp:5a4a32e366c643058dbce28a9fad6de6ff19891ecb6070cd10c790f86a21a672",
+          "raw_text": "{\n  \"text\": \"사평대로28길 인근을 지나며 산책을 시작했다.\",\n  \"evidence_ids\": [\"e1\"],\n  \"focus\": \"현재 위치의 도로명 확인\",\n  \"relation_ids\": []\n}",
+          "revision": "34b9d3c9134921879c2c57b36d4898a6281083dc49e5ac4001186a96c3598c84",
+          "scene_id": "stamp:5a4a32e366c643058dbce28a9fad6de6ff19891ecb6070cd10c790f86a21a672",
+          "candidate": {
+            "text": "사평대로28길 인근을 지나며 산책을 시작했다.",
+            "focus": "현재 위치의 도로명 확인",
+            "evidence_ids": [
+              "stamp:5a4a32e366c643058dbce28a9fad6de6ff19891ecb6070cd10c790f86a21a672:road:843ae4f1ab91d1c6d1d826a6069a7e1d4bb330f47e4c358ceb55a41b8efba3d2"
+            ],
+            "relation_ids": []
+          },
+          "elapsed_s": 14.375,
+          "citation_map": {
+            "e1": "stamp:5a4a32e366c643058dbce28a9fad6de6ff19891ecb6070cd10c790f86a21a672:road:843ae4f1ab91d1c6d1d826a6069a7e1d4bb330f47e4c358ceb55a41b8efba3d2"
+          },
+          "relation_map": {},
+          "response_schema": {
+            "type": "object",
+            "required": [
+              "text",
+              "evidence_ids",
+              "focus",
+              "relation_ids"
+            ],
+            "properties": {
+              "text": {
+                "type": "string",
+                "maxLength": 220,
+                "minLength": 1
+              },
+              "focus": {
+                "type": "string",
+                "maxLength": 160,
+                "minLength": 1
+              },
+              "evidence_ids": {
+                "type": "array",
+                "items": {
+                  "enum": [
+                    "e1"
+                  ],
+                  "type": "string"
+                },
+                "minItems": 1
+              },
+              "relation_ids": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 0
+              }
+            },
+            "additionalProperties": false
+          },
+          "semantic_review": {
+            "method": "model_review_not_proof",
+            "status": "passed",
+            "request": {
+              "part": "space",
+              "evidence": {
+                "current": {
+                  "facts": [
+                    {
+                      "id": "e1",
+                      "scope": {
+                        "kind": "record_point",
+                        "description": "좌표에 대응한 주소의 도로명. 실제 통과·진입 도로는 미확인",
+                        "coverage_key": "bb9c2cc1173b85e4662ea0b28ca57972c5968f5fa137b4cf8e5f56713e3412f2"
+                      },
+                      "value": {
+                        "name": "사평대로28길"
+                      },
+                      "family": "road",
+                      "observed_at": null,
+                      "subject_key": null,
+                      "time_meaning": "조회 시점의 주소 대응. 도로의 관측 시점은 미확인",
+                      "reference_date": null
+                    }
+                  ],
+                  "point": {
+                    "lat": 37.5,
+                    "lng": 127.0
+                  },
+                  "walk_id": "e37c8a7168bf758a234cde888fa5571a3a034a323595e2bbb3b2e003c99b00c3",
+                  "scene_id": "stamp:5a4a32e366c643058dbce28a9fad6de6ff19891ecb6070cd10c790f86a21a672",
+                  "accuracy_m": 5.0,
+                  "collection": {
+                    "road": "complete",
+                    "land_cover": "unknown",
+                    "area_context": "unknown",
+                    "surrounding_object": "unknown"
+                  },
+                  "recorded_at": "2026-09-09T00:00:00Z",
+                  "position_basis": "observed",
+                  "collection_reasons": {
+                    "road": [
+                      "road_name_only"
+                    ],
+                    "land_cover": [
+                      "source_unavailable"
+                    ],
+                    "area_context": [
+                      "source_unavailable"
+                    ],
+                    "surrounding_object": [
+                      "source_unavailable"
+                    ]
+                  }
+                },
+                "earlier": null,
+                "version": "scene-comparison-v1",
+                "narration": {
+                  "scope": "현재 장면",
+                  "narrator": "이 산책을 기록한 보호자(나)",
+                  "companions": []
+                },
+                "connection": null,
+                "citation_ids": [
+                  "e1"
+                ],
+                "relation_ids": [],
+                "relation_slots": {
+                  "proximity": {
+                    "items": [],
+                    "reason": "initial_scene",
+                    "status": "not_applicable",
+                    "policy_version": "scene-comparison-v1"
+                  },
+                  "background": {
+                    "items": [],
+                    "reason": "initial_scene",
+                    "status": "not_applicable",
+                    "policy_version": "scene-comparison-v1"
+                  },
+                  "area_context": {
+                    "items": [],
+                    "reason": "initial_scene",
+                    "status": "not_applicable",
+                    "policy_version": "scene-comparison-v1"
+                  }
+                },
+                "route_evidence": null
+              },
+              "candidate": {
+                "text": "사평대로28길 인근을 지나며 산책을 시작했다.",
+                "focus": "현재 위치의 도로명 확인",
+                "evidence_ids": [
+                  "e1"
+                ],
+                "relation_ids": []
+              },
+              "required_evidence_ids": []
+            },
+            "raw_text": "{\n  \"supported\": true,\n  \"preserves_subjects\": true,\n  \"preserves_relation_axis\": true,\n  \"preserves_scope\": true,\n  \"no_invented_experience\": true,\n  \"required_meanings_present\": true,\n  \"readable_as_diary\": true,\n  \"used_evidence_ids\": [\"e1\"],\n  \"issues\": []\n}",
+            "assessment": {
+              "issues": [],
+              "supported": true,
+              "preserves_scope": true,
+              "readable_as_diary": true,
+              "used_evidence_ids": [
+                "e1"
+              ],
+              "preserves_subjects": true,
+              "no_invented_experience": true,
+              "preserves_relation_axis": true,
+              "required_meanings_present": true
+            },
+            "response_schema": {
+              "type": "object",
+              "title": "SemanticReview",
+              "required": [
+                "supported",
+                "preserves_subjects",
+                "preserves_relation_axis",
+                "preserves_scope",
+                "no_invented_experience",
+                "required_meanings_present",
+                "readable_as_diary",
+                "used_evidence_ids",
+                "issues"
+              ],
+              "properties": {
+                "issues": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "title": "Issues"
+                },
+                "supported": {
+                  "type": "boolean",
+                  "title": "Supported"
+                },
+                "preserves_scope": {
+                  "type": "boolean",
+                  "title": "Preserves Scope"
+                },
+                "readable_as_diary": {
+                  "type": "boolean",
+                  "title": "Readable As Diary"
+                },
+                "used_evidence_ids": {
+                  "type": "array",
+                  "items": {
+                    "enum": [
+                      "e1"
+                    ],
+                    "type": "string"
+                  },
+                  "title": "Used Evidence Ids"
+                },
+                "preserves_subjects": {
+                  "type": "boolean",
+                  "title": "Preserves Subjects"
+                },
+                "no_invented_experience": {
+                  "type": "boolean",
+                  "title": "No Invented Experience"
+                },
+                "preserves_relation_axis": {
+                  "type": "boolean",
+                  "title": "Preserves Relation Axis"
+                },
+                "required_meanings_present": {
+                  "type": "boolean",
+                  "title": "Required Meanings Present"
+                }
+              },
+              "description": "A model assessment, not a mathematical proof of natural-language truth.",
+              "additionalProperties": false
+            },
+            "request_revision": "5636b6ddc5c021846aeea50c21d1a7a67b9f742aaafc99f8391d8303206d0293"
+          },
+          "semantic_status": "model_reviewed",
+          "request_revision": "27d7f5b7d8fd40d03023c1aba1ee10f68b0434133e27141bc65b8cfdf6446702"
+        },
+        {
+          "stage": "space",
+          "status": "failed",
+          "request": {
+            "current": {
+              "facts": [
+                {
+                  "id": "e2",
+                  "scope": {
+                    "kind": "record_point",
+                    "description": "좌표에 대응한 주소의 도로명. 실제 통과·진입 도로는 미확인",
+                    "coverage_key": "e71582e46b9abfc3668e84de18bbb2bde0af7ef86c12564f105e7159ec0a4150"
+                  },
+                  "value": {
+                    "name": "반포대로"
+                  },
+                  "family": "road",
+                  "observed_at": null,
+                  "subject_key": null,
+                  "time_meaning": "조회 시점의 주소 대응. 도로의 관측 시점은 미확인",
+                  "reference_date": null
+                },
+                {
+                  "id": "e3",
+                  "scope": {
+                    "kind": "record_point",
+                    "description": "이 위치의 배경 유형. 실제 통과·현장 풍경·식생의 밀도는 미확인",
+                    "coverage_key": "3b554bd5ed9981a3b3558c581adaa63493bdd93b9347b78d2470c88808b5b8be"
+                  },
+                  "value": {
+                    "layer": "EGIS:lv3_2025y",
+                    "피복": "풀밭",
+                    "classification": {
+                      "피복": "기타초지"
+                    }
+                  },
+                  "family": "land_cover",
+                  "observed_at": null,
+                  "subject_key": "public-normalized-land_cover:EGIS:lv3_2025y:lv3_2025y.7301518",
+                  "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인",
+                  "reference_date": "2024-12-30Z"
+                }
+              ],
+              "point": {
+                "lat": 37.503238,
+                "lng": 127.0
+              },
+              "walk_id": "e37c8a7168bf758a234cde888fa5571a3a034a323595e2bbb3b2e003c99b00c3",
+              "scene_id": "stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e",
+              "accuracy_m": 5.0,
+              "collection": {
+                "road": "complete",
+                "land_cover": "partial",
+                "area_context": "unknown",
+                "surrounding_object": "unknown"
+              },
+              "recorded_at": "2026-09-09T00:05:00Z",
+              "position_basis": "last_known",
+              "collection_reasons": {
+                "road": [
+                  "road_name_only"
+                ],
+                "land_cover": [
+                  "feature_does_not_cover_query"
+                ],
+                "area_context": [
+                  "source_unavailable"
+                ],
+                "surrounding_object": [
+                  "source_unavailable"
+                ]
+              }
+            },
+            "earlier": {
+              "facts": [
+                {
+                  "id": "e1",
+                  "scope": {
+                    "kind": "record_point",
+                    "description": "좌표에 대응한 주소의 도로명. 실제 통과·진입 도로는 미확인",
+                    "coverage_key": "bb9c2cc1173b85e4662ea0b28ca57972c5968f5fa137b4cf8e5f56713e3412f2"
+                  },
+                  "value": {
+                    "name": "사평대로28길"
+                  },
+                  "family": "road",
+                  "observed_at": null,
+                  "subject_key": null,
+                  "time_meaning": "조회 시점의 주소 대응. 도로의 관측 시점은 미확인",
+                  "reference_date": null
+                }
+              ],
+              "point": {
+                "lat": 37.5,
+                "lng": 127.0
+              },
+              "walk_id": "e37c8a7168bf758a234cde888fa5571a3a034a323595e2bbb3b2e003c99b00c3",
+              "scene_id": "stamp:5a4a32e366c643058dbce28a9fad6de6ff19891ecb6070cd10c790f86a21a672",
+              "accuracy_m": 5.0,
+              "collection": {
+                "road": "complete",
+                "land_cover": "unknown",
+                "area_context": "unknown",
+                "surrounding_object": "unknown"
+              },
+              "recorded_at": "2026-09-09T00:00:00Z",
+              "position_basis": "observed",
+              "collection_reasons": {
+                "road": [
+                  "road_name_only"
+                ],
+                "land_cover": [
+                  "source_unavailable"
+                ],
+                "area_context": [
+                  "source_unavailable"
+                ],
+                "surrounding_object": [
+                  "source_unavailable"
+                ]
+              }
+            },
+            "version": "scene-comparison-v1",
+            "narration": {
+              "scope": "현재 장면",
+              "narrator": "이 산책을 기록한 보호자(나)",
+              "companions": []
+            },
+            "connection": {
+              "scope": "두 기록 사이의 경과 시간. 이동을 설명할 범위는 route_status와 관측 근거를 따른다",
+              "route_status": "partial",
+              "elapsed_seconds": 300.0,
+              "current_scene_id": "stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e",
+              "earlier_scene_id": "stamp:5a4a32e366c643058dbce28a9fad6de6ff19891ecb6070cd10c790f86a21a672",
+              "route_evidence_ids": [
+                "e4"
+              ]
+            },
+            "citation_ids": [
+              "e1",
+              "e2",
+              "e3",
+              "e4"
+            ],
+            "relation_ids": [
+              "r1"
+            ],
+            "relation_slots": {
+              "proximity": {
+                "items": [],
+                "reason": "no_comparable_facts",
+                "status": "insufficient_evidence",
+                "policy_version": "scene-comparison-v1"
+              },
+              "background": {
+                "items": [
+                  {
+                    "id": "r1",
+                    "axis": "record_location",
+                    "scope": "두 기록 위치에 연결된 주소·지도 분류의 비교. 동일 장소의 시간 변화·중간 통과는 미확인",
+                    "family": "road",
+                    "result": "different_values",
+                    "comparison_basis": {
+                      "reason": "normalized_values",
+                      "attribute": "name",
+                      "source_dates": [],
+                      "source_dates_differ": false,
+                      "source_time_unknown": true
+                    },
+                    "distance_delta_m": null,
+                    "current_evidence_ids": [
+                      "e2"
+                    ],
+                    "earlier_evidence_ids": [
+                      "e1"
+                    ],
+                    "composition_values_equal": null
+                  },
+                  {
+                    "id": "r2",
+                    "axis": "record_location",
+                    "scope": "한쪽 스냅샷에만 근거가 있음. 대상의 출현·소멸·이탈은 확정하지 않음",
+                    "family": "land_cover",
+                    "result": "only_one_snapshot_has_evidence",
+                    "comparison_basis": {},
+                    "distance_delta_m": null,
+                    "current_evidence_ids": [
+                      "e3"
+                    ],
+                    "earlier_evidence_ids": [],
+                    "composition_values_equal": null
+                  }
+                ],
+                "reason": "see_individual_correspondences",
+                "status": "insufficient_evidence",
+                "policy_version": "scene-comparison-v1"
+              },
+              "area_context": {
+                "items": [],
+                "reason": "no_comparable_facts",
+                "status": "insufficient_evidence",
+                "policy_version": "scene-comparison-v1"
+              }
+            },
+            "route_evidence": {
+              "id": "e4",
+              "status": "partial",
+              "ended_at": "2026-09-09T00:05:00+00:00",
+              "started_at": "2026-09-09T00:00:00+00:00",
+              "elapsed_seconds": 300.0,
+              "observed_seconds": 300.0,
+              "moving_distance_m": 360.0,
+              "observed_distance_m": 360.0,
+              "uncovered_intervals": []
+            }
+          },
+          "task_id": "space:stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e",
+          "raw_text": "{\n  \"text\": \"사평대로28길을 지나 5분 정도 이동하니 반포대로 인근의 풀밭이 나타났다.\",\n  \"evidence_ids\": [\"e1\", \"e2\", \"e3\", \"e4\"],\n  \"focus\": \"이동에 따른 도로명 변화와 새로운 지형지물인 풀밭의 확인\",\n  \"relation_ids\": [\"r1\"]\n}",
+          "revision": "f94639c417defa25aa949ca2a87bb4470329494c49f919c65938bc42c02f99e5",
+          "scene_id": "stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e",
+          "candidate": {
+            "text": "사평대로28길을 지나 5분 정도 이동하니 반포대로 인근의 풀밭이 나타났다.",
+            "focus": "이동에 따른 도로명 변화와 새로운 지형지물인 풀밭의 확인",
+            "evidence_ids": [
+              "stamp:5a4a32e366c643058dbce28a9fad6de6ff19891ecb6070cd10c790f86a21a672:road:843ae4f1ab91d1c6d1d826a6069a7e1d4bb330f47e4c358ceb55a41b8efba3d2",
+              "stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e:road:530422b2c15f95a92c19e0fb81228fb9179f0a1fcd642ab1fc664848398bccf4",
+              "stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e:slot:33f6927dc809fc817542451b7d930d4707f7ac8ae6300a6a41e75263aff31266",
+              "journey:f16c966733c81dffec73aecd44129f0671d59f5a835983f7b2d8c373c4b85b9b"
+            ],
+            "relation_ids": [
+              "comparison:18a10804033cc0f2f408d0a2c4c3e3162acc552882203e811ca664a095138fc1"
+            ]
+          },
+          "elapsed_s": 42.375,
+          "error_type": "SemanticRejection",
+          "citation_map": {
+            "e1": "stamp:5a4a32e366c643058dbce28a9fad6de6ff19891ecb6070cd10c790f86a21a672:road:843ae4f1ab91d1c6d1d826a6069a7e1d4bb330f47e4c358ceb55a41b8efba3d2",
+            "e2": "stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e:road:530422b2c15f95a92c19e0fb81228fb9179f0a1fcd642ab1fc664848398bccf4",
+            "e3": "stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e:slot:33f6927dc809fc817542451b7d930d4707f7ac8ae6300a6a41e75263aff31266",
+            "e4": "journey:f16c966733c81dffec73aecd44129f0671d59f5a835983f7b2d8c373c4b85b9b"
+          },
+          "relation_map": {
+            "r1": "comparison:18a10804033cc0f2f408d0a2c4c3e3162acc552882203e811ca664a095138fc1",
+            "r2": "comparison:3dc9ad941cea0548f28d234210a9f5a37e8c026c9b4f732f7899afbd6d6ff3b5"
+          },
+          "failure_phase": "semantic_review",
+          "response_schema": {
+            "type": "object",
+            "required": [
+              "text",
+              "evidence_ids",
+              "focus",
+              "relation_ids"
+            ],
+            "properties": {
+              "text": {
+                "type": "string",
+                "maxLength": 220,
+                "minLength": 1
+              },
+              "focus": {
+                "type": "string",
+                "maxLength": 160,
+                "minLength": 1
+              },
+              "evidence_ids": {
+                "type": "array",
+                "items": {
+                  "enum": [
+                    "e1",
+                    "e2",
+                    "e3",
+                    "e4"
+                  ],
+                  "type": "string"
+                },
+                "minItems": 1
+              },
+              "relation_ids": {
+                "type": "array",
+                "items": {
+                  "enum": [
+                    "r1"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          "semantic_review": {
+            "method": "model_review_not_proof",
+            "status": "rejected",
+            "request": {
+              "part": "space",
+              "evidence": {
+                "current": {
+                  "facts": [
+                    {
+                      "id": "e2",
+                      "scope": {
+                        "kind": "record_point",
+                        "description": "좌표에 대응한 주소의 도로명. 실제 통과·진입 도로는 미확인",
+                        "coverage_key": "e71582e46b9abfc3668e84de18bbb2bde0af7ef86c12564f105e7159ec0a4150"
+                      },
+                      "value": {
+                        "name": "반포대로"
+                      },
+                      "family": "road",
+                      "observed_at": null,
+                      "subject_key": null,
+                      "time_meaning": "조회 시점의 주소 대응. 도로의 관측 시점은 미확인",
+                      "reference_date": null
+                    },
+                    {
+                      "id": "e3",
+                      "scope": {
+                        "kind": "record_point",
+                        "description": "이 위치의 배경 유형. 실제 통과·현장 풍경·식생의 밀도는 미확인",
+                        "coverage_key": "3b554bd5ed9981a3b3558c581adaa63493bdd93b9347b78d2470c88808b5b8be"
+                      },
+                      "value": {
+                        "layer": "EGIS:lv3_2025y",
+                        "피복": "풀밭",
+                        "classification": {
+                          "피복": "기타초지"
+                        }
+                      },
+                      "family": "land_cover",
+                      "observed_at": null,
+                      "subject_key": "public-normalized-land_cover:EGIS:lv3_2025y:lv3_2025y.7301518",
+                      "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인",
+                      "reference_date": "2024-12-30Z"
+                    }
+                  ],
+                  "point": {
+                    "lat": 37.503238,
+                    "lng": 127.0
+                  },
+                  "walk_id": "e37c8a7168bf758a234cde888fa5571a3a034a323595e2bbb3b2e003c99b00c3",
+                  "scene_id": "stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e",
+                  "accuracy_m": 5.0,
+                  "collection": {
+                    "road": "complete",
+                    "land_cover": "partial",
+                    "area_context": "unknown",
+                    "surrounding_object": "unknown"
+                  },
+                  "recorded_at": "2026-09-09T00:05:00Z",
+                  "position_basis": "last_known",
+                  "collection_reasons": {
+                    "road": [
+                      "road_name_only"
+                    ],
+                    "land_cover": [
+                      "feature_does_not_cover_query"
+                    ],
+                    "area_context": [
+                      "source_unavailable"
+                    ],
+                    "surrounding_object": [
+                      "source_unavailable"
+                    ]
+                  }
+                },
+                "earlier": {
+                  "facts": [
+                    {
+                      "id": "e1",
+                      "scope": {
+                        "kind": "record_point",
+                        "description": "좌표에 대응한 주소의 도로명. 실제 통과·진입 도로는 미확인",
+                        "coverage_key": "bb9c2cc1173b85e4662ea0b28ca57972c5968f5fa137b4cf8e5f56713e3412f2"
+                      },
+                      "value": {
+                        "name": "사평대로28길"
+                      },
+                      "family": "road",
+                      "observed_at": null,
+                      "subject_key": null,
+                      "time_meaning": "조회 시점의 주소 대응. 도로의 관측 시점은 미확인",
+                      "reference_date": null
+                    }
+                  ],
+                  "point": {
+                    "lat": 37.5,
+                    "lng": 127.0
+                  },
+                  "walk_id": "e37c8a7168bf758a234cde888fa5571a3a034a323595e2bbb3b2e003c99b00c3",
+                  "scene_id": "stamp:5a4a32e366c643058dbce28a9fad6de6ff19891ecb6070cd10c790f86a21a672",
+                  "accuracy_m": 5.0,
+                  "collection": {
+                    "road": "complete",
+                    "land_cover": "unknown",
+                    "area_context": "unknown",
+                    "surrounding_object": "unknown"
+                  },
+                  "recorded_at": "2026-09-09T00:00:00Z",
+                  "position_basis": "observed",
+                  "collection_reasons": {
+                    "road": [
+                      "road_name_only"
+                    ],
+                    "land_cover": [
+                      "source_unavailable"
+                    ],
+                    "area_context": [
+                      "source_unavailable"
+                    ],
+                    "surrounding_object": [
+                      "source_unavailable"
+                    ]
+                  }
+                },
+                "version": "scene-comparison-v1",
+                "narration": {
+                  "scope": "현재 장면",
+                  "narrator": "이 산책을 기록한 보호자(나)",
+                  "companions": []
+                },
+                "connection": {
+                  "scope": "두 기록 사이의 경과 시간. 이동을 설명할 범위는 route_status와 관측 근거를 따른다",
+                  "route_status": "partial",
+                  "elapsed_seconds": 300.0,
+                  "current_scene_id": "stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e",
+                  "earlier_scene_id": "stamp:5a4a32e366c643058dbce28a9fad6de6ff19891ecb6070cd10c790f86a21a672",
+                  "route_evidence_ids": [
+                    "e4"
+                  ]
+                },
+                "citation_ids": [
+                  "e1",
+                  "e2",
+                  "e3",
+                  "e4"
+                ],
+                "relation_ids": [
+                  "r1"
+                ],
+                "relation_slots": {
+                  "proximity": {
+                    "items": [],
+                    "reason": "no_comparable_facts",
+                    "status": "insufficient_evidence",
+                    "policy_version": "scene-comparison-v1"
+                  },
+                  "background": {
+                    "items": [
+                      {
+                        "id": "r1",
+                        "axis": "record_location",
+                        "scope": "두 기록 위치에 연결된 주소·지도 분류의 비교. 동일 장소의 시간 변화·중간 통과는 미확인",
+                        "family": "road",
+                        "result": "different_values",
+                        "comparison_basis": {
+                          "reason": "normalized_values",
+                          "attribute": "name",
+                          "source_dates": [],
+                          "source_dates_differ": false,
+                          "source_time_unknown": true
+                        },
+                        "distance_delta_m": null,
+                        "current_evidence_ids": [
+                          "e2"
+                        ],
+                        "earlier_evidence_ids": [
+                          "e1"
+                        ],
+                        "composition_values_equal": null
+                      },
+                      {
+                        "id": "r2",
+                        "axis": "record_location",
+                        "scope": "한쪽 스냅샷에만 근거가 있음. 대상의 출현·소멸·이탈은 확정하지 않음",
+                        "family": "land_cover",
+                        "result": "only_one_snapshot_has_evidence",
+                        "comparison_basis": {},
+                        "distance_delta_m": null,
+                        "current_evidence_ids": [
+                          "e3"
+                        ],
+                        "earlier_evidence_ids": [],
+                        "composition_values_equal": null
+                      }
+                    ],
+                    "reason": "see_individual_correspondences",
+                    "status": "insufficient_evidence",
+                    "policy_version": "scene-comparison-v1"
+                  },
+                  "area_context": {
+                    "items": [],
+                    "reason": "no_comparable_facts",
+                    "status": "insufficient_evidence",
+                    "policy_version": "scene-comparison-v1"
+                  }
+                },
+                "route_evidence": {
+                  "id": "e4",
+                  "status": "partial",
+                  "ended_at": "2026-09-09T00:05:00+00:00",
+                  "started_at": "2026-09-09T00:00:00+00:00",
+                  "elapsed_seconds": 300.0,
+                  "observed_seconds": 300.0,
+                  "moving_distance_m": 360.0,
+                  "observed_distance_m": 360.0,
+                  "uncovered_intervals": []
+                }
+              },
+              "candidate": {
+                "text": "사평대로28길을 지나 5분 정도 이동하니 반포대로 인근의 풀밭이 나타났다.",
+                "focus": "이동에 따른 도로명 변화와 새로운 지형지물인 풀밭의 확인",
+                "evidence_ids": [
+                  "e1",
+                  "e2",
+                  "e3",
+                  "e4"
+                ],
+                "relation_ids": [
+                  "r1"
+                ]
+              },
+              "required_evidence_ids": []
+            },
+            "raw_text": "{\n  \"supported\": false,\n  \"preserves_subjects\": true,\n  \"preserves_relation_axis\": true,\n  \"preserves_scope\": false,\n  \"no_invented_experience\": false,\n  \"required_meanings_present\": true,\n  \"readable_as_diary\": true,\n  \"used_evidence_ids\": [\"e1\", \"e2\", \"e3\", \"e4\"],\n  \"issues\": [\"사평대로28길을 지났다는 근거가 없음. e1은 해당 좌표의 주소일 뿐 통과 여부를 증명하지 않음.\", \"반포대로 인근의 풀밭이라는 표현은 e2와 e3의 좌표가 다름에도 불구하고 동일한 장소의 변화처럼 서술되어 공간적 맥락을 오도함.\", \"이동 시간 5분과 이동 거리 360m를 근거로 '지나'와 '나타났다'라는 행동과 풍경의 변화를 확정적으로 서술함.\"]\n}",
+            "assessment": {
+              "issues": [
+                "사평대로28길을 지났다는 근거가 없음. e1은 해당 좌표의 주소일 뿐 통과 여부를 증명하지 않음.",
+                "반포대로 인근의 풀밭이라는 표현은 e2와 e3의 좌표가 다름에도 불구하고 동일한 장소의 변화처럼 서술되어 공간적 맥락을 오도함.",
+                "이동 시간 5분과 이동 거리 360m를 근거로 '지나'와 '나타났다'라는 행동과 풍경의 변화를 확정적으로 서술함."
+              ],
+              "supported": false,
+              "preserves_scope": false,
+              "readable_as_diary": true,
+              "used_evidence_ids": [
+                "e1",
+                "e2",
+                "e3",
+                "e4"
+              ],
+              "preserves_subjects": true,
+              "no_invented_experience": false,
+              "preserves_relation_axis": true,
+              "required_meanings_present": true
+            },
+            "response_schema": {
+              "type": "object",
+              "title": "SemanticReview",
+              "required": [
+                "supported",
+                "preserves_subjects",
+                "preserves_relation_axis",
+                "preserves_scope",
+                "no_invented_experience",
+                "required_meanings_present",
+                "readable_as_diary",
+                "used_evidence_ids",
+                "issues"
+              ],
+              "properties": {
+                "issues": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "title": "Issues"
+                },
+                "supported": {
+                  "type": "boolean",
+                  "title": "Supported"
+                },
+                "preserves_scope": {
+                  "type": "boolean",
+                  "title": "Preserves Scope"
+                },
+                "readable_as_diary": {
+                  "type": "boolean",
+                  "title": "Readable As Diary"
+                },
+                "used_evidence_ids": {
+                  "type": "array",
+                  "items": {
+                    "enum": [
+                      "e1",
+                      "e2",
+                      "e3",
+                      "e4"
+                    ],
+                    "type": "string"
+                  },
+                  "title": "Used Evidence Ids"
+                },
+                "preserves_subjects": {
+                  "type": "boolean",
+                  "title": "Preserves Subjects"
+                },
+                "no_invented_experience": {
+                  "type": "boolean",
+                  "title": "No Invented Experience"
+                },
+                "preserves_relation_axis": {
+                  "type": "boolean",
+                  "title": "Preserves Relation Axis"
+                },
+                "required_meanings_present": {
+                  "type": "boolean",
+                  "title": "Required Meanings Present"
+                }
+              },
+              "description": "A model assessment, not a mathematical proof of natural-language truth.",
+              "additionalProperties": false
+            },
+            "request_revision": "f5831ad817f1d3eee12d448649a7836b9639f8706ee23ae9c6f860a6750582c9"
+          },
+          "request_revision": "a8f78c47d402399e81bfb3a67c04a3a8457e82810dd4c5fba4b37f57df05bb21"
+        },
+        {
+          "stage": "action",
+          "answer": {
+            "text": "반포대로 인근 풀밭에서 곧게 이동하던 산책 대상이 멈춰 서서 냄새를 맡았다.",
+            "evidence_ids": [
+              "a1",
+              "movement-use:7848fbd28ac2e389e70add06d684097b246db6f231460b9f8af693f19a06cf39",
+              "space:stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e:slot:33f6927dc809fc817542451b7d930d4707f7ac8ae6300a6a41e75263aff31266",
+              "stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e:road:530422b2c15f95a92c19e0fb81228fb9179f0a1fcd642ab1fc664848398bccf4"
+            ]
+          },
+          "status": "returned",
+          "request": {
+            "pin_at": "2026-09-09T00:05:00Z",
+            "narration": {
+              "scope": "현재 장면",
+              "narrator": "이 산책을 기록한 보호자(나)",
+              "companions": []
+            },
+            "citation_ids": [
+              "a1",
+              "movement-use:7848fbd28ac2e389e70add06d684097b246db6f231460b9f8af693f19a06cf39",
+              "space:stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e:slot:33f6927dc809fc817542451b7d930d4707f7ac8ae6300a6a41e75263aff31266",
+              "stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e:road:530422b2c15f95a92c19e0fb81228fb9179f0a1fcd642ab1fc664848398bccf4"
+            ],
+            "current_gait": [],
+            "current_shape": [
+              {
+                "id": "movement-use:7848fbd28ac2e389e70add06d684097b246db6f231460b9f8af693f19a06cf39",
+                "meaning": "대체로 곧게 이동",
+                "relation": "행동핀 시점에 유효한 산책 이동 상황. 행동의 원인이나 지속시간은 아님",
+                "to_pin_s": 150.0,
+                "from_pin_s": -150.0,
+                "event_at_pin_s": null
+              }
+            ],
+            "current_space": [
+              {
+                "id": "space:stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e:slot:33f6927dc809fc817542451b7d930d4707f7ac8ae6300a6a41e75263aff31266",
+                "role": "point_land_cover",
+                "material": {
+                  "피복": "풀밭"
+                },
+                "relation": "이 위치의 배경 유형. 실제 통과·현장 풍경·식생의 밀도는 미확인",
+                "time_meaning": null
+              }
+            ],
+            "road_reference": {
+              "id": "stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e:road:530422b2c15f95a92c19e0fb81228fb9179f0a1fcd642ab1fc664848398bccf4",
+              "scope": "좌표에 대응한 주소의 도로명. 실제 통과·진입 도로는 미확인",
+              "road_nm": "반포대로"
+            },
+            "recorded_action": {
+              "id": "a1",
+              "actor": null,
+              "action": "냄새 맡기"
+            },
+            "movement_context": null
+          },
+          "task_id": "action:stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e",
+          "raw_text": "{\n  \"text\": \"반포대로 인근 풀밭에서 곧게 이동하던 산책 대상이 멈춰 서서 냄새를 맡았다.\",\n  \"evidence_ids\": [\n    \"a1\",\n    \"movement-use:7848fbd28ac2e389e70add06d684097b246db6f231460b9f8af693f19a06cf39\",\n    \"space:stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e:slot:33f6927dc809fc817542451b7d930d4707f7ac8ae6300a6a41e75263aff31266\",\n    \"stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e:road:530422b2c15f95a92c19e0fb81228fb9179f0a1fcd642ab1fc664848398bccf4\"\n  ]\n}",
+          "revision": "b62210247c98e50c5f08c4a6c54fd5f1142ee9056bbc2c9d90e204034852df99",
+          "scene_id": "stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e",
+          "candidate": {
+            "text": "반포대로 인근 풀밭에서 곧게 이동하던 산책 대상이 멈춰 서서 냄새를 맡았다.",
+            "evidence_ids": [
+              "a1",
+              "movement-use:7848fbd28ac2e389e70add06d684097b246db6f231460b9f8af693f19a06cf39",
+              "space:stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e:slot:33f6927dc809fc817542451b7d930d4707f7ac8ae6300a6a41e75263aff31266",
+              "stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e:road:530422b2c15f95a92c19e0fb81228fb9179f0a1fcd642ab1fc664848398bccf4"
+            ]
+          },
+          "elapsed_s": 54.657,
+          "response_schema": {
+            "type": "object",
+            "required": [
+              "text",
+              "evidence_ids"
+            ],
+            "properties": {
+              "text": {
+                "type": "string",
+                "maxLength": 220,
+                "minLength": 1
+              },
+              "evidence_ids": {
+                "type": "array",
+                "items": {
+                  "enum": [
+                    "a1",
+                    "movement-use:7848fbd28ac2e389e70add06d684097b246db6f231460b9f8af693f19a06cf39",
+                    "space:stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e:slot:33f6927dc809fc817542451b7d930d4707f7ac8ae6300a6a41e75263aff31266",
+                    "stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e:road:530422b2c15f95a92c19e0fb81228fb9179f0a1fcd642ab1fc664848398bccf4"
+                  ],
+                  "type": "string"
+                },
+                "minItems": 1
+              }
+            },
+            "additionalProperties": false
+          },
+          "semantic_review": {
+            "method": "model_review_not_proof",
+            "status": "passed",
+            "request": {
+              "part": "action",
+              "evidence": {
+                "pin_at": "2026-09-09T00:05:00Z",
+                "narration": {
+                  "scope": "현재 장면",
+                  "narrator": "이 산책을 기록한 보호자(나)",
+                  "companions": []
+                },
+                "citation_ids": [
+                  "a1",
+                  "movement-use:7848fbd28ac2e389e70add06d684097b246db6f231460b9f8af693f19a06cf39",
+                  "space:stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e:slot:33f6927dc809fc817542451b7d930d4707f7ac8ae6300a6a41e75263aff31266",
+                  "stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e:road:530422b2c15f95a92c19e0fb81228fb9179f0a1fcd642ab1fc664848398bccf4"
+                ],
+                "current_gait": [],
+                "current_shape": [
+                  {
+                    "id": "movement-use:7848fbd28ac2e389e70add06d684097b246db6f231460b9f8af693f19a06cf39",
+                    "meaning": "대체로 곧게 이동",
+                    "relation": "행동핀 시점에 유효한 산책 이동 상황. 행동의 원인이나 지속시간은 아님",
+                    "to_pin_s": 150.0,
+                    "from_pin_s": -150.0,
+                    "event_at_pin_s": null
+                  }
+                ],
+                "current_space": [
+                  {
+                    "id": "space:stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e:slot:33f6927dc809fc817542451b7d930d4707f7ac8ae6300a6a41e75263aff31266",
+                    "role": "point_land_cover",
+                    "material": {
+                      "피복": "풀밭"
+                    },
+                    "relation": "이 위치의 배경 유형. 실제 통과·현장 풍경·식생의 밀도는 미확인",
+                    "time_meaning": null
+                  }
+                ],
+                "road_reference": {
+                  "id": "stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e:road:530422b2c15f95a92c19e0fb81228fb9179f0a1fcd642ab1fc664848398bccf4",
+                  "scope": "좌표에 대응한 주소의 도로명. 실제 통과·진입 도로는 미확인",
+                  "road_nm": "반포대로"
+                },
+                "recorded_action": {
+                  "id": "a1",
+                  "actor": null,
+                  "action": "냄새 맡기"
+                },
+                "movement_context": null
+              },
+              "candidate": {
+                "text": "반포대로 인근 풀밭에서 곧게 이동하던 산책 대상이 멈춰 서서 냄새를 맡았다.",
+                "evidence_ids": [
+                  "a1",
+                  "movement-use:7848fbd28ac2e389e70add06d684097b246db6f231460b9f8af693f19a06cf39",
+                  "space:stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e:slot:33f6927dc809fc817542451b7d930d4707f7ac8ae6300a6a41e75263aff31266",
+                  "stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e:road:530422b2c15f95a92c19e0fb81228fb9179f0a1fcd642ab1fc664848398bccf4"
+                ]
+              },
+              "required_evidence_ids": [
+                "a1"
+              ]
+            },
+            "raw_text": "{\n  \"supported\": true,\n  \"preserves_subjects\": true,\n  \"preserves_relation_axis\": true,\n  \"preserves_scope\": true,\n  \"no_invented_experience\": true,\n  \"required_meanings_present\": true,\n  \"readable_as_diary\": true,\n  \"used_evidence_ids\": [\n    \"a1\",\n    \"movement-use:7848fbd28ac2e389e70add06d684097b246db6f231460b9f8af693f19a06cf39\",\n    \"space:stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e:slot:33f6927dc809fc817542451b7d930d4707f7ac8ae6300a6a41e75263aff31266\",\n    \"stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e:road:530422b2c15f95a92c19e0fb81228fb9179f0a1fcd642ab1fc664848398bccf4\"\n  ],\n  \"issues\": []\n}",
+            "assessment": {
+              "issues": [],
+              "supported": true,
+              "preserves_scope": true,
+              "readable_as_diary": true,
+              "used_evidence_ids": [
+                "a1",
+                "movement-use:7848fbd28ac2e389e70add06d684097b246db6f231460b9f8af693f19a06cf39",
+                "space:stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e:slot:33f6927dc809fc817542451b7d930d4707f7ac8ae6300a6a41e75263aff31266",
+                "stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e:road:530422b2c15f95a92c19e0fb81228fb9179f0a1fcd642ab1fc664848398bccf4"
+              ],
+              "preserves_subjects": true,
+              "no_invented_experience": true,
+              "preserves_relation_axis": true,
+              "required_meanings_present": true
+            },
+            "response_schema": {
+              "type": "object",
+              "title": "SemanticReview",
+              "required": [
+                "supported",
+                "preserves_subjects",
+                "preserves_relation_axis",
+                "preserves_scope",
+                "no_invented_experience",
+                "required_meanings_present",
+                "readable_as_diary",
+                "used_evidence_ids",
+                "issues"
+              ],
+              "properties": {
+                "issues": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "title": "Issues"
+                },
+                "supported": {
+                  "type": "boolean",
+                  "title": "Supported"
+                },
+                "preserves_scope": {
+                  "type": "boolean",
+                  "title": "Preserves Scope"
+                },
+                "readable_as_diary": {
+                  "type": "boolean",
+                  "title": "Readable As Diary"
+                },
+                "used_evidence_ids": {
+                  "type": "array",
+                  "items": {
+                    "enum": [
+                      "a1",
+                      "movement-use:7848fbd28ac2e389e70add06d684097b246db6f231460b9f8af693f19a06cf39",
+                      "space:stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e:slot:33f6927dc809fc817542451b7d930d4707f7ac8ae6300a6a41e75263aff31266",
+                      "stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e:road:530422b2c15f95a92c19e0fb81228fb9179f0a1fcd642ab1fc664848398bccf4"
+                    ],
+                    "type": "string"
+                  },
+                  "title": "Used Evidence Ids"
+                },
+                "preserves_subjects": {
+                  "type": "boolean",
+                  "title": "Preserves Subjects"
+                },
+                "no_invented_experience": {
+                  "type": "boolean",
+                  "title": "No Invented Experience"
+                },
+                "preserves_relation_axis": {
+                  "type": "boolean",
+                  "title": "Preserves Relation Axis"
+                },
+                "required_meanings_present": {
+                  "type": "boolean",
+                  "title": "Required Meanings Present"
+                }
+              },
+              "description": "A model assessment, not a mathematical proof of natural-language truth.",
+              "additionalProperties": false
+            },
+            "request_revision": "cc17fd11c415cb4cab08c2e5354b6df25b76aa83c2bebd1a93878d7a266456ab"
+          },
+          "semantic_status": "model_reviewed",
+          "request_revision": "080c7632a2279a72dc15a247294715ada30a46da0c2db4c9faa7ce93cf7ea208"
+        },
+        {
+          "stage": "space",
+          "status": "failed",
+          "request": {
+            "current": {
+              "facts": [
+                {
+                  "id": "e3",
+                  "scope": {
+                    "kind": "record_point",
+                    "description": "좌표에 대응한 주소의 도로명. 실제 통과·진입 도로는 미확인",
+                    "coverage_key": "f27ecf2a98e0a10d96e518169b375f639290da7e2f4c6cf13fdb45bf644f8429"
+                  },
+                  "value": {
+                    "name": "반포대로"
+                  },
+                  "family": "road",
+                  "observed_at": null,
+                  "subject_key": null,
+                  "time_meaning": "조회 시점의 주소 대응. 도로의 관측 시점은 미확인",
+                  "reference_date": null
+                },
+                {
+                  "id": "e4",
+                  "scope": {
+                    "kind": "record_point",
+                    "description": "이 위치의 배경 유형. 실제 통과·현장 풍경·식생의 밀도는 미확인",
+                    "coverage_key": "be7d65682ce5b036624cc917e25d0f8ed43ef75bfe1d3b791e39a2c7764693fa"
+                  },
+                  "value": {
+                    "layer": "EGIS:lv3_2025y",
+                    "피복": "길",
+                    "classification": {
+                      "피복": "도로"
+                    }
+                  },
+                  "family": "land_cover",
+                  "observed_at": null,
+                  "subject_key": "public-normalized-land_cover:EGIS:lv3_2025y:lv3_2025y.7301442",
+                  "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인",
+                  "reference_date": "2024-12-30Z"
+                }
+              ],
+              "point": {
+                "lat": 37.506475,
+                "lng": 127.0
+              },
+              "walk_id": "e37c8a7168bf758a234cde888fa5571a3a034a323595e2bbb3b2e003c99b00c3",
+              "scene_id": "stamp:fd8ef4df5d22db3990a1b038a20e27333f51dd43abc8617d2d61b63765d5ba6c",
+              "accuracy_m": 5.0,
+              "collection": {
+                "road": "complete",
+                "land_cover": "partial",
+                "area_context": "unknown",
+                "surrounding_object": "unknown"
+              },
+              "recorded_at": "2026-09-09T00:10:00Z",
+              "position_basis": "observed",
+              "collection_reasons": {
+                "road": [
+                  "road_name_only"
+                ],
+                "land_cover": [
+                  "feature_does_not_cover_query"
+                ],
+                "area_context": [
+                  "source_unavailable"
+                ],
+                "surrounding_object": [
+                  "source_unavailable"
+                ]
+              }
+            },
+            "earlier": {
+              "facts": [
+                {
+                  "id": "e1",
+                  "scope": {
+                    "kind": "record_point",
+                    "description": "좌표에 대응한 주소의 도로명. 실제 통과·진입 도로는 미확인",
+                    "coverage_key": "e71582e46b9abfc3668e84de18bbb2bde0af7ef86c12564f105e7159ec0a4150"
+                  },
+                  "value": {
+                    "name": "반포대로"
+                  },
+                  "family": "road",
+                  "observed_at": null,
+                  "subject_key": null,
+                  "time_meaning": "조회 시점의 주소 대응. 도로의 관측 시점은 미확인",
+                  "reference_date": null
+                },
+                {
+                  "id": "e2",
+                  "scope": {
+                    "kind": "record_point",
+                    "description": "이 위치의 배경 유형. 실제 통과·현장 풍경·식생의 밀도는 미확인",
+                    "coverage_key": "3b554bd5ed9981a3b3558c581adaa63493bdd93b9347b78d2470c88808b5b8be"
+                  },
+                  "value": {
+                    "layer": "EGIS:lv3_2025y",
+                    "피복": "풀밭",
+                    "classification": {
+                      "피복": "기타초지"
+                    }
+                  },
+                  "family": "land_cover",
+                  "observed_at": null,
+                  "subject_key": "public-normalized-land_cover:EGIS:lv3_2025y:lv3_2025y.7301518",
+                  "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인",
+                  "reference_date": "2024-12-30Z"
+                }
+              ],
+              "point": {
+                "lat": 37.503238,
+                "lng": 127.0
+              },
+              "walk_id": "e37c8a7168bf758a234cde888fa5571a3a034a323595e2bbb3b2e003c99b00c3",
+              "scene_id": "stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e",
+              "accuracy_m": 5.0,
+              "collection": {
+                "road": "complete",
+                "land_cover": "partial",
+                "area_context": "unknown",
+                "surrounding_object": "unknown"
+              },
+              "recorded_at": "2026-09-09T00:05:00Z",
+              "position_basis": "last_known",
+              "collection_reasons": {
+                "road": [
+                  "road_name_only"
+                ],
+                "land_cover": [
+                  "feature_does_not_cover_query"
+                ],
+                "area_context": [
+                  "source_unavailable"
+                ],
+                "surrounding_object": [
+                  "source_unavailable"
+                ]
+              }
+            },
+            "version": "scene-comparison-v1",
+            "narration": {
+              "scope": "현재 장면",
+              "narrator": "이 산책을 기록한 보호자(나)",
+              "companions": []
+            },
+            "connection": {
+              "scope": "두 기록 사이의 경과 시간. 이동을 설명할 범위는 route_status와 관측 근거를 따른다",
+              "route_status": "partial",
+              "elapsed_seconds": 300.0,
+              "current_scene_id": "stamp:fd8ef4df5d22db3990a1b038a20e27333f51dd43abc8617d2d61b63765d5ba6c",
+              "earlier_scene_id": "stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e",
+              "route_evidence_ids": [
+                "e5"
+              ]
+            },
+            "citation_ids": [
+              "e1",
+              "e2",
+              "e3",
+              "e4",
+              "e5"
+            ],
+            "relation_ids": [
+              "r1",
+              "r2"
+            ],
+            "relation_slots": {
+              "proximity": {
+                "items": [],
+                "reason": "no_comparable_facts",
+                "status": "insufficient_evidence",
+                "policy_version": "scene-comparison-v1"
+              },
+              "background": {
+                "items": [
+                  {
+                    "id": "r1",
+                    "axis": "record_location",
+                    "scope": "두 기록 위치에 연결된 주소·지도 분류의 비교. 동일 장소의 시간 변화·중간 통과는 미확인",
+                    "family": "road",
+                    "result": "same_value",
+                    "comparison_basis": {
+                      "reason": "normalized_values",
+                      "attribute": "name",
+                      "source_dates": [],
+                      "source_dates_differ": false,
+                      "source_time_unknown": true
+                    },
+                    "distance_delta_m": null,
+                    "current_evidence_ids": [
+                      "e3"
+                    ],
+                    "earlier_evidence_ids": [
+                      "e1"
+                    ],
+                    "composition_values_equal": null
+                  },
+                  {
+                    "id": "r2",
+                    "axis": "record_location",
+                    "scope": "두 기록 위치에 연결된 주소·지도 분류의 비교. 동일 장소의 시간 변화·중간 통과는 미확인",
+                    "family": "land_cover",
+                    "result": "different_values",
+                    "comparison_basis": {
+                      "reason": "normalized_values",
+                      "attribute": "classification",
+                      "source_dates": [
+                        "2024-12-30Z"
+                      ],
+                      "source_dates_differ": false,
+                      "source_time_unknown": false
+                    },
+                    "distance_delta_m": null,
+                    "current_evidence_ids": [
+                      "e4"
+                    ],
+                    "earlier_evidence_ids": [
+                      "e2"
+                    ],
+                    "composition_values_equal": null
+                  }
+                ],
+                "reason": "see_individual_correspondences",
+                "status": "confirmed",
+                "policy_version": "scene-comparison-v1"
+              },
+              "area_context": {
+                "items": [],
+                "reason": "no_comparable_facts",
+                "status": "insufficient_evidence",
+                "policy_version": "scene-comparison-v1"
+              }
+            },
+            "route_evidence": {
+              "id": "e5",
+              "status": "partial",
+              "ended_at": "2026-09-09T00:10:00+00:00",
+              "started_at": "2026-09-09T00:05:00+00:00",
+              "elapsed_seconds": 300.0,
+              "observed_seconds": 300.0,
+              "moving_distance_m": 359.9,
+              "observed_distance_m": 359.9,
+              "uncovered_intervals": []
+            }
+          },
+          "task_id": "space:stamp:fd8ef4df5d22db3990a1b038a20e27333f51dd43abc8617d2d61b63765d5ba6c",
+          "raw_text": "{\n  \"text\": \"반포대로를 따라 5분 정도 이동하니 풀밭이 있던 이전과 달리 길 위를 걷고 있었다.\",\n  \"evidence_ids\": [\"e1\", \"e2\", \"e3\", \"e4\", \"e5\"],\n  \"focus\": \"이동에 따른 지표 피복의 변화\",\n  \"relation_ids\": [\"r1\", \"r2\"]\n}",
+          "revision": "a6b9c975646635fa1a540df573afe217fc55f26f9b848489a96cc9ec9b7692d6",
+          "scene_id": "stamp:fd8ef4df5d22db3990a1b038a20e27333f51dd43abc8617d2d61b63765d5ba6c",
+          "candidate": {
+            "text": "반포대로를 따라 5분 정도 이동하니 풀밭이 있던 이전과 달리 길 위를 걷고 있었다.",
+            "focus": "이동에 따른 지표 피복의 변화",
+            "evidence_ids": [
+              "stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e:road:530422b2c15f95a92c19e0fb81228fb9179f0a1fcd642ab1fc664848398bccf4",
+              "stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e:slot:33f6927dc809fc817542451b7d930d4707f7ac8ae6300a6a41e75263aff31266",
+              "stamp:fd8ef4df5d22db3990a1b038a20e27333f51dd43abc8617d2d61b63765d5ba6c:road:ded01d161589dbe668568fdea4026daecb42649b85b90f87957ad510451e2049",
+              "stamp:fd8ef4df5d22db3990a1b038a20e27333f51dd43abc8617d2d61b63765d5ba6c:slot:b9841d2f2af5fd604e5ba17ab82114cfe2a692ee89f042c76dd8c6493fadb45c",
+              "journey:f14a58f6476484cfbb3178bf83093b07e4cddcd8a3bf4185e68915a1f7bad8dc"
+            ],
+            "relation_ids": [
+              "comparison:11402c6d8c60be3da8330686fb379210b83dc3384bc112b3e9129a658f11e0a7",
+              "comparison:dffc3de7bb8798718b32395195b004875a26086a97a234169f08c4015bf18dbe"
+            ]
+          },
+          "elapsed_s": 23.328,
+          "error_type": "SemanticRejection",
+          "citation_map": {
+            "e1": "stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e:road:530422b2c15f95a92c19e0fb81228fb9179f0a1fcd642ab1fc664848398bccf4",
+            "e2": "stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e:slot:33f6927dc809fc817542451b7d930d4707f7ac8ae6300a6a41e75263aff31266",
+            "e3": "stamp:fd8ef4df5d22db3990a1b038a20e27333f51dd43abc8617d2d61b63765d5ba6c:road:ded01d161589dbe668568fdea4026daecb42649b85b90f87957ad510451e2049",
+            "e4": "stamp:fd8ef4df5d22db3990a1b038a20e27333f51dd43abc8617d2d61b63765d5ba6c:slot:b9841d2f2af5fd604e5ba17ab82114cfe2a692ee89f042c76dd8c6493fadb45c",
+            "e5": "journey:f14a58f6476484cfbb3178bf83093b07e4cddcd8a3bf4185e68915a1f7bad8dc"
+          },
+          "relation_map": {
+            "r1": "comparison:11402c6d8c60be3da8330686fb379210b83dc3384bc112b3e9129a658f11e0a7",
+            "r2": "comparison:dffc3de7bb8798718b32395195b004875a26086a97a234169f08c4015bf18dbe"
+          },
+          "failure_phase": "semantic_review",
+          "response_schema": {
+            "type": "object",
+            "required": [
+              "text",
+              "evidence_ids",
+              "focus",
+              "relation_ids"
+            ],
+            "properties": {
+              "text": {
+                "type": "string",
+                "maxLength": 220,
+                "minLength": 1
+              },
+              "focus": {
+                "type": "string",
+                "maxLength": 160,
+                "minLength": 1
+              },
+              "evidence_ids": {
+                "type": "array",
+                "items": {
+                  "enum": [
+                    "e1",
+                    "e2",
+                    "e3",
+                    "e4",
+                    "e5"
+                  ],
+                  "type": "string"
+                },
+                "minItems": 1
+              },
+              "relation_ids": {
+                "type": "array",
+                "items": {
+                  "enum": [
+                    "r1",
+                    "r2"
+                  ],
+                  "type": "string"
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          "semantic_review": {
+            "method": "model_review_not_proof",
+            "status": "rejected",
+            "request": {
+              "part": "space",
+              "evidence": {
+                "current": {
+                  "facts": [
+                    {
+                      "id": "e3",
+                      "scope": {
+                        "kind": "record_point",
+                        "description": "좌표에 대응한 주소의 도로명. 실제 통과·진입 도로는 미확인",
+                        "coverage_key": "f27ecf2a98e0a10d96e518169b375f639290da7e2f4c6cf13fdb45bf644f8429"
+                      },
+                      "value": {
+                        "name": "반포대로"
+                      },
+                      "family": "road",
+                      "observed_at": null,
+                      "subject_key": null,
+                      "time_meaning": "조회 시점의 주소 대응. 도로의 관측 시점은 미확인",
+                      "reference_date": null
+                    },
+                    {
+                      "id": "e4",
+                      "scope": {
+                        "kind": "record_point",
+                        "description": "이 위치의 배경 유형. 실제 통과·현장 풍경·식생의 밀도는 미확인",
+                        "coverage_key": "be7d65682ce5b036624cc917e25d0f8ed43ef75bfe1d3b791e39a2c7764693fa"
+                      },
+                      "value": {
+                        "layer": "EGIS:lv3_2025y",
+                        "피복": "길",
+                        "classification": {
+                          "피복": "도로"
+                        }
+                      },
+                      "family": "land_cover",
+                      "observed_at": null,
+                      "subject_key": "public-normalized-land_cover:EGIS:lv3_2025y:lv3_2025y.7301442",
+                      "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인",
+                      "reference_date": "2024-12-30Z"
+                    }
+                  ],
+                  "point": {
+                    "lat": 37.506475,
+                    "lng": 127.0
+                  },
+                  "walk_id": "e37c8a7168bf758a234cde888fa5571a3a034a323595e2bbb3b2e003c99b00c3",
+                  "scene_id": "stamp:fd8ef4df5d22db3990a1b038a20e27333f51dd43abc8617d2d61b63765d5ba6c",
+                  "accuracy_m": 5.0,
+                  "collection": {
+                    "road": "complete",
+                    "land_cover": "partial",
+                    "area_context": "unknown",
+                    "surrounding_object": "unknown"
+                  },
+                  "recorded_at": "2026-09-09T00:10:00Z",
+                  "position_basis": "observed",
+                  "collection_reasons": {
+                    "road": [
+                      "road_name_only"
+                    ],
+                    "land_cover": [
+                      "feature_does_not_cover_query"
+                    ],
+                    "area_context": [
+                      "source_unavailable"
+                    ],
+                    "surrounding_object": [
+                      "source_unavailable"
+                    ]
+                  }
+                },
+                "earlier": {
+                  "facts": [
+                    {
+                      "id": "e1",
+                      "scope": {
+                        "kind": "record_point",
+                        "description": "좌표에 대응한 주소의 도로명. 실제 통과·진입 도로는 미확인",
+                        "coverage_key": "e71582e46b9abfc3668e84de18bbb2bde0af7ef86c12564f105e7159ec0a4150"
+                      },
+                      "value": {
+                        "name": "반포대로"
+                      },
+                      "family": "road",
+                      "observed_at": null,
+                      "subject_key": null,
+                      "time_meaning": "조회 시점의 주소 대응. 도로의 관측 시점은 미확인",
+                      "reference_date": null
+                    },
+                    {
+                      "id": "e2",
+                      "scope": {
+                        "kind": "record_point",
+                        "description": "이 위치의 배경 유형. 실제 통과·현장 풍경·식생의 밀도는 미확인",
+                        "coverage_key": "3b554bd5ed9981a3b3558c581adaa63493bdd93b9347b78d2470c88808b5b8be"
+                      },
+                      "value": {
+                        "layer": "EGIS:lv3_2025y",
+                        "피복": "풀밭",
+                        "classification": {
+                          "피복": "기타초지"
+                        }
+                      },
+                      "family": "land_cover",
+                      "observed_at": null,
+                      "subject_key": "public-normalized-land_cover:EGIS:lv3_2025y:lv3_2025y.7301518",
+                      "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인",
+                      "reference_date": "2024-12-30Z"
+                    }
+                  ],
+                  "point": {
+                    "lat": 37.503238,
+                    "lng": 127.0
+                  },
+                  "walk_id": "e37c8a7168bf758a234cde888fa5571a3a034a323595e2bbb3b2e003c99b00c3",
+                  "scene_id": "stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e",
+                  "accuracy_m": 5.0,
+                  "collection": {
+                    "road": "complete",
+                    "land_cover": "partial",
+                    "area_context": "unknown",
+                    "surrounding_object": "unknown"
+                  },
+                  "recorded_at": "2026-09-09T00:05:00Z",
+                  "position_basis": "last_known",
+                  "collection_reasons": {
+                    "road": [
+                      "road_name_only"
+                    ],
+                    "land_cover": [
+                      "feature_does_not_cover_query"
+                    ],
+                    "area_context": [
+                      "source_unavailable"
+                    ],
+                    "surrounding_object": [
+                      "source_unavailable"
+                    ]
+                  }
+                },
+                "version": "scene-comparison-v1",
+                "narration": {
+                  "scope": "현재 장면",
+                  "narrator": "이 산책을 기록한 보호자(나)",
+                  "companions": []
+                },
+                "connection": {
+                  "scope": "두 기록 사이의 경과 시간. 이동을 설명할 범위는 route_status와 관측 근거를 따른다",
+                  "route_status": "partial",
+                  "elapsed_seconds": 300.0,
+                  "current_scene_id": "stamp:fd8ef4df5d22db3990a1b038a20e27333f51dd43abc8617d2d61b63765d5ba6c",
+                  "earlier_scene_id": "stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e",
+                  "route_evidence_ids": [
+                    "e5"
+                  ]
+                },
+                "citation_ids": [
+                  "e1",
+                  "e2",
+                  "e3",
+                  "e4",
+                  "e5"
+                ],
+                "relation_ids": [
+                  "r1",
+                  "r2"
+                ],
+                "relation_slots": {
+                  "proximity": {
+                    "items": [],
+                    "reason": "no_comparable_facts",
+                    "status": "insufficient_evidence",
+                    "policy_version": "scene-comparison-v1"
+                  },
+                  "background": {
+                    "items": [
+                      {
+                        "id": "r1",
+                        "axis": "record_location",
+                        "scope": "두 기록 위치에 연결된 주소·지도 분류의 비교. 동일 장소의 시간 변화·중간 통과는 미확인",
+                        "family": "road",
+                        "result": "same_value",
+                        "comparison_basis": {
+                          "reason": "normalized_values",
+                          "attribute": "name",
+                          "source_dates": [],
+                          "source_dates_differ": false,
+                          "source_time_unknown": true
+                        },
+                        "distance_delta_m": null,
+                        "current_evidence_ids": [
+                          "e3"
+                        ],
+                        "earlier_evidence_ids": [
+                          "e1"
+                        ],
+                        "composition_values_equal": null
+                      },
+                      {
+                        "id": "r2",
+                        "axis": "record_location",
+                        "scope": "두 기록 위치에 연결된 주소·지도 분류의 비교. 동일 장소의 시간 변화·중간 통과는 미확인",
+                        "family": "land_cover",
+                        "result": "different_values",
+                        "comparison_basis": {
+                          "reason": "normalized_values",
+                          "attribute": "classification",
+                          "source_dates": [
+                            "2024-12-30Z"
+                          ],
+                          "source_dates_differ": false,
+                          "source_time_unknown": false
+                        },
+                        "distance_delta_m": null,
+                        "current_evidence_ids": [
+                          "e4"
+                        ],
+                        "earlier_evidence_ids": [
+                          "e2"
+                        ],
+                        "composition_values_equal": null
+                      }
+                    ],
+                    "reason": "see_individual_correspondences",
+                    "status": "confirmed",
+                    "policy_version": "scene-comparison-v1"
+                  },
+                  "area_context": {
+                    "items": [],
+                    "reason": "no_comparable_facts",
+                    "status": "insufficient_evidence",
+                    "policy_version": "scene-comparison-v1"
+                  }
+                },
+                "route_evidence": {
+                  "id": "e5",
+                  "status": "partial",
+                  "ended_at": "2026-09-09T00:10:00+00:00",
+                  "started_at": "2026-09-09T00:05:00+00:00",
+                  "elapsed_seconds": 300.0,
+                  "observed_seconds": 300.0,
+                  "moving_distance_m": 359.9,
+                  "observed_distance_m": 359.9,
+                  "uncovered_intervals": []
+                }
+              },
+              "candidate": {
+                "text": "반포대로를 따라 5분 정도 이동하니 풀밭이 있던 이전과 달리 길 위를 걷고 있었다.",
+                "focus": "이동에 따른 지표 피복의 변화",
+                "evidence_ids": [
+                  "e1",
+                  "e2",
+                  "e3",
+                  "e4",
+                  "e5"
+                ],
+                "relation_ids": [
+                  "r1",
+                  "r2"
+                ]
+              },
+              "required_evidence_ids": []
+            },
+            "raw_text": "{\n  \"supported\": false,\n  \"preserves_subjects\": true,\n  \"preserves_relation_axis\": true,\n  \"preserves_scope\": false,\n  \"no_invented_experience\": false,\n  \"required_meanings_present\": true,\n  \"readable_as_diary\": true,\n  \"used_evidence_ids\": [\"e1\", \"e2\", \"e3\", \"e4\", \"e5\"],\n  \"issues\": [\"두 기록의 위치가 서로 다르므로(약 360m 이동), '풀밭이 있던 이전과 달리'라는 표현은 장소의 시간 변화로 오인될 소지가 있음.\", \"GPS 이동 기록만으로 '길 위를 걷고 있었다'는 실제 행동이나 현장 상황을 단정할 수 없음.\", \"공간 자료의 피복 정보는 지도상의 분류일 뿐, 실제 산책 당시의 현장 풍경이나 상태를 증명하지 않음.\"]\n}",
+            "assessment": {
+              "issues": [
+                "두 기록의 위치가 서로 다르므로(약 360m 이동), '풀밭이 있던 이전과 달리'라는 표현은 장소의 시간 변화로 오인될 소지가 있음.",
+                "GPS 이동 기록만으로 '길 위를 걷고 있었다'는 실제 행동이나 현장 상황을 단정할 수 없음.",
+                "공간 자료의 피복 정보는 지도상의 분류일 뿐, 실제 산책 당시의 현장 풍경이나 상태를 증명하지 않음."
+              ],
+              "supported": false,
+              "preserves_scope": false,
+              "readable_as_diary": true,
+              "used_evidence_ids": [
+                "e1",
+                "e2",
+                "e3",
+                "e4",
+                "e5"
+              ],
+              "preserves_subjects": true,
+              "no_invented_experience": false,
+              "preserves_relation_axis": true,
+              "required_meanings_present": true
+            },
+            "response_schema": {
+              "type": "object",
+              "title": "SemanticReview",
+              "required": [
+                "supported",
+                "preserves_subjects",
+                "preserves_relation_axis",
+                "preserves_scope",
+                "no_invented_experience",
+                "required_meanings_present",
+                "readable_as_diary",
+                "used_evidence_ids",
+                "issues"
+              ],
+              "properties": {
+                "issues": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "title": "Issues"
+                },
+                "supported": {
+                  "type": "boolean",
+                  "title": "Supported"
+                },
+                "preserves_scope": {
+                  "type": "boolean",
+                  "title": "Preserves Scope"
+                },
+                "readable_as_diary": {
+                  "type": "boolean",
+                  "title": "Readable As Diary"
+                },
+                "used_evidence_ids": {
+                  "type": "array",
+                  "items": {
+                    "enum": [
+                      "e1",
+                      "e2",
+                      "e3",
+                      "e4",
+                      "e5"
+                    ],
+                    "type": "string"
+                  },
+                  "title": "Used Evidence Ids"
+                },
+                "preserves_subjects": {
+                  "type": "boolean",
+                  "title": "Preserves Subjects"
+                },
+                "no_invented_experience": {
+                  "type": "boolean",
+                  "title": "No Invented Experience"
+                },
+                "preserves_relation_axis": {
+                  "type": "boolean",
+                  "title": "Preserves Relation Axis"
+                },
+                "required_meanings_present": {
+                  "type": "boolean",
+                  "title": "Required Meanings Present"
+                }
+              },
+              "description": "A model assessment, not a mathematical proof of natural-language truth.",
+              "additionalProperties": false
+            },
+            "request_revision": "47736f19a87719ba340227b0541693483288a05fa8d7a33bfa791ddcfbd732cb"
+          },
+          "request_revision": "b9b903ac5cdea7735587d983fbf12fe56ca6d45d5ad1262d440ae6df763630fb"
+        }
+      ],
+      "memory_strategy": "adjacent_source_snapshots_with_intro_recovery",
+      "prompt_revision": "4d1989f6e7156be0e388787f801bf618bd265831ad5c94ae40479d7c048e5db7",
+      "snapshot_revision": "70914aca36c8716afa51ddcd564bf1e07a34992832587f2e6bb4a8566e874006",
+      "semantic_validation": "model_review_not_proof",
+      "short_memory_enabled": true
+    },
+    "execution": {
+      "calls": [
+        {
+          "stage": "space",
+          "status": "returned",
+          "started_s": 106583.062,
+          "completed_s": 106585.515
+        },
+        {
+          "stage": "review",
+          "status": "returned",
+          "started_s": 106595.515,
+          "completed_s": 106597.437
+        },
+        {
+          "stage": "space",
+          "status": "returned",
+          "started_s": 106607.437,
+          "completed_s": 106609.515
+        },
+        {
+          "stage": "action",
+          "status": "returned",
+          "started_s": 106619.515,
+          "completed_s": 106621.937
+        },
+        {
+          "stage": "review",
+          "status": "returned",
+          "started_s": 106631.937,
+          "completed_s": 106639.843
+        },
+        {
+          "stage": "review",
+          "status": "returned",
+          "started_s": 106649.843,
+          "completed_s": 106652.125
+        },
+        {
+          "stage": "space",
+          "status": "returned",
+          "started_s": 106662.125,
+          "completed_s": 106663.468
+        },
+        {
+          "stage": "review",
+          "status": "returned",
+          "started_s": 106673.468,
+          "completed_s": 106675.468
+        },
+        {
+          "stage": "title",
+          "status": "returned",
+          "started_s": 106685.468,
+          "completed_s": 106687.468
+        },
+        {
+          "stage": "review",
+          "status": "returned",
+          "started_s": 106697.484,
+          "completed_s": 106698.812
+        }
+      ],
+      "model": "gemini-3.1-flash-lite",
+      "policy": {
+        "max_calls": 64,
+        "call_timeout_s": 15.0,
+        "semantic_review": true,
+        "minimum_interval_s": 10.0,
+        "generation_timeout_s": 180.0,
+        "preparation_timeout_s": 12.0
+      },
+      "sender_kind": "configured_provider",
+      "call_timeout_s": 15.0,
+      "max_model_calls": 10,
+      "total_timeout_s": 180.0,
+      "automatic_retries": 0,
+      "minimum_interval_s": 10.0,
+      "model_call_attempts": 10,
+      "stopped_on_deadline": false,
+      "stopped_on_rate_limit": false,
+      "semantic_review_enabled": true
+    },
+    "input_revision": "e37c8a7168bf758a234cde888fa5571a3a034a323595e2bbb3b2e003c99b00c3",
+    "meaning_delivery": "not_inferred_from_reference_ids",
+    "snapshot_revision": "70914aca36c8716afa51ddcd564bf1e07a34992832587f2e6bb4a8566e874006",
+    "delivered_task_ids": [
+      "space:stamp:5a4a32e366c643058dbce28a9fad6de6ff19891ecb6070cd10c790f86a21a672",
+      "action:stamp:2aaf088c17a00b578204ca30d960db3a7809210b29e90ac60b7ac5e1e8ba842e"
+    ]
+  }
+}

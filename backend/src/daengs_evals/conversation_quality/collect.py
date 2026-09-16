@@ -169,6 +169,20 @@ def _answered_by_fake_adapter(adapter_mode: Any, capability: Any) -> Any:
     return NOT_REACHED
 
 
+def _replay_intermediate_turn(
+    case: ConversationCase, user_turn_index: int, driver: ConversationDriver
+) -> None:
+    """대상이 아닌 user 턴도 보낸다 — 이력을 실제로 만드는 것은 이 호출이다 (#446).
+
+    응답은 버린다: 이 턴은 평가 대상이 아니라, 그다음 대상 턴이 볼 이력을 실제로
+    쌓기 위한 것뿐이다. `context` 를 얹는 것까지 `target_turn_row` 와 같다 — 두 함수가
+    갈리는 것은 결과를 `TurnSnapshot` 으로 남기느냐뿐이다.
+    """
+    if hasattr(driver, "context"):
+        driver.context = dict(case.state_snapshot)
+    driver.send(case.turns[user_turn_index].text)
+
+
 def target_turn_row(
     case: ConversationCase, turn_index: int, driver: ConversationDriver
 ) -> TurnSnapshot:
@@ -228,13 +242,44 @@ def run_collect(
 ) -> Path:
     """케이스마다 대상 턴을 드라이버에 보내고 랩 파일 하나로 쓴다.
 
-    한 랩 안의 모든 케이스가 같은 `driver` 를 쓴다 — 어댑터 모드는 드라이버를 조립할 때
-    한 번 정해지고, 케이스마다 바뀌는 것은 그 케이스의 상태뿐이다(`target_turn_row` 가 얹는다).
+    한 랩 안의 모든 케이스가 같은 `driver` **인스턴스**를 쓴다 — 어댑터 모드는 드라이버를
+    조립할 때 한 번 정해지고, 케이스마다 바뀌는 것은 그 케이스의 상태뿐이다(`target_turn_row`
+    가 얹는다). 인스턴스를 같이 쓰는 것과 **상태를 같이 쓰는 것**은 다른 일이다 — 케이스마다
+    `getattr(driver, "reset_for_new_case", None)` 가 있으면 그것을 불러 케이스 경계를 긋는다.
+    실측(#446) — `SessionDriver` 는 `_history` 를 자기 인스턴스에 쌓기만 할 뿐 "케이스가
+    바뀌었다"를 모른다, 그래서 이 호출 없이 여러 케이스를 먹이면 앞 케이스의 이력이 뒤
+    케이스로 새어(『심장사상충 질문』이 무관한 『구토 질문』을 이어받아 되묻는 식으로) 랩
+    전체의 `prior_turns_supplied` 가 케이스 경계 없이 그냥 누적된다. `FakeDriver` ·
+    `StatelessDriver` 는 이 메서드가 없다 — 둘 다 케이스를 넘어 쌓는 상태가 원래 없으므로
+    없어도 정직하다(`getattr` 의 기본값 `None` 이 그 경우를 그냥 지나친다). **드라이버
+    종류로 분기하지 않는다** — 이 함수는 여전히 `reset_for_new_case` 가 있는지만 보지,
+    어떤 클래스인지는 모른다.
 
     `settings.general_fallback` 은 여기서 늦게 읽는다(함수 안, 이 줄에서만) — 모듈
     최상단에서 읽으면 이 패키지를 import 만 해도 backend 설정이 필요해진다. `FakeDriver`
     처럼 오케스트레이터를 안 돌리는 이음매를 써도 이 값은 실제 프로세스 설정 그대로
     적힌다 — 무엇을 돌렸는지와 무관하게 "그 순간 스위치가 어느 쪽이었는지"는 항상 사실이다.
+
+    ## 대상 턴 앞이 아니라 케이스 전체를 순서대로 보낸다 (#446)
+
+    `case.turns` 는 인덱스 0 부터 user/assistant 가 번갈아 나온다 — user 턴 *i* 의 응답이
+    assistant 턴 *i+1* 이다. 이 함수는 `max(case.target_turns)` 까지 **모든** user 턴을
+    순서대로 드라이버에 보낸다: *i+1* 이 `target_turns` 에 있으면 그 응답을 행으로 남기고,
+    없으면 보내기만 하고 버린다(`_replay_intermediate_turn`). 대상 바로 앞 user 턴만
+    보내던 이전 코드는 대상들 **사이**의 user 턴을 통째로 건너뛰어, 그 턴이 만들었어야 할
+    이력이 이후 대상에 전혀 안 실렸다 — 대명사("그거")가 가리키는 앞 턴이 사라지거나,
+    관찰 케이스 중간 턴이 이력에서 빠지는 식으로.
+
+    이 재생은 **이력을 나르는 드라이버에만** 적용한다 — `reset_for_new_case` 가 있는지로
+    가른다(케이스 경계를 긋는 자리와 같은 신호: 이 메서드가 있다는 것 자체가 "이 드라이버는
+    호출 사이에 상태를 쌓는다"는 뜻이다). `StatelessDriver`·`FakeDriver` 는 `send()` 가
+    매번 독립이라(#446 스펙 §7) 중간 턴을 더 보내도 다음 대상이 보는 것이 하나도 안
+    바뀐다 — 그런데 `StatelessDriver` 가 무는 `real` 조립에서는 호출 하나하나가 유료
+    모델 호출이라, 아무것도 안 바뀌는 호출을 보태면 비용만 는다. 그래서 이 두 드라이버는
+    옛 경로(대상 바로 앞 user 턴만) 그대로 둔다 — **이미 모은 `before` 랩(`--driver
+    stateless`)이 보낸 것과 이 코드로 다시 모을 `--driver stateless` 랩이 보내는 것이
+    완전히 같다**는 뜻이다. 어느 경로든 **행은 대상 턴 개수만큼만** 나온다 — 재생은
+    무엇을 보내는지만 바꾸고, 무엇을 기록하는지는 안 바꾼다.
     """
     from daengs_backend.config import settings as backend_settings
 
@@ -242,11 +287,23 @@ def run_collect(
     driver_kind = str(getattr(driver, "driver_kind", "stateless"))
     general_fallback = backend_settings.general_fallback
     started_at = datetime.now(UTC).isoformat(timespec="seconds")
-    rows = [
-        target_turn_row(case, turn_index, driver)
-        for case in cases
-        for turn_index in case.target_turns
-    ]
+    reset_for_new_case = getattr(driver, "reset_for_new_case", None)
+    rows: list[TurnSnapshot] = []
+    for case in cases:
+        if reset_for_new_case is not None:
+            reset_for_new_case()
+        if reset_for_new_case is not None:
+            # 이력을 나르는 드라이버만 케이스 전체를 순서대로 재생한다 (위 docstring 절 참고).
+            max_target = max(case.target_turns)
+            for user_turn_index in range(0, max_target, 2):
+                assistant_index = user_turn_index + 1
+                if assistant_index in case.target_turns:
+                    rows.append(target_turn_row(case, assistant_index, driver))
+                else:
+                    _replay_intermediate_turn(case, user_turn_index, driver)
+        else:
+            for turn_index in case.target_turns:
+                rows.append(target_turn_row(case, turn_index, driver))
     finished_at = datetime.now(UTC).isoformat(timespec="seconds")
     header = LapHeader(
         lap=lap,
@@ -320,11 +377,13 @@ def build_adapters(mode: AdapterMode, general_sink: dict[str, Any]) -> Mapping[A
     from daengs_backend.orchestration.adapters import (
         LifeCapabilityAdapter,
         PlaceCapabilityAdapter,
+        SkinCapabilityAdapter,
         TrainingCapabilityAdapter,
+        VetContactCapabilityAdapter,
         WalkCapabilityAdapter,
     )
     from daengs_backend.orchestration.contracts import CapabilityName
-    from daengs_evals.orchestrator_comparison.runner import _fake_adapters
+    from daengs_evals.eval_harness import fake_adapters as _fake_adapters
 
     if mode == "real":
         return {
@@ -333,6 +392,13 @@ def build_adapters(mode: AdapterMode, general_sink: dict[str, Any]) -> Mapping[A
             CapabilityName.WALK: WalkCapabilityAdapter(),
             CapabilityName.PLACE: PlaceCapabilityAdapter(),
             CapabilityName.GENERAL: _general_recording_adapter(general_sink),
+            # 응급 컨트롤 케이스(cq_emergency_immediate_01)가 실측으로 잡은 구멍 (#446).
+            # 결정론적 게이트로만 들어오고 모델을 안 태우므로 real 모드에서도 recording
+            # 래퍼가 필요 없다 — 진짜 어댑터를 그대로 문다.
+            CapabilityName.VET_CONTACT: VetContactCapabilityAdapter(),
+            # 판정 기록이 붙은 `skin` 신호로만 들어온다 (D-079). 하네스는 기록 id 를 안
+            # 보내므로 실제로는 안 돈다 — 운영 엔진과 같은 등록을 두는 것뿐이다.
+            CapabilityName.SKIN: SkinCapabilityAdapter(),
         }
     if mode == "fake":
         return _fake_adapters()
@@ -354,17 +420,13 @@ def build_stateless_driver(mode: AdapterMode) -> Any:
     from daengs_backend.orchestration.semantic import GeminiSemanticRouter
     from daengs_backend.orchestration.service import AssistantOrchestrationService
     from daengs_evals.conversation_quality.drivers import StatelessDriver
-    from daengs_evals.orchestrator_comparison.runner import Meter
-    from daengs_evals.orchestrator_comparison.runner_v2 import (
-        RecordingEngine,
-        _metered_semantic_generate,
-    )
+    from daengs_evals.eval_harness import Meter, RecordingEngine, metered_semantic_generate
 
     plan_sink: dict[str, Any] = {"plan": None}
     general_sink: dict[str, Any] = {"decision": None}
     orchestrator = AssistantOrchestrationService(
         engine=RecordingEngine(build_adapters(mode, general_sink), plan_sink),  # type: ignore[arg-type]
-        semantic_router=GeminiSemanticRouter(generate=_metered_semantic_generate(Meter())),
+        semantic_router=GeminiSemanticRouter(generate=metered_semantic_generate(Meter())),
     )
     principal = PrincipalContext(subject="conversation-quality-runner", kind="ADMIN")
     return StatelessDriver(
@@ -388,17 +450,13 @@ def build_session_driver(mode: AdapterMode) -> Any:
     from daengs_backend.orchestration.semantic import GeminiSemanticRouter
     from daengs_backend.orchestration.service import AssistantOrchestrationService
     from daengs_evals.conversation_quality.drivers import SessionDriver
-    from daengs_evals.orchestrator_comparison.runner import Meter
-    from daengs_evals.orchestrator_comparison.runner_v2 import (
-        RecordingEngine,
-        _metered_semantic_generate,
-    )
+    from daengs_evals.eval_harness import Meter, RecordingEngine, metered_semantic_generate
 
     plan_sink: dict[str, Any] = {"plan": None}
     general_sink: dict[str, Any] = {"decision": None}
     orchestrator = AssistantOrchestrationService(
         engine=RecordingEngine(build_adapters(mode, general_sink), plan_sink),  # type: ignore[arg-type]
-        semantic_router=GeminiSemanticRouter(generate=_metered_semantic_generate(Meter())),
+        semantic_router=GeminiSemanticRouter(generate=metered_semantic_generate(Meter())),
     )
     principal = PrincipalContext(subject="conversation-quality-runner", kind="ADMIN")
     return SessionDriver(

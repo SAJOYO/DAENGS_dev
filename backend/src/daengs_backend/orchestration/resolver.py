@@ -24,6 +24,7 @@ from pydantic import BaseModel, Field, ValidationError, model_validator
 
 from daengs_backend.config import settings
 from daengs_backend.orchestration.contracts import (
+    CareLogProposal,
     ContractModel,
     ConversationContext,
     ObservationAxis,
@@ -104,6 +105,14 @@ class PendingClarification(ContractModel):
     question: str
     missing: list[str] = Field(default_factory=list)
     missing_axes: list[ObservationAxis] = Field(default_factory=list)
+    #: **세 번째 부류** — 케어 기록 확인 (#331 후속, D-075). 위 표의 둘과 달리 이것은 후속
+    #: 답변을 무엇에 묶을지의 문제가 아니라, 후속 답변이 **DB 에 행을 남길지**의 문제다.
+    #:
+    #: 그래서 이 값은 Turn Resolver 를 **안 지난다**: `service._plan_and_execute` 가 모델보다
+    #: 먼저 `planner.resolve_care_log_write` 에 그대로 넘기고, 승낙 판정은 결정론 어휘가
+    #: 한다 (`orchestration/care_log.py`). 리졸버가 이어 주는 것은 "무슨 이야기였나" 이고,
+    #: 쓰기 승낙은 "예/아니오" 라 모델이 개입할 자리가 없다.
+    care_log: CareLogProposal | None = None
 
     @property
     def is_observation_ask(self) -> bool:
@@ -150,10 +159,10 @@ class ResolvedTurn(ContractModel):
 #: `말고기` 오탐)와 `또`(→ `또띠아`/"또 토했어" 오탐)는 예외 — 그 둘은 흔한 새 주제
 #: 문장을 오염시키는 실제 결함이라 fix round 1 에서 좁혔다/뺐다.
 _CONTEXT_MARKERS = re.compile(
-    r"그거|그걸|그것|저거|저걸|걔|아까|방금|말한\s*거|"          # 지시어
-    r"아니(?![요라])|말고(?![가-힣])|가\s*아니라|이\s*아니라|"     # 정정
-    r"그러니까|그니까|다시|했잖아|물어봤|"                         # 반복
-    r"물어봐야|왜\s*안|안\s*물어"                                   # 메타
+    r"그거|그걸|그것|저거|저걸|걔|아까|방금|말한\s*거|"  # 지시어
+    r"아니(?![요라])|말고(?![가-힣])|가\s*아니라|이\s*아니라|"  # 정정
+    r"그러니까|그니까|다시|했잖아|물어봤|"  # 반복
+    r"물어봐야|왜\s*안|안\s*물어"  # 메타
 )
 
 
@@ -207,9 +216,7 @@ def conversation_context_of(
 
 def new_turn(query: str) -> ResolvedTurn:
     """fast path 의 결과. 아무것도 안 잇고, 아무것도 안 넘긴다."""
-    return ResolvedTurn(
-        relation=TurnRelation.NEW, current_query=query, resolution_confidence=1.0
-    )
+    return ResolvedTurn(relation=TurnRelation.NEW, current_query=query, resolution_confidence=1.0)
 
 
 def truncate_assistant(text: str) -> str:
@@ -378,8 +385,10 @@ def validate_resolved_turn(
     # 번째 갈래가 그 경우를 잡는다. 이 갈래는 `referenced` 를 비우고 pending 필드를
     # 채우기만 하므로 `one_anchor_at_most` 가 요구하는 "앵커는 최대 하나" 를 어기지
     # 않고, 원래 더 헐거웠던 첫 갈래(참조 없음)가 놓친 앵커를 되살릴 뿐이다.
-    anchored_to_pending = pending is not None and decision.relation is not TurnRelation.NEW and (
-        referenced is None or referenced.turn_id == pending.turn_id
+    anchored_to_pending = (
+        pending is not None
+        and decision.relation is not TurnRelation.NEW
+        and (referenced is None or referenced.turn_id == pending.turn_id)
     )
     if anchored_to_pending and referenced is not None and referenced.turn_id == pending.turn_id:
         referenced = None
@@ -392,15 +401,12 @@ def validate_resolved_turn(
         referenced_assistant_answer=(
             truncate_assistant(referenced.assistant) if referenced else None
         ),
-        pending_missing_axes=(
-            list(pending.missing_axes) if anchored_to_pending else []
-        ),
+        pending_missing_axes=(list(pending.missing_axes) if anchored_to_pending else []),
         standalone_query=decision.standalone_query,
         resolution_confidence=decision.resolution_confidence,
         ambiguity=decision.ambiguity,
         context_used=(
-            [pending.turn_id] if anchored_to_pending
-            else [referenced.turn_id] if referenced else []
+            [pending.turn_id] if anchored_to_pending else [referenced.turn_id] if referenced else []
         ),
     )
 
@@ -413,15 +419,14 @@ class TurnResolutionError(Exception):
 def _gemini_client() -> Any:
     # google-genai stays a function-local import so importing the resolver never
     # pulls provider machinery (mirrors semantic.py's lazy-import rule).
-    from google import genai
-    from google.genai import types
+    from daengs_backend.core.gemini import create_client
 
     api_key = settings.gemini_api_key.get_secret_value().strip()
     if not api_key:
         raise TurnResolutionError("GEMINI_API_KEY is required for the turn resolver")
-    return genai.Client(
+    return create_client(
         api_key=api_key,
-        http_options=types.HttpOptions(timeout=settings.gemini_timeout_ms),
+        timeout_ms=settings.gemini_timeout_ms,
     )
 
 

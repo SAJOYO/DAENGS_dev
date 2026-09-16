@@ -1,0 +1,62 @@
+{
+  "1_new_year.webp": {
+    "title": "NEW YEAR NEO",
+    "badge": "NEO-JAN25",
+    "subtitle": "JANUARY SPECIAL"
+  },
+  "2_love.webp": {
+    "title": "LOVE NEO",
+    "badge": "NEO-FEB25",
+    "subtitle": "FEBRUARY SPECIAL"
+  },
+  "3_first_day.webp": {
+    "title": "FIRST DAY NEO",
+    "badge": "NEO-MAR25",
+    "subtitle": "MARCH SPECIAL"
+  },
+  "4_blossom.webp": {
+    "title": "BLOSSOM NEO",
+    "badge": "NEO-APR25",
+    "subtitle": "APRIL SPECIAL"
+  },
+  "5_home_team.webp": {
+    "title": "HOME TEAM NEO",
+    "badge": "NEO-MAY25",
+    "subtitle": "MAY SPECIAL"
+  },
+  "6_pool.webp": {
+    "title": "POOL NEO",
+    "badge": "NEO-JUN25",
+    "subtitle": "JUNE SPECIAL"
+  },
+  "7_beach.webp": {
+    "title": "BEACH NEO",
+    "badge": "NEO-JUL24",
+    "subtitle": "JULY SPECIAL"
+  },
+  "8_rain.webp": {
+    "title": "RAIN NEO",
+    "badge": "NEO-AUG25",
+    "subtitle": "AUGUST SPECIAL"
+  },
+  "9_harvest_moon.webp": {
+    "title": "HARVEST MOON NEO",
+    "badge": "NEO-SEP24",
+    "subtitle": "SEPTEMBER SPECIAL"
+  },
+  "10_ghost.webp": {
+    "title": "GHOST NEO",
+    "badge": "NEO-OCT24",
+    "subtitle": "OCTOBER SPECIAL"
+  },
+  "11_thanks.webp": {
+    "title": "THANKS NEO",
+    "badge": "NEO-NOV24",
+    "subtitle": "NOVEMBER SPECIAL"
+  },
+  "12_santa.webp": {
+    "title": "SANTA NEO",
+    "badge": "NEO-DEC24",
+    "subtitle": "DECEMBER SPECIAL"
+  }
+}

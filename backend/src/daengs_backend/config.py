@@ -1,25 +1,21 @@
+import logging
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import AliasChoices, Field, SecretStr, ValidationError, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import (
+    AliasChoices,
+    Field,
+    SecretStr,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 from sqlalchemy import URL
 
 # backend/.env 를 가리킵니다. config.py 기준으로 잡아 두면
 # 어느 디렉터리에서 실행하든 같은 파일을 읽습니다.
 ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
-
-# `/assistant/query` 를 어느 오케스트레이터가 답하는가.
-#
-# **이 별칭이 config 에 있는 것은 자리를 잘못 잡아서가 아니라 순환 때문입니다.**
-# 임자는 `orchestration/runtime.py` 인데, 거기 두고 config 가 import 하면
-# config → runtime → service → semantic → config 로 한 바퀴 돕니다
-# (`semantic.py` 가 `settings` 를 모듈 최상단에서 읽습니다). 값의 권위가 환경
-# 변수(`DAENGS_ORCHESTRATOR`)에 있으니 정의를 이쪽에 두고, `runtime.py` 가
-# 다시 export 합니다 — 쓰는 쪽은 `orchestration.runtime` 에서 가져오면 됩니다.
-#
-# Literal 인 이유: 오타가 **기동 때** 걸립니다. `str` 이면 첫 요청에서야 터집니다.
-OrchestratorKind = Literal["langgraph", "agent"]
 
 
 class Settings(BaseSettings):
@@ -131,6 +127,13 @@ class Settings(BaseSettings):
     walk_diary_enabled: bool = False
     # Experimental endpoint must be enabled independently of published diaries.
     walk_diary_slots_preview_enabled: bool = False
+    # Public normalization is independent of the legacy entry-context job schema.
+    walk_diary_space_enabled: bool = True
+    walk_diary_route_patterns_enabled: bool = False
+    walk_diary_space_radius_m: int = Field(default=1000, ge=1, le=3000)
+    walk_land_cover_layer: str = Field(
+        default="EGIS:lv3_2025y", pattern=r"^EGIS:lv3_[a-zA-Z0-9_-]+$"
+    )
 
     # ── DB ────────────────────────────────────────────────────────────
     # URL 한 줄이 아니라 조각으로 받습니다 (D-013). 개발 PC 와 서버가 다른 것은
@@ -160,35 +163,24 @@ class Settings(BaseSettings):
     # 기본값은 기존 앱 access token을 요구한다.
     training_rag_allow_anonymous_demo: bool = False
 
-    # ── 오케스트레이터 구현 선택 ──────────────────────────────────────
-    # LangGraph 는 정해진 워크플로우에 최적화돼 있어, 자유도가 필요한 질의에
-    # LangChain 에이전트가 더 나은지 재 보려고 두 구현을 병존시킵니다.
-    # `orchestration/runtime.py` 의 `build_orchestrator()` 가 이 값을 읽습니다.
-    #
-    # **이건 배포 스위치입니다 — 비교 스위치가 아닙니다.** 두 구현을 나란히 재는
-    # 벤치마크는 이 값을 건드리지 않고 `build_orchestrator(kind)` 로 객체를 둘
-    # 만듭니다. 환경 변수를 토글해 가며 재면 한 프로세스에서 비교가 안 됩니다.
-    #
-    # 기본값이 `langgraph` 라 **서버 `.env` 를 안 고쳐도 지금과 똑같이 돕니다.**
-    orchestrator: OrchestratorKind = "langgraph"
-
-    # 에이전트 한 턴의 예산. **답이 아니라 안전장치입니다** — 에이전트가 루프를 돌아
-    # 비싼 것 자체는 카드 ③이 재야 할 발견이라, 여기서 깎아 결과를 미리 만들지
-    # 않습니다. 무한 루프만 막습니다. LangGraph 경로는 이 값을 안 읽습니다.
-    agent_turn_timeout_ms: int = Field(default=60_000, gt=0)
-    agent_recursion_limit: int = Field(default=25, gt=0)
-
     # ── 일반 답변 폴백 (#279) ─────────────────────────────────────────
     # 라우터가 전문 능력을 하나도 못 골랐을 때 거절(FAILED) 대신 Gemini 생성 답변
     # (`adapters/general.py`)을 붙일지. **기본값 false 라 켜기 전까지 운영은 지금과
     # 같습니다** — #277 의 판정 결과를 보고 서버 `backend/.env` 한 줄로 켭니다.
     #
-    # 폴백은 라우터의 목적지가 아니라 `planner.assemble_route_plan` 의 결정론 규칙이고,
-    # 두 오케스트레이터 구현(langgraph · agent)이 같은 규칙을 같은 값으로 지납니다.
+    # 폴백은 라우터의 목적지가 아니라 `planner.assemble_route_plan` 의 결정론 규칙입니다.
     # 명시 신호 `requested_capability` 와 골드 회귀 러너는 이 값을 읽지 않습니다.
     general_fallback: bool = Field(
         default=False, validation_alias=AliasChoices("DAENGS_GENERAL_FALLBACK")
     )
+
+    # ── 피부 판정 해설 킬 스위치 (D-079) ────────────────────────────────
+    # `turn_resolver` 와 같은 쪽 기본값(**켜짐**)이다. 켜 둬도 운영이 달라지지 않는 이유가
+    # 따로 있다 — 이 능력은 앱이 `requested_capability="skin"` 과 `screening_record_id` 를
+    # **함께** 보내고 서버가 그 기록의 소유를 확인했을 때만 돈다(`planner.resolve_skin_route`).
+    # 그 조합을 보내는 클라이언트가 생기기 전까지는 오늘과 같은 HANDOFF 이고, 끄면 그 뒤에도
+    # HANDOFF 로 돌아간다. 장애 대응·비용 급증 때 한 줄로 끄는 자리다.
+    skin_agent: bool = Field(default=True, validation_alias=AliasChoices("DAENGS_SKIN_AGENT"))
 
     # ── Turn Resolver 킬 스위치 (#416, R16) ────────────────────────────
     # `general_fallback` 과 정반대 기본값: 이건 **기본이 켜짐**입니다. 리졸버는 이미
@@ -200,8 +192,21 @@ class Settings(BaseSettings):
     # 켜져 있으면(기본) 애매한 발화마다 시맨틱 라우터보다 앞서 Gemini 왕복이 하나 더
     # 붙습니다. 끄면 `service._plan_and_execute` 가 리졸버를 아예 안 부르고 `resolved
     # = None` 으로 오늘처럼 진행합니다 — 이력 이어짐이 없어질 뿐 답은 그대로 나갑니다.
-    turn_resolver: bool = Field(
-        default=True, validation_alias=AliasChoices("DAENGS_TURN_RESOLVER")
+    turn_resolver: bool = Field(default=True, validation_alias=AliasChoices("DAENGS_TURN_RESOLVER"))
+
+    # ── 채팅에서 케어 기록 쓰기 (#331 후속, D-075) ──────────────────────
+    # `general_fallback` 과 같은 기본값(꺼짐)이고 같은 이유입니다 — **켜기 전까지 운영은
+    # 지금과 같습니다.** 다만 여기서 "지금과 같다" 가 뜻하는 것이 하나 더 있습니다:
+    # 꺼져 있어도 `"방금 밥 먹였어"` 는 **기록 화면 HANDOFF** 로 답합니다. 그것이
+    # `docs/care-events.md` 가 적어 둔 순서의 가운데 칸이고, 플래그가 가르는 것은
+    # 그 뒤(확인 되묻기 → 실제 쓰기)뿐입니다.
+    #
+    # ⚠ 이 플래그 하나로는 안 켜집니다. `routers/assistant.py` 가 요청마다
+    # `CareLogCapabilityAdapter` 를 엔진에 넣고 `context["care_log_writable"]` 를 세울 때만
+    # 제안이 나가므로(앱 회원 + 활성 강아지), 관리자 토큰·무상태 점검 요청은 이 값이
+    # 켜져 있어도 HANDOFF 로 떨어집니다.
+    care_log_write: bool = Field(
+        default=False, validation_alias=AliasChoices("DAENGS_CARE_LOG_WRITE")
     )
 
     # ── 의미 라우터 (D-041) ───────────────────────────────────────────
@@ -219,6 +224,61 @@ class Settings(BaseSettings):
     gemini_timeout_ms: int = Field(
         default=30_000, validation_alias=AliasChoices("GEMINI_TIMEOUT_MS")
     )
+
+    # ── 도감 카드 생성 (#496, docs/cardimage/) ─────────────────────────
+    # 채팅용 gemini_api_key 와 **다른 GCP 프로젝트** 키입니다 (지출 상한·사용량이 프로젝트
+    # 단위라 이미지 생성이 채팅 예산을 먹지 않게). 비면 GEMINI_API_KEY 로 떨어지지 **않고**
+    # /admin/cardimage·/app/ai-cards 가 503 입니다 — 앱은 뜹니다.
+    cardimage_gemini_api_key: SecretStr = Field(
+        default=SecretStr(""), validation_alias=AliasChoices("DAENGS_CARDIMAGE_GEMINI_API_KEY")
+    )
+    # Nano Banana 2. 실험 16장 「됨」(worklog 09-14). 세대가 바뀌면 이 한 줄.
+    cardimage_model: str = Field(default="gemini-3.1-flash-image", validation_alias=AliasChoices("DAENGS_CARDIMAGE_MODEL"))
+    # 2K 여야 카드(994×1582)에 확대 없이 맞습니다. 1K 는 1.25배 확대.
+    cardimage_size: str = Field(default="2K", validation_alias=AliasChoices("DAENGS_CARDIMAGE_SIZE"))
+    cardimage_timeout_ms: int = Field(default=120_000, validation_alias=AliasChoices("DAENGS_CARDIMAGE_TIMEOUT_MS"))
+    # 틀 12장·글꼴이 있는 폴더. 기본값을 상대 경로("cardimage")로 두면 CWD 에 따라 갈려서
+    # `uv run dev` 를 backend/ 에서 돌리면 못 찾는다(#496 리뷰에서 실측). 그래서 이 파일
+    # 위치에서 절대 경로로 계산한다 — 개발 PC 는 `backend/src/daengs_backend/config.py` 라
+    # parents[3] 가 저장소 루트라 `<repo>/cardimage`, 컨테이너는 `/app/src/daengs_backend/
+    # config.py` 라 parents[3] 가 `/` 라서 `/cardimage`(compose 마운트와 같은 자리). 둘 다
+    # 맞아떨어지므로 `DAENGS_CARDIMAGE_DIR` 환경 변수는 이제 belt-and-braces 다.
+    cardimage_dir: Path = Field(
+        default=Path(__file__).resolve().parents[3] / "cardimage",
+        validation_alias=AliasChoices("DAENGS_CARDIMAGE_DIR"),
+    )
+    # 허용된 달. 틀은 12장 다 있지만 이 카드(#496)는 4월만 엽니다. "4,9" 처럼 CSV.
+    #
+    # ⚠ pydantic-settings 는 env 값을 우리 before-validator 가 보기 전에 먼저 JSON 으로
+    #   디코드하려 합니다 — frozenset[int] 는 "복합 타입"이라 CSV 문자열("4, 9,12")을
+    #   JSON 으로 못 읽어 여기까지 오기 전에 실패합니다. `NoDecode` 로 그 선(先)디코드를
+    #   끄고, 아래 before-validator 가 원문 문자열을 그대로 받아 직접 나눕니다.
+    cardimage_months: Annotated[frozenset[int], NoDecode] = Field(
+        default=frozenset({4, 9}), validation_alias=AliasChoices("DAENGS_CARDIMAGE_MONTHS")
+    )
+    # 유사도 검수. 텍스트 모델이라 채팅과 같은 계열이어도 됩니다 — 여기서는 "같은 개인가"만 묻습니다.
+    cardimage_judge_model: str = Field(default="gemini-3.1-flash-lite", validation_alias=AliasChoices("DAENGS_CARDIMAGE_JUDGE_MODEL"))
+    # 1~5 중 이 값 미만이면 한 번 다시 만듭니다. 실험에서 정면 사진은 6장 중 1장이 어긋났습니다.
+    cardimage_judge_min: int = Field(default=3, ge=1, le=5, validation_alias=AliasChoices("DAENGS_CARDIMAGE_JUDGE_MIN"))
+    # 앱 사용자 하루 생성 한도 (KST 하루, `ready` 만 셈). 0 이면 한도 없음. 테스트 단계라 1 이고,
+    # 제품 규칙이 정해지면 `services/ai_card_quota.py` 의 함수를 통째로 바꿉니다 (D-076).
+    cardimage_daily_limit: int = Field(default=1, ge=0, validation_alias=AliasChoices("DAENGS_CARDIMAGE_DAILY_LIMIT"))
+    # 서버 전체 동시 생성 수. backend 프로세스 안 백그라운드 작업이라 스레드를 씁니다 (D-076).
+    cardimage_concurrency: int = Field(default=2, ge=1, validation_alias=AliasChoices("DAENGS_CARDIMAGE_CONCURRENCY"))
+
+    # GPU 카드 생성 서비스(D-078, Cloud Run asia-southeast1 L4). **비어 있으면 Nano Banana 2(D-074)
+    # 그대로** — 되돌리기가 이 한 줄이다. ⚠ 앱 경로(`/app/ai-cards`)의 정리 기준은 아직
+    # `cardimage_timeout_ms` 만 보므로 콜드 스타트(가중치 로드 수 분)를 모른다 — #544 에서는 VM 에 넣지 않는다.
+    cardgen_url: str = Field(default="", validation_alias=AliasChoices("DAENGS_CARDGEN_URL"))
+    # 콜드 스타트 + 생성. `infra/gcp/cardgen.sh` 의 `--timeout=900` 과 맞춘다.
+    cardgen_timeout_s: float = Field(default=900.0, gt=0, validation_alias=AliasChoices("DAENGS_CARDGEN_TIMEOUT_S"))
+
+    @field_validator("cardimage_months", mode="before")
+    @classmethod
+    def _parse_months(cls, v):
+        if isinstance(v, str):
+            return frozenset(int(x) for x in v.split(",") if x.strip())
+        return v
 
     # ── LLM judge (RAG-007 · D15 · D-060) ────────────────────────────
     # **세 값의 원본은 `daengs_life.rag.core.config` 입니다** (#305). 여기 있는 것은
@@ -343,6 +403,46 @@ class Settings(BaseSettings):
         default=150 * 1024 * 1024,
         validation_alias=AliasChoices("GAIT_MAX_UPLOAD_BYTES"),
     )
+
+    # 공동 돌봄 초대 웹 안내(`/invite`)가 여는 `/.well-known/assetlinks.json` 의
+    # 서명 지문. **Android App Links 검증에 쓰는 값입니다.** Play App Signing 을 쓰는
+    # 앱은 우리가 올리는 업로드 키(`daengs.uploadKeyStore`)와 스토어가 배포하는 앱의
+    # 서명 키가 **다릅니다** — 스토어 설치본을 열려면 Play Console → 릴리스 → 설정 →
+    # 앱 서명의 「앱 서명 키 인증서」 SHA-256 이 들어가야 합니다. 업로드 키 지문을 같이
+    # 넣어도 됩니다(업로드 키로 서명한 로컬 릴리스 빌드가 그것으로 검증됩니다) —
+    # 배열이라 둘 다 넣을 수 있습니다.
+    #
+    # ⚠️ **비어 있으면 App Links 검증이 그냥 실패합니다** — 일부러 그렇게 둡니다.
+    #    가짜 지문을 넣느니 검증이 안 되는 채로(=링크가 웹 안내로 떨어지는 채로) 배포하는
+    #    편이 낫습니다. 값은 JSON 배열입니다:
+    #    DAENGS_PLAY_SIGNING_SHA256_FINGERPRINTS=["AA:BB:…(32쌍)"]
+    #    파일은 `backend/.env` 입니다 — 최상단 `.env` 는 compose 용이라 backend 가 안 읽습니다.
+    #
+    # ⚠️ **모양이 틀려도 부팅을 막지 않습니다** — 선택 기능이라서입니다. 틀리면 전부 버리고
+    #    (일부만 채택하지 않음) 부팅 로그에 오류를 남기고 `/admin/status` 에 `app_links` 항목으로
+    #    보입니다. 규칙은 `app_links.py` 입니다. 위의 필수 보안 설정(카카오 앱 키·DB·키)은
+    #    여전히 부팅에서 막습니다.
+    #
+    # **원문 문자열로 받습니다.** `list[str]` 로 두면 pydantic-settings 가 검증기보다 먼저
+    # JSON 디코드를 해서, JSON 이 아닌 값 하나에 `SettingsError` 로 부팅이 죽습니다.
+    play_signing_sha256_fingerprints_raw: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("DAENGS_PLAY_SIGNING_SHA256_FINGERPRINTS"),
+    )
+
+    @property
+    def play_signing_sha256_fingerprints(self) -> list[str]:
+        """검증을 통과한 지문. 설정이 틀렸으면 빈 목록이다."""
+        from daengs_backend.app_links import parse_play_signing_fingerprints
+
+        return list(parse_play_signing_fingerprints(self.play_signing_sha256_fingerprints_raw).fingerprints)
+
+    @property
+    def play_signing_config_error(self) -> str | None:
+        """설정이 틀렸으면 그 사유(값은 싣지 않음). 비었거나 맞으면 None."""
+        from daengs_backend.app_links import parse_play_signing_fingerprints
+
+        return parse_play_signing_fingerprints(self.play_signing_sha256_fingerprints_raw).error
 
     # ── 보행 분석 엔진 (#304 · D-063) ──────────────────────────────────
     # **지금 값은 `v4` 하나입니다** — `daengs_gait.inference`(ssdlite + RTMPose AP-10K).
@@ -517,7 +617,7 @@ def _load_settings(**overrides: object) -> Settings:
     트레이스백에 그대로 찍힙니다.
     """
     try:
-        return Settings(**overrides)  # type: ignore[arg-type]
+        loaded = Settings(**overrides)  # type: ignore[arg-type]
     except ValidationError as exc:
         problems = "\n".join(
             f"  {'.'.join(str(part) for part in error['loc']) or '(전체)'}: {error['msg']}"
@@ -527,6 +627,12 @@ def _load_settings(**overrides: object) -> Settings:
             "설정을 읽지 못했습니다. backend/.env 를 확인하세요 "
             f"(backend/.env.example 참고).\n{problems}"
         ) from None
+
+    # **선택 기능의 설정 오류는 부팅을 막지 않고 여기서 크게 남깁니다** (`app_links.py`).
+    # 사유에는 값이 없습니다. 콘솔 `/admin/status` 의 `app_links` 항목에도 같은 말이 뜹니다.
+    if loaded.play_signing_config_error:
+        logging.getLogger(__name__).error(loaded.play_signing_config_error)
+    return loaded
 
 
 settings = _load_settings()

@@ -5,12 +5,12 @@ from copy import deepcopy
 import pytest
 
 from daengs_backend.orchestration.contracts import PrincipalContext
-from daengs_backend.services.walk_diary_contract import (
+from daengs_backend.services.walk_diary.guard import (
     StaleDiaryGeneration,
     bind_generation,
     require_current,
 )
-from daengs_walk.diary_input import (
+from daengs_walk.diary.contracts.input import (
     Anchor,
     DiaryInput,
     MovementObservation,
@@ -18,7 +18,7 @@ from daengs_walk.diary_input import (
     digest,
     material_ref,
 )
-from daengs_walk.diary_output import (
+from daengs_walk.diary.contracts.output import (
     BackgroundPiece,
     DiaryPlan,
     DiaryWriting,

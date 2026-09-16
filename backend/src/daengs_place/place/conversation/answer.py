@@ -10,7 +10,7 @@ fallback_text = render_answer
 async def compose_answer(request, generator=None):
     receipt = request.prepared.receipt
     return ConversationAnswer(
-        text=render_answer(receipt),
+        text=render_answer(receipt, request.prepared.state.filters),
         source="fallback",
         revision=request.committed_revision,
         evidence_ids=tuple(

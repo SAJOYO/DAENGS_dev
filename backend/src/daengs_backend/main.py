@@ -17,6 +17,8 @@ from daengs_backend.routers import (
     activity,
     admin_account,
     admin_audit,
+    admin_cardimage,
+    ai_card,
     app_auth,
     app_report,
     app_user_admin,
@@ -29,10 +31,12 @@ from daengs_backend.routers import (
     facility_discovery,
     gait,
     health,
+    invite_web,
     life_walk,
     metrics,
     pet,
     pet_member,
+    pet_walks,
     report_admin,
     status,
     territory,
@@ -184,6 +188,9 @@ app.add_middleware(
 )
 
 app.include_router(health.router)
+# 공동 돌봄 초대 링크의 웹 폴백(`/invite`) · App Links 검증(`/.well-known/assetlinks.json`).
+# 인증도 DB 도 안 쓴다 — `pet_member.router` 의 `/app/pet-invites/*` 와는 완전히 별개다.
+app.include_router(invite_web.router)
 app.include_router(auth.router)
 # 앱 회원(카카오)용. 관리자와 경로가 겹치지 않게 /auth/app/* 입니다.
 app.include_router(app_auth.router)
@@ -193,6 +200,8 @@ app.include_router(pet.router)
 # 수락 경로가 /app/pets/{pet_id}/... 아래가 아니기 때문입니다 — 수락 전에는
 # 그 강아지에 아무 권한이 없어 URL 에 pet_id 를 실으면 안 됩니다.
 app.include_router(pet_member.router)
+# 산책 기록 공동 조회(`/app/pets/{pet_id}/walks`) — 읽기만. 쓰기·개인 목록은 `/app/walks` 그대로.
+app.include_router(pet_walks.router)
 # 케어 로그(`/app/care-events` · #332) — 밥·약·간식 기록. 산책은 `walks` 가 진실이라 여기 없고,
 # 하루 요약이 세어 같이 보여 줍니다. 오케스트레이터는 이 표를 아직 안 읽습니다(후속 카드).
 app.include_router(care_event.router)
@@ -205,6 +214,11 @@ app.include_router(vet_visit.router)
 # 도감 카드 (D-052). 앱이 Room 과 filesDir 에만 갖고 있던 것을 서버로 —
 # 그전까지는 폰을 바꾸면 뽑은 카드가 전부 사라졌습니다.
 app.include_router(dogcard.router)
+# 콘솔의 「도감 카드 생성」 탭이 부르는 점검 경로 (#496) — 저장하지 않는다.
+app.include_router(admin_cardimage.router)
+# 앱 사용자가 AI 도감 카드를 만들고 조회·삭제하는 경로 (#537, D-076). 비동기 — POST 는
+# 202 로 시작만 알리고, 생성은 같은 프로세스의 백그라운드 작업이 한다.
+app.include_router(ai_card.router)
 # 보행 분석 orchestration (D-043). 라우터가 CurrentAppUser 로 잠겨 있고, 분석 자체는
 # 별도 워커(daengs_backend.tasks.gait)가 합니다 — 여기는 인증·소유권·record/job
 # lifecycle·presigned 발급뿐이고 **영상 바이너리는 이 프로세스를 지나가지 않습니다.**

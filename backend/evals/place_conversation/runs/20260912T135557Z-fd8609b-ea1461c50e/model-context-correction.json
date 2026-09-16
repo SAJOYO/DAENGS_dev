@@ -1,0 +1,21 @@
+{
+  "corrected_on": "2026-09-13",
+  "authority": "User explicitly confirmed the operating model is Flash-Lite.",
+  "operating_model": "gemini-3.1-flash-lite",
+  "observed_subject_model": "gemini-3.1-flash-lite",
+  "observed_judge_model": "gemini-3.1-flash-lite",
+  "incorrect_assumption": "The repository facility-specific Flash default was treated as proof of the deployed model, so Lite observations were described as unrelated to the operating model.",
+  "superseded_interpretations": [
+    "evaluation-plan.json: evaluation_kind, production_facility_model, model_choice_reason, production_baseline_status, next_scope",
+    "comparison.json: kind and the limitation that production Flash remains unmeasured pending quota reset"
+  ],
+  "corrected_interpretation": "This is a development measurement using the operating model, with synthetic search and server prepare/answer. The three proposal-contract failures are relevant to improving Flash-Lite facility behavior. This does not establish reproduction in the deployed end-to-end service.",
+  "flash_quota_interpretation": "The recorded quota failures belong to the Flash calls attempted at that time, not evidence that Flash is the operating model.",
+  "deployed_effective_settings_inspected": false,
+  "new_model_calls": 0,
+  "original_observations_and_judgments_modified": false,
+  "source_observations_sha256": "40167d4584aee6a59256f46f0cff938b88ce2e094fff3836200933ebedc22c95",
+  "functional_failures": 3,
+  "turns": 8,
+  "next_work": "Repair the three Flash-Lite proposal-contract failures and validate original plus separate phrasings. Do not switch to Flash based on the incorrect assumption."
+}

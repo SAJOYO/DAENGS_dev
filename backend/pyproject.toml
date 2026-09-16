@@ -27,6 +27,7 @@ dependencies = [
     "opentelemetry-exporter-otlp-proto-http>=1.30",
     "opentelemetry-sdk>=1.30",
     "pgvector>=0.3",
+    "pillow>=10.2",
     "psycopg[binary]>=3.2",
     "pydantic-settings>=2.15.0",
     "pyproj>=3.7",
@@ -57,20 +58,10 @@ place = [
     "alembic>=1.19",
     "geoalchemy2>=0.15",
 ]
-# LangChain 에이전트 오케스트레이터 (D-055). `orchestration/agent/` 만 씁니다.
-#
-# **extra 인 것이 요점입니다.** 서버 backend 컨테이너에는 안 깔립니다 — 두 구현을 병존시키는
-# 동안에도 운영 경로의 의존성이 늘지 않게 하려는 것입니다. CI(`backend-tests.yml`)는 D-055 ⑦
-# 부터 깝니다(보존하는 코드를 검사하려고). 그래도 `tests/test_orchestration_agent.py` 는
-# `pytest.importorskip` 으로 감쌉니다 — extra 없는 개발 PC 에서 스위트가 수집 단계에서 죽지
-# 않게 (`ml`·`gait`·`screening` 과 같은 자리).
-#
-# ⚠ 로컬 전체 테스트는 **`uv sync --extra place --extra agent`** 입니다. `--extra agent`
-#   하나만 주면 place 가 빠져 `tests/place` 13개가 수집 단계에서 죽습니다.
-agent = [
-    "langchain>=1.0",
-    "langchain-google-genai>=3.0",
-]
+# 로컬 전체 테스트는 `uv sync --extra place` 입니다. LangChain 에이전트 오케스트레이터
+# (구 `orchestration/agent/`, `agent` extra) 는 D-072 로 지웠습니다 — LangGraph 와 재 본
+# 결과가 정확도 우위 없이 토큰·지연만 약 두 배였고, 승인된 후속 기능 어디에도 "툴 결과를
+# 보고 다음 수를 정하는 선택" 이 필요하지 않았습니다.
 
 # torch 를 플랫폼별로 다른 인덱스에서 받는다 (개발 PC 는 RTX 3050, 서버 backend 컨테이너는 CPU).
 # `explicit = true` 라 아래 [tool.uv.sources] 로 지목한 패키지만 이 인덱스에서 받는다.
@@ -93,6 +84,14 @@ agent = [
 override-dependencies = [
     "opencv-python; sys_platform == 'never'",
     "opencv-contrib-python; sys_platform == 'never'",
+]
+
+# `cardgen`(D-078)은 diffusers 가 huggingface-hub>=1.x 를 요구하고, `ml` 은 sentence-transformers →
+# transformers<5 → huggingface-hub<1 에 묶여 한 해석에 같이 못 들어간다. 두 그룹을 한 venv·이미지에
+# 같이 까는 곳이 없으므로(backend=ml·screening, pipeline 이미지=ml·pipeline·pdf, cardgen 이미지=cardgen 만)
+# 서로 배타적인 그룹으로 선언한다. ⚠ 둘을 같이 설치하려 하면 uv 가 거부한다 — 그게 의도다.
+conflicts = [
+    [{ group = "ml" }, { group = "cardgen" }],
 ]
 
 [[tool.uv.index]]
@@ -127,6 +126,8 @@ build-backend = "uv_build"
 [tool.uv.build-backend]
 module-name = [
     "daengs_backend",
+    "daengs_cardgen",
+    "daengs_cardimage",
     "daengs_evals",
     "daengs_gait",
     "daengs_journey",
@@ -139,6 +140,7 @@ module-name = [
 
 [dependency-groups]
 dev = [
+    "numpy>=2.5.2",
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
     "ruff>=0.6",
@@ -253,6 +255,22 @@ realtime = [
     "pyyaml>=6.0.3",
     "redis>=6.0",
     "tzdata>=2026.3",
+]
+# 도감 카드 생성 GPU 서비스(D-078)가 받는 것 전부. **base 의존성을 안 받는다** —
+# `docker/cardgen/Dockerfile` 이 `uv sync --frozen --only-group cardgen --no-install-project` 로 깐다
+# (`realtime` 그룹과 같은 이유). torch 는 여기서도 리눅스 CPU 판으로 잠기고, CUDA 판은 Dockerfile 이
+# 덮어쓴다 — `[tool.uv.sources]` 를 풀지 말 것.
+# ⚠ 이름을 바꾸면 `docker/cardgen/Dockerfile` 의 `--only-group` 인자도 같이 고쳐라.
+cardgen = [
+    "accelerate>=1.0",
+    "bitsandbytes>=0.45",
+    "diffusers>=0.40",
+    "fastapi[standard]>=0.141.1",
+    "huggingface-hub>=0.34",
+    "pillow>=10.2",
+    "torch==2.13.0",
+    "torchvision==0.28.0",
+    "transformers>=4.57.6",
 ]
 
 [tool.ruff]

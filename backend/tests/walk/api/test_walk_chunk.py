@@ -15,7 +15,7 @@ from decimal import Decimal
 import pytest
 
 from daengs_backend.schemas.walk import WalkPointUpload
-from daengs_backend.services.walk_chunk import (
+from daengs_backend.services.walk_session.chunk import (
     CHUNK_COLUMNS,
     CHUNK_VERSION,
     decode_chunk,

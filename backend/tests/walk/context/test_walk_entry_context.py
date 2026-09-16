@@ -10,8 +10,8 @@ import httpx
 import pytest
 
 from daengs_backend.config import settings
-from daengs_backend.services import walk_entry_context as service
 from daengs_backend.services import walk_entry_context_source as source
+from daengs_backend.services.walk_records import context as service
 from tests.walk.support.entry_context import CONTENT, NOW, body
 
 
@@ -21,7 +21,7 @@ from tests.walk.support.entry_context import CONTENT, NOW, body
         ("space.facility", {**CONTENT, "location": None}, "no_location"),
         ("space.park", CONTENT, "provider_not_connected"),
         ("space.river", CONTENT, "provider_not_connected"),
-        ("environment.weather", CONTENT, "provider_not_connected"),
+        ("environment.weather", {**CONTENT, "location": None}, "no_location"),
     ],
 )
 async def test_missing_context_does_not_make_http_calls(tag, content, reason):

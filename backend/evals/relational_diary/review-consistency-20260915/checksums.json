@@ -1,0 +1,27 @@
+{
+  "prepared.json.gz": {
+    "sha256": "24d8537ecdca268d811ff8e7c8fc1ad41782723fd521cb64a782108d97b80308",
+    "original_sha256": "c66fa4bd301f6968db2d2a945782230f3826e4c5271de9d75aace5582586bb05",
+    "original_bytes": 5641048
+  },
+  "receipt.json.gz": {
+    "sha256": "18601b9f7142d6cd2ba8e88dab0f3cb02feeb739b89f224f731fb52f8aa77019",
+    "original_sha256": "9257a0ff7b93ec30f7b79016318a0dab1dccea6703258d6c569667045819d506",
+    "original_bytes": 6542984
+  },
+  "calls.json": {
+    "sha256": "bf6ffff465abc204b89d11da7c221786ea7420a69c08a2f8a0eb2ef5ebda9398",
+    "original_sha256": "bf6ffff465abc204b89d11da7c221786ea7420a69c08a2f8a0eb2ef5ebda9398",
+    "original_bytes": 100431
+  },
+  "manifest.json": {
+    "sha256": "8b395e23b005d16266fd0e2f40de52c41fcc6275304b445f2c350406add16c6f",
+    "original_sha256": "8b395e23b005d16266fd0e2f40de52c41fcc6275304b445f2c350406add16c6f",
+    "original_bytes": 490
+  },
+  "결과.md": {
+    "sha256": "0accbdbc0191b8c2f61f08a36cbf43f365e001b9422fe73a47d6a12cb91004b5",
+    "original_sha256": "0accbdbc0191b8c2f61f08a36cbf43f365e001b9422fe73a47d6a12cb91004b5",
+    "original_bytes": 7879
+  }
+}

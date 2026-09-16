@@ -1,0 +1,160 @@
+"""Stored orchestration receipt; historical slot receipts remain readable unchanged."""
+
+from typing import Literal
+
+from pydantic import JsonValue, model_validator
+
+from daengs_backend.services.walk_diary import space_details
+from daengs_backend.services.walk_diary.contracts import CardWritingResult
+from daengs_backend.services.walk_diary.model_input import READABLE_INPUT_VERSIONS, normalize
+from daengs_walk.diary.board.action_context import require_scene_action
+from daengs_walk.diary.board.activity import covers_observation, movement_uses
+from daengs_walk.diary.board.space_scene import require_background_citation
+from daengs_walk.diary.board.title_context import CONTENT_BASIS, title_context, title_revision
+from daengs_walk.diary.contracts.input import DiaryContract, Digest, digest
+
+
+class StoredCardWriting(DiaryContract):
+    format: Literal["stored-card-writing-v1"] = "stored-card-writing-v1"
+    generation_revision: Digest
+    writer: dict[str, JsonValue]
+    result: CardWritingResult
+
+    @model_validator(mode="after")
+    def intact(self):
+        if digest(self.writer) != self.result.writer_version:
+            raise ValueError("stored card writer version changed")
+        for item in self.result.jobs:
+            payload = {k: v for k, v in item.request.items() if k != "request_revision"}
+            expected = digest(
+                {
+                    "strategy": self.writer["prompts"][item.stage],
+                    "model": self.writer["model"],
+                    "input": payload,
+                }
+            )
+            if (
+                expected != item.request_revision
+                or item.request.get("request_revision") != expected
+            ):
+                raise ValueError("stored job request changed")
+            if item.accepted and item.failure_code:
+                raise ValueError("failed job cannot carry accepted output")
+            if item.accepted and item.stage == "space":
+                require_background_citation(
+                    item.request.get("space_scene"),
+                    item.accepted["evidence_ids"],
+                    item.accepted["text"],
+                )
+            if (
+                self.writer.get("input_policy") in READABLE_INPUT_VERSIONS
+                and item.llm_request is not None
+                and item.llm_request != normalize(item.stage, item.request).payload
+            ):
+                raise ValueError("stored model input changed")
+            if item.tool_trace is not None:
+                if item.stage != "space":
+                    raise ValueError("stored space tools belong only to space writing")
+                model = normalize("space", item.request)
+                space_details.validate_trace(model.payload, item.tool_trace)
+                if item.accepted:
+                    space_details.validate_citations(
+                        model.payload,
+                        model.references,
+                        item.tool_trace,
+                        item.accepted["evidence_ids"],
+                    )
+        return self
+
+    def require_bundle(self, bundle, generation_revision):
+        if (
+            generation_revision != self.generation_revision
+            or bundle != self.result.bundle
+            or bundle.input_revision != self.result.input_revision
+            or bundle.plan_revision != self.result.plan_revision
+        ):
+            raise ValueError("stored card writing belongs to another publication")
+        spaces = {j.request["card_id"]: j for j in self.result.jobs if j.stage == "space"}
+        actions = {j.request["card_id"]: j for j in self.result.jobs if j.stage == "action"}
+        title_jobs = [j for j in self.result.jobs if j.stage == "title"]
+        independent = self.writer.get("input_policy") in READABLE_INPUT_VERSIONS
+        if len(spaces) != len(bundle.scenes) or len(spaces) + len(actions) + len(title_jobs) != len(
+            self.result.jobs
+        ):
+            raise ValueError("missing/duplicate writing job")
+        titles = {t["card_id"]: t for j in title_jobs if j.accepted for t in j.accepted["titles"]}
+        title_inputs = {c["card_id"]: c for j in title_jobs for c in j.request["cards"]}
+        for scene in bundle.scenes:
+            parts = scene.writing
+            if parts is None or scene.id not in spaces:
+                raise ValueError("missing card parts")
+            space = spaces[scene.id]
+            if parts.space.origin == "generated" and (
+                not space.accepted or parts.space.text != space.accepted["text"].strip()
+            ):
+                raise ValueError("space differs from its accepted job")
+            if bool(parts.actions) != (scene.id in actions):
+                raise ValueError("action job and behavior pin differ")
+            for action in parts.actions:
+                result = actions[scene.id]
+                if independent:
+                    require_scene_action(scene, result.request)
+                source = result.request["action"]
+                if (
+                    action.action_id != (source["id"] if source else None)
+                    or action.actor_id != (source["actor"]["id"] if source else None)
+                    or not set(action.movement_ids)
+                    <= {u["id"] for u in movement_uses(result.request)}
+                ):
+                    raise ValueError("stored actor changed")
+                if action.origin == "generated" and (
+                    not result.accepted
+                    or action.text != result.accepted["text"].strip()
+                    or action.movement_ids != tuple(result.accepted.get("movement_ids", ()))
+                ):
+                    raise ValueError("action differs from its accepted job")
+                if parts.observation_in_activity != covers_observation(
+                    result.request, action.movement_ids, scene.observation
+                ):
+                    raise ValueError("observation suppression differs from cited pace")
+            title = titles.get(scene.id)
+            expected_title_revision = (
+                title_revision(scene) if independent else parts.content_revision
+            )
+            if parts.title_origin == "generated" and (
+                not title
+                or title["text"].strip() != scene.title
+                or title["content_revision"] != expected_title_revision
+            ):
+                raise ValueError("title differs from its accepted job")
+            supplied = title_inputs.get(scene.id)
+            if supplied and (
+                supplied["content_revision"] != expected_title_revision
+                or supplied["space"] != parts.space.model_dump(mode="json")
+                or supplied["actions"] != [a.model_dump(mode="json") for a in parts.actions]
+                or supplied["place_reference"]
+                != [p.model_dump(mode="json") for p in scene.place_reference]
+                or supplied.get("observation")
+                != (parts.observation.model_dump(mode="json") if parts.observation else None)
+            ):
+                raise ValueError("title did not read the adopted card bodies")
+        for job in title_jobs:
+            if "context" in job.request:
+                expected = [
+                    {
+                        "card_id": c.id,
+                        "order": c.order,
+                        "event_at": c.anchor.event_at.isoformat(),
+                        "body": c.body,
+                        "location": [p.model_dump(mode="json") for p in c.place_reference],
+                    }
+                    for c in bundle.scenes
+                ]
+                if independent:
+                    if job.request.get("content_basis") != CONTENT_BASIS:
+                        raise ValueError("title must exclude independent user notes")
+                    expected = title_context(bundle.scenes)
+                if job.request["context"] != expected or job.request["context_revision"] != digest(
+                    expected
+                ):
+                    raise ValueError("title did not read the whole frozen board")

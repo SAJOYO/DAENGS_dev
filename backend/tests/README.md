@@ -14,8 +14,9 @@ rkbuhtig 작성 PR에서 다룬 9개 기능의 검증 범위를 정리한다. Ge
 
 - 모든 명령의 작업 디렉터리는 `backend/`다. 해당 변경에 연결된 명령만 선택한다.
 - Python 3.12와 프로젝트 의존성이 필요하다. 최초 준비 또는 lock 변경 시
-  `uv sync --frozen --extra place --extra agent`로 공통 API/Place/agent 의존성을 준비한다.
-  문서 정리만 할 때는 설치나 테스트가 필요하지 않다.
+  `uv sync --frozen --extra place`로 공통 API/Place 의존성을 준비한다. `agent` extra 는
+  D-072 로 LangChain 에이전트와 함께 지워졌다. 문서 정리만 할 때는 설치나 테스트가
+  필요하지 않다.
 - 아래 기본 묶음은 실제 DB 통합 묶음과 구분했다. HTTP 계약 테스트의 fake/override 성공은
   배포 서버의 API 등록, 실제 인증, 외부 공급자 가용성까지 확인한 결과가 아니다.
 - 현재 pytest에 실행용으로 선언된 marker는 `slow`이고 기본값은 `-m 'not slow'`다.
@@ -86,6 +87,11 @@ uv run pytest -q tests/journey
 ```
 
 ### 5. 산책 측정·분석
+
+- 동선 검증 후보 조회(#475): `walk/api/test_trajectory_calculation.py`는 32개 기준 기록을
+  실제 라우터로 직렬화해 소유권·원본 시각·구간·경계·거리·무결성을 확인한다.
+  `test_motion_calculation.py`의 완료/손상/정밀 백업 경계는 두 계산 endpoint에 공통 적용한다.
+  [조회 계약과 실행 범위](../../docs/walk/trajectory-api.md). API는 검증 후보이며 활성 결과를 갱신하지 않는다.
 
 - GPS 고정 정책 재생·계산 조회(#456): `walk/measurement/test_motion_replay.py`는 실제 앱 엔진의
   기준값과 판정을 대조한다. `walk/api/test_motion_calculation.py`는 인증 후 소유권·완료·손상
@@ -265,6 +271,11 @@ Walk Python 파일 53개의 ruff 검사·format 검사와 문서/CI 명령의 �
 스크립트 실행 정책에 막혀 미검증이다. 실행 정책은 변경하지 않았다.
 
 ## Place 정리
+
+신규 네이티브 시설 명령 경계는 `place/commands/`에 있다. 필터 변경·카드 선택 구분,
+상세 조회의 상태 보존, 버전 충돌·중복 실행·제안 자체 수락 차단·취소 후 재개와
+로컬 실험 HTTP를 검증한다. 합성 검색·대역 모델·메모리 저장소만 사용하며 실행 명령은
+`uv run --no-sync pytest -q tests/place/commands`다. 실제 모델과 운영 저장소 검증은 별도다.
 
 `origin/dev`의 `2fe6afc`에서 시작해 테스트 파일 35개를 이동했다. `place/place/` 중복 경로를
 없애고 검색·자연어 검색의 각 단계와 API 테스트를 다음처럼 배치했다.

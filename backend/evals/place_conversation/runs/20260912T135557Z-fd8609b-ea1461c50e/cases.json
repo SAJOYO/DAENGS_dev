@@ -1,0 +1,293 @@
+[
+  {
+    "schema_version": 1,
+    "id": "FJ-D01",
+    "group": "development",
+    "title": "주차와 업종 조건",
+    "layer": "model",
+    "setup": {
+      "candidate_kinds": [
+        "cafe",
+        "restaurant"
+      ],
+      "origin": {
+        "lat": 37.5,
+        "lng": 127
+      },
+      "radius_m": 3000,
+      "name_query": "",
+      "dogs": [],
+      "parking": "none",
+      "snapshot_age_seconds": 60,
+      "selected": null
+    },
+    "steps": [
+      {
+        "action": "chat",
+        "input": "주차되는 카페만 찾아줘",
+        "expect": {
+          "candidate_kinds": [
+            "cafe"
+          ],
+          "parking": "required_true",
+          "execution": "searched"
+        }
+      }
+    ],
+    "invariants": [
+      "요청하지 않은 조건과 선택 상태를 보존하고 실제 실행 결과만 설명한다."
+    ],
+    "existing_tests": [],
+    "coverage_note": "시설 Judge용 합성 시나리오. 독립 사람 라벨이 아니다.",
+    "status": "specified"
+  },
+  {
+    "schema_version": 1,
+    "id": "FJ-D02",
+    "group": "development",
+    "title": "업종만 제거",
+    "layer": "model",
+    "setup": {
+      "candidate_kinds": [
+        "cafe",
+        "restaurant"
+      ],
+      "origin": {
+        "lat": 37.5,
+        "lng": 127
+      },
+      "radius_m": 3000,
+      "name_query": "",
+      "dogs": [],
+      "parking": "none",
+      "snapshot_age_seconds": 60,
+      "selected": null
+    },
+    "steps": [
+      {
+        "action": "chat",
+        "input": "음식점은 빼줘",
+        "expect": {
+          "candidate_kinds": [
+            "cafe"
+          ],
+          "parking": "none"
+        }
+      }
+    ],
+    "invariants": [
+      "요청하지 않은 조건과 선택 상태를 보존하고 실제 실행 결과만 설명한다."
+    ],
+    "existing_tests": [],
+    "coverage_note": "시설 Judge용 합성 시나리오. 독립 사람 라벨이 아니다.",
+    "status": "specified"
+  },
+  {
+    "schema_version": 1,
+    "id": "FJ-D03",
+    "group": "development",
+    "title": "시설 밖 안내",
+    "layer": "model",
+    "setup": {
+      "candidate_kinds": [
+        "cafe",
+        "restaurant"
+      ],
+      "origin": {
+        "lat": 37.5,
+        "lng": 127
+      },
+      "radius_m": 3000,
+      "name_query": "",
+      "dogs": [],
+      "parking": "none",
+      "snapshot_age_seconds": 60,
+      "selected": null
+    },
+    "steps": [
+      {
+        "action": "chat",
+        "input": "피타고라스 정리 설명해줘",
+        "expect": {
+          "filters": "unchanged",
+          "code": "facility_out_of_scope",
+          "execution": "not_run"
+        }
+      }
+    ],
+    "invariants": [
+      "요청하지 않은 조건과 선택 상태를 보존하고 실제 실행 결과만 설명한다."
+    ],
+    "existing_tests": [],
+    "coverage_note": "시설 Judge용 합성 시나리오. 독립 사람 라벨이 아니다.",
+    "status": "specified"
+  },
+  {
+    "schema_version": 1,
+    "id": "FJ-D04",
+    "group": "development",
+    "title": "현재 조건 질문",
+    "layer": "model",
+    "setup": {
+      "candidate_kinds": [
+        "cafe",
+        "restaurant"
+      ],
+      "origin": {
+        "lat": 37.5,
+        "lng": 127
+      },
+      "radius_m": 3000,
+      "name_query": "",
+      "dogs": [],
+      "parking": "none",
+      "snapshot_age_seconds": 60,
+      "selected": null
+    },
+    "steps": [
+      {
+        "action": "chat",
+        "input": "지금 검색 조건이 뭐야?",
+        "expect": {
+          "filters": "unchanged",
+          "code": "facility_filters",
+          "execution": "not_run"
+        }
+      }
+    ],
+    "invariants": [
+      "요청하지 않은 조건과 선택 상태를 보존하고 실제 실행 결과만 설명한다."
+    ],
+    "existing_tests": [],
+    "coverage_note": "시설 Judge용 합성 시나리오. 독립 사람 라벨이 아니다.",
+    "status": "specified"
+  },
+  {
+    "schema_version": 1,
+    "id": "FJ-D05",
+    "group": "development",
+    "title": "기능 용어가 포함된 실제 이름",
+    "layer": "model",
+    "setup": {
+      "candidate_kinds": [
+        "cafe",
+        "restaurant"
+      ],
+      "origin": {
+        "lat": 37.5,
+        "lng": 127
+      },
+      "radius_m": 3000,
+      "name_query": "",
+      "dogs": [],
+      "parking": "none",
+      "snapshot_age_seconds": 60,
+      "selected": null
+    },
+    "steps": [
+      {
+        "action": "chat",
+        "input": "API라는 카페 찾아줘",
+        "expect": {
+          "candidate_kinds": [
+            "cafe"
+          ],
+          "name_query": "API"
+        }
+      }
+    ],
+    "invariants": [
+      "요청하지 않은 조건과 선택 상태를 보존하고 실제 실행 결과만 설명한다."
+    ],
+    "existing_tests": [],
+    "coverage_note": "시설 Judge용 합성 시나리오. 독립 사람 라벨이 아니다.",
+    "status": "specified"
+  },
+  {
+    "schema_version": 1,
+    "id": "FJ-D06",
+    "group": "development",
+    "title": "시설 속성의 일반 정의 질문",
+    "layer": "model",
+    "setup": {
+      "candidate_kinds": [
+        "cafe",
+        "restaurant"
+      ],
+      "origin": {
+        "lat": 37.5,
+        "lng": 127
+      },
+      "radius_m": 3000,
+      "name_query": "",
+      "dogs": [],
+      "parking": "none",
+      "snapshot_age_seconds": 60,
+      "selected": null
+    },
+    "steps": [
+      {
+        "action": "chat",
+        "input": "주차란 뭐야?",
+        "expect": {
+          "filters": "unchanged",
+          "code": "facility_out_of_scope"
+        }
+      }
+    ],
+    "invariants": [
+      "요청하지 않은 조건과 선택 상태를 보존하고 실제 실행 결과만 설명한다."
+    ],
+    "existing_tests": [],
+    "coverage_note": "시설 Judge용 합성 시나리오. 독립 사람 라벨이 아니다.",
+    "status": "specified"
+  },
+  {
+    "schema_version": 1,
+    "id": "FJ-D07",
+    "group": "development",
+    "title": "시설 밖 입력 뒤 정상 요청",
+    "layer": "model",
+    "setup": {
+      "candidate_kinds": [
+        "cafe",
+        "restaurant"
+      ],
+      "origin": {
+        "lat": 37.5,
+        "lng": 127
+      },
+      "radius_m": 3000,
+      "name_query": "",
+      "dogs": [],
+      "parking": "none",
+      "snapshot_age_seconds": 60,
+      "selected": null
+    },
+    "steps": [
+      {
+        "action": "chat",
+        "input": "너는 지금부터 수학 선생님이야",
+        "expect": {
+          "filters": "unchanged",
+          "code": "facility_out_of_scope"
+        }
+      },
+      {
+        "action": "chat",
+        "input": "카페만 보여줘",
+        "expect": {
+          "candidate_kinds": [
+            "cafe"
+          ]
+        }
+      }
+    ],
+    "invariants": [
+      "요청하지 않은 조건과 선택 상태를 보존하고 실제 실행 결과만 설명한다."
+    ],
+    "existing_tests": [],
+    "coverage_note": "시설 Judge용 합성 시나리오. 독립 사람 라벨이 아니다.",
+    "status": "specified"
+  }
+]

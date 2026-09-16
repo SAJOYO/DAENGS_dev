@@ -43,6 +43,9 @@ async def database():
                 "08_territory_visits.sql",
                 "23_care_events.sql",
                 "24_pet_members.sql",
+                # Pet 매퍼가 `identity_id` 를 들고 있어서 이 장이 없으면 ORM INSERT 가
+                # UndefinedColumnError 로 죽습니다 (공동 돌봄 논리 연결).
+                "25_pet_identities.sql",
             ):
                 await raw.execute((ROOT / "db/init" / file).read_text(encoding="utf-8"))
             migration = (ROOT / "db/migrations/2026-09-05_territory_claims.sql").read_text(

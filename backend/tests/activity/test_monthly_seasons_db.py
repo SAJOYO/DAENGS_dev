@@ -2,7 +2,9 @@
 
 import asyncio
 from dataclasses import asdict
+from datetime import UTC, datetime, timedelta
 from itertools import pairwise
+from unittest.mock import Mock
 
 import pytest
 from sqlalchemy import func, select
@@ -16,7 +18,7 @@ from daengs_backend.services import activity, activity_game
 from daengs_backend.services.activity_core import first_season_policy as first
 from daengs_backend.services.activity_core.game_policy import POINT_DENOMINATOR
 from daengs_backend.services.activity_core.monthly_calendar import month
-from tests.activity.support.actions import mark
+from tests.activity.support.actions import begin, mark
 from tests.activity.support.database import database as activity_database  # noqa: F401
 from tests.activity.test_first_season_db import actor, certify
 from tests.activity.test_first_season_db import database as reward_database  # noqa: F401
@@ -59,7 +61,7 @@ async def test_partial_first_season_and_exact_midnight(database, actors, clock):
     season = await start(database, clock)
     assert season.coverage_start_ms == season.starts_ms == clock[0]
     await actor(database, clock, a, pa)
-    client = await base.begin(database, b, [pb])
+    client = await begin(database, clock, b, [pb])
     await mark(database, clock, b, client, pb, site_id=base.SITE2)
     clock[0] = season.ends_ms - 1
     await process(database)
@@ -99,10 +101,26 @@ async def test_partial_first_season_and_exact_midnight(database, actors, clock):
         assert await db.scalar(select(func.count()).select_from(ActivitySeason)) == 2
 
 
-async def test_downtime_catches_up_months_without_carrying_holdings(database, actors, clock):
+@pytest.mark.parametrize(
+    "wall_now",
+    ["2026-01-01T00:00:00+00:00", "2026-09-12T00:00:00+00:00", "2030-01-01T00:00:00+00:00"],
+    ids=["before_scenario", "after_scenario", "years_later"],
+)
+async def test_downtime_catches_up_months_without_carrying_holdings(
+    database, actors, clock, monkeypatch, wall_now
+):
+    # Vary only the builder's wall clock; game time and the database clock stay separate.
+    wall_datetime = Mock(wraps=datetime)
+    wall_datetime.now.return_value = datetime.fromisoformat(wall_now)
+    monkeypatch.setattr(base, "datetime", wall_datetime)
     (a, _), (pa, _, _) = actors
     season = await start(database, clock, "2026-09-11T12:00:00+09:00")
-    await actor(database, clock, a, pa)
+    _, client, _ = await actor(database, clock, a, pa)
+    async with database() as db:
+        session = await base.svc.get_session(db, a, client)
+        assert session.started_at == datetime.fromtimestamp(clock[0] / 1000, UTC) - timedelta(
+            minutes=1
+        )
     clock[0] = stamp("2027-01-04T10:00:00+09:00")
     await process(database)
     async with database() as db:

@@ -18,6 +18,7 @@ from daengs_backend.repositories import pet_member as member_repo
 from daengs_backend.repositories import walk as walk_repo
 from daengs_backend.schemas.pet import PetUpsert
 from daengs_backend.services import gait as gait_service
+from daengs_backend.services import pet_identity as identity_service
 
 log = logging.getLogger(__name__)
 
@@ -101,7 +102,7 @@ class PetHasCarersError(Exception):
 
 async def list_pets(
     session: AsyncSession, app_user_id: uuid.UUID
-) -> tuple[list[Pet], uuid.UUID | None]:
+) -> tuple[list[identity_service.PetView], uuid.UUID | None]:
     """**내가 돌보는 아이 전부**와 대표 id. 대표는 계정 쪽에 있어서 같이 읽어 옵니다.
 
     구성원 기준입니다 (docs/co-care.md §2) — 대표만 돌려주면 돌보미의 `GET /app/pets`
@@ -110,10 +111,16 @@ async def list_pets(
 
     누가 대표인지는 응답의 `is_owner` 로 갈립니다 — 앱이 수정·삭제 버튼을 그 값으로
     가립니다 (`routers/pet.py::_to_response`).
+
+    **논리 강아지당 카드 한 장으로 접습니다** (MVP 결정 §4). 같은 실제 강아지를 A 와 B 가
+    각자 등록해 연결하면 B 의 접근 가능 목록에는 행이 둘(자기 202, 돌보미로 101)이지만
+    카드는 `롱롱씨` 한 장입니다 — 접지 않으면 마이에 카드 두 장, 미니룸에 두 마리가 그대로
+    뜹니다. 고르는 규칙과 공통 정보 투영은 `services/pet_identity.py::collapse` 입니다.
     """
     pets = await pet_repo.list_accessible(session, app_user_id)
+    views = await identity_service.collapse(session, app_user_id, pets)
     user = await app_user_repo.get_by_id(session, app_user_id)
-    return pets, (user.primary_pet_id if user else None)
+    return views, (user.primary_pet_id if user else None)
 
 
 async def create_pet(
@@ -131,6 +138,11 @@ async def create_pet(
     # 아이 수" 여야 합니다. 소유로 세면 돌보미로 5마리를 받은 사람이 자기 강아지를 계속
     # 등록해 방이 넘칩니다. **승계는 다릅니다** — 거기서 늘어나는 것은 소유뿐이라
     # `count_for_owner` 로 봅니다 (Task 7).
+    #
+    # 세기 **전에 사용자 행을 잠급니다** (MVP 결정 §4). 등록과 초대 수락이 동시에 오면
+    # 서로 다른 pet 행을 건드리므로 pet 잠금으로는 직렬화가 안 되고, 둘 다 "아직 4마리"
+    # 를 보고 통과합니다. 세는 단위가 사용자라 잠그는 단위도 사용자여야 합니다.
+    await identity_service.lock_user(session, app_user_id)
     if await pet_repo.count_accessible(session, app_user_id) >= MAX_PETS_PER_USER:
         raise PetLimitReachedError
 
@@ -152,13 +164,46 @@ async def create_pet(
 async def update_pet(
     session: AsyncSession, app_user_id: uuid.UUID, pet_id: uuid.UUID, body: PetUpsert
 ) -> Pet:
+    """프로필 **전체** 수정. 배웅(`farewell_on`)도 이 한 요청에 실려 옵니다.
+
+    ⚠️ **연결된 강아지는 그룹 주보호자만** 부를 수 있습니다 (MVP 결정 §5 · §6).
+
+    이 계약은 전체 PUT 이라, 연결된 B 가 이름만 고치려고 불러도 **A 의 공통 정보**(견종·
+    생일·지병·배웅)가 그대로 B 의 원본 행에 덮어써집니다 — 앱이 화면에 그린 값은 투영된
+    A 의 값이기 때문입니다. 공통 필드를 조용히 무시하는 것도, 원본을 덮어쓰는 것도 답이
+    아니므로 **막고 이유를 말합니다**(409). 이름만 바꾸는 길은 `update_display` 입니다.
+
+    연결 안 된 강아지에서는 행 대표가 곧 그룹 주보호자라 지금까지와 똑같이 동작합니다.
+    """
     pet = await pet_repo.get_owned(session, app_user_id, pet_id)
     if pet is None:
         raise PetNotFoundError
+    await identity_service.require_group_owner(session, app_user_id, pet)
 
     for field, value in body.model_dump().items():
         setattr(pet, field, value)
 
+    await session.commit()
+    return pet
+
+
+async def update_display(
+    session: AsyncSession, app_user_id: uuid.UUID, pet_id: uuid.UUID, *, name: str
+) -> Pet:
+    """**이름만** 바꿉니다. 행 대표면 됩니다 (MVP 결정 §5).
+
+    이름·사진은 보호자마다 자기 값이라, 연결된 B 도 자기 행의 `롱롱씨` 를 계속 고칠 수
+    있어야 합니다. 전체 PUT 이 연결된 행에서 409 인 것과 짝입니다 — 좁은 계약 하나를 여는
+    쪽이, 넓은 계약에서 공통 필드만 몰래 무시하는 것보다 낫습니다.
+
+    그룹 주보호자 검사를 **안 합니다.** 여기서 바뀌는 것은 그 사람 행의 이름 한 칸뿐이고,
+    그것은 다른 보호자의 화면에 안 보입니다.
+    """
+    pet = await pet_repo.get_owned(session, app_user_id, pet_id)
+    if pet is None:
+        raise PetNotFoundError
+
+    pet.name = name
     await session.commit()
     return pet
 
@@ -391,6 +436,13 @@ async def delete_pet(
     if pet is None:
         raise PetNotFoundError
 
+    # ⚠️ **연결된 강아지는 그룹 주보호자만 지웁니다** (MVP 결정 §6). B 가 자기 행(202)의
+    #    대표라는 것만으로 지우게 두면, 그룹이 함께 보던 기록의 한쪽이 통째로 사라집니다.
+    #    `confirm` 으로도 안 뚫립니다 — 아래 `PetHasCarersError` 와 성격이 다릅니다(저쪽은
+    #    "알고 하는 것이 맞나" 확인이고, 이쪽은 "당신이 할 일이 아니다" 입니다).
+    identity_id = pet.identity_id
+    await identity_service.require_group_owner(session, app_user_id, pet)
+
     # ⚠️ **소유 확인(`get_owned`) 바로 다음, 어떤 cleanup 도 하기 전**이라야 합니다.
     #    gait·사진·산책을 먼저 지운 뒤에 게이트를 걸면 409 를 받은 사용자가 다시
     #    `confirm=true` 로 불렀을 때 이미 반쯤 지워진 상태에서 재개해야 합니다.
@@ -434,6 +486,13 @@ async def delete_pet(
 
         await pet_repo.delete(session, pet)
         await session.flush()
+
+        # 그룹에 혼자 남은 행은 연결을 풀어 줍니다. 앵커(그룹 주보호자의 행)를 지운
+        # 경우에는 `pet_identities.owner_pet_id` 의 CASCADE 가 그룹 행을 이미 없애고
+        # `pets.identity_id` 의 SET NULL 이 남은 행을 되돌려 놓아, 여기서 할 일이
+        # 없습니다 — 그래도 부르는 이유는 **그 사실에 기대지 않기 위해서**입니다.
+        if identity_id is not None:
+            await identity_service.prune(session, identity_id)
 
         if was_primary and user is not None:
             remaining = await pet_repo.list_for_owner(session, app_user_id)
@@ -479,17 +538,43 @@ async def delete_all_for_owner(session: AsyncSession, app_user_id: uuid.UUID) ->
 
     await gait_service.cleanup_for_pets(session, [pet.id for pet in pets])
     await cleanup_photos_for_pets(session, pets)
-    return await pet_repo.delete_all_for_owner(session, app_user_id)
+
+    # 연결돼 있던 그룹은 지우기 **전에** 적어 둡니다 — 행이 사라진 뒤에는 어느 그룹이었는지
+    # 알 길이 없습니다.
+    #
+    # 여기 걸리는 것은 **연결된 공동 보호자**의 탈퇴뿐입니다. 그룹 주보호자는 자기 아이에
+    # 돌보미가 남아 있어 위 `OwnerHasCarersError` 에서 이미 막힙니다. 공동 보호자가 나가면
+    # 그룹에 앵커 하나만 남으므로 `prune` 이 연결을 풀어 원래 모양으로 되돌립니다.
+    identity_ids = {p.identity_id for p in pets if p.identity_id is not None}
+
+    deleted = await pet_repo.delete_all_for_owner(session, app_user_id)
+    for identity_id in identity_ids:
+        await identity_service.prune(session, identity_id)
+    return deleted
 
 
 async def set_primary(session: AsyncSession, app_user_id: uuid.UUID, pet_id: uuid.UUID) -> AppUser:
-    """대표를 바꿉니다. **내 강아지인지 여기서 확인합니다.**
+    """대표 강아지를 바꿉니다. **구성원이면 됩니다 — 소유가 아닙니다.**
 
-    FK 는 "존재하는 pets 행"까지만 보장하고 그게 내 것인지는 안 봅니다
+    대표 강아지는 그 아이의 권한이 아니라 **내 계정의 표시 기본값**입니다
+    (`app_users.primary_pet_id`, 05_pets.sql 주석). 계정마다 한 칸이라 내가 무엇을
+    고르든 다른 보호자의 화면은 안 바뀝니다.
+
+    **그래서 `get_owned` 가 아니라 `get_accessible` 입니다.** 소유로 재면 연결 없이
+    참여한 돌보미가 자기 대표를 못 고릅니다 — 그 사람의 목록에서 `display` 는 대표의
+    행이라(`identity_service.views_for`) `get_owned` 가 늘 `None` 입니다. 정작 수락
+    경로는 첫 참여자의 `primary_pet_id` 에 그 행 id 를 **이미 넣고 있어서**
+    (`pet_member.accept_invite`), 서버가 자동으로 세워 준 값을 사용자가 손으로는 못
+    고르는 상태였습니다.
+
+    FK 는 "존재하는 pets 행"까지만 보장하고 그게 접근 가능한지는 안 봅니다
     (05_pets.sql 주석). 그래서 이 검사를 빠뜨리면 남의 강아지를 내 대표로 세울 수
-    있습니다.
+    있습니다 — 구성원 조건은 여전히 필요합니다.
+
+    나가거나 내보내진 뒤에는 `pet_member.remove_member` 가 이 값을 비웁니다. FK 의
+    `ON DELETE SET NULL` 은 강아지 행이 안 지워지므로 안 돕니다.
     """
-    pet = await pet_repo.get_owned(session, app_user_id, pet_id)
+    pet = await pet_repo.get_accessible(session, app_user_id, pet_id)
     if pet is None:
         raise PetNotFoundError
 

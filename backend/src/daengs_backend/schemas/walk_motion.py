@@ -108,8 +108,11 @@ class MotionCalculation(MotionWire):
     config_hash: str
     manifest_fingerprint: Digest
     evidence_fingerprint: Digest
-    coordinate_basis: Literal["stored-raw-v1-six-decimals"] = "stored-raw-v1-six-decimals"
-    # Same policy on stored inputs; original device coordinates were not preserved losslessly.
+    coordinate_basis: Literal["stored-raw-v1-six-decimals", "device-fix-bits-v1"] = (
+        "stored-raw-v1-six-decimals"
+    )
+    precision_fingerprint: Digest | None = None
+    # Only the device performs the cross-runtime comparison; this server has no device receipt.
     device_result_verified: Literal[False] = False
     distance_m: float = Field(ge=0, allow_inf_nan=False)
     recording_duration_nanos: Int64

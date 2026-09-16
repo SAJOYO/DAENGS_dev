@@ -1,0 +1,445 @@
+[
+  {
+    "card_id": "stamp:9e82be6f4ff6d65eb3d67647139cc351eff5446e36212071ff81b71a98d824bc",
+    "space": {
+      "materials": [
+        {
+          "id": "m1",
+          "temperature_c": 24.2,
+          "observation_age_s": 260.0,
+          "relation": "기록 시각 이전의 해당 지역 격자 기온. 현장 체감·순간 직접 측정은 아님",
+          "role": "regional_environment"
+        },
+        {
+          "id": "m2",
+          "material": {
+            "배경": "공원"
+          },
+          "relation": "근처에 공원이 있음. 경계·내부·방문 여부는 미확인",
+          "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인",
+          "role": "spatial_relation"
+        },
+        {
+          "id": "m3",
+          "material": {
+            "업종구성": "여러 업종 혼합",
+            "조회영역_등록분포": "등록 지점이 흩어져 있음"
+          },
+          "relation": "조회 원 전체의 등록 상가 분포. 기록 지점의 길 모습·영업·방문·혼잡은 미확인",
+          "radius_m": 1000.0,
+          "nearest_registered_point_m": 79.177,
+          "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인",
+          "role": "area_statistics"
+        },
+        {
+          "id": "m4",
+          "material": {
+            "dong": "양재2동"
+          },
+          "relation": "기록 위치의 동 이름",
+          "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인",
+          "role": "location_label"
+        },
+        {
+          "id": "m5",
+          "material": {
+            "피복": "풀밭"
+          },
+          "relation": "이 위치의 배경 유형. 실제 통과·현장 풍경·식생의 밀도는 미확인",
+          "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인",
+          "role": "point_land_cover"
+        }
+      ]
+    },
+    "action": null
+  },
+  {
+    "card_id": "stamp:0a1a08f3801cbe9ef7550551e07ad2227b1f304c053601501653c9fb1c7b08bc",
+    "space": {
+      "materials": [
+        {
+          "id": "m1",
+          "material": {
+            "dong": "양재2동"
+          },
+          "relation": "기록 위치의 동 이름",
+          "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인",
+          "role": "location_label"
+        },
+        {
+          "id": "m2",
+          "temperature_c": 24.2,
+          "observation_age_s": 600.0,
+          "relation": "기록 시각 이전의 해당 지역 격자 기온. 현장 체감·순간 직접 측정은 아님",
+          "role": "regional_environment"
+        },
+        {
+          "id": "m3",
+          "material": {
+            "배경": "공원"
+          },
+          "relation": "근처에 공원이 있음. 경계·내부·방문 여부는 미확인",
+          "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인",
+          "role": "spatial_relation"
+        },
+        {
+          "id": "m4",
+          "material": {
+            "피복": "길"
+          },
+          "relation": "이 위치의 배경 유형. 실제 통과·현장 풍경·식생의 밀도는 미확인",
+          "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인",
+          "role": "point_land_cover"
+        },
+        {
+          "id": "m5",
+          "material": {
+            "업종구성": "여러 업종 혼합",
+            "조회영역_등록분포": "등록 지점이 흩어져 있음"
+          },
+          "relation": "조회 원 전체의 등록 상가 분포. 기록 지점의 길 모습·영업·방문·혼잡은 미확인",
+          "radius_m": 1000.0,
+          "nearest_registered_point_m": 6.702,
+          "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인",
+          "role": "area_statistics"
+        }
+      ]
+    },
+    "action": {
+      "recorded_action": {
+        "id": "a1",
+        "actor": "보리",
+        "action": "냄새 맡기"
+      },
+      "movement_context": {
+        "id": "m1",
+        "meaning": "대체로 곧게 이동. 그 시각의 걸음은 이번 산책의 다른 이동 구간보다 상대적으로 느린 걸음",
+        "relation": "행동이 기록된 시각의 산책 이동. 행동의 지속 구간이나 원인은 아님"
+      }
+    }
+  },
+  {
+    "card_id": "stamp:330bbd9b1be86ddf15657f4d2e04c4ad7fb6cfeb93d1f585ff5cb54e1a3bc927",
+    "space": {
+      "materials": [
+        {
+          "id": "m1",
+          "material": {
+            "배경": "공원"
+          },
+          "relation": "근처에 공원이 있음. 경계·내부·방문 여부는 미확인",
+          "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인",
+          "role": "spatial_relation"
+        },
+        {
+          "id": "m2",
+          "temperature_c": 24.2,
+          "observation_age_s": 950.0,
+          "relation": "기록 시각 이전의 해당 지역 격자 기온. 현장 체감·순간 직접 측정은 아님",
+          "role": "regional_environment"
+        },
+        {
+          "id": "m3",
+          "material": {
+            "dong": "양재1동"
+          },
+          "relation": "기록 위치의 동 이름",
+          "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인",
+          "role": "location_label"
+        },
+        {
+          "id": "m4",
+          "material": {
+            "업종구성": "여러 업종 혼합",
+            "조회영역_등록분포": "등록 지점이 흩어져 있음"
+          },
+          "relation": "조회 원 전체의 등록 상가 분포. 기록 지점의 길 모습·영업·방문·혼잡은 미확인",
+          "radius_m": 1000.0,
+          "nearest_registered_point_m": 37.539,
+          "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인",
+          "role": "area_statistics"
+        },
+        {
+          "id": "m5",
+          "material": {
+            "피복": "숲"
+          },
+          "relation": "이 위치의 배경 유형. 실제 통과·현장 풍경·식생의 밀도는 미확인",
+          "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인",
+          "role": "point_land_cover"
+        }
+      ]
+    },
+    "action": null
+  },
+  {
+    "card_id": "stamp:69e5333261f2e0ff7378511bd67f798a75ba6f7a40827c72b0fb2d3f065f9a22",
+    "space": {
+      "materials": [
+        {
+          "id": "m1",
+          "material": {
+            "dong": "양재1동"
+          },
+          "relation": "기록 위치의 동 이름",
+          "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인",
+          "role": "location_label"
+        },
+        {
+          "id": "m2",
+          "material": {
+            "업종구성": "여러 업종 혼합",
+            "조회영역_등록분포": "등록 지점이 흩어져 있음"
+          },
+          "relation": "조회 원 전체의 등록 상가 분포. 기록 지점의 길 모습·영업·방문·혼잡은 미확인",
+          "radius_m": 1000.0,
+          "nearest_registered_point_m": 37.581,
+          "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인",
+          "role": "area_statistics"
+        },
+        {
+          "id": "m3",
+          "material": {
+            "배경": "공원"
+          },
+          "relation": "근처에 공원이 있음. 경계·내부·방문 여부는 미확인",
+          "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인",
+          "role": "spatial_relation"
+        },
+        {
+          "id": "m4",
+          "temperature_c": 24.2,
+          "observation_age_s": 1260.0,
+          "relation": "기록 시각 이전의 해당 지역 격자 기온. 현장 체감·순간 직접 측정은 아님",
+          "role": "regional_environment"
+        },
+        {
+          "id": "m5",
+          "material": {
+            "피복": "풀밭"
+          },
+          "relation": "이 위치의 배경 유형. 실제 통과·현장 풍경·식생의 밀도는 미확인",
+          "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인",
+          "role": "point_land_cover"
+        }
+      ]
+    },
+    "action": null
+  },
+  {
+    "card_id": "stamp:e0669aa583712f22b365166e98641b791cd0c140739c0164eb0914273fe5a3ec",
+    "space": {
+      "materials": [
+        {
+          "id": "m1",
+          "material": {
+            "dong": "양재1동"
+          },
+          "relation": "기록 위치의 동 이름",
+          "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인",
+          "role": "location_label"
+        },
+        {
+          "id": "m2",
+          "temperature_c": 24.2,
+          "observation_age_s": 1490.0,
+          "relation": "기록 시각 이전의 해당 지역 격자 기온. 현장 체감·순간 직접 측정은 아님",
+          "role": "regional_environment"
+        },
+        {
+          "id": "m3",
+          "material": {
+            "업종구성": "여러 업종 혼합",
+            "조회영역_등록분포": "등록 지점이 흩어져 있음"
+          },
+          "relation": "조회 원 전체의 등록 상가 분포. 기록 지점의 길 모습·영업·방문·혼잡은 미확인",
+          "radius_m": 1000.0,
+          "nearest_registered_point_m": 21.647,
+          "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인",
+          "role": "area_statistics"
+        },
+        {
+          "id": "m4",
+          "material": {
+            "배경": "공원"
+          },
+          "relation": "근처에 공원이 있음. 경계·내부·방문 여부는 미확인",
+          "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인",
+          "role": "spatial_relation"
+        },
+        {
+          "id": "m5",
+          "material": {
+            "피복": "길"
+          },
+          "relation": "이 위치의 배경 유형. 실제 통과·현장 풍경·식생의 밀도는 미확인",
+          "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인",
+          "role": "point_land_cover"
+        }
+      ]
+    },
+    "action": null
+  },
+  {
+    "card_id": "stamp:0a18e6f64a40f0c299df4202957d6cad39d215c334bae957be4a3c2bbe9a0320",
+    "space": {
+      "materials": [
+        {
+          "id": "m1",
+          "material": {
+            "배경": "공원"
+          },
+          "relation": "근처에 공원이 있음. 경계·내부·방문 여부는 미확인",
+          "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인",
+          "role": "spatial_relation"
+        },
+        {
+          "id": "m2",
+          "material": {
+            "dong": "양재1동"
+          },
+          "relation": "기록 위치의 동 이름",
+          "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인",
+          "role": "location_label"
+        },
+        {
+          "id": "m3",
+          "temperature_c": 24.2,
+          "observation_age_s": 1640.0,
+          "relation": "기록 시각 이전의 해당 지역 격자 기온. 현장 체감·순간 직접 측정은 아님",
+          "role": "regional_environment"
+        },
+        {
+          "id": "m4",
+          "material": {
+            "업종구성": "여러 업종 혼합",
+            "조회영역_등록분포": "등록 지점이 흩어져 있음"
+          },
+          "relation": "조회 원 전체의 등록 상가 분포. 기록 지점의 길 모습·영업·방문·혼잡은 미확인",
+          "radius_m": 1000.0,
+          "nearest_registered_point_m": 7.705,
+          "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인",
+          "role": "area_statistics"
+        },
+        {
+          "id": "m5",
+          "material": {
+            "피복": "길"
+          },
+          "relation": "이 위치의 배경 유형. 실제 통과·현장 풍경·식생의 밀도는 미확인",
+          "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인",
+          "role": "point_land_cover"
+        }
+      ]
+    },
+    "action": null
+  },
+  {
+    "card_id": "stamp:42f42c051b214a48aeb32861326f96bea3e458603fced6431dbe36cb1c777e2a",
+    "space": {
+      "materials": [
+        {
+          "id": "m1",
+          "temperature_c": 24.2,
+          "observation_age_s": 1920.0,
+          "relation": "기록 시각 이전의 해당 지역 격자 기온. 현장 체감·순간 직접 측정은 아님",
+          "role": "regional_environment"
+        },
+        {
+          "id": "m2",
+          "material": {
+            "dong": "양재2동"
+          },
+          "relation": "기록 위치의 동 이름",
+          "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인",
+          "role": "location_label"
+        },
+        {
+          "id": "m3",
+          "material": {
+            "배경": "공원"
+          },
+          "relation": "근처에 공원이 있음. 경계·내부·방문 여부는 미확인",
+          "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인",
+          "role": "spatial_relation"
+        },
+        {
+          "id": "m4",
+          "material": {
+            "업종구성": "여러 업종 혼합",
+            "조회영역_등록분포": "등록 지점이 흩어져 있음"
+          },
+          "relation": "조회 원 전체의 등록 상가 분포. 기록 지점의 길 모습·영업·방문·혼잡은 미확인",
+          "radius_m": 1000.0,
+          "nearest_registered_point_m": 47.858,
+          "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인",
+          "role": "area_statistics"
+        },
+        {
+          "id": "m5",
+          "material": {
+            "피복": "풀밭"
+          },
+          "relation": "이 위치의 배경 유형. 실제 통과·현장 풍경·식생의 밀도는 미확인",
+          "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인",
+          "role": "point_land_cover"
+        }
+      ]
+    },
+    "action": null
+  },
+  {
+    "card_id": "stamp:2f9390dce5d99aeb89b76c1b24e94196de1ba28dc260c723fdcfa3788e3e742a",
+    "space": {
+      "materials": [
+        {
+          "id": "m1",
+          "material": {
+            "배경": "공원"
+          },
+          "relation": "근처에 공원이 있음. 경계·내부·방문 여부는 미확인",
+          "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인",
+          "role": "spatial_relation"
+        },
+        {
+          "id": "m2",
+          "material": {
+            "업종구성": "여러 업종 혼합",
+            "조회영역_등록분포": "등록 지점이 흩어져 있음"
+          },
+          "relation": "조회 원 전체의 등록 상가 분포. 기록 지점의 길 모습·영업·방문·혼잡은 미확인",
+          "radius_m": 1000.0,
+          "nearest_registered_point_m": 79.177,
+          "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인",
+          "role": "area_statistics"
+        },
+        {
+          "id": "m3",
+          "material": {
+            "dong": "양재2동"
+          },
+          "relation": "기록 위치의 동 이름",
+          "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인",
+          "role": "location_label"
+        },
+        {
+          "id": "m4",
+          "temperature_c": 24.2,
+          "observation_age_s": 2150.0,
+          "relation": "기록 시각 이전의 해당 지역 격자 기온. 현장 체감·순간 직접 측정은 아님",
+          "role": "regional_environment"
+        },
+        {
+          "id": "m5",
+          "material": {
+            "피복": "풀밭"
+          },
+          "relation": "이 위치의 배경 유형. 실제 통과·현장 풍경·식생의 밀도는 미확인",
+          "time_meaning": "조회 시점의 등록·지도 정보. 산책 당시 상태는 미확인",
+          "role": "point_land_cover"
+        }
+      ]
+    },
+    "action": null
+  }
+]

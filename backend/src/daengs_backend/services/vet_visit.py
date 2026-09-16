@@ -24,6 +24,7 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from hashlib import sha256
 from typing import Literal
+from zoneinfo import ZoneInfo
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -35,6 +36,7 @@ from daengs_backend.repositories import app_user as app_user_repo
 from daengs_backend.repositories import pet as pet_repo
 from daengs_backend.repositories import vet_visit as vet_repo
 from daengs_backend.services import vet_receipt
+from daengs_backend.services.care_event import DAY_TIMEZONE
 from daengs_backend.services.vet_receipt import ReceiptExtraction, ReceiptExtractionFailed
 
 log = logging.getLogger(__name__)
@@ -68,15 +70,48 @@ class VetVisitConflictError(Exception):
 
 
 class VetRangeError(ValueError):
-    """조회 창이 뒤집혔거나 상한을 넘었다. 라우터가 422 로 바꾼다 (`care_event.
-    CareRangeError` 와 같은 자리)."""
+    """조회 창이 뒤집혔다. 라우터가 422 로 바꾼다 (`care_event.CareRangeError` 와
+    같은 자리). **기간 상한으로는 안 뜬다** — 상한이 없다 (`DEFAULT_RANGE` 주석)."""
 
 
-#: 기간 조회의 상한. "피부로 1년간 얼마 썼나" 가 실제 질문이라 (docs 머리말),
-#: 케어 로그(31일)보다 훨씬 넉넉하게 둔다.
-MAX_RANGE = timedelta(days=366 * 5)
-#: 안 보내면 최근 1년.
+class VetSplitSumError(ValueError):
+    """아이별 금액의 합이 영수증 총액과 다르다. 라우터가 422 로 바꾼다.
+
+    **items 가 필요 없는 검사다** — 요청 안에서 닫히므로 OCR 학습 동의 여부와 무관하게
+    항상 돈다. 미동의 유저의 초안에는 `items` 가 없어서(docs §3) 서버가 블록별로 더할
+    재료가 없는데, 이 검산은 그 재료를 안 쓴다.
+    """
+
+
+class VetVisitDateError(ValueError):
+    """`visited_on` 이 미래다. 라우터가 422 로 바꾼다.
+
+    **확정을 막는 이유는 목록이 미래를 안 보여 주기 때문이다.** `_window` 의 `end` 는
+    아무리 늘려도 오늘이라, 미래 날짜로 확정된 기록은 저장은 되는데 어떤 조회 창으로도
+    안 잡힌다 — 유저에게는 "확인을 눌렀는데 저장소에 없다" 로 보이고, 재인식하면
+    `possible_duplicate` 만 뜬다(그쪽은 창이 없다). 저장 뒤에 못 고치느니 확인 화면에서
+    되돌려 주는 쪽이 싸다.
+    """
+
+
+#: 안 보내면 최근 1년. **상한은 없다** — 저장소의 [전체] 가 그것을 요구한다.
+#: 예전에는 5년 상한이 있었는데, 그러면 "전체"를 앱이 창을 쪼개 여러 번 불러야 하고
+#: 쪼개는 코드는 경계에서 한 건씩 흘린다. 상한을 없애도 되는 이유는 이 조회가
+#: `(pet_id, visited_on DESC)` 인덱스를 타고 **아이 한 마리의 병원 방문**만 세기
+#: 때문이다 — 연 2~6건이라 평생을 다 읽어도 수십 줄이다.
 DEFAULT_RANGE = timedelta(days=366)
+#: 확정이 허용하는 미래 쪽 여유. **시차 때문에 0 이 아니다** — 기기가 KST 보다 앞선
+#: 시간대(최대 UTC+14)에 있으면 거기서 오늘 받은 영수증이 KST 로는 내일이다.
+FUTURE_GRACE = timedelta(days=1)
+
+
+def today_kst() -> date:
+    """**UTC 가 아니라 KST 의 오늘이다.** `visited_on` 은 영수증에 찍힌 한국 날짜인데
+    `datetime.now(UTC).date()` 는 KST 00:00~09:00 사이에 어제를 낸다. 그 9시간 동안
+    오늘 찍은 영수증이 목록의 `end` 보다 뒤가 되어, 확정은 됐는데 저장소에서 사라진다
+    (테스터 제보, 2026-09-13). 하루의 경계는 `care_event.DAY_TIMEZONE` 이 원본이다.
+    """
+    return datetime.now(ZoneInfo(DAY_TIMEZONE)).date()
 
 
 @dataclass(frozen=True)
@@ -89,22 +124,45 @@ class StartDraftRequest:
 
 
 @dataclass(frozen=True)
+class ConfirmSplit:
+    """확정될 행 하나 = 아이 하나. **멱등키가 행마다 하나씩인 이유**는 `vet_visits` 의
+    UNIQUE 가 `(app_user_id, client_event_id)` 라 행 단위이기 때문이다.
+
+    `pet_id` 가 `None` 이면 초안의 강아지다 — 한 마리 확정과 구 모양 호환이 그 자리다.
+    `patient_index` 는 `raw_ocr_items` 를 자르는 데만 쓰고 저장하지 않는다."""
+
+    client_event_id: uuid.UUID
+    reason_code: str
+    total_krw: int
+    pet_id: uuid.UUID | None = None
+    reason_detail: str | None = None
+    is_emergency: bool = False
+    is_oncology: bool = False
+    patient_index: int | None = None
+
+
+@dataclass(frozen=True)
 class ConfirmDraftRequest:
     """`confirm_draft` 의 입력. **`items` 를 받는 필드가 여기 없다** — `raw_ocr_items`
     는 초안에서만 읽는다 (docs §3). 여기 다시 `items` 를 더하고 싶어지면, HTTP 경계의
     `schemas.vet_visit.VetVisitConfirmRequest` 머리말이 이미 막아 둔 그 판단부터
-    다시 보라는 뜻이다 — 받아도 안 쓰는 필드는 다음 편집이 집어 들 총이다."""
+    다시 보라는 뜻이다 — 받아도 안 쓰는 필드는 다음 편집이 집어 들 총이다.
 
-    client_event_id: uuid.UUID
-    reason_code: str
+    **`splits` 는 언제나 있고 길이가 1 이상이다.** 한 마리는 특수 케이스가 아니라
+    `len(splits) == 1` 이다 — 그래야 소유권 검사도 금액 검산도 항목 자르기도 한 벌만
+    존재하고, 기존 한 마리 경로가 그 한 벌을 매일 밟는다. 평평한 구 모양을 1개짜리
+    리스트로 접는 일은 HTTP 경계(`schemas`)가 하고 여기까지 오지 않는다.
+
+    `visited_on` · `hospital_*` · `total_krw` 는 **영수증 단위**다 — 아이마다 같고,
+    `total_krw` 는 영수증에 찍힌 총액이라 `splits` 의 합과 대조된다."""
+
     visited_on: date
     total_krw: int
+    splits: tuple[ConfirmSplit, ...]
     reason_detail: str | None = None
     hospital_name: str | None = None
     hospital_address: str | None = None
     hospital_phone: str | None = None
-    is_emergency: bool = False
-    is_oncology: bool = False
 
 
 @dataclass(frozen=True)
@@ -368,70 +426,136 @@ async def reason_options(
     return [ReasonOption(code=code, label=VET_REASON_LABELS[code]) for code in recent + rest]
 
 
+def _items_for(raw_items: list, split: ConfirmSplit, single: bool) -> list:
+    """이 아이 몫의 항목만. **한 마리면 통째로, 나누면 블록으로 자른다.**
+
+    `patient_index` 가 `null` 인 항목은 **나눌 때 버린다.** 블록은 있는데 어느 블록인지
+    모델이 확신 못 한 항목인데, 아무 아이에게나 붙이면 학습 코퍼스에 잘못 라벨된
+    데이터가 들어간다 — 코퍼스에는 빠진 것보다 **틀린 것이 나쁘다**. 금액 검산은
+    항목을 안 쓰므로(`VetSplitSumError`) 버려도 아무것도 안 깨진다.
+    """
+    if single:
+        return raw_items
+    if split.patient_index is None:
+        return []
+    return [
+        item
+        for item in raw_items
+        if isinstance(item, dict) and item.get("patient_index") == split.patient_index
+    ]
+
+
 async def confirm_draft(
     session: AsyncSession, app_user_id: uuid.UUID, draft_id: uuid.UUID, body: ConfirmDraftRequest
-) -> VetVisit:
+) -> list[VetVisit]:
     """유저가 [확인] 을 누른 순간. **여기서만 `vet_visits` 에 행이 생긴다.**
 
-    `raw_ocr_items` 는 **초안에서만** 읽는다 — `body.items` 는 받아도 무시한다.
-    요청 본문의 items 를 믿으면 앱이 동의 분기를 우회하고, 클라이언트가 쓴 문자열이
-    학습 코퍼스로 들어온다 (docs §3).
+    영수증 한 장이 아이 N명이면 **행 N개**가 생긴다 (N≥1). 한 `vet_visit` 에 여러
+    `pet_id` 를 매달지 않는 이유는 `reason_code` 축이 아이 하나를 전제로 서 있어서다 —
+    한 방문이 5마리면 겨눈 계통이 5개가 되고, 닫힌 목록으로 지키려던 누계가 바로 그
+    지점에서 깨진다 (`db/init/25_vet_visits.sql` 의 `reason_code` 주석).
+
+    `raw_ocr_items` 는 **초안에서만** 읽는다 — `body` 가 들고 있는 값을 믿으면 앱이
+    동의 분기를 우회한다 (docs §3).
+
+    ⚠️ **초안은 여전히 정확히 한 번 지운다.** 그것이 정리가 아니라 불변식이기 때문이다 —
+    `_sweep_expired` 와 `delete_visit` 의 주석이 "확정된 기록의 사진을 다른 표가 참조하지
+    않는다"에 기대고 있다. 초안을 남긴 채 여러 번 확정하게 만들면, 24시간 뒤 청소가
+    **확정된 기록들의 사진을 지운다.**
     """
-    # vet_visits 자신의 안전망. **먼저 본다** — 이겨서 confirm 을 끝낸 요청은 초안
-    # 행을 이미 지웠으므로, 재시도가 `get_draft_owned` 를 먼저 타면 초안이 없어
-    # 404 가 된다. 앞의 세 층을 다 뚫고 온 재시도라도 이 키만으로 잡혀야 한다.
-    existing = await vet_repo.get_by_client_event(session, app_user_id, body.client_event_id)
-    if existing is not None:
-        return existing
+    # 멱등 — 키별로 본다. 요청 단위 all-or-nothing 이라는 개념은 이 저장소에 없다
+    # (`care_event.create` · `docs/walk/upload-idempotency.md`): 같은 키로 다른 내용이
+    # 와도 먼저 온 것이 남는다. **초안보다 먼저 보는 이유**는 이겨서 확정을 끝낸 요청이
+    # 초안을 이미 지웠기 때문이다 — 재시도가 초안을 먼저 타면 404 가 된다.
+    keys = [split.client_event_id for split in body.splits]
+    existing = await vet_repo.get_many_by_client_events(session, app_user_id, keys)
+    if len(existing) == len(keys):
+        return [existing[key] for key in keys]
+
+    if body.visited_on > today_kst() + FUTURE_GRACE:
+        # 멱등키 조회 **뒤**다 — 이미 확정된 재시도는 통과해야 하고, 날짜 판단은
+        # 새 행을 만들 때만 한다.
+        raise VetVisitDateError("영수증 날짜는 오늘보다 뒤일 수 없습니다.")
+
+    if sum(split.total_krw for split in body.splits) != body.total_krw:
+        raise VetSplitSumError("아이별 금액의 합이 영수증 총액과 다릅니다.")
 
     draft = await vet_repo.get_draft_owned(session, app_user_id, draft_id)
     if draft is None:
+        # 초안이 이미 소진됐다. 키가 일부만 남아 있는 재시도도 여기로 온다 —
+        # 새 키로 다시 확정하는 것과 구별할 방법이 없고, 구별할 이유도 없다.
         raise VetVisitNotFoundError
 
     extracted = draft.extracted or {}
     raw_ocr_items = extracted.get("items", [])
-    suggested_reason_code = extracted.get("suggested_reason_code")
+    single = len(body.splits) == 1
+    # 제안 코드는 **영수증 하나당 하나**라 아이별 제안이 아니다. N행에 복사하면
+    # `suggested_reason_code` 와 `reason_code` 의 비교가 거짓이 된다 — `label_source`
+    # 칸을 안 둔 설계가 그 비교에 기대고 있어서(25_vet_visits.sql 의 주석), 한번
+    # 오염되면 "기계가 제안했나 유저가 골랐나"를 영영 못 가린다. NULL 이 정확히
+    # "제안이 없었다"는 뜻이므로 나눌 때는 NULL 이 사실이다.
+    suggested_reason_code = extracted.get("suggested_reason_code") if single else None
 
-    visit = VetVisit(
-        app_user_id=app_user_id,
-        pet_id=draft.pet_id,
-        visited_on=body.visited_on,
-        total_krw=body.total_krw,
-        hospital_name=body.hospital_name,
-        hospital_address=body.hospital_address,
-        hospital_phone=body.hospital_phone,
-        reason_code=body.reason_code,
-        reason_detail=body.reason_detail,
-        suggested_reason_code=suggested_reason_code,
-        is_emergency=body.is_emergency,
-        is_oncology=body.is_oncology,
-        raw_ocr_items=raw_ocr_items,
-        receipt_image_key=draft.receipt_image_key,
-        client_event_id=body.client_event_id,
-    )
-    vet_repo.add(session, visit)
+    created: dict[uuid.UUID, VetVisit] = {}
+    for split in body.splits:
+        if split.client_event_id in existing:
+            continue
+        pet_id = split.pet_id or draft.pet_id
+        # ⚠️ **소유권 검사가 여기 처음 생긴다.** 예전에는 `pet_id` 가 클라이언트가
+        #    아니라 초안에서 와서 `start_draft` 의 검사 하나로 충분했다. splits 는
+        #    앱이 `pet_id` 를 보내므로 행마다 다시 본다 — 안 보면 남의 강아지 id 로
+        #    고아 행이 생기고, 외래키 위반이 멱등 복구 경로로 새어 원인이 사라진다.
+        if await pet_repo.get_owned(session, app_user_id, pet_id) is None:
+            raise VetVisitNotFoundError
+        visit = VetVisit(
+            app_user_id=app_user_id,
+            pet_id=pet_id,
+            visited_on=body.visited_on,
+            total_krw=split.total_krw,
+            hospital_name=body.hospital_name,
+            hospital_address=body.hospital_address,
+            hospital_phone=body.hospital_phone,
+            reason_code=split.reason_code,
+            reason_detail=split.reason_detail,
+            suggested_reason_code=suggested_reason_code,
+            is_emergency=split.is_emergency,
+            is_oncology=split.is_oncology,
+            raw_ocr_items=_items_for(raw_ocr_items, split, single),
+            receipt_image_key=draft.receipt_image_key,
+            client_event_id=split.client_event_id,
+        )
+        vet_repo.add(session, visit)
+        created[split.client_event_id] = visit
+
     # 초안 행을 지운다 — **사진 객체는 안 지운다.** vet_visits 가 같은 키를 그대로
     # 물려받았으므로, 초안 청소가 나중에 이 키를 지우면 확정된 기록의 사진이 사라진다.
+    # 아이 N명이면 N행이 **같은 키를 공유**한다 (`delete_visit` 이 그래서 센다).
     await vet_repo.delete_draft(session, draft)
     try:
         await session.commit()
-    except IntegrityError:
+    except IntegrityError as exc:
         await session.rollback()
-        winner = await vet_repo.get_by_client_event(session, app_user_id, body.client_event_id)
-        if winner is None:  # pragma: no cover
+        # **이 멱등키의 충돌일 때만** 재조회로 복구한다 — 다른 UNIQUE·CHECK·외래키
+        # 오류는 성공으로 바꾸지 않고 그대로 전달한다 (`docs/walk/upload-idempotency.md`).
+        if not vet_repo.is_client_event_conflict(exc):
             raise
-        return winner
-    return visit
+        winners = await vet_repo.get_many_by_client_events(session, app_user_id, keys)
+        if len(winners) != len(keys):  # pragma: no cover — UNIQUE 가 터졌는데 행이 없을 수 없다
+            raise
+        return [winners[key] for key in keys]
+    return [created.get(key) or existing[key] for key in keys]
 
 
 def _window(start: date | None, end: date | None) -> tuple[date, date]:
-    """조회 창. 안 보낸 쪽을 채우고 상한을 본다 (`care_event._window` 와 같은 자리)."""
-    end = end or datetime.now(UTC).date()
+    """조회 창. 안 보낸 쪽을 채운다 (`care_event._window` 와 같은 자리).
+
+    **기간 상한은 안 본다** (`DEFAULT_RANGE` 주석) — `from=0001-01-01` 도 정당한
+    요청이고, 그것이 저장소의 [전체] 다.
+    """
+    end = end or today_kst()
     start = start or end - DEFAULT_RANGE
     if end < start:
         raise VetRangeError("to 는 from 보다 뒤여야 합니다.")
-    if end - start > MAX_RANGE:
-        raise VetRangeError(f"조회 기간은 {MAX_RANGE.days}일까지입니다.")
     return start, end
 
 
@@ -442,40 +566,62 @@ async def list_visits(
     *,
     start: date | None = None,
     end: date | None = None,
-) -> tuple[list[VetVisit], date, date]:
+) -> tuple[list[VetVisit], date, date, int]:
     """기간 조회, 최근 먼저. 창을 같이 돌려주는 이유는 기본값을 앱이 되짚어 볼 수
-    있게 하려는 것이다 (`care_event.list_events` 와 같은 자리)."""
+    있게 하려는 것이다 (`care_event.list_events` 와 같은 자리).
+
+    **`start` 보다 오래된 기록 수도 같이 낸다.** 기본 창이 최근 1년이라 묵은 영수증은
+    확정해도 이 목록에 안 뜨는데, 그 사실이 화면 어디에도 안 적혀 있으면 유저에게는
+    기록이 사라진 것으로 보인다 (테스터 제보, 2026-09-13). 건수가 0 이 아닐 때만
+    "언제 이후만 보입니다" 를 띄우면 평소 화면은 안 빡빡해진다.
+    """
     await _owned_pet(session, app_user_id, pet_id)
     start, end = _window(start, end)
-    return await vet_repo.list_between(session, app_user_id, pet_id, start, end), start, end
+    visits = await vet_repo.list_between(session, app_user_id, pet_id, start, end)
+    older = await vet_repo.count_before(session, app_user_id, pet_id, start)
+    return visits, start, end, older
 
 
 async def delete_visit(session: AsyncSession, app_user_id: uuid.UUID, visit_id: uuid.UUID) -> None:
-    """지운다. **사진 파일까지 지운다** (`screening.delete_record` 와 같은 이유) —
-    확정된 기록이 사라지면 그 사진을 다른 표가 참조하지 않는다."""
+    """지운다. 사진 파일도 지우되 **마지막 참조일 때만** 지운다.
+
+    한 장에 여러 아이가 찍힌 영수증은 행 N개가 **같은 `receipt_image_key` 를 공유**한다
+    (그 칸에 UNIQUE 가 없다). 예전처럼 무조건 지우면 아이 하나를 지울 때 **나머지
+    아이들의 사진까지** 사라진다.
+
+    ⚠️ **행을 지우고 커밋한 뒤에 센다.** 지우기 전에 세면 자기 자신이 세어져 영영
+    0 이 안 되고, 커밋 전에 객체를 지우면 커밋이 실패했을 때 여전히 존재하는 기록의
+    사진이 이미 사라진 뒤다 — `_sweep_expired` 가 커밋을 먼저 하는 것과 같은 이유다.
+    """
     visit = await vet_repo.get_owned(session, app_user_id, visit_id)
     if visit is None:
         raise VetVisitNotFoundError
-    if visit.receipt_image_key is not None:
-        get_storage().delete(visit.receipt_image_key)
+    storage_key = visit.receipt_image_key
     await vet_repo.delete(session, visit)
     await session.commit()
+    if storage_key is None:
+        return
+    if await vet_repo.count_by_image_key(session, storage_key) == 0:
+        get_storage().delete(storage_key)
 
 
 __all__ = [
     "DEFAULT_RANGE",
     "DRAFT_TTL",
-    "MAX_RANGE",
+    "FUTURE_GRACE",
     "MAX_RECEIPT_BYTES",
     "SWEEP_LIMIT",
     "VET_RECEIPT_BRIDGE_DOWNLOAD_PATH",
     "VET_RECEIPT_BRIDGE_UPLOAD_PATH",
     "ConfirmDraftRequest",
+    "ConfirmSplit",
     "DraftExtraction",
     "ReasonOption",
     "StartDraftRequest",
     "VetRangeError",
+    "VetSplitSumError",
     "VetVisitConflictError",
+    "VetVisitDateError",
     "VetVisitNotFoundError",
     "confirm_draft",
     "content_type_from_key",
@@ -484,4 +630,5 @@ __all__ = [
     "list_visits",
     "reason_options",
     "start_draft",
+    "today_kst",
 ]

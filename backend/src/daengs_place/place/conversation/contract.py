@@ -110,7 +110,7 @@ class FilterRemoval(PlanningModel):
 
 
 class PrepareRequest(PlanningModel):
-    mode: Literal["manual", "chat", "restore", "filters"]
+    mode: Literal["manual", "chat", "restore", "filters", "bootstrap"]
     saved_search: Literal["v1"] | None = None
     candidate_pools: Literal["v1"] | None = None
     restore_pool: SearchPool = "all_places"
@@ -131,6 +131,10 @@ class PrepareRequest(PlanningModel):
 
     @model_validator(mode="after")
     def valid_mode(self) -> Self:
+        if self.mode == "bootstrap" and (
+            self.previous is not None or self.query or self.manual is None
+        ):
+            raise ValueError("bootstrap creates empty search context from manual defaults")
         if self.mode == "filters":
             if (
                 self.previous is None

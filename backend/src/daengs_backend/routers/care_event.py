@@ -25,6 +25,7 @@ from daengs_backend.schemas.care_event import (
     CareEventListResponse,
     CareEventQuery,
     CareEventResponse,
+    DayWalkOut,
 )
 from daengs_backend.services import care_event as care_service
 from daengs_backend.services import pet_member as member_service
@@ -39,7 +40,7 @@ _EVENT_NOT_FOUND = "기록을 찾을 수 없습니다."
 
 
 async def _actor_labels(
-    session: AsyncSession, pet_id: uuid.UUID, events: Sequence[CareEvent]
+    session: AsyncSession, pet_ids: Sequence[uuid.UUID], events: Sequence[CareEvent]
 ) -> dict[uuid.UUID, str | None]:
     """actor id → 표시 이름. **등장하는 사람 수만큼만** `actor_label` 을 부릅니다.
 
@@ -47,9 +48,15 @@ async def _actor_labels(
     같은 사람이 여러 줄을 남긴 경우가 흔하므로, 먼저 등장하는 `actor_app_user_id` 를
     집합으로 모아 **사람 수만큼만** 묻습니다. `None`(컬럼보다 먼저 쌓인 기록·탈퇴자)은
     `actor_label` 을 부를 것도 없이 `None` 이라, 애초에 집합에 넣지 않습니다.
+
+    **판정은 논리 그룹 전체**입니다 (MVP 결정 §7) — 연결된 상대는 내 행의 구성원이 아니라
+    그 사람이 적은 기록의 이름이 통째로 빕니다 (`group_actor_label` 독스트링).
     """
     ids = {e.actor_app_user_id for e in events if e.actor_app_user_id is not None}
-    return {uid: await member_service.actor_label(session, pet_id, uid) for uid in ids}
+    return {
+        uid: await member_service.group_actor_label(session, list(pet_ids), uid)
+        for uid in ids
+    }
 
 
 def _to_response(
@@ -91,14 +98,14 @@ async def list_events(
     """
     window = _range(start, end)
     try:
-        events, start_, end_ = await care_service.list_events(
+        events, start_, end_, group_ids = await care_service.list_events(
             session, user.app_user_id, pet_id, start=window.start, end=window.end
         )
     except PetNotFoundError:
         raise HTTPException(status.HTTP_404_NOT_FOUND, _PET_NOT_FOUND) from None
     except care_service.CareRangeError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(exc)) from None
-    labels = await _actor_labels(session, pet_id, events)
+    labels = await _actor_labels(session, group_ids, events)
     return CareEventListResponse(
         pet_id=pet_id,
         start=start_,
@@ -137,7 +144,11 @@ async def record_event(
         #    먼저 딕셔너리로 만들어 둔 뒤에 씁니다. **event id 가 아니라 actor 의
         #    user id 로 키를 잡습니다** — 같은 사람이 conflict 를 두 줄 남겼으면 event id
         #    로 잡을 때 그 사람만 두 번 묻게 됩니다. 사람 수만큼만 물어야 합니다.
-        labels = await _actor_labels(session, body.pet_id, exc.conflicts)
+        labels = await _actor_labels(
+            session,
+            await care_service.group_ids_for(session, user.app_user_id, body.pet_id),
+            exc.conflicts,
+        )
         raise HTTPException(
             status.HTTP_409_CONFLICT,
             {
@@ -160,7 +171,11 @@ async def record_event(
                 ],
             },
         ) from None
-    labels = await _actor_labels(session, event.pet_id, [event])
+    labels = await _actor_labels(
+        session,
+        await care_service.group_ids_for(session, user.app_user_id, event.pet_id),
+        [event],
+    )
     response.status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
     return _to_response(event, labels)
 
@@ -183,7 +198,13 @@ async def today(
         summary = await care_service.day_summary(session, user.app_user_id, pet_id, day=day)
     except PetNotFoundError:
         raise HTTPException(status.HTTP_404_NOT_FOUND, _PET_NOT_FOUND) from None
-    labels = await _actor_labels(session, pet_id, summary.events)
+    labels = await _actor_labels(session, summary.group_ids, summary.events)
+    # 산책 수행자도 **케어 actor 와 같은 규칙**입니다 — 지금도 그 아이의 구성원일 때만
+    # 이름이 납니다. 사람 수만큼만 묻는 것도 같습니다 (`_actor_labels` 독스트링).
+    walkers = {
+        uid: await member_service.group_actor_label(session, summary.group_ids, uid)
+        for uid in {w.app_user_id for w in summary.walk_rows}
+    }
     return CareDaySummaryResponse(
         pet_id=pet_id,
         day=summary.day,
@@ -195,6 +216,17 @@ async def today(
         snack=summary.counts.get("snack", 0),
         walk=summary.walks,
         events=[_to_response(e, labels) for e in summary.events],
+        walk_rows=[
+            DayWalkOut(
+                walk_id=walk.id,
+                started_at=walk.started_at,
+                actor=ActorOut(
+                    app_user_id=walk.app_user_id,
+                    nickname=walkers.get(walk.app_user_id),
+                ),
+            )
+            for walk in summary.walk_rows
+        ],
     )
 
 

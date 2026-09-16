@@ -14,6 +14,7 @@ from daengs_evals.place_conversation.context_ablation import (
 )
 from daengs_evals.place_conversation.runner import DATA
 from daengs_place.place.conversation.contract import ConversationState
+from tests.place.support.conversation import scoped_wire
 
 
 async def samples():
@@ -39,7 +40,7 @@ def response(arguments):
     )
 
 
-async def test_paired_input_only_adds_context_and_does_not_propagate_new_state():
+async def test_paired_input_only_adds_context_but_cannot_authorize_ungrounded_undo():
     targets, fixtures = await samples()
     target = next(t for t in targets if t["id"] == "PC-X03")
     wires = []
@@ -49,12 +50,15 @@ async def test_paired_input_only_adds_context_and_does_not_propagate_new_state()
         wires.append(wire)
         has_context = "context" in json.loads(wire["input"])
         return response(
-            {
-                "goal": "show",
-                "changes": {"kinds": {"operation": "remove", "values": ["restaurant"]}},
-            }
-            if has_context
-            else {"goal": "show"}
+            scoped_wire(
+                {
+                    "goal": "show",
+                    "changes": {"kinds": {"operation": "remove", "values": ["restaurant"]}},
+                }
+                if has_context
+                else {"goal": "show"},
+                json.loads(wire["input"])["query"],
+            )
         )
 
     provider = ContextGemini("synthetic-key", "mock", transport=httpx.MockTransport(capture))
@@ -64,7 +68,11 @@ async def test_paired_input_only_adds_context_and_does_not_propagate_new_state()
     assert a["anchor_sha256"] == b["anchor_sha256"] == a2["anchor_sha256"]
     assert a["before"] == b["before"] == a2["before"]
     assert a["prepared"]["state"]["filters"]["candidate_kinds"] == ["cafe", "restaurant"]
-    assert b["prepared"]["state"]["filters"]["candidate_kinds"] == ["cafe"]
+    # This historical anchor has no committed intent history. Extra model clues alone
+    # cannot authorize "undo what I just added" under the facility scope contract.
+    assert b["plans"][0]["changes"]["kinds"]["values"] == ["restaurant"]
+    assert b["prepared"]["receipt"]["code"] == "invalid_plan"
+    assert b["prepared"]["state"]["filters"]["candidate_kinds"] == ["cafe", "restaurant"]
     assert a2["prepared"]["state"]["filters"]["candidate_kinds"] == ["cafe", "restaurant"]
     enriched = json.loads(wires[1]["input"])
     enriched.pop("context")

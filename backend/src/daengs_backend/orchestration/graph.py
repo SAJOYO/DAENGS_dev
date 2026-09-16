@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
-import time
 import uuid
 from collections.abc import Mapping
 from typing import Protocol, cast
@@ -16,6 +14,7 @@ from daengs_backend.orchestration.adapters import (
     GeneralCapabilityAdapter,
     LifeCapabilityAdapter,
     PlaceCapabilityAdapter,
+    SkinCapabilityAdapter,
     TrainingCapabilityAdapter,
     VetContactCapabilityAdapter,
     WalkCapabilityAdapter,
@@ -33,6 +32,8 @@ from daengs_backend.orchestration.contracts import (
     RoutePlan,
     ScreeningHistory,
 )
+from daengs_backend.orchestration.execution import JobExecutor
+from daengs_backend.orchestration.facility_presentation import present_facility
 
 _FORBIDDEN_CONTEXT_KEYS = frozenset(
     {"authorization", "jwt", "jwe", "access_token", "refresh_token", "cookie", "cookie_token"}
@@ -48,7 +49,13 @@ class CapabilityAdapter(Protocol):
 class OrchestrationEngine:
     """Sequential v1 execution; no router, persistence, checkpointer, or subgraphs."""
 
-    def __init__(self, adapters: Mapping[CapabilityName, CapabilityAdapter] | None = None) -> None:
+    def __init__(
+        self,
+        adapters: Mapping[CapabilityName, CapabilityAdapter] | None = None,
+        *,
+        place_adapter: CapabilityAdapter | None = None,
+        care_log_adapter: CapabilityAdapter | None = None,
+    ) -> None:
         if adapters is None:
             adapters = {
                 CapabilityName.TRAINING: TrainingCapabilityAdapter(),
@@ -60,8 +67,26 @@ class OrchestrationEngine:
                 CapabilityName.GENERAL: GeneralCapabilityAdapter(),
                 # 라우터가 고를 수 없는 능력이다 — `resolve_emergency_route` 만 계획에 넣는다.
                 CapabilityName.VET_CONTACT: VetContactCapabilityAdapter(),
+                # 라우터가 고를 수 없다 — 판정 기록이 붙은 `skin` 신호만 `resolve_skin_route`
+                # 가 계획에 넣는다 (D-079).
+                CapabilityName.SKIN: SkinCapabilityAdapter(),
             }
         self._adapters = dict(adapters)
+        if place_adapter is not None:
+            if place_adapter.capability != CapabilityName.PLACE:
+                raise ValueError("the facility override must implement Place")
+            self._adapters[CapabilityName.PLACE] = place_adapter
+        # 케어 기록 쓰기는 **기본 어댑터가 없다** (위 dict 에 CARE_LOG 가 없는 것이 의도다).
+        # 요청마다 만들어 넣어야 하는 이유는 `adapters/care_log.py` 머리말에 있다 —
+        # `app_user_id` 를 들고 있고 그것이 "누구 이름으로 기록되는가" 라서다. 안 넣으면
+        # `_execute_requests` 가 `unsupported_capability` 로 끝내지만, 실무에서 그 자리에
+        # 닿지 않는다: `planner.resolve_care_log_route` 가 `context["care_log_writable"]`
+        # 없이는 제안 자체를 안 내므로 승낙받을 제안이 없다. 그 플래그를 세우는 곳과 이
+        # 어댑터를 넣는 곳이 `routers/assistant.py` 의 같은 `if` 다.
+        if care_log_adapter is not None:
+            if care_log_adapter.capability != CapabilityName.CARE_LOG:
+                raise ValueError("the care-log override must implement CareLog")
+            self._adapters[CapabilityName.CARE_LOG] = care_log_adapter
         self.graph = self._build_graph()
 
     def _build_graph(self):
@@ -154,7 +179,8 @@ class OrchestrationEngine:
 
     async def _execute_requests(self, state: OrchestratorState) -> dict:
         results: list[CapabilityResult] = []
-        for request in state["route_plan"].requests:
+        executor = JobExecutor(concurrency=1)
+        for index, request in enumerate(state["route_plan"].requests):
             adapter = self._adapters.get(request.capability)
             if adapter is None:
                 results.append(
@@ -169,18 +195,16 @@ class OrchestrationEngine:
                     )
                 )
                 continue
-            started = time.perf_counter()
-            try:
-                pending = adapter.run(request, request_id=state["request_id"])
-                if request.timeout_ms is None:
-                    result = await pending
-                else:
-                    # This is a response deadline, not hard cancellation: blocking
-                    # asyncio.to_thread() work may continue. Domain/provider timeouts
-                    # remain the execution bound, so retry policy must allow for a
-                    # timed-out invocation that is still completing.
-                    result = await asyncio.wait_for(pending, timeout=request.timeout_ms / 1_000)
-            except TimeoutError:
+            outcome = await executor.run(
+                f"{state['request_id']}:{index}:{request.capability.value}",
+                lambda adapter=adapter, request=request: adapter.run(
+                    request, request_id=state["request_id"]
+                ),
+                timeout_ms=request.timeout_ms,
+            )
+            if outcome.status == "ok":
+                result = outcome.value
+            elif outcome.status == "timeout":
                 result = CapabilityResult(
                     capability=request.capability,
                     status=CapabilityStatus.TIMEOUT,
@@ -188,17 +212,17 @@ class OrchestrationEngine:
                         kind="orchestration_timeout",
                         detail="기능 실행 시간이 초과됐습니다.",
                     ),
-                    elapsed_ms=int((time.perf_counter() - started) * 1_000),
+                    elapsed_ms=outcome.elapsed_ms,
                 )
-            except Exception as exc:  # noqa: BLE001 - contain one adapter's unexpected failure
+            else:
                 result = CapabilityResult(
                     capability=request.capability,
                     status=CapabilityStatus.ERROR,
                     error=ErrorDetail(
-                        kind=type(exc).__name__,
+                        kind=outcome.error_kind,
                         detail="기능 실행 중 예기치 않은 오류가 발생했습니다.",
                     ),
-                    elapsed_ms=int((time.perf_counter() - started) * 1_000),
+                    elapsed_ms=outcome.elapsed_ms,
                 )
             results.append(result)
         return {"results": results}
@@ -208,10 +232,13 @@ class OrchestrationEngine:
         # 이력은 **planner 와 같은 화이트리스트**를 지나서 온다 — 답변에 붙는 절이 payload 와
         # 다른 경로로 컨텍스트를 읽으면 좁힘이 두 벌이 된다 (#79 3번).
         history = planner.screening_history(state["context"])
+        plan, results = state["route_plan"], state["results"]
+        if state["context"].get("facility_response"):
+            plan, results = present_facility(plan, results)
         response = aggregate_results(
             request_id=state["request_id"],
-            route_plan=state["route_plan"],
-            results=state["results"],
+            route_plan=plan,
+            results=results,
             include_route_trace=state["include_route_trace"],
             screening_history=ScreeningHistory.model_validate(history) if history else None,
         )

@@ -70,9 +70,7 @@ def grid(
 ) -> dict[str, dict[str, Any]]:
     """계층마다 한 칸. 판정은 variant 'A' 만 쓴다 — 일치율 파일(A/B)을 넣어도 A 만 센다."""
     by_row = {str(r["question_id"]): r for r in rows}
-    by_judgment = {
-        str(j["question_id"]): j for j in judgments if j.get("variant", "A") == "A"
-    }
+    by_judgment = {str(j["question_id"]): j for j in judgments if j.get("variant", "A") == "A"}
     cells: dict[str, dict[str, Any]] = {}
     for case in cases:
         row = by_row.get(case.question_id)
@@ -82,10 +80,16 @@ def grid(
         cell = cells.setdefault(
             case.stratum,
             {
-                "topic": stratum.topic.name, "style": stratum.style.name, "n": 0,
-                "life": Counter(), "codes": Counter(),
-                "unable": 0, "false_refuse": 0, "false_answer": 0,
-                "_answered": [], "_grounded": [],
+                "topic": stratum.topic.name,
+                "style": stratum.style.name,
+                "n": 0,
+                "life": Counter(),
+                "codes": Counter(),
+                "unable": 0,
+                "false_refuse": 0,
+                "false_answer": 0,
+                "_answered": [],
+                "_grounded": [],
             },
         )
         judgment = by_judgment.get(case.question_id)
@@ -114,8 +118,15 @@ def by_topic(cells: Mapping[str, Mapping[str, Any]]) -> dict[str, dict[str, Any]
     for cell in cells.values():
         t = topics.setdefault(
             cell["topic"],
-            {"topic": cell["topic"], "n": 0, "life": Counter(), "codes": Counter(),
-             "unable": 0, "false_refuse": 0, "false_answer": 0},
+            {
+                "topic": cell["topic"],
+                "n": 0,
+                "life": Counter(),
+                "codes": Counter(),
+                "unable": 0,
+                "false_refuse": 0,
+                "false_answer": 0,
+            },
         )
         t["n"] += cell["n"]
         t["life"].update(cell["life"])
@@ -136,7 +147,10 @@ def by_topic(cells: Mapping[str, Mapping[str, Any]]) -> dict[str, dict[str, Any]
 
 
 def build_summary(
-    *, label: str, grid: Mapping[str, Mapping[str, Any]], meta: Mapping[str, Any],
+    *,
+    label: str,
+    grid: Mapping[str, Mapping[str, Any]],
+    meta: Mapping[str, Any],
     notes: Sequence[str] = (),
 ) -> dict[str, Any]:
     return {
@@ -186,8 +200,10 @@ def render(summary: Mapping[str, Any]) -> str:
         )
     lines += [
         "",
-        ("「못함」 = 기대 OK 인데 Life 가 OK 가 아니거나 판정 answered 0 (RAG-075 ⑦). 오거절 = 기대 OK 인데 REFUSED. "
-         "오답변 = 기대 REFUSED(경계)인데 OK."),
+        (
+            "「못함」 = 기대 OK 인데 Life 가 OK 가 아니거나 판정 answered 0 (RAG-075 ⑦). 오거절 = 기대 OK 인데 REFUSED. "
+            "오답변 = 기대 REFUSED(경계)인데 OK."
+        ),
         "",
         "## 격자 — 주제 × 문체",
         "",
@@ -204,7 +220,9 @@ def render(summary: Mapping[str, Any]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def label_sheet(cases: Sequence[QuestionCase], rows: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+def label_sheet(
+    cases: Sequence[QuestionCase], rows: Sequence[Mapping[str, Any]]
+) -> list[dict[str, Any]]:
     """사람 라벨 시트. `human_answered` 를 0/1/2 로 채우면 `judge` 의 일치율과 대조할 수 있다."""
     by_row = {str(r["question_id"]): r for r in rows}
     sheet = []
@@ -212,11 +230,17 @@ def label_sheet(cases: Sequence[QuestionCase], rows: Sequence[Mapping[str, Any]]
         row = by_row.get(case.question_id)
         if row is None:
             continue
-        sheet.append({
-            "question_id": case.question_id, "stratum": case.stratum, "query": case.query,
-            "life_status": life_status(row), "message": str(row.get("message") or ""),
-            "human_answered": None, "human_note": "",
-        })
+        sheet.append(
+            {
+                "question_id": case.question_id,
+                "stratum": case.stratum,
+                "query": case.query,
+                "life_status": life_status(row),
+                "message": str(row.get("message") or ""),
+                "human_answered": None,
+                "human_note": "",
+            }
+        )
     return sheet
 
 
@@ -276,7 +300,11 @@ def human_vs_judge(
                 within1 += 1
             counts[f"{h},{g}"] += 1
         pairs[variant] = variant_pairs
-        agreement[variant] = {"same": same, "within1": within1, "rate": round(same / n, 4) if n else None}
+        agreement[variant] = {
+            "same": same,
+            "within1": within1,
+            "rate": round(same / n, 4) if n else None,
+        }
         confusion[variant] = dict(counts)
 
     primary = "A" if "A" in variants else (variants[0] if variants else None)
@@ -288,15 +316,21 @@ def human_vs_judge(
             if h == g_primary:
                 continue
             row = human[qid]
-            disagreements.append({
-                "question_id": qid,
-                "stratum": row.get("stratum"),
-                "life_status": row.get("life_status"),
-                "human": h,
-                "judge_a": int(by_variant["A"][qid]["scores"]["answered"]) if "A" in by_variant and qid in by_variant["A"] else None,
-                "judge_b": int(by_variant["B"][qid]["scores"]["answered"]) if "B" in by_variant and qid in by_variant["B"] else None,
-                "note": row.get("human_note", ""),
-            })
+            disagreements.append(
+                {
+                    "question_id": qid,
+                    "stratum": row.get("stratum"),
+                    "life_status": row.get("life_status"),
+                    "human": h,
+                    "judge_a": int(by_variant["A"][qid]["scores"]["answered"])
+                    if "A" in by_variant and qid in by_variant["A"]
+                    else None,
+                    "judge_b": int(by_variant["B"][qid]["scores"]["answered"])
+                    if "B" in by_variant and qid in by_variant["B"]
+                    else None,
+                    "note": row.get("human_note", ""),
+                }
+            )
 
     judge_models = [judge_model_by_variant[v] for v in variants]
 
@@ -406,13 +440,19 @@ def main(argv: Sequence[str] | None = None) -> int:
         n = summary["n"]
         a = summary["agreement"].get("A", {})
         b = summary["agreement"].get("B", {})
-        ab_answered_shared = sorted(set(summary["pairs"].get("A", {})) & set(summary["pairs"].get("B", {})))
+        ab_answered_shared = sorted(
+            set(summary["pairs"].get("A", {})) & set(summary["pairs"].get("B", {}))
+        )
         ab_same = sum(
             1
             for qid in ab_answered_shared
             if summary["pairs"]["A"][qid]["judge"] == summary["pairs"]["B"][qid]["judge"]
         )
-        within1 = min((a.get("within1", 0), b.get("within1", 0))) if a and b else a.get("within1") or b.get("within1") or 0
+        within1 = (
+            min((a.get("within1", 0), b.get("within1", 0)))
+            if a and b
+            else a.get("within1") or b.get("within1") or 0
+        )
         print(
             f"  사람=A {a.get('same', 0)}/{n} · 사람=B {b.get('same', 0)}/{n} · "
             f"A=B {ab_same}/{len(ab_answered_shared)} · 1점 이내 {within1}/{n}"
@@ -440,7 +480,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         "prompt_version": args.meta_prompt_version,
         "judge_model": None if jmeta is None else jmeta.get("judge_model"),
     }
-    summary = build_summary(label=args.label, grid=grid(cases, rows, judgments), meta=meta, notes=args.note)
+    summary = build_summary(
+        label=args.label, grid=grid(cases, rows, judgments), meta=meta, notes=args.note
+    )
     report_path = args.dir / f"report_{args.label}.md"
     summary_path = args.dir / f"summary_{args.label}.json"
     report_path.write_text(render(summary), encoding="utf-8")
@@ -448,7 +490,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     print(f"리포트 {report_path}")
     print(f"요약   {summary_path}")
     for t in summary["topics"].values():
-        print(f"  {t['topic']:<16} n={t['n']:<3} 못함 {t['unable']:<3} 오거절 {t['false_refuse']:<3} 오답변 {t['false_answer']}")
+        print(
+            f"  {t['topic']:<16} n={t['n']:<3} 못함 {t['unable']:<3} 오거절 {t['false_refuse']:<3} 오답변 {t['false_answer']}"
+        )
     return 0
 
 

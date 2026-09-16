@@ -1,0 +1,595 @@
+{
+  "baseline": "018a9ce7",
+  "cases": [
+    {
+      "fixture": "gps-motion-replay-v1.json",
+      "name": "empty",
+      "response_sha256": "212438c1b7220a1b02223dfda1b1007e9e1c971d20264e00fa2dd4f1a6320d96",
+      "summary_sha256": null,
+      "page_sha256": [],
+      "measurement_id": "shadow-b7d395c6eb5763bec9804fd6cfe2aece5181d7492d252279c08b79434880055a"
+    },
+    {
+      "fixture": "gps-motion-replay-v1.json",
+      "name": "slow-accumulation",
+      "response_sha256": "56bf198e904e34c887f456cf1012e2dc00ab4514d7fb0e25682214d4dba90dea",
+      "summary_sha256": null,
+      "page_sha256": [],
+      "measurement_id": "shadow-e3e6d246b686cea942a0227f2fbd9ea3aa34802832161b4b9837a07160111599"
+    },
+    {
+      "fixture": "gps-motion-replay-v1.json",
+      "name": "walking",
+      "response_sha256": "b746b8597c587c187c0cf0e35631cd11e269d837681666e0b366fbd88b3071b0",
+      "summary_sha256": null,
+      "page_sha256": [],
+      "measurement_id": "shadow-edebcff94b4a27b45ed14207e93b7e4067fb62239f6d54789e127622f3845470"
+    },
+    {
+      "fixture": "gps-motion-replay-v1.json",
+      "name": "coordinate-only",
+      "response_sha256": "a65de74a314e70216073829a8c3b1632b9c7c11628c2b7959e7f98808fca93fd",
+      "summary_sha256": null,
+      "page_sha256": [],
+      "measurement_id": "shadow-e1742e71868e731ccd8fa05aee96a86009a8be1fe17c459d1465f47f664d1987"
+    },
+    {
+      "fixture": "gps-motion-replay-v1.json",
+      "name": "uncertain-device",
+      "response_sha256": "07ae7e358ae16efac7fda0f3841281694ffbf719ead5c89103ddd395de54c8ef",
+      "summary_sha256": null,
+      "page_sha256": [],
+      "measurement_id": "shadow-581c0161cff397cfb09530b222e7ffefb6a35da6e81e8727ce8e5234eee3a8d1"
+    },
+    {
+      "fixture": "gps-motion-replay-v1.json",
+      "name": "device-conflict",
+      "response_sha256": "a8cf51730b195ef9015fcc229c55877460f7fb19a31f705bbd7e4ec5d1a4cb47",
+      "summary_sha256": null,
+      "page_sha256": [],
+      "measurement_id": "shadow-7fa3bf5fd88d703a2f2094ab9a172215f9d9c161cf37bd2f6ad6c2b76083620a"
+    },
+    {
+      "fixture": "gps-motion-replay-v1.json",
+      "name": "invalid-speed",
+      "response_sha256": "afc5b695ec9896b8f5490d68f52d82472d524e5c24df9a3c46b629bea015ff98",
+      "summary_sha256": null,
+      "page_sha256": [],
+      "measurement_id": "shadow-3d0967282595a3ef8b449cec6af464f4a7da4d1f1b5a268114032487937d3640"
+    },
+    {
+      "fixture": "gps-motion-replay-v1.json",
+      "name": "uncertain-speed-accuracy",
+      "response_sha256": "642210cc189acd34f6e74d7db7926f3cd690113fd0e1e2a264d7cd8fa73d4765",
+      "summary_sha256": null,
+      "page_sha256": [],
+      "measurement_id": "shadow-7225662b34604153d9604bedd795c8f53c73bf3c1037f81205901007d5f79500"
+    },
+    {
+      "fixture": "gps-motion-replay-v1.json",
+      "name": "poor-position",
+      "response_sha256": "f97be59bc98156aaffe119c038d7912ec864b56290fd321ebd3e55eaa3005a70",
+      "summary_sha256": null,
+      "page_sha256": [],
+      "measurement_id": "shadow-503558b4f97168b261745d354a321de5e745342c1c3c80cba34f66ffd8174d0b"
+    },
+    {
+      "fixture": "gps-motion-replay-v1.json",
+      "name": "mock-breaks-estimate",
+      "response_sha256": "70b0d0ee0bf364249559b4bd94167c26c8d2b17ac992e4869a592df265173300",
+      "summary_sha256": null,
+      "page_sha256": [],
+      "measurement_id": "shadow-4dca6cf2a21b58df6a9eff5eb57237b1ba602949203db0a713bb4dd71c75fb9d"
+    },
+    {
+      "fixture": "gps-motion-replay-v1.json",
+      "name": "high-speed-reentry",
+      "response_sha256": "76f97d4a44ee76fa15c39bc03af4aad593cd5bba0984decd429abe3156d176f3",
+      "summary_sha256": null,
+      "page_sha256": [],
+      "measurement_id": "shadow-9eb92845cf3ebd12e5763da8d40388679ddde72fcf67fb619ff1a9883a042013"
+    },
+    {
+      "fixture": "gps-motion-replay-v1.json",
+      "name": "segment-high-speed",
+      "response_sha256": "482c115a326583a1896fe13f39e0339ed9ce785e4283c2cb6820f174b7e83905",
+      "summary_sha256": null,
+      "page_sha256": [],
+      "measurement_id": "shadow-779dfb79fb837fb827ad51692f2f3f438021dd049d996ea6addcce24cfa1c5d6"
+    },
+    {
+      "fixture": "gps-motion-replay-v1.json",
+      "name": "reentry-unverified",
+      "response_sha256": "3dfe1c36ca909a56394bf7dde4ed236b2dccd9ad5bb4fa648ca27e904cc28204",
+      "summary_sha256": null,
+      "page_sha256": [],
+      "measurement_id": "shadow-564434ad67bbf2f4ebb08b6bf51901d6aaa899fc38b0cf3aef6c8a0ede3f7e82"
+    },
+    {
+      "fixture": "gps-motion-replay-v1.json",
+      "name": "jump",
+      "response_sha256": "246b6bd6462a966f9249a64d85527860e292f84d9804217bb638ac8a4cc042cd",
+      "summary_sha256": null,
+      "page_sha256": [],
+      "measurement_id": "shadow-48cc6fc690cff2c68a2b0cf1310d9f9562bb0e7603a05e605261607915f4a3f6"
+    },
+    {
+      "fixture": "gps-motion-replay-v1.json",
+      "name": "observation-gap",
+      "response_sha256": "d8b899e66a6beaab4334fd7d28e5615a604a616938d0279451b8d2853b550740",
+      "summary_sha256": null,
+      "page_sha256": [],
+      "measurement_id": "shadow-824fe0093b264df1aecc55d61eabc8a197fa2bcdfeb59a5cbae390a9e6970c54"
+    },
+    {
+      "fixture": "gps-motion-replay-v1.json",
+      "name": "last-usable-gap",
+      "response_sha256": "cabb351a979b9c60972f87d2b648d88fae66496fb403bff438f4b8ca07b38bd6",
+      "summary_sha256": null,
+      "page_sha256": [],
+      "measurement_id": "shadow-1c74a216aae8f0089dc859927e84b10945b63fec43514d99f2215c573e02ff29"
+    },
+    {
+      "fixture": "gps-motion-replay-v1.json",
+      "name": "invalid-time",
+      "response_sha256": "870816e55d9d834f2c4f3f87bd5cd605cd6e7ddb19439715e24cb6893c0de386",
+      "summary_sha256": null,
+      "page_sha256": [],
+      "measurement_id": "shadow-5eb8b0ac0846b1eed78b05a697d8464295bb92f70236191c663ae8084a528fa1"
+    },
+    {
+      "fixture": "gps-motion-replay-v1.json",
+      "name": "missing-reception",
+      "response_sha256": "c045c8430d6630b96dac787ef9a7f62456f6a7e33195bf480655e5b8d425df5d",
+      "summary_sha256": null,
+      "page_sha256": [],
+      "measurement_id": "shadow-66c419ec23ee34c1d5064de4d047b38e3cf0881e151aeb9db5911e859c60907c"
+    },
+    {
+      "fixture": "gps-motion-replay-v1.json",
+      "name": "reception-before-fix",
+      "response_sha256": "a0efaeb955dedd5fd72b9eea2b2138c3fd2527e720664cfb18340feed34f9c2b",
+      "summary_sha256": null,
+      "page_sha256": [],
+      "measurement_id": "shadow-faf84b3c7fdab2885bd01afbc7b32c1554441bc3fd0ac77332aa0a91f5557000"
+    },
+    {
+      "fixture": "gps-motion-replay-v1.json",
+      "name": "cache-outside",
+      "response_sha256": "74413609ed6712b71147d29cde56c262db68f533bdfd5c9bc84e9db637c25d15",
+      "summary_sha256": null,
+      "page_sha256": [],
+      "measurement_id": "shadow-a1abfae05ef7e20d2908ad480cc3a7478228c0565399cec7643eec766a605d81"
+    },
+    {
+      "fixture": "gps-motion-replay-v1.json",
+      "name": "out-of-order",
+      "response_sha256": "b1a8a9eb750712615233c388fc2f44f839c213d0215dfbf7fce82d9b4981d196",
+      "summary_sha256": null,
+      "page_sha256": [],
+      "measurement_id": "shadow-88277409c911c875e54ad2968f599af5f0f0a319aee87c4af7d973feed3ba89a"
+    },
+    {
+      "fixture": "gps-motion-replay-v1.json",
+      "name": "same-time-identity",
+      "response_sha256": "4a84d063e4b810ec9e6802ea6e8668dfb2988c99f275277d30ad0f79e3d3617f",
+      "summary_sha256": null,
+      "page_sha256": [],
+      "measurement_id": "shadow-fe5a50eddeac076346bdacd74fc1997ff333bbb45e12c9a9cd2a99897d5d8e6f"
+    },
+    {
+      "fixture": "gps-motion-replay-v1.json",
+      "name": "same-time-nan",
+      "response_sha256": "47920d719cc330a6dea5c173c1f8484cb03e1f493f1231d638687b861b8c8a9d",
+      "summary_sha256": null,
+      "page_sha256": [],
+      "measurement_id": "shadow-30e3790eb76ef46b6f08886b2204b9cb87f5ea7b52110ccce6481b3e6bca6f9b"
+    },
+    {
+      "fixture": "gps-motion-replay-v1.json",
+      "name": "pause",
+      "response_sha256": "74fdd19f5390d1ca0422db856ab8029fb2ea8a939734a46c4ee4033b058d0774",
+      "summary_sha256": null,
+      "page_sha256": [],
+      "measurement_id": "shadow-3872dac34eb06f1c0b880cdfe0f4c1d005adc394b98b22c9741e6623e5aa49d7"
+    },
+    {
+      "fixture": "gps-motion-replay-v1.json",
+      "name": "pause-empty-stop",
+      "response_sha256": "955aa5e22283f6f03e753b9aa1e20a30d1fa12aca88dfe6954e1d55739a4e4bc",
+      "summary_sha256": null,
+      "page_sha256": [],
+      "measurement_id": "shadow-ca57af895e479c89f2e4df74c0acb29a6e0e7d7b2b6163e390ad50f22b061afa"
+    },
+    {
+      "fixture": "gps-motion-replay-v1.json",
+      "name": "large-nanos",
+      "response_sha256": "ce2236f5ae0501547d16f5914052e2c93319bc7b16f2e817279f09147227be2f",
+      "summary_sha256": null,
+      "page_sha256": [],
+      "measurement_id": "shadow-27bbecc8123ed4db3de9d0e9aa1eca090cacada63bb9a0d39877aaeba1096e8c"
+    },
+    {
+      "fixture": "gps-motion-replay-v1.json",
+      "name": "long-custom-window",
+      "response_sha256": "58934e8585cfb36bb2d47c35a3001996a8f17efcf6f588be2c6126b33e609b36",
+      "summary_sha256": null,
+      "page_sha256": [],
+      "measurement_id": "shadow-f9fb5c931932fa6f9367c0a8badbcfc4736e2f06572ecc55e581fca2d2610bc1"
+    },
+    {
+      "fixture": "gps-motion-replay-v1.json",
+      "name": "speed-threshold",
+      "response_sha256": "0a866c662b307bd24d4388727d6bf4926007fe439b8905be1a39f8c999bd2889",
+      "summary_sha256": null,
+      "page_sha256": [],
+      "measurement_id": "shadow-cd02c8522dcee40b63b36e128948122c277f5c6f80aa22fa73ca9ae3befb0ccb"
+    },
+    {
+      "fixture": "gps-motion-replay-v1.json",
+      "name": "date-line",
+      "response_sha256": "3a1d864a62d9ba557f9785661ca2a9c6a79a8e9d041fada921ba4d30003da595",
+      "summary_sha256": null,
+      "page_sha256": [],
+      "measurement_id": "shadow-eab508f457abb30fa770df18476977e55c79cc2cfccb11c2bbfc564b81a1ea54"
+    },
+    {
+      "fixture": "gps-motion-replay-v1.json",
+      "name": "seoul",
+      "response_sha256": "9b88ff426e83ec2a474ede8965f905dbe1d66fe48d527b1a70988c6413b8d3b4",
+      "summary_sha256": null,
+      "page_sha256": [],
+      "measurement_id": "shadow-336d9dffa491ca2539d785bbbaa8613d3562eab03afae4a999484117e3988efc"
+    },
+    {
+      "fixture": "gps-motion-replay-v1.json",
+      "name": "noise-and-polar",
+      "response_sha256": "103cecbc2d8cbe8211403010346b5d17b1dd7756fe38bc8d2d0cae9c8f13b036",
+      "summary_sha256": null,
+      "page_sha256": [],
+      "measurement_id": "shadow-aefce50d4ef6b4652710ecbe7dcceaf88e9e9b04c90a46d37ab984b94273e255"
+    },
+    {
+      "fixture": "gps-motion-replay-v1.json",
+      "name": "stop-tie",
+      "response_sha256": "686427b9a3ffe2afd6db4b3bb6ed358069c82f8d2da288da885cf3ae2981251e",
+      "summary_sha256": null,
+      "page_sha256": [],
+      "measurement_id": "shadow-67014a01929534b15cd8943a0ebdc4375aa3dbc403eacf3e4ad42aead42dd759"
+    },
+    {
+      "fixture": "gps-motion-precision-v1.json",
+      "name": "empty",
+      "response_sha256": "c634a88cd2250c397a61146a5a95b7643f6ac18ed88faef0d2a3d99295592945",
+      "summary_sha256": "c999a1c2ba31bd49d3336d748626e76a0d6eb10008089c7a7c42d097bba9725f",
+      "page_sha256": [],
+      "measurement_id": "shadow-9f14a6cceecce7741eac9e80a9e2cf54086bec17b386514b8d0b16bd249ddf55"
+    },
+    {
+      "fixture": "gps-motion-precision-v1.json",
+      "name": "slow-accumulation",
+      "response_sha256": "eee4b1900e294a9875879fdd3c79ffec720b5fc9bafc329ac1abff8b2a724092",
+      "summary_sha256": "a0c0c11999699096940e6afed018fcc1510a41091bf44e64ba41eaf7a2267c2a",
+      "page_sha256": [
+        "5e33f0db2e5327ce4db28439707020cc9bfb8ff834ce039c1b732a319d71b78b"
+      ],
+      "measurement_id": "shadow-8d83f69ceee3c2ef339575f46e28b171db6dad8147b0e85cc36be51a94bd4e8e"
+    },
+    {
+      "fixture": "gps-motion-precision-v1.json",
+      "name": "walking",
+      "response_sha256": "1dde89ca1c8127f485dfbbf9a106a6b671a74ac398ff209d01574e9ff7772a8f",
+      "summary_sha256": "7da6515709b10d71f47db45e382abde4275ad376702f83e5fc4ff5160484cd13",
+      "page_sha256": [
+        "10ab93014292694cf8a59e889682b70c619cbdd720f022e6023c36df611e9188"
+      ],
+      "measurement_id": "shadow-2b25c0301ecaa92c8a7af651a67ddfef9d1db4eb94aacb22f01213a8f28d43cd"
+    },
+    {
+      "fixture": "gps-motion-precision-v1.json",
+      "name": "coordinate-only",
+      "response_sha256": "34139dce3cf96369d41caf484ec2dabb53021939f4e3e8d72ef12b263f10a754",
+      "summary_sha256": "f9dd14fbf344ac54999e5fa1ba7221cc7b35b9ace52e72f9a1ffec67f7c81126",
+      "page_sha256": [
+        "27a68057bd13c4aa661c331c130c24db9a04b6caaa8e1048341eaf460429309e"
+      ],
+      "measurement_id": "shadow-7d97ff0f127cdffcb5eaee392a5dcf0e4c1d4af172d22f0844daa1ee1f978992"
+    },
+    {
+      "fixture": "gps-motion-precision-v1.json",
+      "name": "uncertain-device",
+      "response_sha256": "5afe829d028a10201d0882ed91c2ba832496a8ab7d48bc6be830c8b73616b3cb",
+      "summary_sha256": "db7a32bb228525bc19ac56522b2ef505b0779983454b79f321fa70910ec9420b",
+      "page_sha256": [
+        "667fc9b9cfa1f08704898685c68d905666b88ad4f9d7184b82ebb9dbfb6c4c3a"
+      ],
+      "measurement_id": "shadow-20694b71bbbcd61101237ca470ee2f466b19299cc491ff0e303f469e51d0502e"
+    },
+    {
+      "fixture": "gps-motion-precision-v1.json",
+      "name": "device-conflict",
+      "response_sha256": "9eb118d17a55e8c0a9ef88f8f1076c13ad597a19545363c07a055d2649c4aa09",
+      "summary_sha256": "98100d55cc018d9b4146e9ac58c9c48aad47799563aeec419b01f959c0c9f48c",
+      "page_sha256": [
+        "2b936c780bb055f3cfe86fac09d57a27d7dd64c269cd2c9db5f366e12ca5f76d"
+      ],
+      "measurement_id": "shadow-f75391d748f407e2810c3ef6a1e4118fef0f47dbc8ceca037a1e4714705a7208"
+    },
+    {
+      "fixture": "gps-motion-precision-v1.json",
+      "name": "invalid-speed",
+      "response_sha256": "351da4b007f85feab14a8c08bf90faa98b2c92885c0d6cc5c4c17441f868e718",
+      "summary_sha256": "7ed70a830490155897464fc8e568eca1ed78660c0f33c5e479e7f213cfc7abb2",
+      "page_sha256": [
+        "e6fb707ec2c78c064736cf9a62d572bd376b4c7abc02e194f3404bb8f02aeca3"
+      ],
+      "measurement_id": "shadow-b1814f4884db31166d401dad4d31c3d0265fa9e45b7dcad6cd2f6c4c6ec29ef7"
+    },
+    {
+      "fixture": "gps-motion-precision-v1.json",
+      "name": "uncertain-speed-accuracy",
+      "response_sha256": "4ba2aaf821e129389daa00f0bf526f2fee88d354d1cde465ca551774d5d6d421",
+      "summary_sha256": "005f00855f04d0e157de1fc3a5a2fe2d7e0a63512e90b4545f75f892ea0001e4",
+      "page_sha256": [
+        "117dfa8bf37f550332a2acbd1a398dee56b17ab9e899d1d80d62d77b81ea9bb8"
+      ],
+      "measurement_id": "shadow-5191ec496eee7166f94a0de2739e2aa63f29014dc44443d996e8d7d7ba2008e6"
+    },
+    {
+      "fixture": "gps-motion-precision-v1.json",
+      "name": "poor-position",
+      "response_sha256": "8697209c599e8a82384c150084abf8169e1655c6c1e5b13970fc20446e18f0b5",
+      "summary_sha256": "68c0348f51b9c14ff51bc23e732be0fe2cc7f9f030b4abf14bb757ed56a61528",
+      "page_sha256": [
+        "118a20ffcf6f43d6751ff3f859e7bc76e45e3878b5086e6db9599b963f7eee88"
+      ],
+      "measurement_id": "shadow-686034c38521dfda26689a21af9e7ce5034227adb1a19c4a9a70806c23e1308f"
+    },
+    {
+      "fixture": "gps-motion-precision-v1.json",
+      "name": "mock-breaks-estimate",
+      "response_sha256": "707a54e48ba015184f1c9ba52b1b70216db270b51f1f3bfa442aa69d93a28c5d",
+      "summary_sha256": "771e93b442ecfebe1f39603d77d32cecb3bfb2a07c4f45c51f1f0b401a7d7c18",
+      "page_sha256": [
+        "82f6a70f34cfcbde9d67dd7f87132089515274fb722c20896679152046508f11"
+      ],
+      "measurement_id": "shadow-1f583862a016caa6674d8d83d0017f6d8556ac5e0681fed3828634b7a8d18e95"
+    },
+    {
+      "fixture": "gps-motion-precision-v1.json",
+      "name": "high-speed-reentry",
+      "response_sha256": "e9f8f80c4e7dfb70a4da8a6c9fd98a9a1d837d16508ad36056a4d2fe79c56b16",
+      "summary_sha256": "69f621481bc5601072cc45a62ac221b33b171644ac5eb287ac03a341ff4c44fd",
+      "page_sha256": [
+        "214a32bf19dd36beae68a3d70afb5f521fb05c6835a065a2408bfe7b77a5bd21"
+      ],
+      "measurement_id": "shadow-f7523c59b3e6254b52002cc616f2a91279f2d410f4ed743a5694a2026de2e27e"
+    },
+    {
+      "fixture": "gps-motion-precision-v1.json",
+      "name": "segment-high-speed",
+      "response_sha256": "1ae44e850e8e744aa80c29d7f363c80e2f8d42b85a3cc251af02d24a84a21171",
+      "summary_sha256": "5bd1932d3afcfffe93c208ca6356d8b799e45988280b9ecd610066d9dfec53cb",
+      "page_sha256": [
+        "a51afc3ff18066fe6f3eec213ab9ce994107aee41397dbbf4f95bea2c5882c90"
+      ],
+      "measurement_id": "shadow-b225a5f606c5a60adaf7e215301ce4b5530042879baa1fb4c8ed0efab68be490"
+    },
+    {
+      "fixture": "gps-motion-precision-v1.json",
+      "name": "reentry-unverified",
+      "response_sha256": "e20f1fec83478ec04699508c2b04fad5c33837293051ddb61ef73214872550fc",
+      "summary_sha256": "c0b4f2b78e9f9a766edaaa87eb2157c3d504bf3964a1538643eddfe09f7815df",
+      "page_sha256": [
+        "86ad1175314b34f519e9d0068b101fda989fde648375b408a1b5607a19d5df78"
+      ],
+      "measurement_id": "shadow-3b4396811e63d2cc8461d46ca38ccc06faf091376e2f2928d719a16afac58cd3"
+    },
+    {
+      "fixture": "gps-motion-precision-v1.json",
+      "name": "jump",
+      "response_sha256": "6f7d95eeed52b8112ef24e8f1f440769eab46f2c5fb5ea690b20ab2597142374",
+      "summary_sha256": "505e987e25663f51face3f6d93320a707661f68eba680463dc45062035c8db84",
+      "page_sha256": [
+        "6a2e52d98368235fbf70b671400892128cfda52d9ea339b1b80df9186fa0530a"
+      ],
+      "measurement_id": "shadow-d2280d384f64bba97fa69d8e9b1561407c094d6b842c2d92a1099f5018c48df2"
+    },
+    {
+      "fixture": "gps-motion-precision-v1.json",
+      "name": "observation-gap",
+      "response_sha256": "a6e7d4b792c5acc17fbc98aa1d0aa66bf8577192615021c77adbf78043d3e773",
+      "summary_sha256": "4ba63d570651ff1ec09c7030ea299569abd221e45584be29f9dac2b1ec95f641",
+      "page_sha256": [
+        "d55fcf7158a2e53a775dd478c157687009a40cf84a36b824eb430aa889eb7ea4"
+      ],
+      "measurement_id": "shadow-88f51acf288da026397b240fcbdc9cf5b48d3c628e5aee3b58780cf7fce3e813"
+    },
+    {
+      "fixture": "gps-motion-precision-v1.json",
+      "name": "last-usable-gap",
+      "response_sha256": "06730507dd90612bf1d2042158a072117d1d5b770009879064c475a052ec5df4",
+      "summary_sha256": "a446f4e7e70fa67022ab33c7f1d0f213381efcd62c44ae7bb114b1ab44ebd2d7",
+      "page_sha256": [
+        "a3419f7c989a94518948d21b645acb74cf73bc47234d5d9fc07021f258599266"
+      ],
+      "measurement_id": "shadow-0c9d25b516bd510c680225a46674e93dbe51696b2364a416eb0d6dfeec24211e"
+    },
+    {
+      "fixture": "gps-motion-precision-v1.json",
+      "name": "invalid-time",
+      "response_sha256": "2cd9260836c5911a71156814a8d563c4511bfb6303b6e7672d5a1fad40ceaeb6",
+      "summary_sha256": "e7eef460b6b9a930b964a845ab8366ed3c80a3979777b8f02c79ee553162bf0e",
+      "page_sha256": [
+        "c9f9a3e660d667ba6838e1d83e9e29671befffcea71f8082cb05757b32e90d23"
+      ],
+      "measurement_id": "shadow-3471474f99d08c0319aab368d12f2f50ca3ea6728ab8046ad52f0d39f191a397"
+    },
+    {
+      "fixture": "gps-motion-precision-v1.json",
+      "name": "missing-reception",
+      "response_sha256": "fd6bb4ac3a964530551f3d7005bed9a2b30b993e617e9ea90830630bdd6a571a",
+      "summary_sha256": "3ed01c382552940424960ac8988c2953e2450c49ebdb7c2410d7eeb5684f10db",
+      "page_sha256": [
+        "f6e7755388cb09a551274ab306ebf56d74c8fce6b204a3ea4ad061ac4426b9e9"
+      ],
+      "measurement_id": "shadow-7c13b56b491c17d2339772def504225f93c8853aa8b1ab759112ca85edf71e65"
+    },
+    {
+      "fixture": "gps-motion-precision-v1.json",
+      "name": "reception-before-fix",
+      "response_sha256": "d8372fd3280dfe4ba1ca95e996b6b0be784c98a74e796af80b58bc211c6e59f8",
+      "summary_sha256": "7aacd5d224522611633984688cf7ec1ab206c33b298ab26296ed83b4bf8ca828",
+      "page_sha256": [
+        "a04017e8c1b7100555bdec84d52218e7925f21a7b02efda27f6b09a784832ebd"
+      ],
+      "measurement_id": "shadow-e6c3cde34c21371252a1d4919a2b8e54ee38e50c1bbf3299bb7c9ba15d54b148"
+    },
+    {
+      "fixture": "gps-motion-precision-v1.json",
+      "name": "cache-outside",
+      "response_sha256": "b30ae39e7bfbac04749ef4dfd0fa3e661c14e60b7293ba39553d0c4864018e73",
+      "summary_sha256": "b652e1760b7398382fd77b1c3191f14bd50729f646452b4ac5d7ddf8462dfeb5",
+      "page_sha256": [
+        "097f5e0b1034f76a3b9facd8a27fae9d3ef0143e7f226519eb9b993a7ff64d61"
+      ],
+      "measurement_id": "shadow-9df262d530be4839d0c88bf83fbac50df4d200a414f8f6c17d32ac56daf194cf"
+    },
+    {
+      "fixture": "gps-motion-precision-v1.json",
+      "name": "out-of-order",
+      "response_sha256": "133d36dcfa51b4158937f4ace363765b39ed38efda36192d732e7124bb5336e2",
+      "summary_sha256": "bdd69f68aece37a7f1e85dd3b376fc17f553315ac6ec90b98465ea0283433d4c",
+      "page_sha256": [
+        "8bc1ddcc282729723c742a289250f6c241eb9a42228a4ed8ca48c90bb3b6cbc5"
+      ],
+      "measurement_id": "shadow-0e7768c21f63114ed39cb2ed572b81ac66eaf320a98d96031420ee3c706f6165"
+    },
+    {
+      "fixture": "gps-motion-precision-v1.json",
+      "name": "same-time-identity",
+      "response_sha256": "0f0692f96fe9bf28ad90331d6ba6edd19ef3c57e84cb961027c021da698f81fc",
+      "summary_sha256": "f9ebae321f7bfb4a0b4dbb0964fcbc19acbba13b47e77488bbc3fdd00fbe2aab",
+      "page_sha256": [
+        "ac1af8e22ec3fbaff5e8642239723dc603fae1714c9af7ec43072d007d1994d9"
+      ],
+      "measurement_id": "shadow-f138bba2d395b550751589f873ffbe0b61423c209beff28f8e469ebf0273e173"
+    },
+    {
+      "fixture": "gps-motion-precision-v1.json",
+      "name": "same-time-nan",
+      "response_sha256": "7f178734f98bd9fd87acc2ed5d2daf1bad3bf3e214afcfb87a9b648c2a8e8a42",
+      "summary_sha256": "f7e9760dfc78aab471e12149fc3296417ce2ce07cae9277e5172fc1e1a3edf11",
+      "page_sha256": [
+        "602b179e5f847453f58153e34b25a0de2183b24e746d3da849936e754bc4e2b9"
+      ],
+      "measurement_id": "shadow-1e298a8e251c97c893ff27f02df835cb8fc8aae26898a24ed7fc64c0a3787657"
+    },
+    {
+      "fixture": "gps-motion-precision-v1.json",
+      "name": "pause",
+      "response_sha256": "452e21785cd856770c41bc6c35a3bca1b4950fb86b545ad1aaae47c6b1404fd0",
+      "summary_sha256": "f68c03247f0a1acb27ca43e20e31ed2b192a5fbdf5fe86b6b2ea02fe42e52763",
+      "page_sha256": [
+        "b3b82991d3245d63caa8d92e455b877c3acc1d2a8f379dcc0818fd8729e6f51a"
+      ],
+      "measurement_id": "shadow-88b0bf07554921fdb172ff7613c9949e07c333a33e55815334cb16365cf029d7"
+    },
+    {
+      "fixture": "gps-motion-precision-v1.json",
+      "name": "pause-empty-stop",
+      "response_sha256": "ac559572244d4a3144e45edbbc694bcf9ef1bef8e8e7668c1912e98f30a7bf34",
+      "summary_sha256": "903bcf450d0a09da03c164f873d64107be213699320f6ca7d6864e50e162bbb0",
+      "page_sha256": [
+        "6723f33d9aa5bdd6ef12b1479dec5f3bb26d5aeccf1ed9f821e14110d684948a"
+      ],
+      "measurement_id": "shadow-9116040137a880f9fa9b7fa355de1e456e3149c734103280db7e9d3e9993676b"
+    },
+    {
+      "fixture": "gps-motion-precision-v1.json",
+      "name": "large-nanos",
+      "response_sha256": "c5d221cc21d3af289f5a03c039b740ed42a66a7452c14d93a0fcb6662028755d",
+      "summary_sha256": "7e4c8ed609c454de83ad881d109e47f85e81ced5d0a947b3df1fb5d304b3f672",
+      "page_sha256": [
+        "8549e1f06a14422e348ae89df7804f95a6902750a22f7624b3ca7b3dd77abb6e"
+      ],
+      "measurement_id": "shadow-094444536fd73b685703cfb5311da747b4b21a41334a6214bddeeebdf5e86c26"
+    },
+    {
+      "fixture": "gps-motion-precision-v1.json",
+      "name": "long-custom-window",
+      "response_sha256": "c0c3c2e304786894c9b94a58a220951e0a6f1a92f7d8c81aaa230e19f4c7d70b",
+      "summary_sha256": "9f9a0c24416978a8b314122c8a6c81e7c62900edb857c8749ae255bc425bdcb1",
+      "page_sha256": [
+        "ab8f13eb2df9641503cba487af0405654b69ce56e8671b6a6cfe20b1d79b6987"
+      ],
+      "measurement_id": "shadow-984e73dd2d98e32a5aebdb828e9e911fae2426b46103ac70ecae6a6346d98808"
+    },
+    {
+      "fixture": "gps-motion-precision-v1.json",
+      "name": "speed-threshold",
+      "response_sha256": "81c01e18cf195e118cd651dcc102630e5589b428828727afad775544a0b74c33",
+      "summary_sha256": "f1092def95531b00ea3de7a5f0b871278c3bba80a318602646121c18ea930649",
+      "page_sha256": [
+        "ae0cc58cdedefc532acfb6473109c582419d1eae6bbe9fe5f4466a41f68df8ce"
+      ],
+      "measurement_id": "shadow-02c28b446059b4c9581149b5726504e436fc919fcad3e6006866c06c1bd54fc2"
+    },
+    {
+      "fixture": "gps-motion-precision-v1.json",
+      "name": "date-line",
+      "response_sha256": "1935d0e3f1408b691154d3640804db3147c35ae6c692b6ae77909d0979a0f460",
+      "summary_sha256": "d206ce5e03119ed9b289306aa9468157aa773a5442ad689ac3ae072cea65f182",
+      "page_sha256": [
+        "75aeee993672dcdfb4542fc075e63d37d8282cc8ae0ed84cf1304e72806d2cd6"
+      ],
+      "measurement_id": "shadow-debcd12bf19ad88c67929cb8e2a92a1c7552dea4e2e6ed09922ac65e1eb57890"
+    },
+    {
+      "fixture": "gps-motion-precision-v1.json",
+      "name": "seoul",
+      "response_sha256": "d6259081572a6549c98f0a373fc29d264e8ac7ca2a4f57182e76513994aca4b8",
+      "summary_sha256": "8abf994f41ee328957af99c5275950e589ca7d0c748aee1c33fd8bb28df660d8",
+      "page_sha256": [
+        "46b6c6ba8f1e28b107e031cf219b46479075af43671a4c95af0364412d6a3f81"
+      ],
+      "measurement_id": "shadow-07b8f7fddf63eb1fd45ed415dd46a1f7e9a843a5d52d5f1aba0c98ed33d0d98c"
+    },
+    {
+      "fixture": "gps-motion-precision-v1.json",
+      "name": "noise-and-polar",
+      "response_sha256": "264906b4183950c75d40e253816c603eadf3bd4b3ba59dce7d81ef0b277084b6",
+      "summary_sha256": "bb67b3d1f6990c8be9a604e4dfbf080518f7bbf6036c758a4cb7ea88136801ae",
+      "page_sha256": [
+        "864fa5a18fb11539b72135037f620f7addaaad3b0ccc128645f619db5e3fc3ab"
+      ],
+      "measurement_id": "shadow-a469868468f56024812b1559c06dba57de8cac7e9619ecffd4e70ae522320755"
+    },
+    {
+      "fixture": "gps-motion-precision-v1.json",
+      "name": "stop-tie",
+      "response_sha256": "8ff2a635fa175b6ef384937db750764232dd81015b03f3c08570006b22225dba",
+      "summary_sha256": "cb0c6727301ab6ddfd636d8ba6f9ad8662869b83e5c224926fcab46e3a1382a6",
+      "page_sha256": [
+        "65da5057a1ea78ab9de1f9435d51fa55151965c703818866a9f8e092ec52abe4"
+      ],
+      "measurement_id": "shadow-d24d8ba2d0e231fac5ddb9afa14731242cf127b9e78fdb79e018c96d79ac2cd4"
+    },
+    {
+      "fixture": "walk-measurement-long-input-v1.json",
+      "name": "long-600",
+      "response_sha256": "c8e5d225ab3becf91ca69df857d567272a56fa77b91e0095fc98ad60b0c01e30",
+      "summary_sha256": "4e4e46367ff6ffe1fc6926c66114bd465f4aea4f04a1ab52ace0a166eecacf63",
+      "page_sha256": [
+        "8381d67edf1640fc4624cf6e3e028353e0127c9af2e50338f7ae00b519b887da",
+        "2bdee809d216a79dfcce2b2370bb655d54c627060e225a82654ad40a9f64b05c"
+      ],
+      "measurement_id": "shadow-7c33b04848d60251cd26ef20d91d350be6972205835d9b0828af043fbd355ffa"
+    }
+  ],
+  "schemas": {
+    "TrajectoryCalculation": "b22c3ef3aab994ef24562ccf5f8e9ff1dfa46b7c6aad45224f8e7feed4faf524",
+    "MeasurementSummary": "e316a45a2b6c012b3086d4f3534cd882bbf09983b038d763ad25eb75ae7f1c53",
+    "RoutePage": "6b346a174687fa38eaef082d4cfb31dc398603635a79a7fab019bc3bc1fdb74d"
+  }
+}

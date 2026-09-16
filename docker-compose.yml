@@ -59,6 +59,11 @@ services:
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.1-flash-lite}
       GEMINI_TIMEOUT_MS: ${GEMINI_TIMEOUT_MS:-30000}
+      # 도감 카드 틀 폴더 (#496). 위 volumes 의 ./cardimage:/cardimage:ro 와 짝입니다.
+      # ⚠ 키(DAENGS_CARDIMAGE_GEMINI_API_KEY)는 여기 두지 않습니다 — environment 가
+      #   env_file 보다 우선이라, 적으면 backend/.env 의 값이 빈 값으로 덮입니다
+      #   (GEMINI_API_KEY·HF_TOKEN 과 같은 함정). 키는 backend/.env 로만 받습니다.
+      DAENGS_CARDIMAGE_DIR: /cardimage
       # backend 기본 DB와 같은 POSTGRES_* 접속 정보를 사용합니다.
       RAG_PGVECTOR_DSN: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@pgvector:5432/${POSTGRES_DB:-vectordb}
       # 실시간 산책(②)의 캐시·일 예산 카운터. **접두사 DAENGS_ 가 없습니다** —
@@ -183,6 +188,8 @@ services:
       # 없으면 uv sync 가 실패합니다.
       - ./backend/README.md:/app/README.md:ro
       - ./backend/src:/app/src
+      # 도감 카드 틀 12장 + 글꼴 (#496). 읽기 전용. backend/.env 의 DAENGS_CARDIMAGE_DIR=/cardimage 와 짝.
+      - ./cardimage:/cardimage:ro
       - backend-venv:/opt/venv
       - walk-public-catalogs:/data/walk-public:ro
       - uv-cache:/root/.cache/uv
@@ -654,6 +661,7 @@ services:
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.1-flash-lite}
       GEMINI_TIMEOUT_MS: ${GEMINI_TIMEOUT_MS:-30000}
+      FACILITY_CONVERSATION_MODEL: ${FACILITY_CONVERSATION_MODEL:-gemini-3.1-flash-lite}
       TZ: Asia/Seoul
     working_dir: /app
     volumes:

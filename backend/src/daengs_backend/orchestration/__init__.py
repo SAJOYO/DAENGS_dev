@@ -4,6 +4,8 @@ Which implementation actually answers `/assistant/query` is `runtime.py`'s call 
 see its module docstring for what the two implementations share and what they don't.
 """
 
+from importlib import import_module
+
 from daengs_backend.orchestration.contracts import (
     AssistantResponse,
     AssistantStatus,
@@ -12,13 +14,25 @@ from daengs_backend.orchestration.contracts import (
     CapabilityStatus,
     RoutePlan,
 )
-from daengs_backend.orchestration.graph import OrchestrationEngine
-from daengs_backend.orchestration.runtime import (
-    Orchestrator,
-    OrchestratorKind,
-    build_orchestrator,
-)
-from daengs_backend.orchestration.service import AssistantOrchestrationService
+
+_LAZY_EXPORTS = {
+    "OrchestrationEngine": ".graph",
+    "Orchestrator": ".runtime",
+    "build_orchestrator": ".runtime",
+    "AssistantOrchestrationService": ".service",
+}
+
+
+def __getattr__(name):
+    # Shared contracts/execution must not import assistant graphs or providers.
+    # Preserve existing public imports, including frozen benchmark callers.
+    module = _LAZY_EXPORTS.get(name)
+    if module is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    value = getattr(import_module(module, __name__), name)
+    globals()[name] = value
+    return value
+
 
 __all__ = [
     "AssistantOrchestrationService",
@@ -29,7 +43,6 @@ __all__ = [
     "CapabilityStatus",
     "OrchestrationEngine",
     "Orchestrator",
-    "OrchestratorKind",
     "RoutePlan",
     "build_orchestrator",
 ]

@@ -27,6 +27,10 @@ _LABELS = {
     CapabilityName.GENERAL: "일반",
     # 배타 실행이라 단독 결과여서 화면에 안 찍힌다. 그래도 빠뜨리면 KeyError 다 (GENERAL 과 같다).
     CapabilityName.VET_CONTACT: "응급",
+    # 위 둘과 같다 — 쓰기는 승낙 한 번에 한 건이라 늘 단독 결과다 (#331 후속).
+    CapabilityName.CARE_LOG: "케어 기록",
+    # 배타 단일 요청이라 화면에 안 찍힌다. 그래도 빠뜨리면 KeyError 다 (D-079).
+    CapabilityName.SKIN: "피부",
 }
 
 # HANDOFF 사용자 문구. `handoff.target`/`handoff.reason` 은 라우팅 내부 값이라
@@ -35,6 +39,10 @@ _LABELS = {
 _HANDOFF_MESSAGES = {
     "skin": "피부 사진을 등록해 함께 확인해 볼게요.",
     "gait": "보행 영상을 등록해 함께 확인해 볼게요.",
+    # 위 둘과 달리 **의미 라우터가 못 고르는** target 이다 (`planner._HANDOFF_REASONS`).
+    # "무엇을" 이나 "어느 아이" 를 확실히 모를 때 추측해서 쓰지 않고 사람이 적게 보내는
+    # 자리이고, 쓰기 플래그가 꺼진 운영에서는 기록 의도가 전부 이 문장으로 끝난다.
+    "care_log": "케어 기록 화면에서 남겨 드릴게요.",
 }
 # 아직 모르는 target 이 와도(v1 밖 확장) 내부 값을 노출하지 않는 안전한 문장.
 _UNKNOWN_HANDOFF_MESSAGE = "추가 입력이 필요한 전용 기능으로 안내할게요."

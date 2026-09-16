@@ -8,8 +8,8 @@ import pytest
 
 from daengs_backend.config import settings
 from daengs_backend.schemas.walk_storyboard import StoryboardRequest
-from daengs_backend.services import walk_diary_writing as writer
 from daengs_backend.services import walk_storyboard as legacy
+from daengs_backend.services.walk_diary.legacy import bundle as writer
 from tests.walk.support.diary_generation import FORMAT, PATH, QUERY, body
 from tests.walk.support.photo_input import ENTRY, OWNER, WALK
 from tests.walk.support.photo_input import row as photos
@@ -117,6 +117,7 @@ def test_opt_in_ownership_validation_and_explicit_target(api, monkeypatch):
     assert client.get("/app/walks/storyboard/capabilities").json()["diary_formats"] == [
         FORMAT,
         "walk-diary-board-v1",
+        "walk-relational-diary-v1",
     ]
     missing = body(state)
     missing.pop("target_scene_count")

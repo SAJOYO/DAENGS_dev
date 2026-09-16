@@ -41,6 +41,7 @@ from daengs_backend.models.admin_audit_log import (
     AdminAuditLog,
 )
 from daengs_backend.models.admin_user import ADMIN_ROLES, ADMIN_STATUSES, AdminUser
+from daengs_backend.models.ai_card import AI_CARD_STATUSES, AiCard, AiCardUsage
 from daengs_backend.models.answer_report import (
     ANSWER_REPORT_STATUSES,
     REASON_MAX_CHARS,
@@ -64,7 +65,9 @@ from daengs_backend.models.pet import (
     PET_SEXES,
     Pet,
 )
+from daengs_backend.models.pet_identity import PetIdentity
 from daengs_backend.models.pet_invite import PetInvite
+from daengs_backend.models.pet_invite_pet import PetInvitePet
 from daengs_backend.models.pet_member import PetMember
 from daengs_backend.models.refresh_token import RefreshToken
 from daengs_backend.models.request_metrics import (
@@ -111,6 +114,7 @@ from daengs_backend.models.walk import (
 __all__ = [
     "ADMIN_ROLES",
     "ADMIN_STATUSES",
+    "AI_CARD_STATUSES",
     "ANSWER_REPORT_STATUSES",
     "APP_USER_STATUSES",
     "AUDIT_ACCOUNT_CREATED",
@@ -158,6 +162,8 @@ __all__ = [
     "ActivityWalkHead",
     "AdminAuditLog",
     "AdminUser",
+    "AiCard",
+    "AiCardUsage",
     "AnswerReport",
     "AppUser",
     "Base",
@@ -169,7 +175,9 @@ __all__ = [
     "DogCard",
     "GaitRecord",
     "Pet",
+    "PetIdentity",
     "PetInvite",
+    "PetInvitePet",
     "PetMember",
     "RefreshToken",
     "RequestMetric",

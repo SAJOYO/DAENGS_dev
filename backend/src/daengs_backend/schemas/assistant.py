@@ -15,6 +15,8 @@ import uuid
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from daengs_backend.schemas.assistant_facility import AssistantFacilityContext
+
 # Walk 적합도(`GET /life/walk-conditions`)와 WalkPayload(orchestration/contracts.py)가 이미 쓰는
 # 남한 좌표 범위. 새 지리 정책을 만들지 않는다 — 세 곳이 같은 값이어야 한다.
 _LAT_BOUNDS = (33.0, 39.0)
@@ -51,6 +53,7 @@ class AssistantQueryRequest(BaseModel):
     # 소유권 증명이 아니라 라우팅/개인화 힌트일 뿐이다 (O-4, contracts §1).
     active_dog_id: str | None = None
     location: LocationIn | None = None
+    facility: AssistantFacilityContext | None = None
     # 이어서 물을 스크리닝 기록 (#307). **판정 내용이 아니라 참조입니다** — 응답은 대화
     # turn 으로 저장되므로(D-048), 검증하지 않은 판정이 한 번 들어가면 되돌릴 수 없습니다.
     # 서버가 소유권을 확인해 DB 에서 읽고 `verdict` + `days_ago` 로 좁힙니다

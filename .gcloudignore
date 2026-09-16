@@ -18,4 +18,6 @@
 !docker/pipeline/**
 !docker/realtime/
 !docker/realtime/**
+!docker/cardgen/
+!docker/cardgen/**
 backend/src/**/__pycache__/

@@ -3,13 +3,20 @@
 라우터는 HTTP 만 보고, 리포지토리는 쿼리만 합니다. "이 강아지를 내가 돌보는가"·"같은 기록을
 두 번 받았나"·"기간이 너무 넓은가"·"하루의 경계가 어디인가" 는 전부 여기 모입니다.
 
-**오케스트레이터를 모릅니다.** 비서가 이 로그를 읽는 것은 후속 카드이고, 채팅으로 기록하는
-쓰기 능력은 처음부터 안 합니다 (2026-09-08 사람 결정 — #331 메모).
+**오케스트레이터를 모릅니다 — 그런데 오케스트레이터가 이 파일을 부릅니다.** 비서가 로그를
+읽는 것은 `services/care_log_context`(#344), 쓰는 것은
+`orchestration/adapters/care_log.py`(D-075)이고, 후자는 아래 `record` 를 **라우터와 같은
+함수로** 부릅니다. 방향이 한쪽인 것이 중요합니다: 이 파일은 여전히 orchestration 을 import
+하지 않고, 채팅에서 온 기록이 화면에서 온 기록과 다른 규칙을 통과할 길이 없습니다.
+
+2026-09-08 의 사람 결정("채팅으로 기록하는 쓰기 능력은 처음부터 안 한다" — #331 메모)은
+2026-09-13 에 D-075 로 개정됐습니다. 그 메모가 같이 적어 둔 순서의 세 번째 칸이고, "처음부터
+안 한다" 가 가리킨 것은 **확인 없는** 쓰기였습니다.
 """
 
 import logging
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -21,6 +28,7 @@ from daengs_backend.repositories import care_event as care_repo
 from daengs_backend.repositories import pet as pet_repo
 from daengs_backend.repositories import walk as walk_repo
 from daengs_backend.schemas.care_event import CareEventCreate
+from daengs_backend.services import pet_identity as identity_service
 from daengs_backend.services.pet import PetNotFoundError
 
 log = logging.getLogger(__name__)
@@ -75,6 +83,14 @@ class DaySummary:
     counts: dict[str, int]
     walks: int
     events: list[CareEvent]
+    #: 이 요약이 읽은 **논리 그룹의 pet id 들**. 라우터가 이름표 판정을 그룹 전체로
+    #: 하는 데 씁니다 (`pet_member.group_actor_label`) — 안 넘기면 연결된 상대가 적은
+    #: 기록의 이름이 통째로 빕니다.
+    group_ids: list = field(default_factory=list)
+    #: 그날 그 논리 강아지가 나간 산책 행들. **누가 다녀왔는지**(`walk.app_user_id`)가
+    #: 여기 있습니다 — 라우터가 케어 `actor` 와 같은 규칙으로 이름표를 붙입니다
+    #: (MVP 결정 §7). `walks` 는 그 수이고 둘이 같은 질의에서 나옵니다.
+    walk_rows: list = field(default_factory=list)
 
 
 async def _accessible_pet(session: AsyncSession, app_user_id: uuid.UUID, pet_id: uuid.UUID):
@@ -91,6 +107,34 @@ async def _accessible_pet(session: AsyncSession, app_user_id: uuid.UUID, pet_id:
     if pet is None:
         raise PetNotFoundError
     return pet
+
+
+async def _group_ids(session: AsyncSession, pet) -> list[uuid.UUID]:
+    """읽을 때 합칠 pet id 들 (MVP 결정 §7).
+
+    연결 안 된 아이는 `[pet.id]` 하나라 지금 동작이 안 바뀝니다. 연결됐으면 같은 실제
+    강아지의 행 전부입니다 — 기록이 두 `pet_id` 에 갈려 쌓이는데 화면에서는 한 마리이기
+    때문입니다.
+
+    **쓰기에는 안 씁니다.** 새 기록은 언제나 부른 사람의 행(`pet.id`)에 남습니다 — 그래야
+    연결을 풀었을 때 각자가 적은 것이 제자리에 남습니다.
+    """
+    return await identity_service.group_pet_ids_of(session, pet)
+
+
+async def group_ids_for(
+    session: AsyncSession, app_user_id: uuid.UUID, pet_id: uuid.UUID
+) -> list[uuid.UUID]:
+    """접근 권한을 확인하고 그 아이의 **논리 그룹 pet id 들**을 돌려줍니다.
+
+    라우터가 이름표 판정(`pet_member.group_actor_label`)에 쓰는 자리입니다 — 하루 요약은
+    이미 계산한 것을 `DaySummary.group_ids` 로 받지만, 기록 응답과 409 본문은 그 계산을
+    안 거쳐서 여기서 한 번 더 묻습니다.
+
+    **권한을 다시 봅니다** — 라우터가 `pet_id` 를 그대로 넘기는 자리라, 여기서 안 보면
+    남의 아이 id 로 그룹 구성을 떠볼 수 있습니다.
+    """
+    return await _group_ids(session, await _accessible_pet(session, app_user_id, pet_id))
 
 
 async def record(
@@ -124,9 +168,12 @@ async def record(
     # 같은 순간의 동시 탭이 아닙니다 (docs/co-care.md §4 "일부러 안 하는 것").
     if body.kind in CONFIRM_KINDS and not body.confirm:
         window = MEDICATION_CONFIRM_WINDOW
+        # **창을 그룹 전체로 넓힙니다** (MVP 결정 §7). 안 넓히면 A 가 자기 행에 적은 약을
+        # B 의 행에서 못 봐서, 교대 경계의 중복 투약이 통째로 안 걸립니다 — 그것이 이
+        # 확인의 존재 이유 전부입니다 (docs/co-care.md §4).
         conflicts = await care_repo.list_kind_between(
             session,
-            pet.id,
+            await _group_ids(session, pet),
             body.kind,
             body.occurred_at - window,
             body.occurred_at + window,
@@ -173,11 +220,13 @@ async def list_events(
     *,
     start: datetime | None = None,
     end: datetime | None = None,
-) -> tuple[list[CareEvent], datetime, datetime]:
+) -> tuple[list[CareEvent], datetime, datetime, list[uuid.UUID]]:
     """기간 조회. 창을 같이 돌려주는 이유는 기본값을 앱이 되짚어 볼 수 있게 하려는 것입니다."""
-    await _accessible_pet(session, app_user_id, pet_id)
+    pet = await _accessible_pet(session, app_user_id, pet_id)
     start, end = _window(start, end)
-    return await care_repo.list_between(session, app_user_id, pet_id, start, end), start, end
+    group_ids = await _group_ids(session, pet)
+    events = await care_repo.list_between(session, app_user_id, group_ids, start, end)
+    return events, start, end, group_ids
 
 
 async def delete_event(
@@ -217,15 +266,21 @@ async def day_summary(
 
     `day` 를 안 보내면 그 시간대의 오늘입니다.
     """
-    await _accessible_pet(session, app_user_id, pet_id)
+    pet = await _accessible_pet(session, app_user_id, pet_id)
     day = day or datetime.now(ZoneInfo(timezone)).date()
     start, end = day_bounds(day, timezone)
-    counts = await care_repo.count_by_kind(session, app_user_id, pet_id, start, end)
-    walks = await walk_repo.count_for_pet_between(session, app_user_id, pet_id, start, end)
-    events = await care_repo.list_between(session, app_user_id, pet_id, start, end)
+    # 케어도 산책도 **논리 강아지 전체**를 셉니다 (MVP 결정 §7) — 연결된 두 행에 갈려
+    # 쌓인 기록이 화면에서는 한 마리의 하루이기 때문입니다.
+    group_ids = await _group_ids(session, pet)
+    counts = await care_repo.count_by_kind(session, app_user_id, group_ids, start, end)
+    events = await care_repo.list_between(session, app_user_id, group_ids, start, end)
+    # 산책은 **행으로** 읽습니다 — 수만 세면 "누가 다녀왔는지" 를 못 보여 줍니다.
+    # 수는 그 길이라, 세는 질의와 보여 주는 질의가 갈려 어긋날 자리가 없습니다.
+    walk_rows = await walk_repo.list_for_pets_between(session, group_ids, start, end)
     return DaySummary(
         day=day, timezone=timezone, start=start, end=end,
-        counts=counts, walks=walks, events=events,
+        counts=counts, walks=len(walk_rows), events=events, walk_rows=walk_rows,
+        group_ids=group_ids,
     )
 
 
@@ -242,6 +297,7 @@ __all__ = [
     "day_bounds",
     "day_summary",
     "delete_event",
+    "group_ids_for",
     "list_events",
     "record",
 ]

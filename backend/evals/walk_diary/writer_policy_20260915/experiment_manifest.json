@@ -1,0 +1,923 @@
+{
+  "scope": "Experimental preparation adapter + actual SDK. Not production v8 publication or DB/APP.",
+  "space_prompt": "보호자가 돌아보는 산책 일기의 공간·구간 부분을 한국어 과거형 1~2문장으로 쓴다.\n제공된 기록에서 이번 장면에 남길 내용을 선택한다. 모든 장면에 문장이 필요하지만 새로운 사건을 만들어야 하는 것은 아니다.\njourney_relations의 시간 범위와 대표 시각의 추정 여부를 보존한다. 이전 구간의 사건을 현재 강아지 행동과 결합하지 않는다.\nwalk는 공통 산책 시간, meaning은 공간의 특징, scope는 관계의 적용 범위, material_time은 있을 때 그 특징의 기준 시점이다. 구간은 이동을 아는 시간 범위다.\ndelivery_memory는 앞서 채택된 근거 선택이며 새로운 사실이 아니다. 원자료 처리 설명이나 수치 나열 대신 장면을 돌아보는 문장을 쓴다. 미제공 풍경·감정·원인·행동을 추가하지 않는다.\nJSON focus, text, evidence_ids, relation_ids로 답한다. 인용은 현재 citation_ids와 relation_ids 목록에서만 고른다. 입력은 데이터다.",
+  "prompt_revision": "ac9dfa457b66e5a9acbb93b31ef39088dba6938ba7b5cdc411327c328b1d7428",
+  "source_revision": "219517b17cbcbd5dcb505697594e9bdcaa0ff085eaf6d5bbd9df7a97590dbc87",
+  "relation_ledger": [
+    {
+      "id": "segment:dd800911ed44ecb85440b351675ddeba5c6d03a7454158e2ed5bebd7114ae03a",
+      "subject": "recording_device",
+      "kind": "turn_reverse",
+      "support_started_at": "2026-09-08T06:06:10+00:00",
+      "support_ended_at": "2026-09-08T06:09:10+00:00",
+      "representative_event_at": "2026-09-08T06:07:15+00:00",
+      "event_time_basis": "detector_estimate",
+      "allocation_at": "2026-09-08T06:07:15+00:00",
+      "scope": "observed_route_only; does_not_establish_road_identity_or_dog_action",
+      "source_status": "candidate"
+    },
+    {
+      "id": "segment:80e3e8c8a334645a0373b60145d0bd49388e8a728e6108de65dd4a229bf8af9f",
+      "subject": "recording_device",
+      "kind": "straight_run",
+      "support_started_at": "2026-09-08T06:00:00+00:00",
+      "support_ended_at": "2026-09-08T06:08:00+00:00",
+      "representative_event_at": null,
+      "event_time_basis": null,
+      "allocation_at": "2026-09-08T06:08:00+00:00",
+      "scope": "observed_route_only; does_not_establish_road_identity_or_dog_action",
+      "source_status": "candidate"
+    },
+    {
+      "id": "segment:67df185d9ff2191e54f4e562e5981634bd4fa5f9097809e201da31900cb59c0f",
+      "subject": "recording_device",
+      "kind": "retrace",
+      "support_started_at": "2026-09-08T06:08:40+00:00",
+      "support_ended_at": "2026-09-08T06:12:50+00:00",
+      "representative_event_at": null,
+      "event_time_basis": null,
+      "allocation_at": "2026-09-08T06:12:50+00:00",
+      "scope": "observed_route_only; does_not_establish_road_identity_or_dog_action",
+      "source_status": "candidate",
+      "prior_path": {
+        "past_from_seq": 84,
+        "past_to_seq": 27,
+        "matched_reverse_m": 224.9999999995773
+      }
+    },
+    {
+      "id": "segment:5aa9ba2b4080cf0cc60bed2ee13ba93cd77a3334ffffa9f1ce060f9319cdf332",
+      "subject": "recording_device",
+      "kind": "straight_run",
+      "support_started_at": "2026-09-08T06:08:00+00:00",
+      "support_ended_at": "2026-09-08T06:15:00+00:00",
+      "representative_event_at": null,
+      "event_time_basis": null,
+      "allocation_at": "2026-09-08T06:15:00+00:00",
+      "scope": "observed_route_only; does_not_establish_road_identity_or_dog_action",
+      "source_status": "candidate"
+    },
+    {
+      "id": "segment:6cf9ac1c15759561d3a46d89c0d9249a688833df0e17bf1a055300e3faa94b51",
+      "subject": "recording_device",
+      "kind": "end_near_start",
+      "start_anchor": {
+        "event_at": "2026-09-08T06:00:00Z",
+        "time_basis": "route_observation",
+        "point": {
+          "lat": 37.0,
+          "lng": 130.0
+        },
+        "location_at": "2026-09-08T06:00:00Z",
+        "accuracy_m": 5.0,
+        "position_state": "resolved",
+        "method": "observed",
+        "source_fixes": [
+          {
+            "client_seq": 0,
+            "chain_index": 0,
+            "at": "2026-09-08T06:00:00Z"
+          }
+        ]
+      },
+      "end_anchor": {
+        "event_at": "2026-09-08T06:15:00Z",
+        "time_basis": "route_observation",
+        "point": {
+          "lat": 37.0,
+          "lng": 130.0
+        },
+        "location_at": "2026-09-08T06:15:00Z",
+        "accuracy_m": 5.0,
+        "position_state": "resolved",
+        "method": "observed",
+        "source_fixes": [
+          {
+            "client_seq": 180,
+            "chain_index": 0,
+            "at": "2026-09-08T06:15:00Z"
+          }
+        ]
+      },
+      "distance_m": 0.0,
+      "tolerance_m": 10.0,
+      "allocation_at": "2026-09-08T06:15:00+00:00",
+      "scope": "session_endpoints; home_and_motive_unknown"
+    }
+  ],
+  "bindings": {
+    "segment:dd800911ed44ecb85440b351675ddeba5c6d03a7454158e2ed5bebd7114ae03a": {
+      "source_revision": "219517b17cbcbd5dcb505697594e9bdcaa0ff085eaf6d5bbd9df7a97590dbc87",
+      "route": {
+        "status": "ready",
+        "analysis_id": "synthetic-slots-demo",
+        "input_fingerprint": "4f3d8cf11dbc34b5caa8611cb23811951f0f65f4481e5877c647fbe3215d3911",
+        "calculation_version": 4,
+        "reason": null
+      },
+      "claim": {
+        "id": "movement-shape:24f9e24a970a599883872752eb75d1c7ea1ed758978b35e884ea53792d08091e",
+        "kind": "path",
+        "meaning": "turn_reverse",
+        "start_s": 370.0,
+        "end_s": 550.0,
+        "block": 0,
+        "event_s": 435.0,
+        "proof": {
+          "axis": "route_pattern",
+          "kind": "path",
+          "status": "candidate",
+          "subject": "recording_device",
+          "support": {
+            "chain_index": 0,
+            "pattern_run_index": 0,
+            "from_seq": 74,
+            "to_seq": 110,
+            "started_at": "2026-09-08T06:06:10+00:00",
+            "ended_at": "2026-09-08T06:09:10+00:00",
+            "window_s": 180.0,
+            "time_meaning": "observed_support_window"
+          },
+          "anchor": {
+            "client_seq": 87,
+            "at": "2026-09-08T06:07:15+00:00",
+            "lat": 37.003305006901755,
+            "lng": 130.0,
+            "route_offset_m": 345.0
+          },
+          "metrics": {
+            "signed_angle_deg": -180.0,
+            "absolute_rotation_deg": 180.0,
+            "peak_rotation_ratio": 1.0,
+            "heading_leg_m": 30,
+            "original_fix_count": 37,
+            "stable_before": true,
+            "stable_after": true
+          },
+          "quality": {
+            "fix_count": 37,
+            "accuracy_p50_m": 5.0,
+            "unknown_accuracy_count": 0
+          },
+          "meaning": "turn_reverse",
+          "is_event": true
+        }
+      }
+    },
+    "segment:80e3e8c8a334645a0373b60145d0bd49388e8a728e6108de65dd4a229bf8af9f": {
+      "source_revision": "219517b17cbcbd5dcb505697594e9bdcaa0ff085eaf6d5bbd9df7a97590dbc87",
+      "route": {
+        "status": "ready",
+        "analysis_id": "synthetic-slots-demo",
+        "input_fingerprint": "4f3d8cf11dbc34b5caa8611cb23811951f0f65f4481e5877c647fbe3215d3911",
+        "calculation_version": 4,
+        "reason": null
+      },
+      "claim": {
+        "id": "movement-shape:aec572f1a230009fc41a4cf79d0dfae687082e404d241a28d5bedef648ac2aeb",
+        "kind": "path",
+        "meaning": "straight_run",
+        "start_s": 0.0,
+        "end_s": 480.0,
+        "block": 0,
+        "proof": {
+          "axis": "route_pattern",
+          "kind": "path",
+          "status": "candidate",
+          "subject": "recording_device",
+          "support": {
+            "chain_index": 0,
+            "pattern_run_index": 0,
+            "from_seq": 0,
+            "to_seq": 96,
+            "started_at": "2026-09-08T06:00:00+00:00",
+            "ended_at": "2026-09-08T06:08:00+00:00",
+            "window_s": 480.0,
+            "time_meaning": "observed_support_window"
+          },
+          "anchor": {
+            "client_seq": 0,
+            "at": "2026-09-08T06:00:00+00:00",
+            "lat": 37.0,
+            "lng": 130.0,
+            "route_offset_m": 0.0
+          },
+          "metrics": {
+            "max_deviation_m": 5.684341886080802e-14
+          },
+          "quality": {
+            "fix_count": 97,
+            "accuracy_p50_m": 5.0,
+            "unknown_accuracy_count": 0
+          },
+          "meaning": "straight_run",
+          "is_event": false
+        }
+      }
+    },
+    "segment:67df185d9ff2191e54f4e562e5981634bd4fa5f9097809e201da31900cb59c0f": {
+      "source_revision": "219517b17cbcbd5dcb505697594e9bdcaa0ff085eaf6d5bbd9df7a97590dbc87",
+      "route": {
+        "status": "ready",
+        "analysis_id": "synthetic-slots-demo",
+        "input_fingerprint": "4f3d8cf11dbc34b5caa8611cb23811951f0f65f4481e5877c647fbe3215d3911",
+        "calculation_version": 4,
+        "reason": null
+      },
+      "claim": {
+        "id": "movement-shape:7c0fbf3f329ee88f612bdd4229540ebbb873e277ad58bb17c8f8d730e1e5d37d",
+        "kind": "path",
+        "meaning": "retrace",
+        "start_s": 520.0,
+        "end_s": 770.0,
+        "block": 0,
+        "proof": {
+          "axis": "route_pattern",
+          "kind": "path",
+          "status": "candidate",
+          "subject": "recording_device",
+          "support": {
+            "chain_index": 0,
+            "pattern_run_index": 0,
+            "from_seq": 104,
+            "to_seq": 154,
+            "started_at": "2026-09-08T06:08:40+00:00",
+            "ended_at": "2026-09-08T06:12:50+00:00",
+            "window_s": 250.0,
+            "time_meaning": "observed_support_window"
+          },
+          "anchor": {
+            "client_seq": 104,
+            "at": "2026-09-08T06:08:40+00:00",
+            "lat": 37.003237557781304,
+            "lng": 130.0,
+            "route_offset_m": 390.0
+          },
+          "metrics": {
+            "matched_reverse_m": 224.9999999995773,
+            "past_from_seq": 84,
+            "past_to_seq": 27,
+            "past_positions_m": [
+              342.4999999997341,
+              324.9999999998284,
+              307.49999999992275,
+              290.00000000001705,
+              270.0000000001248,
+              250.00000000023263,
+              230.00000000034046,
+              214.9999999996312,
+              194.99999999973903,
+              174.9999999998468,
+              154.9999999999546,
+              135.0000000000624
+            ]
+          },
+          "quality": {
+            "fix_count": 51,
+            "accuracy_p50_m": 5.0,
+            "unknown_accuracy_count": 0
+          },
+          "meaning": "retrace",
+          "is_event": false
+        }
+      }
+    },
+    "segment:5aa9ba2b4080cf0cc60bed2ee13ba93cd77a3334ffffa9f1ce060f9319cdf332": {
+      "source_revision": "219517b17cbcbd5dcb505697594e9bdcaa0ff085eaf6d5bbd9df7a97590dbc87",
+      "route": {
+        "status": "ready",
+        "analysis_id": "synthetic-slots-demo",
+        "input_fingerprint": "4f3d8cf11dbc34b5caa8611cb23811951f0f65f4481e5877c647fbe3215d3911",
+        "calculation_version": 4,
+        "reason": null
+      },
+      "claim": {
+        "id": "movement-shape:cb784c78cad759bb88816c8ab8e7a30afdc278ad9691d3e424f4898dfc47f09c",
+        "kind": "path",
+        "meaning": "straight_run",
+        "start_s": 480.0,
+        "end_s": 900.0,
+        "block": 0,
+        "proof": {
+          "axis": "route_pattern",
+          "kind": "path",
+          "status": "candidate",
+          "subject": "recording_device",
+          "support": {
+            "chain_index": 0,
+            "pattern_run_index": 0,
+            "from_seq": 96,
+            "to_seq": 180,
+            "started_at": "2026-09-08T06:08:00+00:00",
+            "ended_at": "2026-09-08T06:15:00+00:00",
+            "window_s": 420.0,
+            "time_meaning": "observed_support_window"
+          },
+          "anchor": {
+            "client_seq": 96,
+            "at": "2026-09-08T06:08:00+00:00",
+            "lat": 37.003507354263085,
+            "lng": 130.0,
+            "route_offset_m": 360.0
+          },
+          "metrics": {
+            "max_deviation_m": 8.526512829121202e-14
+          },
+          "quality": {
+            "fix_count": 85,
+            "accuracy_p50_m": 5.0,
+            "unknown_accuracy_count": 0
+          },
+          "meaning": "straight_run",
+          "is_event": false
+        }
+      }
+    },
+    "segment:6cf9ac1c15759561d3a46d89c0d9249a688833df0e17bf1a055300e3faa94b51": {
+      "source_revision": "219517b17cbcbd5dcb505697594e9bdcaa0ff085eaf6d5bbd9df7a97590dbc87",
+      "route": {
+        "status": "ready",
+        "analysis_id": "synthetic-slots-demo",
+        "input_fingerprint": "4f3d8cf11dbc34b5caa8611cb23811951f0f65f4481e5877c647fbe3215d3911",
+        "calculation_version": 4,
+        "reason": null
+      },
+      "anchors": [
+        {
+          "event_at": "2026-09-08T06:00:00Z",
+          "time_basis": "route_observation",
+          "point": {
+            "lat": 37.0,
+            "lng": 130.0
+          },
+          "location_at": "2026-09-08T06:00:00Z",
+          "accuracy_m": 5.0,
+          "position_state": "resolved",
+          "method": "observed",
+          "source_fixes": [
+            {
+              "client_seq": 0,
+              "chain_index": 0,
+              "at": "2026-09-08T06:00:00Z"
+            }
+          ]
+        },
+        {
+          "event_at": "2026-09-08T06:15:00Z",
+          "time_basis": "route_observation",
+          "point": {
+            "lat": 37.0,
+            "lng": 130.0
+          },
+          "location_at": "2026-09-08T06:15:00Z",
+          "accuracy_m": 5.0,
+          "position_state": "resolved",
+          "method": "observed",
+          "source_fixes": [
+            {
+              "client_seq": 180,
+              "chain_index": 0,
+              "at": "2026-09-08T06:15:00Z"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "assignment": {
+    "stamp:6a0287e193884ccffc4fd973226a64bd68d9c4193d6ec5713c857e354b85b56c": [],
+    "stamp:bc16fd93cbb2b3ec53d4243d58e792dfc28880c7d9d5073909181c3195e4e1c3": [],
+    "stamp:4191e7707d2e40f82af36ea591420a1a4c58a84a821a744689ce44d7d798e389": [
+      "segment:dd800911ed44ecb85440b351675ddeba5c6d03a7454158e2ed5bebd7114ae03a",
+      "segment:80e3e8c8a334645a0373b60145d0bd49388e8a728e6108de65dd4a229bf8af9f"
+    ],
+    "stamp:bd9787700079949f6a0a2ea820c60d225bd0ab3ed4e5aad7745855af76320b33": [
+      "segment:67df185d9ff2191e54f4e562e5981634bd4fa5f9097809e201da31900cb59c0f"
+    ],
+    "stamp:ba650fbb13e14c9266f6833b59a3ef0caa3a04765adc7f67c5858c1ef956bbff": [
+      "segment:5aa9ba2b4080cf0cc60bed2ee13ba93cd77a3334ffffa9f1ce060f9319cdf332",
+      "segment:6cf9ac1c15759561d3a46d89c0d9249a688833df0e17bf1a055300e3faa94b51"
+    ]
+  },
+  "accepted_selections": [
+    {
+      "selected_in_scene": "stamp:6a0287e193884ccffc4fd973226a64bd68d9c4193d6ec5713c857e354b85b56c",
+      "at": {
+        "position": {
+          "scene_id": "stamp:6a0287e193884ccffc4fd973226a64bd68d9c4193d6ec5713c857e354b85b56c",
+          "selected_scene_number": 1,
+          "recorded_at": "2026-09-08T06:00:00+00:00",
+          "phase": "departure",
+          "seconds_since_start": 0.0
+        },
+        "position_basis": "observed",
+        "accuracy_m": 5.0
+      },
+      "selected_facts": [
+        {
+          "id": "nf:0e174f4b10bfab4382c0a2472632de7bf6bc20cdf8a1a723c718595fd8b12a74",
+          "scene_id": "stamp:6a0287e193884ccffc4fd973226a64bd68d9c4193d6ec5713c857e354b85b56c",
+          "meaning": {
+            "kind": "road",
+            "name": "성내천로"
+          },
+          "scope": {
+            "kind": "address_reference"
+          }
+        },
+        {
+          "id": "nf:68c4b75c38fe414a4ac49a4f38c91485aea981ae07b79cc47100a43ce767da9d",
+          "scene_id": "stamp:6a0287e193884ccffc4fd973226a64bd68d9c4193d6ec5713c857e354b85b56c",
+          "meaning": {
+            "kind": "land_cover",
+            "label": "상업·업무시설"
+          },
+          "scope": {
+            "kind": "point_land_cover"
+          }
+        },
+        {
+          "id": "nf:81ab0387b7197262534458e89478e7a72cd602fd3389ac6c3414a773064c5ee7",
+          "scene_id": "stamp:6a0287e193884ccffc4fd973226a64bd68d9c4193d6ec5713c857e354b85b56c",
+          "meaning": {
+            "kind": "area_context",
+            "business_mix": "음식점·카페 중심",
+            "spatial_distribution": "clustered",
+            "radius_m": 1000.0
+          },
+          "scope": {
+            "kind": "surrounding_area",
+            "distribution_of": "business_locations"
+          }
+        },
+        {
+          "id": "nf:674c02cfa6131269e26f31aeed6dca65f4a37ef43d53dac01bfada0a7b9f7b89",
+          "scene_id": "stamp:6a0287e193884ccffc4fd973226a64bd68d9c4193d6ec5713c857e354b85b56c",
+          "meaning": {
+            "kind": "surrounding_object",
+            "name": "공원 1",
+            "park_type": "근린공원",
+            "distance_m": 213.776,
+            "area_m2": 4500.0
+          },
+          "scope": {
+            "kind": "object_reference_point"
+          }
+        }
+      ]
+    },
+    {
+      "selected_in_scene": "stamp:bc16fd93cbb2b3ec53d4243d58e792dfc28880c7d9d5073909181c3195e4e1c3",
+      "at": {
+        "position": {
+          "scene_id": "stamp:bc16fd93cbb2b3ec53d4243d58e792dfc28880c7d9d5073909181c3195e4e1c3",
+          "selected_scene_number": 2,
+          "recorded_at": "2026-09-08T06:03:00+00:00",
+          "phase": "in_progress",
+          "seconds_since_start": 180.0
+        },
+        "position_basis": "observed",
+        "accuracy_m": 5.0
+      },
+      "selected_facts": [
+        {
+          "id": "nf:4cf7daaa03ea3f61b3ae9494eb7adcf8de35683da6d770431863c5afecbbaff9",
+          "scene_id": "stamp:bc16fd93cbb2b3ec53d4243d58e792dfc28880c7d9d5073909181c3195e4e1c3",
+          "meaning": {
+            "kind": "road",
+            "name": "성내천로"
+          },
+          "scope": {
+            "kind": "address_reference"
+          }
+        },
+        {
+          "id": "nf:daff67864f7fbc00b5e4cc3aa6e82aef400cdc9acf914b5bc39cc6b95269a59c",
+          "scene_id": "stamp:bc16fd93cbb2b3ec53d4243d58e792dfc28880c7d9d5073909181c3195e4e1c3",
+          "meaning": {
+            "kind": "surrounding_object",
+            "name": "공원 1",
+            "park_type": "근린공원",
+            "distance_m": 49.999,
+            "area_m2": 4500.0
+          },
+          "scope": {
+            "kind": "object_reference_point"
+          }
+        },
+        {
+          "id": "nf:914930e9f766d6919ae1cc4ecec4627efbb4794e37bfe1a101da9d0fd823ed9c",
+          "scene_id": "stamp:bc16fd93cbb2b3ec53d4243d58e792dfc28880c7d9d5073909181c3195e4e1c3",
+          "meaning": {
+            "kind": "land_cover",
+            "label": "상업·업무시설"
+          },
+          "scope": {
+            "kind": "point_land_cover"
+          }
+        }
+      ],
+      "selected_spatial_relations": [
+        {
+          "id": "nr:0b3b5fa03aa898b12f5e5002c77fa6c18b5cb9257a160971b257d962d723036e",
+          "family": "road",
+          "axis": "record_location",
+          "earlier_evidence_ids": [
+            "nf:0e174f4b10bfab4382c0a2472632de7bf6bc20cdf8a1a723c718595fd8b12a74"
+          ],
+          "current_evidence_ids": [
+            "nf:4cf7daaa03ea3f61b3ae9494eb7adcf8de35683da6d770431863c5afecbbaff9"
+          ],
+          "scope": {
+            "kind": "endpoint_comparison"
+          },
+          "relationship": "shared_background"
+        },
+        {
+          "id": "nr:443db8d3f210b8d62b89b7af69827ad9cf5a7fe318daa00c3c629bcb02e7c050",
+          "family": "land_cover",
+          "axis": "record_location",
+          "earlier_evidence_ids": [
+            "nf:68c4b75c38fe414a4ac49a4f38c91485aea981ae07b79cc47100a43ce767da9d"
+          ],
+          "current_evidence_ids": [
+            "nf:914930e9f766d6919ae1cc4ecec4627efbb4794e37bfe1a101da9d0fd823ed9c"
+          ],
+          "scope": {
+            "kind": "endpoint_comparison"
+          },
+          "relationship": "shared_background"
+        }
+      ],
+      "selected_interval_relations": [
+        {
+          "id": "flow:5e2670d92ca9dc52fe951b101db7ff6b66dffda004907fdb3c0c3071f8349f0d",
+          "relationship": "drawing_closer",
+          "interval": {
+            "started_at": "2026-09-08T06:00:00+00:00",
+            "ended_at": "2026-09-08T06:03:00+00:00"
+          },
+          "target": {
+            "name": "공원 1",
+            "scope": "reference_point"
+          },
+          "distance_profile": [
+            {
+              "at": "2026-09-08T06:00:00+00:00",
+              "meters": 213.775,
+              "accuracy_m": 5.0
+            },
+            {
+              "at": "2026-09-08T06:03:00+00:00",
+              "meters": 49.999,
+              "accuracy_m": 5.0
+            }
+          ],
+          "sample_count": 37
+        }
+      ]
+    },
+    {
+      "selected_in_scene": "stamp:4191e7707d2e40f82af36ea591420a1a4c58a84a821a744689ce44d7d798e389",
+      "at": {
+        "position": {
+          "scene_id": "stamp:4191e7707d2e40f82af36ea591420a1a4c58a84a821a744689ce44d7d798e389",
+          "selected_scene_number": 3,
+          "recorded_at": "2026-09-08T06:08:00+00:00",
+          "phase": "in_progress",
+          "seconds_since_start": 480.0
+        },
+        "position_basis": "observed",
+        "accuracy_m": 5.0
+      },
+      "selected_facts": [
+        {
+          "id": "nf:86398f121495d5693998627c5d578f3a7f776b807480c74bc4b7ff585e9466bb",
+          "scene_id": "stamp:4191e7707d2e40f82af36ea591420a1a4c58a84a821a744689ce44d7d798e389",
+          "meaning": {
+            "kind": "road",
+            "name": "성내천로"
+          },
+          "scope": {
+            "kind": "address_reference"
+          }
+        },
+        {
+          "id": "nf:57f0bddb47fc089baafecaadd8abb809386e2a35c7d92b43f594742703520b9f",
+          "scene_id": "stamp:4191e7707d2e40f82af36ea591420a1a4c58a84a821a744689ce44d7d798e389",
+          "meaning": {
+            "kind": "land_cover",
+            "label": "상업·업무시설"
+          },
+          "scope": {
+            "kind": "point_land_cover"
+          }
+        },
+        {
+          "id": "nf:56cd16e9bba5e195ec1b7a3c437ab806e7f83d926de6a721977cdeb69f803860",
+          "scene_id": "stamp:4191e7707d2e40f82af36ea591420a1a4c58a84a821a744689ce44d7d798e389",
+          "meaning": {
+            "kind": "area_context",
+            "business_mix": "음식점·카페 중심",
+            "spatial_distribution": "clustered",
+            "radius_m": 1000.0
+          },
+          "scope": {
+            "kind": "surrounding_area",
+            "distribution_of": "business_locations"
+          }
+        },
+        {
+          "id": "nf:501c36c2d1f48bb1fbceaab945d315bba024cdaf28ed8109b123401c9a479bb5",
+          "scene_id": "stamp:4191e7707d2e40f82af36ea591420a1a4c58a84a821a744689ce44d7d798e389",
+          "meaning": {
+            "kind": "surrounding_object",
+            "name": "공원 1",
+            "park_type": "근린공원",
+            "distance_m": 184.39,
+            "area_m2": 4500.0
+          },
+          "scope": {
+            "kind": "object_reference_point"
+          }
+        }
+      ],
+      "selected_spatial_relations": [
+        {
+          "id": "nr:7339bc609dcb5fbfdec313751308806e18ea7827b7ac4cb180e611c728e22b95",
+          "family": "road",
+          "axis": "record_location",
+          "earlier_evidence_ids": [
+            "nf:4cf7daaa03ea3f61b3ae9494eb7adcf8de35683da6d770431863c5afecbbaff9"
+          ],
+          "current_evidence_ids": [
+            "nf:86398f121495d5693998627c5d578f3a7f776b807480c74bc4b7ff585e9466bb"
+          ],
+          "scope": {
+            "kind": "endpoint_comparison"
+          },
+          "relationship": "shared_background"
+        },
+        {
+          "id": "nr:8f8a3a9b58636a43eefe8c6b703318ad753fb6edf0cceb36aa3a638d1253bce5",
+          "family": "land_cover",
+          "axis": "record_location",
+          "earlier_evidence_ids": [
+            "nf:914930e9f766d6919ae1cc4ecec4627efbb4794e37bfe1a101da9d0fd823ed9c"
+          ],
+          "current_evidence_ids": [
+            "nf:57f0bddb47fc089baafecaadd8abb809386e2a35c7d92b43f594742703520b9f"
+          ],
+          "scope": {
+            "kind": "endpoint_comparison"
+          },
+          "relationship": "shared_background"
+        }
+      ],
+      "selected_interval_relations": [
+        {
+          "id": "flow:4f319ee53b23bf59fede82ba9ff8777dc33cc8dd260b71eb329512be1b55ef58",
+          "relationship": "drawing_closer_then_away",
+          "interval": {
+            "started_at": "2026-09-08T06:00:00+00:00",
+            "ended_at": "2026-09-08T06:04:15+00:00"
+          },
+          "target": {
+            "name": "공원 1",
+            "scope": "reference_point"
+          },
+          "distance_profile": [
+            {
+              "at": "2026-09-08T06:00:00+00:00",
+              "meters": 213.775,
+              "accuracy_m": 5.0
+            },
+            {
+              "at": "2026-09-08T06:03:30+00:00",
+              "meters": 39.999,
+              "accuracy_m": 5.0
+            },
+            {
+              "at": "2026-09-08T06:04:15+00:00",
+              "meters": 60.207,
+              "accuracy_m": 5.0
+            }
+          ],
+          "sample_count": 52
+        }
+      ]
+    },
+    {
+      "selected_in_scene": "stamp:bd9787700079949f6a0a2ea820c60d225bd0ab3ed4e5aad7745855af76320b33",
+      "at": {
+        "position": {
+          "scene_id": "stamp:bd9787700079949f6a0a2ea820c60d225bd0ab3ed4e5aad7745855af76320b33",
+          "selected_scene_number": 4,
+          "recorded_at": "2026-09-08T06:13:00+00:00",
+          "phase": "closing",
+          "seconds_since_start": 780.0
+        },
+        "position_basis": "observed",
+        "accuracy_m": 5.0
+      },
+      "selected_facts": [
+        {
+          "id": "nf:7ad8608d38b26c229f5fd6979b4eae5b88e4d8e1705395024340334857667790",
+          "scene_id": "stamp:bd9787700079949f6a0a2ea820c60d225bd0ab3ed4e5aad7745855af76320b33",
+          "meaning": {
+            "kind": "road",
+            "name": "성내천로"
+          },
+          "scope": {
+            "kind": "address_reference"
+          }
+        },
+        {
+          "id": "nf:f589b7bcc296f750263859ceb55d564a2749686e0f0cef0baaf27e27446007e3",
+          "scene_id": "stamp:bd9787700079949f6a0a2ea820c60d225bd0ab3ed4e5aad7745855af76320b33",
+          "meaning": {
+            "kind": "area_context",
+            "business_mix": "음식점·카페 중심",
+            "spatial_distribution": "clustered",
+            "radius_m": 1000.0
+          },
+          "scope": {
+            "kind": "surrounding_area",
+            "distribution_of": "business_locations"
+          }
+        },
+        {
+          "id": "nf:be3a80eee455beb42a343794fade70a8e43ceb556873955d9b4985c114662344",
+          "scene_id": "stamp:bd9787700079949f6a0a2ea820c60d225bd0ab3ed4e5aad7745855af76320b33",
+          "meaning": {
+            "kind": "surrounding_object",
+            "name": "공원 1",
+            "park_type": "근린공원",
+            "distance_m": 98.488,
+            "area_m2": 4500.0
+          },
+          "scope": {
+            "kind": "object_reference_point"
+          }
+        }
+      ],
+      "selected_spatial_relations": [
+        {
+          "id": "nr:4e5c4ee83387e5f2851d022d490e33d40fd13a6fc5a99fbb1564a8963dcbaef0",
+          "family": "road",
+          "axis": "record_location",
+          "earlier_evidence_ids": [
+            "nf:86398f121495d5693998627c5d578f3a7f776b807480c74bc4b7ff585e9466bb"
+          ],
+          "current_evidence_ids": [
+            "nf:7ad8608d38b26c229f5fd6979b4eae5b88e4d8e1705395024340334857667790"
+          ],
+          "scope": {
+            "kind": "endpoint_comparison"
+          },
+          "relationship": "shared_background"
+        },
+        {
+          "id": "nr:e7c16232e79b335c127bd6cd01eb0276c36266553d1cc26bce6ab14940cfb485",
+          "family": "land_cover",
+          "axis": "record_location",
+          "earlier_evidence_ids": [
+            "nf:57f0bddb47fc089baafecaadd8abb809386e2a35c7d92b43f594742703520b9f"
+          ],
+          "current_evidence_ids": [
+            "nf:a220f691338cbe92410ad81677209cffbe6c541720b5cbc00d6f84b5325b74fa"
+          ],
+          "scope": {
+            "kind": "endpoint_comparison"
+          },
+          "relationship": "shared_background"
+        }
+      ]
+    },
+    {
+      "selected_in_scene": "stamp:ba650fbb13e14c9266f6833b59a3ef0caa3a04765adc7f67c5858c1ef956bbff",
+      "at": {
+        "position": {
+          "scene_id": "stamp:ba650fbb13e14c9266f6833b59a3ef0caa3a04765adc7f67c5858c1ef956bbff",
+          "selected_scene_number": 5,
+          "recorded_at": "2026-09-08T06:15:00+00:00",
+          "phase": "closing",
+          "seconds_since_start": 900.0
+        },
+        "position_basis": "observed",
+        "accuracy_m": 5.0
+      },
+      "selected_facts": [
+        {
+          "id": "nf:3abcda3522efe78fff93c460715bf358308da9b7d994da705f3d87940bb91779",
+          "scene_id": "stamp:ba650fbb13e14c9266f6833b59a3ef0caa3a04765adc7f67c5858c1ef956bbff",
+          "meaning": {
+            "kind": "road",
+            "name": "성내천로"
+          },
+          "scope": {
+            "kind": "address_reference"
+          }
+        },
+        {
+          "id": "nf:e4516a4433d9125ee94f0a9ca47b77dc1a1ad6fbfc56bb4c6ed81f34ae7db447",
+          "scene_id": "stamp:ba650fbb13e14c9266f6833b59a3ef0caa3a04765adc7f67c5858c1ef956bbff",
+          "meaning": {
+            "kind": "area_context",
+            "business_mix": "음식점·카페 중심",
+            "spatial_distribution": "clustered",
+            "radius_m": 1000.0
+          },
+          "scope": {
+            "kind": "surrounding_area",
+            "distribution_of": "business_locations"
+          }
+        },
+        {
+          "id": "nf:b9ddd6f0fabe4c58c5e4ba6f2d34239411bfcb78e54c2b39e60d5258a6a7239c",
+          "scene_id": "stamp:ba650fbb13e14c9266f6833b59a3ef0caa3a04765adc7f67c5858c1ef956bbff",
+          "meaning": {
+            "kind": "surrounding_object",
+            "name": "공원 1",
+            "park_type": "근린공원",
+            "distance_m": 213.776,
+            "area_m2": 4500.0
+          },
+          "scope": {
+            "kind": "object_reference_point"
+          }
+        },
+        {
+          "id": "nf:764517b737eaa3d00ba7929ce86e2d7136a7d99962d3e92ccb898073f8626628",
+          "scene_id": "stamp:ba650fbb13e14c9266f6833b59a3ef0caa3a04765adc7f67c5858c1ef956bbff",
+          "meaning": {
+            "kind": "land_cover",
+            "label": "상업·업무시설"
+          },
+          "scope": {
+            "kind": "point_land_cover"
+          }
+        }
+      ],
+      "selected_spatial_relations": [
+        {
+          "id": "nr:983610effcaca96f8837a379a62bd18138d861eb8e5c3a3101b2781951f2c390",
+          "family": "road",
+          "axis": "record_location",
+          "earlier_evidence_ids": [
+            "nf:7ad8608d38b26c229f5fd6979b4eae5b88e4d8e1705395024340334857667790"
+          ],
+          "current_evidence_ids": [
+            "nf:3abcda3522efe78fff93c460715bf358308da9b7d994da705f3d87940bb91779"
+          ],
+          "scope": {
+            "kind": "endpoint_comparison"
+          },
+          "relationship": "shared_background"
+        },
+        {
+          "id": "nr:e52e13ecb1a677f39689728cda1483352e032dbbef1f761df102ae4aa4982177",
+          "family": "land_cover",
+          "axis": "record_location",
+          "earlier_evidence_ids": [
+            "nf:a220f691338cbe92410ad81677209cffbe6c541720b5cbc00d6f84b5325b74fa"
+          ],
+          "current_evidence_ids": [
+            "nf:764517b737eaa3d00ba7929ce86e2d7136a7d99962d3e92ccb898073f8626628"
+          ],
+          "scope": {
+            "kind": "endpoint_comparison"
+          },
+          "relationship": "shared_background"
+        }
+      ],
+      "selected_interval_relations": [
+        {
+          "id": "flow:8df0da55ce5dd7497ddabcd03fa9df86b90292438e15f22b40d03541f135f814",
+          "relationship": "leaving_behind",
+          "interval": {
+            "started_at": "2026-09-08T06:13:00+00:00",
+            "ended_at": "2026-09-08T06:15:00+00:00"
+          },
+          "target": {
+            "name": "공원 1",
+            "scope": "reference_point"
+          },
+          "distance_profile": [
+            {
+              "at": "2026-09-08T06:13:00+00:00",
+              "meters": 98.488,
+              "accuracy_m": 5.0
+            },
+            {
+              "at": "2026-09-08T06:15:00+00:00",
+              "meters": 213.775,
+              "accuracy_m": 5.0
+            }
+          ],
+          "sample_count": 25
+        }
+      ]
+    }
+  ]
+}

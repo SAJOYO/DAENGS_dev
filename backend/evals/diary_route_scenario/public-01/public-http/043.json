@@ -1,0 +1,11 @@
+{
+  "sequence": 43,
+  "endpoint": "https://sgisapi.mods.go.kr/OpenAPI3/addr/rgeocode.json",
+  "parameters": {
+    "x_coor": "958703.3416487619",
+    "y_coor": "1941855.691480749",
+    "addr_type": "20"
+  },
+  "started_at": "2026-09-14T03:04:32.396045+00:00",
+  "elapsed_s": 0.0
+}

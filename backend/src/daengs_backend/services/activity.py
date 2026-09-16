@@ -19,7 +19,6 @@ from daengs_backend.services.activity_core.sessions import SessionSource, resolv
 from daengs_backend.services.activity_core.territory import HoldingPeriod, holding_time
 from daengs_backend.services.activity_core.walk import (
     AnalysisVersions,
-    WalkContribution,
     WalkMetrics,
     WalkProjection,
     WalkSelection,
@@ -27,7 +26,8 @@ from daengs_backend.services.activity_core.walk import (
     project_walks,
     summarize_walks,
 )
-from daengs_backend.services.walk_analysis import decode_analysis_model
+from daengs_backend.services.activity_walk_projection import cached_contribution, contribution_for
+from daengs_backend.services.walk_metrics.analysis import decode_analysis_model
 from daengs_walk.capsule import CAPSULE_VERSION
 from daengs_walk.contracts import (
     MEASUREMENT_RECEIPT_VERSION,
@@ -182,7 +182,9 @@ async def process_pending(db, *, limit=100):
         await repo.barrier(db)
         await activity_game.close_if_due(db, activity_game.now_ms())
         completed = 0
-        for head in await repo.pending_walks(db, limit):
+        heads = await repo.pending_walks(db, limit)
+        references = await repo.analysis_references(db, [head.analysis_id for head in heads])
+        for head in heads:
             walk, analysis = await repo.walk_analysis(db, head.walk_id, head.analysis_id)
             source = walk_source(walk, analysis)
             projection = project_walks(
@@ -191,13 +193,14 @@ async def process_pending(db, *, limit=100):
                 expected_versions=VERSIONS,
             )
             row = projection.contributions[0]
-            # Only measurements/version/exclusion are cached. No owner/pet IDs in JSON.
+            # Measurements/version/exclusion and a source digest; no owner/pet IDs in JSON.
             head.contribution = {
                 "metrics": asdict(source.metrics) if source.metrics else None,
                 "versions": asdict(source.versions),
                 "exclusion_reason": row.exclusion_reason,
                 "statistics_version": IDENTITY.statistics_version,
                 "generation_id": IDENTITY.generation_id,
+                "source_fingerprint": references[analysis.id].source_fingerprint,
             }
             head.processed_analysis_id = head.analysis_id
             head.processed_revision = head.revision
@@ -268,33 +271,55 @@ async def walk_summary(db, owner, from_ms, to_ms, pet_id=None):
     await repo.barrier(db)
     if pet_id and await pet_repo.owned_ids(db, owner, [pet_id]) != {pet_id}:
         raise ActivityNotFound
-    walks = await repo.walks_in_window(db, owner, from_ms, to_ms)
+    walks = await repo.walks_in_window(db, owner, from_ms, to_ms, pet_id)
+    walks = [
+        walk
+        for walk in walks
+        if from_ms <= millis(walk.ended_at) < to_ms and (pet_id is None or pet_id in walk.pet_ids)
+    ]
+    heads = await repo.walk_heads(db, [walk.id for walk in walks])
     contributions = []
     pending = 0
     refs = []
+    ready = []
     for walk in walks:
-        if not from_ms <= millis(walk.ended_at) < to_ms or (pet_id and pet_id not in walk.pet_ids):
-            continue
-        head = await db.get(ActivityWalkHead, walk.id)
+        head = heads.get(walk.id)
         if (
             head is None
             or head.processed_revision != head.revision
             or head.contribution is None
             or head.processed_analysis_id is None
+            or head.processed_analysis_id != head.analysis_id
         ):
             pending += 1
             continue
-        loaded_walk, analysis = await repo.walk_analysis(db, walk.id, head.processed_analysis_id)
-        source = walk_source(loaded_walk, analysis)
-        contributions.append(
-            WalkContribution(source, head.processed_revision, head.contribution["exclusion_reason"])
-        )
+        ready.append((walk, head))
         refs.append(
             {
                 "walk_id": walk.id,
                 "analysis_id": head.processed_analysis_id,
                 "revision": head.processed_revision,
             }
+        )
+    references = await repo.analysis_references(db, [head.analysis_id for _, head in ready])
+    fallback = []
+    for walk, head in ready:
+        reference = references.get(head.analysis_id)
+        if reference is None or reference.walk_id != walk.id:
+            raise ValueError("analysis_walk_mismatch")
+        if walk.analysis_state != "derived" or reference.capsule_version is None:
+            raise ValueError("analysis_not_sealed")
+        cached = cached_contribution(
+            walk, head, reference, identity=IDENTITY, expected_versions=VERSIONS
+        )
+        contributions.append(cached)
+        if cached is None:
+            fallback.append((len(contributions) - 1, walk, head))
+    analyses = await repo.analyses_by_ids(db, [head.analysis_id for _, _, head in fallback])
+    for index, walk, head in fallback:
+        source = walk_source(walk, analyses[head.analysis_id])
+        contributions[index] = contribution_for(
+            source, head.processed_revision, identity=IDENTITY, expected_versions=VERSIONS
         )
     result = summarize_walks(
         WalkProjection(IDENTITY, VERSIONS, tuple(contributions), ()),

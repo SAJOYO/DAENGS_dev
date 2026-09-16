@@ -1,0 +1,33 @@
+{
+  "status": "completed",
+  "variant": "all_materials",
+  "started_at": "2026-09-14T10:31:32.256287+00:00",
+  "requests": [
+    {
+      "status": "returned",
+      "elapsed_s": 1.125,
+      "usage": {
+        "candidates_token_count": 53,
+        "prompt_token_count": 822,
+        "prompt_tokens_details": [
+          {
+            "modality": "TEXT",
+            "token_count": 822
+          }
+        ],
+        "total_token_count": 875
+      },
+      "answer_text": "{\"text\": \"양재1동의 숲이 우거진 길을 따라 걸었다. 근처에 공원이 자리하여 한적한 분위기가 이어졌다.\", \"evidence_ids\": [\"m1\", \"m3\", \"m5\"]}"
+    }
+  ],
+  "public_api_calls": 0,
+  "answer": {
+    "text": "양재1동의 숲이 우거진 길을 따라 걸었다. 근처에 공원이 자리하여 한적한 분위기가 이어졌다.",
+    "evidence_ids": [
+      "m1",
+      "m3",
+      "m5"
+    ]
+  },
+  "elapsed_s": 1.157
+}

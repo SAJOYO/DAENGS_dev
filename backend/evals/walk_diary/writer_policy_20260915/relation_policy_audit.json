@@ -1,0 +1,2259 @@
+[
+  {
+    "scene": 1,
+    "candidates": [],
+    "selection": {
+      "scene_id": "stamp:6a0287e193884ccffc4fd973226a64bd68d9c4193d6ec5713c857e354b85b56c",
+      "flows": [],
+      "spatial_relation_ids": [],
+      "replaced_relation_ids": [],
+      "policy": "relation-injection-v1"
+    },
+    "delivered": []
+  },
+  {
+    "scene": 2,
+    "candidates": [
+      {
+        "id": "flow:5e2670d92ca9dc52fe951b101db7ff6b66dffda004907fdb3c0c3071f8349f0d",
+        "case": "distance_decrease",
+        "started_at": "2026-09-08 06:00:00+00:00",
+        "ended_at": "2026-09-08 06:03:00+00:00",
+        "target_id": "public-normalized-park:1",
+        "target_name": "공원 1",
+        "target_scope": "reference_point",
+        "profile": [
+          {
+            "at": "2026-09-08 06:00:00+00:00",
+            "distance_m": 213.77549031110823,
+            "accuracy_m": 5.0,
+            "source_id": "gps:0",
+            "continuity_id": 0,
+            "path_offset_m": null,
+            "target_axis_offset_m": null
+          },
+          {
+            "at": "2026-09-08 06:00:05+00:00",
+            "distance_m": 208.86588833898642,
+            "accuracy_m": 5.0,
+            "source_id": "gps:1",
+            "continuity_id": 0,
+            "path_offset_m": null,
+            "target_axis_offset_m": null
+          },
+          {
+            "at": "2026-09-08 06:00:10+00:00",
+            "distance_m": 203.96067847804585,
+            "accuracy_m": 5.0,
+            "source_id": "gps:2",
+            "continuity_id": 0,
+            "path_offset_m": null,
+            "target_axis_offset_m": null
+          },
+          {
+            "at": "2026-09-08 06:00:15+00:00",
+            "distance_m": 199.0601854191344,
+            "accuracy_m": 5.0,
+            "source_id": "gps:3",
+            "continuity_id": 0,
+            "path_offset_m": null,
+            "target_axis_offset_m": null
+          },
+          {
+            "at": "2026-09-08 06:00:20+00:00",
+            "distance_m": 194.16476630163905,
+            "accuracy_m": 5.0,
+            "source_id": "gps:4",
+            "continuity_id": 0,
+            "path_offset_m": null,
+            "target_axis_offset_m": null
+          },
+          {
+            "at": "2026-09-08 06:00:25+00:00",
+            "distance_m": 189.27481482446257,
+            "accuracy_m": 5.0,
+            "source_id": "gps:5",
+            "continuity_id": 0,
+            "path_offset_m": null,
+            "target_axis_offset_m": null
+          },
+          {
+            "at": "2026-09-08 06:00:30+00:00",
+            "distance_m": 184.39076598473957,
+            "accuracy_m": 5.0,
+            "source_id": "gps:6",
+            "continuity_id": 0,
+            "path_offset_m": null,
+            "target_axis_offset_m": null
+          },
+          {
+            "at": "2026-09-08 06:00:35+00:00",
+            "distance_m": 179.5131015672662,
+            "accuracy_m": 5.0,
+            "source_id": "gps:7",
+            "continuity_id": 0,
+            "path_offset_m": null,
+            "target_axis_offset_m": null
+          },
+          {
+            "at": "2026-09-08 06:00:40+00:00",
+            "distance_m": 174.6423565122586,
+            "accuracy_m": 5.0,
+            "source_id": "gps:8",
+            "continuity_id": 0,
+            "path_offset_m": null,
+            "target_axis_offset_m": null
+          },
+          {
+            "at": "2026-09-08 06:00:45+00:00",
+            "distance_m": 169.77912634293756,
+            "accuracy_m": 5.0,
+            "source_id": "gps:9",
+            "continuity_id": 0,
+            "path_offset_m": null,
+            "target_axis_offset_m": null
+          },
+          {
+            "at": "2026-09-08 06:00:50+00:00",
+            "distance_m": 164.92407585195838,
+            "accuracy_m": 5.0,
+            "source_id": "gps:10",
+            "continuity_id": 0,
+            "path_offset_m": null,
+            "target_axis_offset_m": null
+          },
+          {
+            "at": "2026-09-08 06:00:55+00:00",
+            "distance_m": 160.07794929180108,
+            "accuracy_m": 5.0,
+            "source_id": "gps:11",
+            "continuity_id": 0,
+            "path_offset_m": null,
+            "target_axis_offset_m": null
+          },
+          {
+            "at": "2026-09-08 06:01:00+00:00",
+            "distance_m": 155.24158239046878,
+            "accuracy_m": 5.0,
+            "source_id": "gps:12",
+            "continuity_id": 0,
+            "path_offset_m": null,
+            "target_axis_offset_m": null
+          },
+          {
+            "at": "2026-09-08 06:01:05+00:00",
+            "distance_m": 150.4159165678246,
+            "accuracy_m": 5.0,
+            "source_id": "gps:13",
+            "continuity_id": 0,
+            "path_offset_m": null,
+            "target_axis_offset_m": null
+          },
+          {
+            "at": "2026-09-08 06:01:10+00:00",
+            "distance_m": 145.60201581975232,
+            "accuracy_m": 5.0,
+            "source_id": "gps:14",
+            "continuity_id": 0,
+            "path_offset_m": null,
+            "target_axis_offset_m": null
+          },
+          {
+            "at": "2026-09-08 06:01:15+00:00",
+            "distance_m": 140.80108687160273,
+            "accuracy_m": 5.0,
+            "source_id": "gps:15",
+            "continuity_id": 0,
+            "path_offset_m": null,
+            "target_axis_offset_m": null
+          },
+          {
+            "at": "2026-09-08 06:01:20+00:00",
+            "distance_m": 136.01450333719743,
+            "accuracy_m": 5.0,
+            "source_id": "gps:16",
+            "continuity_id": 0,
+            "path_offset_m": null,
+            "target_axis_offset_m": null
+          },
+          {
+            "at": "2026-09-08 06:01:25+00:00",
+            "distance_m": 131.24383479576824,
+            "accuracy_m": 5.0,
+            "source_id": "gps:17",
+            "continuity_id": 0,
+            "path_offset_m": null,
+            "target_axis_offset_m": null
+          },
+          {
+            "at": "2026-09-08 06:01:30+00:00",
+            "distance_m": 126.49088198652053,
+            "accuracy_m": 5.0,
+            "source_id": "gps:18",
+            "continuity_id": 0,
+            "path_offset_m": null,
+            "target_axis_offset_m": null
+          },
+          {
+            "at": "2026-09-08 06:01:35+00:00",
+            "distance_m": 121.75771958848723,
+            "accuracy_m": 5.0,
+            "source_id": "gps:19",
+            "continuity_id": 0,
+            "path_offset_m": null,
+            "target_axis_offset_m": null
+          },
+          {
+            "at": "2026-09-08 06:01:40+00:00",
+            "distance_m": 117.04674849483781,
+            "accuracy_m": 5.0,
+            "source_id": "gps:20",
+            "continuity_id": 0,
+            "path_offset_m": null,
+            "target_axis_offset_m": null
+          },
+          {
+            "at": "2026-09-08 06:01:45+00:00",
+            "distance_m": 112.36075999668876,
+            "accuracy_m": 5.0,
+            "source_id": "gps:21",
+            "continuity_id": 0,
+            "path_offset_m": null,
+            "target_axis_offset_m": null
+          },
+          {
+            "at": "2026-09-08 06:01:50+00:00",
+            "distance_m": 107.70301500285981,
+            "accuracy_m": 5.0,
+            "source_id": "gps:22",
+            "continuity_id": 0,
+            "path_offset_m": null,
+            "target_axis_offset_m": null
+          },
+          {
+            "at": "2026-09-08 06:01:55+00:00",
+            "distance_m": 103.07734229461919,
+            "accuracy_m": 5.0,
+            "source_id": "gps:23",
+            "continuity_id": 0,
+            "path_offset_m": null,
+            "target_axis_offset_m": null
+          },
+          {
+            "at": "2026-09-08 06:02:00+00:00",
+            "distance_m": 98.48826096714511,
+            "accuracy_m": 5.0,
+            "source_id": "gps:24",
+            "continuity_id": 0,
+            "path_offset_m": null,
+            "target_axis_offset_m": null
+          },
+          {
+            "at": "2026-09-08 06:02:05+00:00",
+            "distance_m": 93.94113370625865,
+            "accuracy_m": 5.0,
+            "source_id": "gps:25",
+            "continuity_id": 0,
+            "path_offset_m": null,
+            "target_axis_offset_m": null
+          },
+          {
+            "at": "2026-09-08 06:02:10+00:00",
+            "distance_m": 89.44235940438804,
+            "accuracy_m": 5.0,
+            "source_id": "gps:26",
+            "continuity_id": 0,
+            "path_offset_m": null,
+            "target_axis_offset_m": null
+          },
+          {
+            "at": "2026-09-08 06:02:15+00:00",
+            "distance_m": 84.9996159381019,
+            "accuracy_m": 5.0,
+            "source_id": "gps:27",
+            "continuity_id": 0,
+            "path_offset_m": null,
+            "target_axis_offset_m": null
+          },
+          {
+            "at": "2026-09-08 06:02:20+00:00",
+            "distance_m": 80.62216670011092,
+            "accuracy_m": 5.0,
+            "source_id": "gps:28",
+            "continuity_id": 0,
+            "path_offset_m": null,
+            "target_axis_offset_m": null
+          },
+          {
+            "at": "2026-09-08 06:02:25+00:00",
+            "distance_m": 76.32124748141058,
+            "accuracy_m": 5.0,
+            "source_id": "gps:29",
+            "continuity_id": 0,
+            "path_offset_m": null,
+            "target_axis_offset_m": null
+          },
+          {
+            "at": "2026-09-08 06:02:30+00:00",
+            "distance_m": 72.11055311749132,
+            "accuracy_m": 5.0,
+            "source_id": "gps:30",
+            "continuity_id": 0,
+            "path_offset_m": null,
+            "target_axis_offset_m": null
+          },
+          {
+            "at": "2026-09-08 06:02:35+00:00",
+            "distance_m": 68.00684469005235,
+            "accuracy_m": 5.0,
+            "source_id": "gps:31",
+            "continuity_id": 0,
+            "path_offset_m": null,
+            "target_axis_offset_m": null
+          },
+          {
+            "at": "2026-09-08 06:02:40+00:00",
+            "distance_m": 64.03069559521497,
+            "accuracy_m": 5.0,
+            "source_id": "gps:32",
+            "continuity_id": 0,
+            "path_offset_m": null,
+            "target_axis_offset_m": null
+          },
+          {
+            "at": "2026-09-08 06:02:45+00:00",
+            "distance_m": 60.20738353549015,
+            "accuracy_m": 5.0,
+            "source_id": "gps:33",
+            "continuity_id": 0,
+            "path_offset_m": null,
+            "target_axis_offset_m": null
+          },
+          {
+            "at": "2026-09-08 06:02:50+00:00",
+            "distance_m": 56.567906855094876,
+            "accuracy_m": 5.0,
+            "source_id": "gps:34",
+            "continuity_id": 0,
+            "path_offset_m": null,
+            "target_axis_offset_m": null
+          },
+          {
+            "at": "2026-09-08 06:02:55+00:00",
+            "distance_m": 53.15004364710157,
+            "accuracy_m": 5.0,
+            "source_id": "gps:35",
+            "continuity_id": 0,
+            "path_offset_m": null,
+            "target_axis_offset_m": null
+          },
+          {
+            "at": "2026-09-08 06:03:00+00:00",
+            "distance_m": 49.999261929172974,
+            "accuracy_m": 5.0,
+            "source_id": "gps:36",
+            "continuity_id": 0,
+            "path_offset_m": null,
+            "target_axis_offset_m": null
+          }
+        ],
+        "source_ids": [
+          "gps:0",
+          "gps:1",
+          "gps:2",
+          "gps:3",
+          "gps:4",
+          "gps:5",
+          "gps:6",
+          "gps:7",
+          "gps:8",
+          "gps:9",
+          "gps:10",
+          "gps:11",
+          "gps:12",
+          "gps:13",
+          "gps:14",
+          "gps:15",
+          "gps:16",
+          "gps:17",
+          "gps:18",
+          "gps:19",
+          "gps:20",
+          "gps:21",
+          "gps:22",
+          "gps:23",
+          "gps:24",
+          "gps:25",
+          "gps:26",
+          "gps:27",
+          "gps:28",
+          "gps:29",
+          "gps:30",
+          "gps:31",
+          "gps:32",
+          "gps:33",
+          "gps:34",
+          "gps:35",
+          "gps:36"
+        ],
+        "calculation_policy": "relation-flow-analysis-v1",
+        "source_version": "9dfcc59ecdce43e27b2017ddf92ef9b05914079e6b3e9e1a516b5ddb4d9e395a",
+        "interval_view": null
+      }
+    ],
+    "selection": {
+      "scene_id": "stamp:bc16fd93cbb2b3ec53d4243d58e792dfc28880c7d9d5073909181c3195e4e1c3",
+      "flows": [
+        {
+          "id": "flow:5e2670d92ca9dc52fe951b101db7ff6b66dffda004907fdb3c0c3071f8349f0d",
+          "case": "distance_decrease",
+          "started_at": "2026-09-08 06:00:00+00:00",
+          "ended_at": "2026-09-08 06:03:00+00:00",
+          "target_id": "public-normalized-park:1",
+          "target_name": "공원 1",
+          "target_scope": "reference_point",
+          "profile": [
+            {
+              "at": "2026-09-08 06:00:00+00:00",
+              "distance_m": 213.77549031110823,
+              "accuracy_m": 5.0,
+              "source_id": "gps:0",
+              "continuity_id": 0,
+              "path_offset_m": null,
+              "target_axis_offset_m": null
+            },
+            {
+              "at": "2026-09-08 06:00:05+00:00",
+              "distance_m": 208.86588833898642,
+              "accuracy_m": 5.0,
+              "source_id": "gps:1",
+              "continuity_id": 0,
+              "path_offset_m": null,
+              "target_axis_offset_m": null
+            },
+            {
+              "at": "2026-09-08 06:00:10+00:00",
+              "distance_m": 203.96067847804585,
+              "accuracy_m": 5.0,
+              "source_id": "gps:2",
+              "continuity_id": 0,
+              "path_offset_m": null,
+              "target_axis_offset_m": null
+            },
+            {
+              "at": "2026-09-08 06:00:15+00:00",
+              "distance_m": 199.0601854191344,
+              "accuracy_m": 5.0,
+              "source_id": "gps:3",
+              "continuity_id": 0,
+              "path_offset_m": null,
+              "target_axis_offset_m": null
+            },
+            {
+              "at": "2026-09-08 06:00:20+00:00",
+              "distance_m": 194.16476630163905,
+              "accuracy_m": 5.0,
+              "source_id": "gps:4",
+              "continuity_id": 0,
+              "path_offset_m": null,
+              "target_axis_offset_m": null
+            },
+            {
+              "at": "2026-09-08 06:00:25+00:00",
+              "distance_m": 189.27481482446257,
+              "accuracy_m": 5.0,
+              "source_id": "gps:5",
+              "continuity_id": 0,
+              "path_offset_m": null,
+              "target_axis_offset_m": null
+            },
+            {
+              "at": "2026-09-08 06:00:30+00:00",
+              "distance_m": 184.39076598473957,
+              "accuracy_m": 5.0,
+              "source_id": "gps:6",
+              "continuity_id": 0,
+              "path_offset_m": null,
+              "target_axis_offset_m": null
+            },
+            {
+              "at": "2026-09-08 06:00:35+00:00",
+              "distance_m": 179.5131015672662,
+              "accuracy_m": 5.0,
+              "source_id": "gps:7",
+              "continuity_id": 0,
+              "path_offset_m": null,
+              "target_axis_offset_m": null
+            },
+            {
+              "at": "2026-09-08 06:00:40+00:00",
+              "distance_m": 174.6423565122586,
+              "accuracy_m": 5.0,
+              "source_id": "gps:8",
+              "continuity_id": 0,
+              "path_offset_m": null,
+              "target_axis_offset_m": null
+            },
+            {
+              "at": "2026-09-08 06:00:45+00:00",
+              "distance_m": 169.77912634293756,
+              "accuracy_m": 5.0,
+              "source_id": "gps:9",
+              "continuity_id": 0,
+              "path_offset_m": null,
+              "target_axis_offset_m": null
+            },
+            {
+              "at": "2026-09-08 06:00:50+00:00",
+              "distance_m": 164.92407585195838,
+              "accuracy_m": 5.0,
+              "source_id": "gps:10",
+              "continuity_id": 0,
+              "path_offset_m": null,
+              "target_axis_offset_m": null
+            },
+            {
+              "at": "2026-09-08 06:00:55+00:00",
+              "distance_m": 160.07794929180108,
+              "accuracy_m": 5.0,
+              "source_id": "gps:11",
+              "continuity_id": 0,
+              "path_offset_m": null,
+              "target_axis_offset_m": null
+            },
+            {
+              "at": "2026-09-08 06:01:00+00:00",
+              "distance_m": 155.24158239046878,
+              "accuracy_m": 5.0,
+              "source_id": "gps:12",
+              "continuity_id": 0,
+              "path_offset_m": null,
+              "target_axis_offset_m": null
+            },
+            {
+              "at": "2026-09-08 06:01:05+00:00",
+              "distance_m": 150.4159165678246,
+              "accuracy_m": 5.0,
+              "source_id": "gps:13",
+              "continuity_id": 0,
+              "path_offset_m": null,
+              "target_axis_offset_m": null
+            },
+            {
+              "at": "2026-09-08 06:01:10+00:00",
+              "distance_m": 145.60201581975232,
+              "accuracy_m": 5.0,
+              "source_id": "gps:14",
+              "continuity_id": 0,
+              "path_offset_m": null,
+              "target_axis_offset_m": null
+            },
+            {
+              "at": "2026-09-08 06:01:15+00:00",
+              "distance_m": 140.80108687160273,
+              "accuracy_m": 5.0,
+              "source_id": "gps:15",
+              "continuity_id": 0,
+              "path_offset_m": null,
+              "target_axis_offset_m": null
+            },
+            {
+              "at": "2026-09-08 06:01:20+00:00",
+              "distance_m": 136.01450333719743,
+              "accuracy_m": 5.0,
+              "source_id": "gps:16",
+              "continuity_id": 0,
+              "path_offset_m": null,
+              "target_axis_offset_m": null
+            },
+            {
+              "at": "2026-09-08 06:01:25+00:00",
+              "distance_m": 131.24383479576824,
+              "accuracy_m": 5.0,
+              "source_id": "gps:17",
+              "continuity_id": 0,
+              "path_offset_m": null,
+              "target_axis_offset_m": null
+            },
+            {
+              "at": "2026-09-08 06:01:30+00:00",
+              "distance_m": 126.49088198652053,
+              "accuracy_m": 5.0,
+              "source_id": "gps:18",
+              "continuity_id": 0,
+              "path_offset_m": null,
+              "target_axis_offset_m": null
+            },
+            {
+              "at": "2026-09-08 06:01:35+00:00",
+              "distance_m": 121.75771958848723,
+              "accuracy_m": 5.0,
+              "source_id": "gps:19",
+              "continuity_id": 0,
+              "path_offset_m": null,
+              "target_axis_offset_m": null
+            },
+            {
+              "at": "2026-09-08 06:01:40+00:00",
+              "distance_m": 117.04674849483781,
+              "accuracy_m": 5.0,
+              "source_id": "gps:20",
+              "continuity_id": 0,
+              "path_offset_m": null,
+              "target_axis_offset_m": null
+            },
+            {
+              "at": "2026-09-08 06:01:45+00:00",
+              "distance_m": 112.36075999668876,
+              "accuracy_m": 5.0,
+              "source_id": "gps:21",
+              "continuity_id": 0,
+              "path_offset_m": null,
+              "target_axis_offset_m": null
+            },
+            {
+              "at": "2026-09-08 06:01:50+00:00",
+              "distance_m": 107.70301500285981,
+              "accuracy_m": 5.0,
+              "source_id": "gps:22",
+              "continuity_id": 0,
+              "path_offset_m": null,
+              "target_axis_offset_m": null
+            },
+            {
+              "at": "2026-09-08 06:01:55+00:00",
+              "distance_m": 103.07734229461919,
+              "accuracy_m": 5.0,
+              "source_id": "gps:23",
+              "continuity_id": 0,
+              "path_offset_m": null,
+              "target_axis_offset_m": null
+            },
+            {
+              "at": "2026-09-08 06:02:00+00:00",
+              "distance_m": 98.48826096714511,
+              "accuracy_m": 5.0,
+              "source_id": "gps:24",
+              "continuity_id": 0,
+              "path_offset_m": null,
+              "target_axis_offset_m": null
+            },
+            {
+              "at": "2026-09-08 06:02:05+00:00",
+              "distance_m": 93.94113370625865,
+              "accuracy_m": 5.0,
+              "source_id": "gps:25",
+              "continuity_id": 0,
+              "path_offset_m": null,
+              "target_axis_offset_m": null
+            },
+            {
+              "at": "2026-09-08 06:02:10+00:00",
+              "distance_m": 89.44235940438804,
+              "accuracy_m": 5.0,
+              "source_id": "gps:26",
+              "continuity_id": 0,
+              "path_offset_m": null,
+              "target_axis_offset_m": null
+            },
+            {
+              "at": "2026-09-08 06:02:15+00:00",
+              "distance_m": 84.9996159381019,
+              "accuracy_m": 5.0,
+              "source_id": "gps:27",
+              "continuity_id": 0,
+              "path_offset_m": null,
+              "target_axis_offset_m": null
+            },
+            {
+              "at": "2026-09-08 06:02:20+00:00",
+              "distance_m": 80.62216670011092,
+              "accuracy_m": 5.0,
+              "source_id": "gps:28",
+              "continuity_id": 0,
+              "path_offset_m": null,
+              "target_axis_offset_m": null
+            },
+            {
+              "at": "2026-09-08 06:02:25+00:00",
+              "distance_m": 76.32124748141058,
+              "accuracy_m": 5.0,
+              "source_id": "gps:29",
+              "continuity_id": 0,
+              "path_offset_m": null,
+              "target_axis_offset_m": null
+            },
+            {
+              "at": "2026-09-08 06:02:30+00:00",
+              "distance_m": 72.11055311749132,
+              "accuracy_m": 5.0,
+              "source_id": "gps:30",
+              "continuity_id": 0,
+              "path_offset_m": null,
+              "target_axis_offset_m": null
+            },
+            {
+              "at": "2026-09-08 06:02:35+00:00",
+              "distance_m": 68.00684469005235,
+              "accuracy_m": 5.0,
+              "source_id": "gps:31",
+              "continuity_id": 0,
+              "path_offset_m": null,
+              "target_axis_offset_m": null
+            },
+            {
+              "at": "2026-09-08 06:02:40+00:00",
+              "distance_m": 64.03069559521497,
+              "accuracy_m": 5.0,
+              "source_id": "gps:32",
+              "continuity_id": 0,
+              "path_offset_m": null,
+              "target_axis_offset_m": null
+            },
+            {
+              "at": "2026-09-08 06:02:45+00:00",
+              "distance_m": 60.20738353549015,
+              "accuracy_m": 5.0,
+              "source_id": "gps:33",
+              "continuity_id": 0,
+              "path_offset_m": null,
+              "target_axis_offset_m": null
+            },
+            {
+              "at": "2026-09-08 06:02:50+00:00",
+              "distance_m": 56.567906855094876,
+              "accuracy_m": 5.0,
+              "source_id": "gps:34",
+              "continuity_id": 0,
+              "path_offset_m": null,
+              "target_axis_offset_m": null
+            },
+            {
+              "at": "2026-09-08 06:02:55+00:00",
+              "distance_m": 53.15004364710157,
+              "accuracy_m": 5.0,
+              "source_id": "gps:35",
+              "continuity_id": 0,
+              "path_offset_m": null,
+              "target_axis_offset_m": null
+            },
+            {
+              "at": "2026-09-08 06:03:00+00:00",
+              "distance_m": 49.999261929172974,
+              "accuracy_m": 5.0,
+              "source_id": "gps:36",
+              "continuity_id": 0,
+              "path_offset_m": null,
+              "target_axis_offset_m": null
+            }
+          ],
+          "source_ids": [
+            "gps:0",
+            "gps:1",
+            "gps:2",
+            "gps:3",
+            "gps:4",
+            "gps:5",
+            "gps:6",
+            "gps:7",
+            "gps:8",
+            "gps:9",
+            "gps:10",
+            "gps:11",
+            "gps:12",
+            "gps:13",
+            "gps:14",
+            "gps:15",
+            "gps:16",
+            "gps:17",
+            "gps:18",
+            "gps:19",
+            "gps:20",
+            "gps:21",
+            "gps:22",
+            "gps:23",
+            "gps:24",
+            "gps:25",
+            "gps:26",
+            "gps:27",
+            "gps:28",
+            "gps:29",
+            "gps:30",
+            "gps:31",
+            "gps:32",
+            "gps:33",
+            "gps:34",
+            "gps:35",
+            "gps:36"
+          ],
+          "calculation_policy": "relation-flow-analysis-v1",
+          "source_version": "9dfcc59ecdce43e27b2017ddf92ef9b05914079e6b3e9e1a516b5ddb4d9e395a",
+          "interval_view": null
+        }
+      ],
+      "spatial_relation_ids": [
+        "nr:0b3b5fa03aa898b12f5e5002c77fa6c18b5cb9257a160971b257d962d723036e",
+        "nr:443db8d3f210b8d62b89b7af69827ad9cf5a7fe318daa00c3c629bcb02e7c050"
+      ],
+      "replaced_relation_ids": [
+        "nr:789f071d66d57e0321ccd38618684c65d9e05ee19ff44c2bb67df53829ebc487"
+      ],
+      "policy": "relation-injection-v1"
+    },
+    "delivered": [
+      {
+        "id": "flow:5e2670d92ca9dc52fe951b101db7ff6b66dffda004907fdb3c0c3071f8349f0d",
+        "relationship": "drawing_closer",
+        "interval": {
+          "started_at": "2026-09-08T06:00:00+00:00",
+          "ended_at": "2026-09-08T06:03:00+00:00"
+        },
+        "target": {
+          "name": "공원 1",
+          "scope": "reference_point"
+        },
+        "distance_profile": [
+          {
+            "at": "2026-09-08T06:00:00+00:00",
+            "meters": 213.775,
+            "accuracy_m": 5.0
+          },
+          {
+            "at": "2026-09-08T06:03:00+00:00",
+            "meters": 49.999,
+            "accuracy_m": 5.0
+          }
+        ],
+        "sample_count": 37
+      }
+    ]
+  },
+  {
+    "scene": 3,
+    "candidates": [
+      {
+        "id": "segment:dd800911ed44ecb85440b351675ddeba5c6d03a7454158e2ed5bebd7114ae03a",
+        "case": "route_turn",
+        "started_at": "2026-09-08 06:06:10+00:00",
+        "ended_at": "2026-09-08 06:09:10+00:00",
+        "target_id": null,
+        "target_name": null,
+        "target_scope": null,
+        "profile": [],
+        "source_ids": [
+          "segment:dd800911ed44ecb85440b351675ddeba5c6d03a7454158e2ed5bebd7114ae03a"
+        ],
+        "calculation_policy": "existing-route-detectors",
+        "source_version": "source-bound-ledger",
+        "interval_view": {
+          "id": "segment:dd800911ed44ecb85440b351675ddeba5c6d03a7454158e2ed5bebd7114ae03a",
+          "kind": "turn_reverse",
+          "support_started_at": "2026-09-08T06:06:10+00:00",
+          "support_ended_at": "2026-09-08T06:09:10+00:00",
+          "representative_event_at": "2026-09-08T06:07:15+00:00",
+          "event_time_precision": "estimated",
+          "certainty": "inferred",
+          "scope": {
+            "kind": "walk_movement_support_interval"
+          }
+        }
+      },
+      {
+        "id": "segment:80e3e8c8a334645a0373b60145d0bd49388e8a728e6108de65dd4a229bf8af9f",
+        "case": "route_straight",
+        "started_at": "2026-09-08 06:00:00+00:00",
+        "ended_at": "2026-09-08 06:08:00+00:00",
+        "target_id": null,
+        "target_name": null,
+        "target_scope": null,
+        "profile": [],
+        "source_ids": [
+          "segment:80e3e8c8a334645a0373b60145d0bd49388e8a728e6108de65dd4a229bf8af9f"
+        ],
+        "calculation_policy": "existing-route-detectors",
+        "source_version": "source-bound-ledger",
+        "interval_view": {
+          "id": "segment:80e3e8c8a334645a0373b60145d0bd49388e8a728e6108de65dd4a229bf8af9f",
+          "kind": "straight_run",
+          "support_started_at": "2026-09-08T06:00:00+00:00",
+          "support_ended_at": "2026-09-08T06:08:00+00:00",
+          "certainty": "inferred",
+          "scope": {
+            "kind": "walk_movement_support_interval"
+          }
+        }
+      },
+      {
+        "id": "flow:4f319ee53b23bf59fede82ba9ff8777dc33cc8dd260b71eb329512be1b55ef58",
+        "case": "distance_valley",
+        "started_at": "2026-09-08 06:00:00+00:00",
+        "ended_at": "2026-09-08 06:04:15+00:00",
+        "target_id": "public-normalized-park:1",
+        "target_name": "공원 1",
+        "target_scope": "reference_point",
+        "profile": [
+          {
+            "at": "2026-09-08 06:00:00+00:00",
+            "distance_m": 213.77549031110823,
+            "accuracy_m": 5.0,
+            "source_id": "gps:0",
+            "continuity_id": 0,
+            "path_offset_m": null,
+            "target_axis_offset_m": null
+          },
+          {
+            "at": "2026-09-08 06:03:30+00:00",
+            "distance_m": 39.99900643749797,
+            "accuracy_m": 5.0,
+            "source_id": "gps:42",
+            "continuity_id": 0,
+            "path_offset_m": null,
+            "target_axis_offset_m": null
+          },
+          {
+            "at": "2026-09-08 06:04:15+00:00",
+            "distance_m": 60.207242087016894,
+            "accuracy_m": 5.0,
+            "source_id": "gps:51",
+            "continuity_id": 0,
+            "path_offset_m": null,
+            "target_axis_offset_m": null
+          }
+        ],
+        "source_ids": [
+          "gps:0",
+          "gps:1",
+          "gps:2",
+          "gps:3",
+          "gps:4",
+          "gps:5",
+          "gps:6",
+          "gps:7",
+          "gps:8",
+          "gps:9",
+          "gps:10",
+          "gps:11",
+          "gps:12",
+          "gps:13",
+          "gps:14",
+          "gps:15",
+          "gps:16",
+          "gps:17",
+          "gps:18",
+          "gps:19",
+          "gps:20",
+          "gps:21",
+          "gps:22",
+          "gps:23",
+          "gps:24",
+          "gps:25",
+          "gps:26",
+          "gps:27",
+          "gps:28",
+          "gps:29",
+          "gps:30",
+          "gps:31",
+          "gps:32",
+          "gps:33",
+          "gps:34",
+          "gps:35",
+          "gps:36",
+          "gps:37",
+          "gps:38",
+          "gps:39",
+          "gps:40",
+          "gps:41",
+          "gps:42",
+          "gps:43",
+          "gps:44",
+          "gps:45",
+          "gps:46",
+          "gps:47",
+          "gps:48",
+          "gps:49",
+          "gps:50",
+          "gps:51"
+        ],
+        "calculation_policy": "relation-flow-analysis-v1",
+        "source_version": "9dfcc59ecdce43e27b2017ddf92ef9b05914079e6b3e9e1a516b5ddb4d9e395a",
+        "interval_view": null
+      }
+    ],
+    "selection": {
+      "scene_id": "stamp:4191e7707d2e40f82af36ea591420a1a4c58a84a821a744689ce44d7d798e389",
+      "flows": [
+        {
+          "id": "segment:dd800911ed44ecb85440b351675ddeba5c6d03a7454158e2ed5bebd7114ae03a",
+          "case": "route_turn",
+          "started_at": "2026-09-08 06:06:10+00:00",
+          "ended_at": "2026-09-08 06:09:10+00:00",
+          "target_id": null,
+          "target_name": null,
+          "target_scope": null,
+          "profile": [],
+          "source_ids": [
+            "segment:dd800911ed44ecb85440b351675ddeba5c6d03a7454158e2ed5bebd7114ae03a"
+          ],
+          "calculation_policy": "existing-route-detectors",
+          "source_version": "source-bound-ledger",
+          "interval_view": {
+            "id": "segment:dd800911ed44ecb85440b351675ddeba5c6d03a7454158e2ed5bebd7114ae03a",
+            "kind": "turn_reverse",
+            "support_started_at": "2026-09-08T06:06:10+00:00",
+            "support_ended_at": "2026-09-08T06:09:10+00:00",
+            "representative_event_at": "2026-09-08T06:07:15+00:00",
+            "event_time_precision": "estimated",
+            "certainty": "inferred",
+            "scope": {
+              "kind": "walk_movement_support_interval"
+            }
+          }
+        },
+        {
+          "id": "segment:80e3e8c8a334645a0373b60145d0bd49388e8a728e6108de65dd4a229bf8af9f",
+          "case": "route_straight",
+          "started_at": "2026-09-08 06:00:00+00:00",
+          "ended_at": "2026-09-08 06:08:00+00:00",
+          "target_id": null,
+          "target_name": null,
+          "target_scope": null,
+          "profile": [],
+          "source_ids": [
+            "segment:80e3e8c8a334645a0373b60145d0bd49388e8a728e6108de65dd4a229bf8af9f"
+          ],
+          "calculation_policy": "existing-route-detectors",
+          "source_version": "source-bound-ledger",
+          "interval_view": {
+            "id": "segment:80e3e8c8a334645a0373b60145d0bd49388e8a728e6108de65dd4a229bf8af9f",
+            "kind": "straight_run",
+            "support_started_at": "2026-09-08T06:00:00+00:00",
+            "support_ended_at": "2026-09-08T06:08:00+00:00",
+            "certainty": "inferred",
+            "scope": {
+              "kind": "walk_movement_support_interval"
+            }
+          }
+        },
+        {
+          "id": "flow:4f319ee53b23bf59fede82ba9ff8777dc33cc8dd260b71eb329512be1b55ef58",
+          "case": "distance_valley",
+          "started_at": "2026-09-08 06:00:00+00:00",
+          "ended_at": "2026-09-08 06:04:15+00:00",
+          "target_id": "public-normalized-park:1",
+          "target_name": "공원 1",
+          "target_scope": "reference_point",
+          "profile": [
+            {
+              "at": "2026-09-08 06:00:00+00:00",
+              "distance_m": 213.77549031110823,
+              "accuracy_m": 5.0,
+              "source_id": "gps:0",
+              "continuity_id": 0,
+              "path_offset_m": null,
+              "target_axis_offset_m": null
+            },
+            {
+              "at": "2026-09-08 06:03:30+00:00",
+              "distance_m": 39.99900643749797,
+              "accuracy_m": 5.0,
+              "source_id": "gps:42",
+              "continuity_id": 0,
+              "path_offset_m": null,
+              "target_axis_offset_m": null
+            },
+            {
+              "at": "2026-09-08 06:04:15+00:00",
+              "distance_m": 60.207242087016894,
+              "accuracy_m": 5.0,
+              "source_id": "gps:51",
+              "continuity_id": 0,
+              "path_offset_m": null,
+              "target_axis_offset_m": null
+            }
+          ],
+          "source_ids": [
+            "gps:0",
+            "gps:1",
+            "gps:2",
+            "gps:3",
+            "gps:4",
+            "gps:5",
+            "gps:6",
+            "gps:7",
+            "gps:8",
+            "gps:9",
+            "gps:10",
+            "gps:11",
+            "gps:12",
+            "gps:13",
+            "gps:14",
+            "gps:15",
+            "gps:16",
+            "gps:17",
+            "gps:18",
+            "gps:19",
+            "gps:20",
+            "gps:21",
+            "gps:22",
+            "gps:23",
+            "gps:24",
+            "gps:25",
+            "gps:26",
+            "gps:27",
+            "gps:28",
+            "gps:29",
+            "gps:30",
+            "gps:31",
+            "gps:32",
+            "gps:33",
+            "gps:34",
+            "gps:35",
+            "gps:36",
+            "gps:37",
+            "gps:38",
+            "gps:39",
+            "gps:40",
+            "gps:41",
+            "gps:42",
+            "gps:43",
+            "gps:44",
+            "gps:45",
+            "gps:46",
+            "gps:47",
+            "gps:48",
+            "gps:49",
+            "gps:50",
+            "gps:51"
+          ],
+          "calculation_policy": "relation-flow-analysis-v1",
+          "source_version": "9dfcc59ecdce43e27b2017ddf92ef9b05914079e6b3e9e1a516b5ddb4d9e395a",
+          "interval_view": null
+        }
+      ],
+      "spatial_relation_ids": [
+        "nr:7339bc609dcb5fbfdec313751308806e18ea7827b7ac4cb180e611c728e22b95",
+        "nr:8f8a3a9b58636a43eefe8c6b703318ad753fb6edf0cceb36aa3a638d1253bce5"
+      ],
+      "replaced_relation_ids": [
+        "nr:2d4b1d1e285e3451eed6482ceffe8ab77798b26cdbcbba9ff6593a8ba4f801f7"
+      ],
+      "policy": "relation-injection-v1"
+    },
+    "delivered": [
+      {
+        "id": "segment:dd800911ed44ecb85440b351675ddeba5c6d03a7454158e2ed5bebd7114ae03a",
+        "relationship": "turning_back",
+        "interval": {
+          "started_at": "2026-09-08T06:06:10+00:00",
+          "ended_at": "2026-09-08T06:09:10+00:00"
+        },
+        "support_started_at": "2026-09-08T06:06:10+00:00",
+        "support_ended_at": "2026-09-08T06:09:10+00:00",
+        "representative_event_at": "2026-09-08T06:07:15+00:00",
+        "event_time_precision": "estimated",
+        "certainty": "inferred",
+        "scope": {
+          "kind": "walk_movement_support_interval"
+        }
+      },
+      {
+        "id": "segment:80e3e8c8a334645a0373b60145d0bd49388e8a728e6108de65dd4a229bf8af9f",
+        "relationship": "carrying_on_straight",
+        "interval": {
+          "started_at": "2026-09-08T06:00:00+00:00",
+          "ended_at": "2026-09-08T06:08:00+00:00"
+        },
+        "support_started_at": "2026-09-08T06:00:00+00:00",
+        "support_ended_at": "2026-09-08T06:08:00+00:00",
+        "certainty": "inferred",
+        "scope": {
+          "kind": "walk_movement_support_interval"
+        }
+      },
+      {
+        "id": "flow:4f319ee53b23bf59fede82ba9ff8777dc33cc8dd260b71eb329512be1b55ef58",
+        "relationship": "drawing_closer_then_away",
+        "interval": {
+          "started_at": "2026-09-08T06:00:00+00:00",
+          "ended_at": "2026-09-08T06:04:15+00:00"
+        },
+        "target": {
+          "name": "공원 1",
+          "scope": "reference_point"
+        },
+        "distance_profile": [
+          {
+            "at": "2026-09-08T06:00:00+00:00",
+            "meters": 213.775,
+            "accuracy_m": 5.0
+          },
+          {
+            "at": "2026-09-08T06:03:30+00:00",
+            "meters": 39.999,
+            "accuracy_m": 5.0
+          },
+          {
+            "at": "2026-09-08T06:04:15+00:00",
+            "meters": 60.207,
+            "accuracy_m": 5.0
+          }
+        ],
+        "sample_count": 52
+      }
+    ]
+  },
+  {
+    "scene": 4,
+    "candidates": [
+      {
+        "id": "segment:67df185d9ff2191e54f4e562e5981634bd4fa5f9097809e201da31900cb59c0f",
+        "case": "route_retrace",
+        "started_at": "2026-09-08 06:08:40+00:00",
+        "ended_at": "2026-09-08 06:12:50+00:00",
+        "target_id": null,
+        "target_name": null,
+        "target_scope": null,
+        "profile": [],
+        "source_ids": [
+          "segment:67df185d9ff2191e54f4e562e5981634bd4fa5f9097809e201da31900cb59c0f"
+        ],
+        "calculation_policy": "existing-route-detectors",
+        "source_version": "source-bound-ledger",
+        "interval_view": {
+          "id": "segment:67df185d9ff2191e54f4e562e5981634bd4fa5f9097809e201da31900cb59c0f",
+          "kind": "retrace",
+          "support_started_at": "2026-09-08T06:08:40+00:00",
+          "support_ended_at": "2026-09-08T06:12:50+00:00",
+          "certainty": "inferred",
+          "scope": {
+            "kind": "walk_movement_support_interval"
+          },
+          "prior_path": {
+            "relationship": "earlier_route_in_this_walk",
+            "matched_reverse_m": 224.9999999995773
+          }
+        }
+      },
+      {
+        "id": "flow:5663cc0e5be17f4c532177ffc5e41953086a21a2f9c7b1764d2edd9bd679156a",
+        "case": "distance_valley",
+        "started_at": "2026-09-08 06:08:00+00:00",
+        "ended_at": "2026-09-08 06:12:15+00:00",
+        "target_id": "public-normalized-park:1",
+        "target_name": "공원 1",
+        "target_scope": "reference_point",
+        "profile": [
+          {
+            "at": "2026-09-08 06:08:00+00:00",
+            "distance_m": 184.3905812421931,
+            "accuracy_m": 5.0,
+            "source_id": "gps:96",
+            "continuity_id": 0,
+            "path_offset_m": null,
+            "target_axis_offset_m": null
+          },
+          {
+            "at": "2026-09-08 06:11:30+00:00",
+            "distance_m": 39.99900643749797,
+            "accuracy_m": 5.0,
+            "source_id": "gps:138",
+            "continuity_id": 0,
+            "path_offset_m": null,
+            "target_axis_offset_m": null
+          },
+          {
+            "at": "2026-09-08 06:12:15+00:00",
+            "distance_m": 60.20738353549015,
+            "accuracy_m": 5.0,
+            "source_id": "gps:147",
+            "continuity_id": 0,
+            "path_offset_m": null,
+            "target_axis_offset_m": null
+          }
+        ],
+        "source_ids": [
+          "gps:96",
+          "gps:97",
+          "gps:98",
+          "gps:99",
+          "gps:100",
+          "gps:101",
+          "gps:102",
+          "gps:103",
+          "gps:104",
+          "gps:105",
+          "gps:106",
+          "gps:107",
+          "gps:108",
+          "gps:109",
+          "gps:110",
+          "gps:111",
+          "gps:112",
+          "gps:113",
+          "gps:114",
+          "gps:115",
+          "gps:116",
+          "gps:117",
+          "gps:118",
+          "gps:119",
+          "gps:120",
+          "gps:121",
+          "gps:122",
+          "gps:123",
+          "gps:124",
+          "gps:125",
+          "gps:126",
+          "gps:127",
+          "gps:128",
+          "gps:129",
+          "gps:130",
+          "gps:131",
+          "gps:132",
+          "gps:133",
+          "gps:134",
+          "gps:135",
+          "gps:136",
+          "gps:137",
+          "gps:138",
+          "gps:139",
+          "gps:140",
+          "gps:141",
+          "gps:142",
+          "gps:143",
+          "gps:144",
+          "gps:145",
+          "gps:146",
+          "gps:147"
+        ],
+        "calculation_policy": "relation-flow-analysis-v1",
+        "source_version": "9dfcc59ecdce43e27b2017ddf92ef9b05914079e6b3e9e1a516b5ddb4d9e395a",
+        "interval_view": null
+      }
+    ],
+    "selection": {
+      "scene_id": "stamp:bd9787700079949f6a0a2ea820c60d225bd0ab3ed4e5aad7745855af76320b33",
+      "flows": [
+        {
+          "id": "segment:67df185d9ff2191e54f4e562e5981634bd4fa5f9097809e201da31900cb59c0f",
+          "case": "route_retrace",
+          "started_at": "2026-09-08 06:08:40+00:00",
+          "ended_at": "2026-09-08 06:12:50+00:00",
+          "target_id": null,
+          "target_name": null,
+          "target_scope": null,
+          "profile": [],
+          "source_ids": [
+            "segment:67df185d9ff2191e54f4e562e5981634bd4fa5f9097809e201da31900cb59c0f"
+          ],
+          "calculation_policy": "existing-route-detectors",
+          "source_version": "source-bound-ledger",
+          "interval_view": {
+            "id": "segment:67df185d9ff2191e54f4e562e5981634bd4fa5f9097809e201da31900cb59c0f",
+            "kind": "retrace",
+            "support_started_at": "2026-09-08T06:08:40+00:00",
+            "support_ended_at": "2026-09-08T06:12:50+00:00",
+            "certainty": "inferred",
+            "scope": {
+              "kind": "walk_movement_support_interval"
+            },
+            "prior_path": {
+              "relationship": "earlier_route_in_this_walk",
+              "matched_reverse_m": 224.9999999995773
+            }
+          }
+        },
+        {
+          "id": "flow:5663cc0e5be17f4c532177ffc5e41953086a21a2f9c7b1764d2edd9bd679156a",
+          "case": "distance_valley",
+          "started_at": "2026-09-08 06:08:00+00:00",
+          "ended_at": "2026-09-08 06:12:15+00:00",
+          "target_id": "public-normalized-park:1",
+          "target_name": "공원 1",
+          "target_scope": "reference_point",
+          "profile": [
+            {
+              "at": "2026-09-08 06:08:00+00:00",
+              "distance_m": 184.3905812421931,
+              "accuracy_m": 5.0,
+              "source_id": "gps:96",
+              "continuity_id": 0,
+              "path_offset_m": null,
+              "target_axis_offset_m": null
+            },
+            {
+              "at": "2026-09-08 06:11:30+00:00",
+              "distance_m": 39.99900643749797,
+              "accuracy_m": 5.0,
+              "source_id": "gps:138",
+              "continuity_id": 0,
+              "path_offset_m": null,
+              "target_axis_offset_m": null
+            },
+            {
+              "at": "2026-09-08 06:12:15+00:00",
+              "distance_m": 60.20738353549015,
+              "accuracy_m": 5.0,
+              "source_id": "gps:147",
+              "continuity_id": 0,
+              "path_offset_m": null,
+              "target_axis_offset_m": null
+            }
+          ],
+          "source_ids": [
+            "gps:96",
+            "gps:97",
+            "gps:98",
+            "gps:99",
+            "gps:100",
+            "gps:101",
+            "gps:102",
+            "gps:103",
+            "gps:104",
+            "gps:105",
+            "gps:106",
+            "gps:107",
+            "gps:108",
+            "gps:109",
+            "gps:110",
+            "gps:111",
+            "gps:112",
+            "gps:113",
+            "gps:114",
+            "gps:115",
+            "gps:116",
+            "gps:117",
+            "gps:118",
+            "gps:119",
+            "gps:120",
+            "gps:121",
+            "gps:122",
+            "gps:123",
+            "gps:124",
+            "gps:125",
+            "gps:126",
+            "gps:127",
+            "gps:128",
+            "gps:129",
+            "gps:130",
+            "gps:131",
+            "gps:132",
+            "gps:133",
+            "gps:134",
+            "gps:135",
+            "gps:136",
+            "gps:137",
+            "gps:138",
+            "gps:139",
+            "gps:140",
+            "gps:141",
+            "gps:142",
+            "gps:143",
+            "gps:144",
+            "gps:145",
+            "gps:146",
+            "gps:147"
+          ],
+          "calculation_policy": "relation-flow-analysis-v1",
+          "source_version": "9dfcc59ecdce43e27b2017ddf92ef9b05914079e6b3e9e1a516b5ddb4d9e395a",
+          "interval_view": null
+        }
+      ],
+      "spatial_relation_ids": [
+        "nr:4e5c4ee83387e5f2851d022d490e33d40fd13a6fc5a99fbb1564a8963dcbaef0",
+        "nr:e7c16232e79b335c127bd6cd01eb0276c36266553d1cc26bce6ab14940cfb485"
+      ],
+      "replaced_relation_ids": [
+        "nr:edbe628a39b2214488af0e1ebe7ebbf982ef9c02c11c4dccbedc7e04efa8ce85"
+      ],
+      "policy": "relation-injection-v1"
+    },
+    "delivered": [
+      {
+        "id": "segment:67df185d9ff2191e54f4e562e5981634bd4fa5f9097809e201da31900cb59c0f",
+        "relationship": "retracing",
+        "interval": {
+          "started_at": "2026-09-08T06:08:40+00:00",
+          "ended_at": "2026-09-08T06:12:50+00:00"
+        },
+        "support_started_at": "2026-09-08T06:08:40+00:00",
+        "support_ended_at": "2026-09-08T06:12:50+00:00",
+        "certainty": "inferred",
+        "scope": {
+          "kind": "walk_movement_support_interval"
+        },
+        "prior_path": {
+          "relationship": "earlier_route_in_this_walk",
+          "matched_reverse_m": 224.9999999995773
+        }
+      },
+      {
+        "id": "flow:5663cc0e5be17f4c532177ffc5e41953086a21a2f9c7b1764d2edd9bd679156a",
+        "relationship": "drawing_closer_then_away",
+        "interval": {
+          "started_at": "2026-09-08T06:08:00+00:00",
+          "ended_at": "2026-09-08T06:12:15+00:00"
+        },
+        "target": {
+          "name": "공원 1",
+          "scope": "reference_point"
+        },
+        "distance_profile": [
+          {
+            "at": "2026-09-08T06:08:00+00:00",
+            "meters": 184.391,
+            "accuracy_m": 5.0
+          },
+          {
+            "at": "2026-09-08T06:11:30+00:00",
+            "meters": 39.999,
+            "accuracy_m": 5.0
+          },
+          {
+            "at": "2026-09-08T06:12:15+00:00",
+            "meters": 60.207,
+            "accuracy_m": 5.0
+          }
+        ],
+        "sample_count": 52
+      }
+    ]
+  },
+  {
+    "scene": 5,
+    "candidates": [
+      {
+        "id": "segment:5aa9ba2b4080cf0cc60bed2ee13ba93cd77a3334ffffa9f1ce060f9319cdf332",
+        "case": "route_straight",
+        "started_at": "2026-09-08 06:08:00+00:00",
+        "ended_at": "2026-09-08 06:15:00+00:00",
+        "target_id": null,
+        "target_name": null,
+        "target_scope": null,
+        "profile": [],
+        "source_ids": [
+          "segment:5aa9ba2b4080cf0cc60bed2ee13ba93cd77a3334ffffa9f1ce060f9319cdf332"
+        ],
+        "calculation_policy": "existing-route-detectors",
+        "source_version": "source-bound-ledger",
+        "interval_view": {
+          "id": "segment:5aa9ba2b4080cf0cc60bed2ee13ba93cd77a3334ffffa9f1ce060f9319cdf332",
+          "kind": "straight_run",
+          "support_started_at": "2026-09-08T06:08:00+00:00",
+          "support_ended_at": "2026-09-08T06:15:00+00:00",
+          "certainty": "inferred",
+          "scope": {
+            "kind": "walk_movement_support_interval"
+          }
+        }
+      },
+      {
+        "id": "segment:6cf9ac1c15759561d3a46d89c0d9249a688833df0e17bf1a055300e3faa94b51",
+        "case": "route_return",
+        "started_at": "2026-09-08 06:00:00+00:00",
+        "ended_at": "2026-09-08 06:15:00+00:00",
+        "target_id": null,
+        "target_name": null,
+        "target_scope": null,
+        "profile": [],
+        "source_ids": [
+          "segment:6cf9ac1c15759561d3a46d89c0d9249a688833df0e17bf1a055300e3faa94b51"
+        ],
+        "calculation_policy": "existing-route-detectors",
+        "source_version": "source-bound-ledger",
+        "interval_view": {
+          "id": "segment:6cf9ac1c15759561d3a46d89c0d9249a688833df0e17bf1a055300e3faa94b51",
+          "kind": "end_near_start",
+          "start": {
+            "event_at": "2026-09-08T06:00:00+00:00",
+            "time_basis": "walk_time",
+            "position_basis": "observed",
+            "accuracy_m": 5.0
+          },
+          "end": {
+            "event_at": "2026-09-08T06:15:00+00:00",
+            "time_basis": "walk_time",
+            "position_basis": "observed",
+            "accuracy_m": 5.0
+          },
+          "distance_m": 0.0,
+          "tolerance_m": 10.0,
+          "scope": {
+            "kind": "session_endpoints"
+          }
+        }
+      },
+      {
+        "id": "flow:8df0da55ce5dd7497ddabcd03fa9df86b90292438e15f22b40d03541f135f814",
+        "case": "distance_increase",
+        "started_at": "2026-09-08 06:13:00+00:00",
+        "ended_at": "2026-09-08 06:15:00+00:00",
+        "target_id": "public-normalized-park:1",
+        "target_name": "공원 1",
+        "target_scope": "reference_point",
+        "profile": [
+          {
+            "at": "2026-09-08 06:13:00+00:00",
+            "distance_m": 98.48826096714511,
+            "accuracy_m": 5.0,
+            "source_id": "gps:156",
+            "continuity_id": 0,
+            "path_offset_m": null,
+            "target_axis_offset_m": null
+          },
+          {
+            "at": "2026-09-08 06:13:05+00:00",
+            "distance_m": 103.07734229461919,
+            "accuracy_m": 5.0,
+            "source_id": "gps:157",
+            "continuity_id": 0,
+            "path_offset_m": null,
+            "target_axis_offset_m": null
+          },
+          {
+            "at": "2026-09-08 06:13:10+00:00",
+            "distance_m": 107.70301500285981,
+            "accuracy_m": 5.0,
+            "source_id": "gps:158",
+            "continuity_id": 0,
+            "path_offset_m": null,
+            "target_axis_offset_m": null
+          },
+          {
+            "at": "2026-09-08 06:13:15+00:00",
+            "distance_m": 112.36075999668876,
+            "accuracy_m": 5.0,
+            "source_id": "gps:159",
+            "continuity_id": 0,
+            "path_offset_m": null,
+            "target_axis_offset_m": null
+          },
+          {
+            "at": "2026-09-08 06:13:20+00:00",
+            "distance_m": 117.04674849483781,
+            "accuracy_m": 5.0,
+            "source_id": "gps:160",
+            "continuity_id": 0,
+            "path_offset_m": null,
+            "target_axis_offset_m": null
+          },
+          {
+            "at": "2026-09-08 06:13:25+00:00",
+            "distance_m": 121.75771958848723,
+            "accuracy_m": 5.0,
+            "source_id": "gps:161",
+            "continuity_id": 0,
+            "path_offset_m": null,
+            "target_axis_offset_m": null
+          },
+          {
+            "at": "2026-09-08 06:13:30+00:00",
+            "distance_m": 126.49088198652053,
+            "accuracy_m": 5.0,
+            "source_id": "gps:162",
+            "continuity_id": 0,
+            "path_offset_m": null,
+            "target_axis_offset_m": null
+          },
+          {
+            "at": "2026-09-08 06:13:35+00:00",
+            "distance_m": 131.24383479576824,
+            "accuracy_m": 5.0,
+            "source_id": "gps:163",
+            "continuity_id": 0,
+            "path_offset_m": null,
+            "target_axis_offset_m": null
+          },
+          {
+            "at": "2026-09-08 06:13:40+00:00",
+            "distance_m": 136.01450333719743,
+            "accuracy_m": 5.0,
+            "source_id": "gps:164",
+            "continuity_id": 0,
+            "path_offset_m": null,
+            "target_axis_offset_m": null
+          },
+          {
+            "at": "2026-09-08 06:13:45+00:00",
+            "distance_m": 140.80108687160273,
+            "accuracy_m": 5.0,
+            "source_id": "gps:165",
+            "continuity_id": 0,
+            "path_offset_m": null,
+            "target_axis_offset_m": null
+          },
+          {
+            "at": "2026-09-08 06:13:50+00:00",
+            "distance_m": 145.60201581975232,
+            "accuracy_m": 5.0,
+            "source_id": "gps:166",
+            "continuity_id": 0,
+            "path_offset_m": null,
+            "target_axis_offset_m": null
+          },
+          {
+            "at": "2026-09-08 06:13:55+00:00",
+            "distance_m": 150.4159165678246,
+            "accuracy_m": 5.0,
+            "source_id": "gps:167",
+            "continuity_id": 0,
+            "path_offset_m": null,
+            "target_axis_offset_m": null
+          },
+          {
+            "at": "2026-09-08 06:14:00+00:00",
+            "distance_m": 155.24158239046878,
+            "accuracy_m": 5.0,
+            "source_id": "gps:168",
+            "continuity_id": 0,
+            "path_offset_m": null,
+            "target_axis_offset_m": null
+          },
+          {
+            "at": "2026-09-08 06:14:05+00:00",
+            "distance_m": 160.07794929180108,
+            "accuracy_m": 5.0,
+            "source_id": "gps:169",
+            "continuity_id": 0,
+            "path_offset_m": null,
+            "target_axis_offset_m": null
+          },
+          {
+            "at": "2026-09-08 06:14:10+00:00",
+            "distance_m": 164.92407585195838,
+            "accuracy_m": 5.0,
+            "source_id": "gps:170",
+            "continuity_id": 0,
+            "path_offset_m": null,
+            "target_axis_offset_m": null
+          },
+          {
+            "at": "2026-09-08 06:14:15+00:00",
+            "distance_m": 169.77912634293756,
+            "accuracy_m": 5.0,
+            "source_id": "gps:171",
+            "continuity_id": 0,
+            "path_offset_m": null,
+            "target_axis_offset_m": null
+          },
+          {
+            "at": "2026-09-08 06:14:20+00:00",
+            "distance_m": 174.6423565122586,
+            "accuracy_m": 5.0,
+            "source_id": "gps:172",
+            "continuity_id": 0,
+            "path_offset_m": null,
+            "target_axis_offset_m": null
+          },
+          {
+            "at": "2026-09-08 06:14:25+00:00",
+            "distance_m": 179.5131015672662,
+            "accuracy_m": 5.0,
+            "source_id": "gps:173",
+            "continuity_id": 0,
+            "path_offset_m": null,
+            "target_axis_offset_m": null
+          },
+          {
+            "at": "2026-09-08 06:14:30+00:00",
+            "distance_m": 184.39076598473957,
+            "accuracy_m": 5.0,
+            "source_id": "gps:174",
+            "continuity_id": 0,
+            "path_offset_m": null,
+            "target_axis_offset_m": null
+          },
+          {
+            "at": "2026-09-08 06:14:35+00:00",
+            "distance_m": 189.27481482446257,
+            "accuracy_m": 5.0,
+            "source_id": "gps:175",
+            "continuity_id": 0,
+            "path_offset_m": null,
+            "target_axis_offset_m": null
+          },
+          {
+            "at": "2026-09-08 06:14:40+00:00",
+            "distance_m": 194.16476630163905,
+            "accuracy_m": 5.0,
+            "source_id": "gps:176",
+            "continuity_id": 0,
+            "path_offset_m": null,
+            "target_axis_offset_m": null
+          },
+          {
+            "at": "2026-09-08 06:14:45+00:00",
+            "distance_m": 199.0601854191344,
+            "accuracy_m": 5.0,
+            "source_id": "gps:177",
+            "continuity_id": 0,
+            "path_offset_m": null,
+            "target_axis_offset_m": null
+          },
+          {
+            "at": "2026-09-08 06:14:50+00:00",
+            "distance_m": 203.96067847804585,
+            "accuracy_m": 5.0,
+            "source_id": "gps:178",
+            "continuity_id": 0,
+            "path_offset_m": null,
+            "target_axis_offset_m": null
+          },
+          {
+            "at": "2026-09-08 06:14:55+00:00",
+            "distance_m": 208.86588833898642,
+            "accuracy_m": 5.0,
+            "source_id": "gps:179",
+            "continuity_id": 0,
+            "path_offset_m": null,
+            "target_axis_offset_m": null
+          },
+          {
+            "at": "2026-09-08 06:15:00+00:00",
+            "distance_m": 213.77549031110823,
+            "accuracy_m": 5.0,
+            "source_id": "gps:180",
+            "continuity_id": 0,
+            "path_offset_m": null,
+            "target_axis_offset_m": null
+          }
+        ],
+        "source_ids": [
+          "gps:156",
+          "gps:157",
+          "gps:158",
+          "gps:159",
+          "gps:160",
+          "gps:161",
+          "gps:162",
+          "gps:163",
+          "gps:164",
+          "gps:165",
+          "gps:166",
+          "gps:167",
+          "gps:168",
+          "gps:169",
+          "gps:170",
+          "gps:171",
+          "gps:172",
+          "gps:173",
+          "gps:174",
+          "gps:175",
+          "gps:176",
+          "gps:177",
+          "gps:178",
+          "gps:179",
+          "gps:180"
+        ],
+        "calculation_policy": "relation-flow-analysis-v1",
+        "source_version": "9dfcc59ecdce43e27b2017ddf92ef9b05914079e6b3e9e1a516b5ddb4d9e395a",
+        "interval_view": null
+      }
+    ],
+    "selection": {
+      "scene_id": "stamp:ba650fbb13e14c9266f6833b59a3ef0caa3a04765adc7f67c5858c1ef956bbff",
+      "flows": [
+        {
+          "id": "segment:5aa9ba2b4080cf0cc60bed2ee13ba93cd77a3334ffffa9f1ce060f9319cdf332",
+          "case": "route_straight",
+          "started_at": "2026-09-08 06:08:00+00:00",
+          "ended_at": "2026-09-08 06:15:00+00:00",
+          "target_id": null,
+          "target_name": null,
+          "target_scope": null,
+          "profile": [],
+          "source_ids": [
+            "segment:5aa9ba2b4080cf0cc60bed2ee13ba93cd77a3334ffffa9f1ce060f9319cdf332"
+          ],
+          "calculation_policy": "existing-route-detectors",
+          "source_version": "source-bound-ledger",
+          "interval_view": {
+            "id": "segment:5aa9ba2b4080cf0cc60bed2ee13ba93cd77a3334ffffa9f1ce060f9319cdf332",
+            "kind": "straight_run",
+            "support_started_at": "2026-09-08T06:08:00+00:00",
+            "support_ended_at": "2026-09-08T06:15:00+00:00",
+            "certainty": "inferred",
+            "scope": {
+              "kind": "walk_movement_support_interval"
+            }
+          }
+        },
+        {
+          "id": "segment:6cf9ac1c15759561d3a46d89c0d9249a688833df0e17bf1a055300e3faa94b51",
+          "case": "route_return",
+          "started_at": "2026-09-08 06:00:00+00:00",
+          "ended_at": "2026-09-08 06:15:00+00:00",
+          "target_id": null,
+          "target_name": null,
+          "target_scope": null,
+          "profile": [],
+          "source_ids": [
+            "segment:6cf9ac1c15759561d3a46d89c0d9249a688833df0e17bf1a055300e3faa94b51"
+          ],
+          "calculation_policy": "existing-route-detectors",
+          "source_version": "source-bound-ledger",
+          "interval_view": {
+            "id": "segment:6cf9ac1c15759561d3a46d89c0d9249a688833df0e17bf1a055300e3faa94b51",
+            "kind": "end_near_start",
+            "start": {
+              "event_at": "2026-09-08T06:00:00+00:00",
+              "time_basis": "walk_time",
+              "position_basis": "observed",
+              "accuracy_m": 5.0
+            },
+            "end": {
+              "event_at": "2026-09-08T06:15:00+00:00",
+              "time_basis": "walk_time",
+              "position_basis": "observed",
+              "accuracy_m": 5.0
+            },
+            "distance_m": 0.0,
+            "tolerance_m": 10.0,
+            "scope": {
+              "kind": "session_endpoints"
+            }
+          }
+        },
+        {
+          "id": "flow:8df0da55ce5dd7497ddabcd03fa9df86b90292438e15f22b40d03541f135f814",
+          "case": "distance_increase",
+          "started_at": "2026-09-08 06:13:00+00:00",
+          "ended_at": "2026-09-08 06:15:00+00:00",
+          "target_id": "public-normalized-park:1",
+          "target_name": "공원 1",
+          "target_scope": "reference_point",
+          "profile": [
+            {
+              "at": "2026-09-08 06:13:00+00:00",
+              "distance_m": 98.48826096714511,
+              "accuracy_m": 5.0,
+              "source_id": "gps:156",
+              "continuity_id": 0,
+              "path_offset_m": null,
+              "target_axis_offset_m": null
+            },
+            {
+              "at": "2026-09-08 06:13:05+00:00",
+              "distance_m": 103.07734229461919,
+              "accuracy_m": 5.0,
+              "source_id": "gps:157",
+              "continuity_id": 0,
+              "path_offset_m": null,
+              "target_axis_offset_m": null
+            },
+            {
+              "at": "2026-09-08 06:13:10+00:00",
+              "distance_m": 107.70301500285981,
+              "accuracy_m": 5.0,
+              "source_id": "gps:158",
+              "continuity_id": 0,
+              "path_offset_m": null,
+              "target_axis_offset_m": null
+            },
+            {
+              "at": "2026-09-08 06:13:15+00:00",
+              "distance_m": 112.36075999668876,
+              "accuracy_m": 5.0,
+              "source_id": "gps:159",
+              "continuity_id": 0,
+              "path_offset_m": null,
+              "target_axis_offset_m": null
+            },
+            {
+              "at": "2026-09-08 06:13:20+00:00",
+              "distance_m": 117.04674849483781,
+              "accuracy_m": 5.0,
+              "source_id": "gps:160",
+              "continuity_id": 0,
+              "path_offset_m": null,
+              "target_axis_offset_m": null
+            },
+            {
+              "at": "2026-09-08 06:13:25+00:00",
+              "distance_m": 121.75771958848723,
+              "accuracy_m": 5.0,
+              "source_id": "gps:161",
+              "continuity_id": 0,
+              "path_offset_m": null,
+              "target_axis_offset_m": null
+            },
+            {
+              "at": "2026-09-08 06:13:30+00:00",
+              "distance_m": 126.49088198652053,
+              "accuracy_m": 5.0,
+              "source_id": "gps:162",
+              "continuity_id": 0,
+              "path_offset_m": null,
+              "target_axis_offset_m": null
+            },
+            {
+              "at": "2026-09-08 06:13:35+00:00",
+              "distance_m": 131.24383479576824,
+              "accuracy_m": 5.0,
+              "source_id": "gps:163",
+              "continuity_id": 0,
+              "path_offset_m": null,
+              "target_axis_offset_m": null
+            },
+            {
+              "at": "2026-09-08 06:13:40+00:00",
+              "distance_m": 136.01450333719743,
+              "accuracy_m": 5.0,
+              "source_id": "gps:164",
+              "continuity_id": 0,
+              "path_offset_m": null,
+              "target_axis_offset_m": null
+            },
+            {
+              "at": "2026-09-08 06:13:45+00:00",
+              "distance_m": 140.80108687160273,
+              "accuracy_m": 5.0,
+              "source_id": "gps:165",
+              "continuity_id": 0,
+              "path_offset_m": null,
+              "target_axis_offset_m": null
+            },
+            {
+              "at": "2026-09-08 06:13:50+00:00",
+              "distance_m": 145.60201581975232,
+              "accuracy_m": 5.0,
+              "source_id": "gps:166",
+              "continuity_id": 0,
+              "path_offset_m": null,
+              "target_axis_offset_m": null
+            },
+            {
+              "at": "2026-09-08 06:13:55+00:00",
+              "distance_m": 150.4159165678246,
+              "accuracy_m": 5.0,
+              "source_id": "gps:167",
+              "continuity_id": 0,
+              "path_offset_m": null,
+              "target_axis_offset_m": null
+            },
+            {
+              "at": "2026-09-08 06:14:00+00:00",
+              "distance_m": 155.24158239046878,
+              "accuracy_m": 5.0,
+              "source_id": "gps:168",
+              "continuity_id": 0,
+              "path_offset_m": null,
+              "target_axis_offset_m": null
+            },
+            {
+              "at": "2026-09-08 06:14:05+00:00",
+              "distance_m": 160.07794929180108,
+              "accuracy_m": 5.0,
+              "source_id": "gps:169",
+              "continuity_id": 0,
+              "path_offset_m": null,
+              "target_axis_offset_m": null
+            },
+            {
+              "at": "2026-09-08 06:14:10+00:00",
+              "distance_m": 164.92407585195838,
+              "accuracy_m": 5.0,
+              "source_id": "gps:170",
+              "continuity_id": 0,
+              "path_offset_m": null,
+              "target_axis_offset_m": null
+            },
+            {
+              "at": "2026-09-08 06:14:15+00:00",
+              "distance_m": 169.77912634293756,
+              "accuracy_m": 5.0,
+              "source_id": "gps:171",
+              "continuity_id": 0,
+              "path_offset_m": null,
+              "target_axis_offset_m": null
+            },
+            {
+              "at": "2026-09-08 06:14:20+00:00",
+              "distance_m": 174.6423565122586,
+              "accuracy_m": 5.0,
+              "source_id": "gps:172",
+              "continuity_id": 0,
+              "path_offset_m": null,
+              "target_axis_offset_m": null
+            },
+            {
+              "at": "2026-09-08 06:14:25+00:00",
+              "distance_m": 179.5131015672662,
+              "accuracy_m": 5.0,
+              "source_id": "gps:173",
+              "continuity_id": 0,
+              "path_offset_m": null,
+              "target_axis_offset_m": null
+            },
+            {
+              "at": "2026-09-08 06:14:30+00:00",
+              "distance_m": 184.39076598473957,
+              "accuracy_m": 5.0,
+              "source_id": "gps:174",
+              "continuity_id": 0,
+              "path_offset_m": null,
+              "target_axis_offset_m": null
+            },
+            {
+              "at": "2026-09-08 06:14:35+00:00",
+              "distance_m": 189.27481482446257,
+              "accuracy_m": 5.0,
+              "source_id": "gps:175",
+              "continuity_id": 0,
+              "path_offset_m": null,
+              "target_axis_offset_m": null
+            },
+            {
+              "at": "2026-09-08 06:14:40+00:00",
+              "distance_m": 194.16476630163905,
+              "accuracy_m": 5.0,
+              "source_id": "gps:176",
+              "continuity_id": 0,
+              "path_offset_m": null,
+              "target_axis_offset_m": null
+            },
+            {
+              "at": "2026-09-08 06:14:45+00:00",
+              "distance_m": 199.0601854191344,
+              "accuracy_m": 5.0,
+              "source_id": "gps:177",
+              "continuity_id": 0,
+              "path_offset_m": null,
+              "target_axis_offset_m": null
+            },
+            {
+              "at": "2026-09-08 06:14:50+00:00",
+              "distance_m": 203.96067847804585,
+              "accuracy_m": 5.0,
+              "source_id": "gps:178",
+              "continuity_id": 0,
+              "path_offset_m": null,
+              "target_axis_offset_m": null
+            },
+            {
+              "at": "2026-09-08 06:14:55+00:00",
+              "distance_m": 208.86588833898642,
+              "accuracy_m": 5.0,
+              "source_id": "gps:179",
+              "continuity_id": 0,
+              "path_offset_m": null,
+              "target_axis_offset_m": null
+            },
+            {
+              "at": "2026-09-08 06:15:00+00:00",
+              "distance_m": 213.77549031110823,
+              "accuracy_m": 5.0,
+              "source_id": "gps:180",
+              "continuity_id": 0,
+              "path_offset_m": null,
+              "target_axis_offset_m": null
+            }
+          ],
+          "source_ids": [
+            "gps:156",
+            "gps:157",
+            "gps:158",
+            "gps:159",
+            "gps:160",
+            "gps:161",
+            "gps:162",
+            "gps:163",
+            "gps:164",
+            "gps:165",
+            "gps:166",
+            "gps:167",
+            "gps:168",
+            "gps:169",
+            "gps:170",
+            "gps:171",
+            "gps:172",
+            "gps:173",
+            "gps:174",
+            "gps:175",
+            "gps:176",
+            "gps:177",
+            "gps:178",
+            "gps:179",
+            "gps:180"
+          ],
+          "calculation_policy": "relation-flow-analysis-v1",
+          "source_version": "9dfcc59ecdce43e27b2017ddf92ef9b05914079e6b3e9e1a516b5ddb4d9e395a",
+          "interval_view": null
+        }
+      ],
+      "spatial_relation_ids": [
+        "nr:983610effcaca96f8837a379a62bd18138d861eb8e5c3a3101b2781951f2c390",
+        "nr:e52e13ecb1a677f39689728cda1483352e032dbbef1f761df102ae4aa4982177"
+      ],
+      "replaced_relation_ids": [
+        "nr:1c5ed53e8ac2121b2a111bb708e1d48bda532e43cd3902e2eb1e6ec07a87a33d"
+      ],
+      "policy": "relation-injection-v1"
+    },
+    "delivered": [
+      {
+        "id": "segment:5aa9ba2b4080cf0cc60bed2ee13ba93cd77a3334ffffa9f1ce060f9319cdf332",
+        "relationship": "carrying_on_straight",
+        "interval": {
+          "started_at": "2026-09-08T06:08:00+00:00",
+          "ended_at": "2026-09-08T06:15:00+00:00"
+        },
+        "support_started_at": "2026-09-08T06:08:00+00:00",
+        "support_ended_at": "2026-09-08T06:15:00+00:00",
+        "certainty": "inferred",
+        "scope": {
+          "kind": "walk_movement_support_interval"
+        }
+      },
+      {
+        "id": "segment:6cf9ac1c15759561d3a46d89c0d9249a688833df0e17bf1a055300e3faa94b51",
+        "relationship": "coming_back",
+        "interval": {
+          "started_at": "2026-09-08T06:00:00+00:00",
+          "ended_at": "2026-09-08T06:15:00+00:00"
+        },
+        "start": {
+          "event_at": "2026-09-08T06:00:00+00:00",
+          "time_basis": "walk_time",
+          "position_basis": "observed",
+          "accuracy_m": 5.0
+        },
+        "end": {
+          "event_at": "2026-09-08T06:15:00+00:00",
+          "time_basis": "walk_time",
+          "position_basis": "observed",
+          "accuracy_m": 5.0
+        },
+        "distance_m": 0.0,
+        "tolerance_m": 10.0,
+        "scope": {
+          "kind": "session_endpoints"
+        }
+      },
+      {
+        "id": "flow:8df0da55ce5dd7497ddabcd03fa9df86b90292438e15f22b40d03541f135f814",
+        "relationship": "leaving_behind",
+        "interval": {
+          "started_at": "2026-09-08T06:13:00+00:00",
+          "ended_at": "2026-09-08T06:15:00+00:00"
+        },
+        "target": {
+          "name": "공원 1",
+          "scope": "reference_point"
+        },
+        "distance_profile": [
+          {
+            "at": "2026-09-08T06:13:00+00:00",
+            "meters": 98.488,
+            "accuracy_m": 5.0
+          },
+          {
+            "at": "2026-09-08T06:15:00+00:00",
+            "meters": 213.775,
+            "accuracy_m": 5.0
+          }
+        ],
+        "sample_count": 25
+      }
+    ]
+  }
+]

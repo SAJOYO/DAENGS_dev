@@ -9,12 +9,11 @@ import pytest
 from pydantic import SecretStr
 
 from daengs_backend.config import settings
-from daengs_backend.services import walk_area_catalog as catalog
-from daengs_backend.services import walk_catalog_refresh as refresh
-from daengs_backend.services import walk_catalog_regions as regions
-from daengs_backend.services.walk_public_context import collect_public
-from daengs_backend.services.walk_public_http import PublicSourceError, get_json
-from daengs_walk.diary_input import digest
+from daengs_backend.services.walk_background.catalogs import area as catalog
+from daengs_backend.services.walk_background.catalogs import refresh, regions
+from daengs_backend.services.walk_background.http import PublicSourceError, get_json
+from daengs_backend.services.walk_background.providers.public import collect_public
+from daengs_walk.diary.contracts.input import digest
 
 POINTS = [{"lat": 37.5, "lng": 127.0}, {"lat": 37.66, "lng": 126.754}]
 
@@ -278,3 +277,20 @@ def test_catalog_task_has_separate_queue_and_expiry():
     scheduled = app.conf.beat_schedule["public-catalog-refresh"]
     assert scheduled["options"] == {"queue": "walk-public-catalog", "expires": 55}
     assert app.conf.task_default_queue == "walk-entry-context"
+
+
+async def test_cycle_refreshes_a_missing_park_catalog(enabled, monkeypatch):
+    session, _ = factory(monkeypatch, [])
+    calls = []
+
+    async def download(transport, key, path):
+        calls.append(path)
+        park(enabled / "parks.json")
+
+    monkeypatch.setattr(refresh.walk_park_catalog, "refresh_catalog", download)
+    broker = Broker()
+    async with httpx.AsyncHTTPTransport() as transport:
+        report = await refresh.cycle(session, broker, refresh.BudgetTransport(transport, broker))
+    assert calls == [settings.walk_park_catalog_path]
+    assert report["refreshed"] == 1 and report["failed"] == 0
+    assert refresh.fresh(settings.walk_park_catalog_path, "park")

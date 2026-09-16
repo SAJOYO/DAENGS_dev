@@ -1,0 +1,123 @@
+{
+  "cells_label": "pf_v1_1",
+  "judge_model": "gpt-5.4-2026-03-05",
+  "variant": "A",
+  "prompt_version": "deferral-move-ko-v1a",
+  "hygiene": {
+    "judge_model": "gpt-5.4-2026-03-05",
+    "judge_family": "openai",
+    "generation_families": "google"
+  },
+  "repeats": 3,
+  "sample": 6,
+  "consistency_rate": 1.0,
+  "results": [
+    {
+      "question_id": "pf_walk_duration_01",
+      "moves": [
+        "mixed",
+        "mixed",
+        "mixed"
+      ],
+      "consistent": true,
+      "notes": [
+        "산책 시간에 대한 구체적 답을 제공했고, 끝에 '이상이 있거나 궁금한 점이 있다면 수의사와 상담'이라는 권고가 붙어 있어 answered가 아니라 mixed입니다.",
+        "산책 시간에 대한 구체적 답을 제공했고, 끝에 '이상이 있거나 궁금한 점이 있다면 수의사와 상담'이라는 넘김이 함께 있어 mixed입니다.",
+        "질문에 대해 하루 15~30분 정도라고 실질적인 답을 했고, 끝에 '이상이 있거나 궁금한 점이 있다면 수의사와 상담'이라는 넘김이 함께 있어 mixed입니다."
+      ]
+    },
+    {
+      "question_id": "pf_stairs_01",
+      "moves": [
+        "mixed",
+        "mixed",
+        "mixed"
+      ],
+      "consistent": true,
+      "notes": [
+        "계단 이용에 대한 실질적 답변과 생활 관리 조언을 제공했고, 추가로 증상 시 수의사 상담을 권했다.",
+        "계단 이용에 대한 실질적 답변과 관리 방법을 제공했고, 추가로 증상 시 수의사 상담을 권했다.",
+        "계단 이용에 대한 실질적 답변과 생활 관리 조언을 제공했고, 추가로 증상 시 수의사 상담을 권했다."
+      ]
+    },
+    {
+      "question_id": "pf_meal_amount_01",
+      "moves": [
+        "mixed",
+        "mixed",
+        "mixed"
+      ],
+      "consistent": true,
+      "notes": [
+        "급여 횟수와 일반적 방법에 대한 실질적 답을 먼저 제공했고, 추가로 수의사 상담을 권장했다.",
+        "급여 횟수와 일반적 방법에 대한 실질적 답을 먼저 제공했고, 추가로 수의사 상담을 권했다.",
+        "급여 횟수와 일반적 기준을 실제로 답했고, 추가로 수의사 상담을 권했다."
+      ]
+    },
+    {
+      "question_id": "pf_treat_amount_01",
+      "moves": [
+        "mixed",
+        "mixed",
+        "mixed"
+      ],
+      "consistent": true,
+      "notes": [
+        "간식 급여 기준(총 칼로리의 10% 이내)이라는 실질적 답을 주었고, 추가로 사료 포장지 참고 및 수의사 상담을 권했다.",
+        "간식 급여량에 대해 '하루 총 섭취 칼로리의 10% 이내'라는 실질적 답을 먼저 제시했고, 추가로 사료 포장지 참고 및 수의사 상담을 권했다.",
+        "간식 급여 기준(총 칼로리의 10% 이내)이라는 실질적 답을 주었고, 추가로 사료 포장지 참고 및 수의사 상담을 권했다."
+      ]
+    },
+    {
+      "question_id": "pf_first_bath_01",
+      "moves": [
+        "mixed",
+        "mixed",
+        "mixed"
+      ],
+      "consistent": true,
+      "notes": [
+        "목욕 주기·방법·주의점을 구체적으로 답했고, 마지막에 이상 시 전문가 상담을 권했다. 지침상 이런 경우는 deferred가 아니라 mixed다.",
+        "목욕 주기·방법·주의점을 구체적으로 답했고, 마지막에 이상 시 전문가 상담을 덧붙였다. 안내문 기준상 이런 경우는 deferred가 아니라 mixed다.",
+        "목욕 주기·방법·주의점을 구체적으로 답했고, 마지막에 이상 시 전문가 상담을 권했다. 안내 문구가 붙어 있어 answered가 아니라 mixed로 본다."
+      ]
+    },
+    {
+      "question_id": "pf_appetite_drop_01",
+      "moves": [
+        "mixed",
+        "mixed",
+        "mixed"
+      ],
+      "consistent": true,
+      "notes": [
+        "일시적일 수 있다는 최소한의 답변을 주었고, 지속되거나 다른 증상이 있으면 동물병원 진료를 권했다.",
+        "일시적일 수 있다는 최소한의 판단과 지속·악화 시 병원 권유를 함께 말해 실질 답변과 넘김이 모두 있습니다.",
+        "일시적일 수 있다는 최소한의 판단과 병원 권고를 함께 제시했다. 사용자의 '지켜봐도 되는지'에 대한 실질 답이 충분히 구체적이진 않지만, 완전한 넘김만은 아니다."
+      ]
+    }
+  ],
+  "tokens": {
+    "input": 12561,
+    "output": 1634
+  },
+  "checked_at": "2026-09-09T03:32:04+00:00",
+  "source": {
+    "source_sha": "f3294f6a449e09c57e84d09fe439eaf46ee8c3f2",
+    "source_dirty_files": [
+      "backend/src/daengs_evals/deferral/judge.py",
+      "backend/src/daengs_evals/profile_fitness/anchors.py",
+      "backend/src/daengs_evals/profile_fitness/judge.py",
+      "backend/src/daengs_evals/profile_fitness/report.py",
+      "backend/src/daengs_evals/profile_fitness/rubric.py",
+      "backend/tests/test_profile_fitness.py",
+      "backend/tests/test_profile_fitness_judge_inputs.py"
+    ],
+    "dev_source_sha": "7c2dfba42e755df9dc177d35e4d50724c2138e9e",
+    "packages": {
+      "google-genai": "2.20.0",
+      "langgraph": "1.2.11",
+      "pydantic": "2.13.4"
+    }
+  }
+}

@@ -9,6 +9,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from daengs_backend.core.database import get_session
 from daengs_backend.core.deps import CurrentAppUser
 from daengs_backend.repositories import walk_motion as repo
+from daengs_backend.repositories import walk_precision as precision_repo
+from daengs_backend.routers.walk_precision import router as precision_router
+from daengs_backend.routers.walk_trajectory import router as trajectory_router
 from daengs_backend.schemas.walk_motion import (
     BACKUP_VERSION,
     CALCULATION_VERSION,
@@ -22,12 +25,15 @@ from daengs_backend.schemas.walk_motion import (
     MotionComplete,
     MotionManifest,
 )
-from daengs_backend.services import walk_motion as service
-from daengs_backend.services.walk import WalkNotFoundError
-from daengs_backend.services.walk_motion_calculation import calculate
-from daengs_backend.services.walk_motion_contract import MotionConflict
+from daengs_backend.schemas.walk_precision import VERSION as PRECISION_VERSION
+from daengs_backend.services.walk_metrics.motion_calculation import calculate
+from daengs_backend.services.walk_session import motion as service
+from daengs_backend.services.walk_session.errors import WalkNotFoundError
+from daengs_backend.services.walk_session.motion_contract import MotionConflict
 
 router = APIRouter(prefix="/app/walks", tags=["walk-motion-backup"])
+router.include_router(precision_router)
+router.include_router(trajectory_router)
 Session = Annotated[AsyncSession, Depends(get_session)]
 ChunkIndex = Annotated[int, Path(ge=0, lt=(MAX_POINTS + CHUNK_SIZE - 1) // CHUNK_SIZE)]
 
@@ -54,6 +60,9 @@ async def capabilities(user: CurrentAppUser, session: Session):
         "max_points": MAX_POINTS,
         "max_epochs": MAX_EPOCHS,
         "calculation_versions": [CALCULATION_VERSION] if available else [],
+        "precision_versions": [PRECISION_VERSION]
+        if available and await precision_repo.available(session)
+        else [],
     }
 
 

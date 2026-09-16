@@ -8,13 +8,13 @@ import pytest
 
 from daengs_backend.schemas.walk import WalkPointUpload
 from daengs_backend.schemas.walk_motion import MotionManifest, MotionObservation
-from daengs_backend.services.walk_finalize import walk_input_fingerprint
-from daengs_backend.services.walk_motion_contract import (
+from daengs_backend.services.walk_metrics.motion_engine import replay
+from daengs_backend.services.walk_session.finalize import walk_input_fingerprint
+from daengs_backend.services.walk_session.motion_contract import (
     chunk_digest,
     evidence_digest,
     manifest_digest,
 )
-from daengs_backend.services.walk_motion_engine import replay
 
 FIXTURE = Path(__file__).parents[1] / "fixtures/gps-motion-replay-v1.json"
 CASES = json.loads(FIXTURE.read_text(encoding="utf-8"))["cases"]

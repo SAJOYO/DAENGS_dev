@@ -10,7 +10,7 @@ from pydantic import ValidationError
 
 from daengs_backend.schemas.walk import WalkPointUpload
 from daengs_backend.schemas.walk_motion import MotionManifest, MotionObservation
-from daengs_backend.services.walk_motion_contract import (
+from daengs_backend.services.walk_session.motion_contract import (
     MotionConflict,
     chunk_digest,
     evidence_digest,
@@ -26,6 +26,14 @@ FIXTURE = Path(__file__).parents[1] / "fixtures/gps-motion-backup-v1.json"
     "method,suffix",
     [
         ("GET", "motion-capabilities"),
+        ("GET", "trajectory-capabilities"),
+        (
+            "GET",
+            (
+                "00000000-0000-0000-0000-000000000001/trajectory-calculation"
+                "?version=walk-trajectory-calculation-v1"
+            ),
+        ),
         ("GET", "00000000-0000-0000-0000-000000000001/motion-calculation"),
         ("PUT", "00000000-0000-0000-0000-000000000001/motion-backup"),
         ("GET", "00000000-0000-0000-0000-000000000001/motion-backup"),

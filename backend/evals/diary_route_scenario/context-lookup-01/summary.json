@@ -1,0 +1,12 @@
+{
+  "mode": "context-only",
+  "external_calls": 0,
+  "source": "public-02",
+  "input_sha256": "6d713480f69d669aeb0594feff5a0d1644aaf97af5154e7251bb0c384bf2af62",
+  "backgrounds_sha256": "34c6ec2dc371c1b6b17801850f614ef790c86231b05dab394f1b5f5c3b5584dd",
+  "slot_revision": "344669ab5d3d681dd1f9980da8a6bd77991a8a11ebbbba2912cbd7ec00a73498",
+  "cards": 8,
+  "space_contexts": 8,
+  "action_contexts": 1,
+  "generated_parts": 0
+}

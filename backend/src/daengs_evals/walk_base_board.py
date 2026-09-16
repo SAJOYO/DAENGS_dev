@@ -10,20 +10,23 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from daengs_backend.schemas.walk import WalkFinalizeRequest, WalkPointUpload
-from daengs_backend.services.walk_analysis import build_analysis_models
-from daengs_backend.services.walk_chunk import encode_chunk
-from daengs_backend.services.walk_finalize import prepare_finalized_walk
-from daengs_walk import analyze_walk, build_cellophane
-from daengs_walk.diary_board import BaseBoardPolicy
-from daengs_walk.diary_stamps import StampPolicy
+from daengs_backend.services.walk_artifacts.api import build_analysis_models
+from daengs_backend.services.walk_session.chunk import encode_chunk
+from daengs_backend.services.walk_session.finalize import prepare_finalized_walk
+from daengs_walk.cellophane import build_cellophane
+from daengs_walk.diary.board.models import BaseBoardPolicy
+from daengs_walk.diary.selection.stamps import StampPolicy
+from daengs_walk.evidence import analyze_walk
 
 START = datetime(2026, 9, 9, tzinfo=UTC)
 
 
 def example(case, samples, *, note=False):
-    from daengs_backend.services.walk_diary_base_board import assemble_saved_base_board
-    from daengs_backend.services.walk_diary_input import assemble_input
-    from daengs_backend.services.walk_diary_observations import prepare_observation_source
+    from daengs_backend.services.walk_diary.preparation.board import assemble_saved_base_board
+    from daengs_backend.services.walk_diary.preparation.input import assemble_input
+    from daengs_backend.services.walk_diary.preparation.observations import (
+        prepare_observation_source,
+    )
 
     walk_id = uuid.uuid5(uuid.NAMESPACE_URL, "synthetic-base-board:" + case)
     points = [

@@ -18,10 +18,10 @@ from daengs_backend.core.deps import AppPrincipal, CurrentAppUser
 from daengs_backend.routers import walk as router
 from daengs_backend.schemas.walk import WalkFinalizeRequest, WalkPointUpload, WalkUpload
 from daengs_backend.schemas.walk_entry_v2 import EntryWriteV2
-from daengs_backend.services import walk_recording as recording
-from daengs_backend.services.walk_chunk import decode_chunk, encode_chunk
-from daengs_backend.services.walk_entry_pin import validate_new_pin, validate_sources
-from daengs_backend.services.walk_finalize import prepare_finalized_walk
+from daengs_backend.services.walk_records.pins import validate_new_pin, validate_sources
+from daengs_backend.services.walk_session import recording
+from daengs_backend.services.walk_session.chunk import decode_chunk, encode_chunk
+from daengs_backend.services.walk_session.finalize import prepare_finalized_walk
 
 FIXTURE = Path(__file__).parents[1] / "fixtures/gps-recording-v1.json"
 

@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from daengs_backend.core.database import get_session, get_snapshot_session
 from daengs_backend.core.deps import CurrentAppUser
-from daengs_backend.routers.walk_entry import translate as translate_entry
+from daengs_backend.routers.walk_entry_errors import translate as translate_entry
 from daengs_backend.schemas.walk_entry import RecordProfileQuery
 from daengs_backend.schemas.walk_entry_context import EntryContexts
 from daengs_backend.schemas.walk_entry_v2 import (
@@ -19,7 +19,7 @@ from daengs_backend.schemas.walk_entry_v2 import (
     ProfileV2,
     Tombstone,
 )
-from daengs_backend.services import walk_entry_v2 as service
+from daengs_backend.services.walk_records import v2 as service
 
 router = APIRouter(prefix="/app/v2/walks", tags=["walk-entry-v2"])
 capabilities_router = APIRouter(prefix="/app/walks", tags=["walk-entry-v2"])
@@ -66,7 +66,7 @@ async def write(
 async def contexts(
     walk_id: uuid.UUID, entry_id: uuid.UUID, user: CurrentAppUser, session: Snapshot
 ):
-    from daengs_backend.services.walk_entry_context import read
+    from daengs_backend.services.walk_records.context import read
 
     return await translate(read(session, user.app_user_id, walk_id, entry_id, v2=True))
 

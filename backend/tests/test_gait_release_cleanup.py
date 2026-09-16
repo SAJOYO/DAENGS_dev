@@ -148,7 +148,13 @@ async def test_storage_success_then_db_commit_failure_keeps_retry_safe(
 async def test_storage_failure_does_not_reach_walk_or_pet_deletion(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    pet = type("Pet", (), {"id": uuid.uuid4()})()
+    # `identity_id`·`app_user_id` 도 들고 있어야 합니다 — 삭제 경로가 **그룹 주보호자**
+    # 인지 먼저 보기 때문입니다 (MVP 결정 §6). 여기서는 연결 안 된 아이라 `identity_id`
+    # 가 None 이고, 그때 그룹 주보호자는 곧 행 대표라 이 가드가 지나갑니다.
+    owner = uuid.uuid4()
+    pet = type(
+        "Pet", (), {"id": uuid.uuid4(), "identity_id": None, "app_user_id": owner}
+    )()
     session = TxSession()
     destructive_calls: list[str] = []
 
@@ -171,7 +177,7 @@ async def test_storage_failure_does_not_reach_walk_or_pet_deletion(
     monkeypatch.setattr(pet_service.pet_repo, "delete", destructive)
 
     with pytest.raises(RuntimeError, match="storage unavailable"):
-        await pet_service.delete_pet(session, uuid.uuid4(), pet.id)
+        await pet_service.delete_pet(session, owner, pet.id)
 
     assert destructive_calls == []
     assert session.commits == 0
@@ -183,8 +189,19 @@ async def test_single_pet_deletion_uses_common_gait_cleanup_before_delete(
 ) -> None:
     # 사진 칸도 들고 있어야 합니다 — 삭제 경로가 보행 객체와 **프로필 사진**을
     # 둘 다 훑기 때문입니다 (D-052). 여기서는 사진이 없는 아이라 전부 None 입니다.
+    # `identity_id`·`app_user_id` 는 그룹 주보호자 가드가 봅니다 (MVP 결정 §6) —
+    # 연결 안 된 아이라 None 이고, 그때 그룹 주보호자는 곧 행 대표입니다.
+    owner = uuid.uuid4()
     pet = type(
-        "Pet", (), {"id": uuid.uuid4(), "photo_storage_key": None, "photo_pending_key": None}
+        "Pet",
+        (),
+        {
+            "id": uuid.uuid4(),
+            "photo_storage_key": None,
+            "photo_pending_key": None,
+            "identity_id": None,
+            "app_user_id": owner,
+        },
     )()
     session = TxSession()
     events: list[str] = []
@@ -219,7 +236,7 @@ async def test_single_pet_deletion_uses_common_gait_cleanup_before_delete(
     monkeypatch.setattr(pet_service.member_repo, "list_members", no_carers)
     monkeypatch.setattr(pet_service.pet_repo, "delete", delete_pet_row)
 
-    await pet_service.delete_pet(session, uuid.uuid4(), pet.id)
+    await pet_service.delete_pet(session, owner, pet.id)
 
     assert events == ["gait", "walks", "pet"]
     assert session.commits == 1

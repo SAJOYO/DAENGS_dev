@@ -85,8 +85,9 @@ def compare(
     `comparable` 은 **한쪽이라도 인용이 있는** 문항 수입니다. 양쪽 다 없는 것은 답을 안 한
     자리라 세지 않습니다 (모듈 docstring).
     """
-    a, b = _by_question(a_rows, exclude_styles=exclude_styles), _by_question(
-        b_rows, exclude_styles=exclude_styles
+    a, b = (
+        _by_question(a_rows, exclude_styles=exclude_styles),
+        _by_question(b_rows, exclude_styles=exclude_styles),
     )
     shared = [q for q in a if q in b]
     details: list[dict[str, Any]] = []

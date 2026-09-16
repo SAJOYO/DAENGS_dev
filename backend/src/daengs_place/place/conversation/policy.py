@@ -12,7 +12,9 @@ from daengs_place.place.conversation.candidates import (
 from daengs_place.place.conversation.compiler import fingerprint
 from daengs_place.place.conversation.contract import PendingChange, TurnPlan
 from daengs_place.place.conversation.intent import Interpretation
-from daengs_place.place.conversation.render import ATTRIBUTES, confirmation
+from daengs_place.place.conversation.presentation import user_text_allowed
+from daengs_place.place.conversation.render import ATTRIBUTES, confirmation, describe_filters
+from daengs_place.place.conversation.scope import OUT_OF_SCOPE, OutsideFacilityScope, validate_scope
 from daengs_place.place.conversation.search_compilation import compile_search
 from daengs_place.place.conversation.search_policy import resolve_search
 from daengs_place.place.filters.contract import FilterState, guard_filter_state
@@ -94,6 +96,12 @@ async def decide(planner, request, now):
             question="지금은 적용을 기다리는 제안이 없어요. 원하는 조건을 알려주세요.",
         )
     if pending:
+        if not user_text_allowed(pending.question, limit=300):
+            return Decision(
+                "clarify",
+                code="presentation_requires_rephrase",
+                question="조건을 짧게 나눠서 알려주세요.",
+            )
         valid = (
             pending.revision == base_revision(request)
             and pending.base_fingerprint == fingerprint(old.filters)
@@ -101,6 +109,8 @@ async def decide(planner, request, now):
             and now < pending.expires_at
         )
         decision = await planner.decide_pending(request)
+        if decision.decision == "out_of_scope":
+            return Decision("clarify", code="facility_out_of_scope", question=OUT_OF_SCOPE)
         if not valid and decision.decision not in {"new_request", "reject"}:
             # Do not interpret a bare consent as a fresh instruction after expiry.
             return Decision(
@@ -144,6 +154,18 @@ async def decide(planner, request, now):
     intent = await planner.plan(context)
     if not isinstance(intent, Interpretation):
         raise TypeError("expected semantic interpretation")
+    try:
+        validate_scope(intent, request.query, request.previous)
+    except OutsideFacilityScope:
+        return Decision("clarify", code="facility_out_of_scope", question=OUT_OF_SCOPE)
+    if intent.kind == "out_of_scope":
+        return Decision("clarify", code="facility_out_of_scope", question=OUT_OF_SCOPE)
+    if intent.kind == "facility_state" and intent.state_subject == "filters":
+        return Decision(
+            "explain",
+            code="facility_filters",
+            question=f"지금은 {POOL_LABELS[old.search_pool]}에서 {describe_filters(old.filters)} 조건으로 보고 있어요.",
+        )
     intent = grounded_feedback(intent, request.query)
     directive = resolve_search(
         intent, context.previous.search_pool, request.query, candidate_pools=request.candidate_pools
@@ -188,9 +210,9 @@ async def decide(planner, request, now):
             "explain",
             code="feedback_no_mutation",
             question={
-                "evaluation": "장소 평가는 찜이나 검색 조건에 자동 반영하지 않아요. 남기고 싶으면 찜해 달라고 말해 주세요.",
-                "familiarity": "어느 장소를 이미 알고 계세요? 장소를 선택하거나 이름·목록 번호를 알려주세요.",
-                "information_dispute": "안내한 정보가 현장과 다를 수 있어요. 지금 자료만으로 이전이나 폐업 여부는 확인할 수 없어요.",
+                "evaluation": "말씀은 들었어요. 조건과 목록은 그대로 둘게요.",
+                "familiarity": "어느 곳을 이미 알고 계세요?",
+                "information_dispute": "정보가 현장과 다를 수 있어요. 이전이나 폐업 여부는 아직 확인할 수 없어요.",
             }[intent.feedback],
             intent=intent,
         )
@@ -223,7 +245,7 @@ async def decide(planner, request, now):
             "await_confirmation",
             pending=pending,
             code="confirmation_required",
-            question=pending.question + " 적용하려면 ‘적용해줘’라고 말씀해 주세요.",
+            question=pending.question.rstrip("?") + " — 적용하려면 ‘적용해줘’라고 말씀해 주세요.",
         )
     candidate = compile_search(context.previous.filters, intent, "all_places")
     unsupported = (
@@ -253,7 +275,15 @@ async def decide(planner, request, now):
             )
         question = confirmation(candidate, unsupported, plan.goal)
         if directive.pool != old.search_pool:
-            question = f"검색 대상은 {POOL_LABELS[directive.pool]}예요. " + question
+            question = question.replace(". ", f". {POOL_LABELS[directive.pool]} 중에서 ", 1)
+        if not user_text_allowed(question, limit=300):
+            # Never hide a proposal's scope and still allow a bare yes to apply it.
+            return Decision(
+                "clarify",
+                code="presentation_requires_rephrase",
+                question="조건을 짧게 나눠서 알려주세요.",
+                intent=intent,
+            )
         proposal = PendingChange(
             id=uuid4(),
             revision=base_revision(request) + 1,

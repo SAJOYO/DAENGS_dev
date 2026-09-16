@@ -45,6 +45,12 @@ LLM은 의미만 판단합니다. EXECUTE에서는 `training`·`life`·`walk`, H
 `skin`·`gait` 중 사용자가 요청한 대상을 복수 선택할 수 있습니다. 자연어 키워드가 아니라
 질의의 의미와 부정을 읽고, Skin/Gait를 EXECUTE로 선택하지 않습니다.
 
+**모델 앞에 서는 결정론 게이트가 셋입니다** — 명시 신호(`requested_capability`) · 응급
+어휘(`emergency.py` → `vet_contact`) · 케어 기록(`care_log.py` → 확인 되묻기 또는 기록 화면
+HANDOFF, D-075). 셋 다 라우터를 아예 안 거치고 계획을 냅니다. 마지막 것이 **이 저장소에서
+유일하게 DB 에 쓰는 경로**이고, 그래서 모델 앞에 있습니다 — 프롬프트 회귀 하나가 남의 강아지
+기록에 행을 남기는 자리를 만들지 않으려는 배치입니다 (contracts §3 「케어 기록 쓰기」).
+
 최종 `RoutePlan`(`requests[] + handoffs[] + clarify` — contracts 문서 §2)은 결정론적
 오케스트레이션 코드가 만듭니다. 이 코드는 Training/Life payload에 사용자 원문을 그대로
 넣고, Walk 좌표는 허용된 구조화 컨텍스트에서만 복사합니다. Walk를 선택했는데 좌표가
@@ -324,6 +330,11 @@ handoff 쌍 · `social_intent` · O-14 1회 재시도 · v5 의 Life 제한 · v
 - HANDOFF 는 실패가 아닙니다. multipart 이미지·영상 워크플로(Skin·Gait)는 전용 API 에
   남는다는 확정 경계(architecture §논리 오케스트레이션)의 라우팅 쪽 표현입니다.
   대상 플로우 식별자를 각 `handoffs[].target` 에 담아 프론트가 이동시킬 수 있게 합니다.
+  **세 번째 target 이 있습니다 — `care_log`** (D-075, `reason: "care_log_entry_required"`).
+  앞 둘과 달리 **의미 라우터가 못 고릅니다**: 결정론 게이트
+  (`orchestration/care_log.py` → `planner.resolve_care_log_route`)만 냅니다. 뜻은 같습니다 —
+  "채팅으로 처리하지 않고 기록 화면으로 보낸다". `"방금 밥 먹였어"` 에서 무엇을·어느 아이를
+  확실히 모를 때, 그리고 `DAENGS_CARE_LOG_WRITE` 가 꺼진 운영에서 여기로 떨어집니다.
   Skin 핸드오프의 인수인계 계약은 **PR #79** 가 원본입니다 — "우리 개 피부가 이상해"
   류 텍스트 진입 → 업로드 플로우 유도, 결과 문구(`headline`·`body`·`disclaimer` 등)
   무수정 통과, 대화 이력 활용은 저장소 결정(#78) 뒤 (architecture §능력 현실 표).
@@ -418,7 +429,8 @@ Place 는 PR #196 에서 실행 registry 에 들어왔고 `requested_capability=
 | Life | YES | YES |
 | Walk | YES | YES |
 | Place | YES | YES |
-| Skin EXECUTE | NO | NO |
+| Skin 판정 EXECUTE (`/screen/*`) | NO | NO |
+| Skin 판정 해설 EXECUTE — 기록이 붙은 `skin` 신호 (D-079) | YES | NO (기록이 없어 HANDOFF) |
 | Gait EXECUTE | NO | NO |
 
 - **앱 회원의 assistant 경유 Training 실행은 의도된 제품 접근 확대입니다** — 우발적
@@ -433,6 +445,9 @@ Place 는 PR #196 에서 실행 registry 에 들어왔고 `requested_capability=
 ### 나머지 규칙
 
 - **Skin · Gait 로는 EXECUTE 하지 않습니다.** 대화에서 그 도메인이 감지되면 HANDOFF 입니다.
+  예외는 하나입니다 — 앱이 판정 기록(`screening_record_id`)을 붙여 `skin` 신호를 보내면, 그
+  판정을 **해설**하는 `skin` EXECUTE 가 돕니다 (D-079, `planner.resolve_skin_route`). 판정을
+  새로 내는 것은 여전히 HANDOFF 이고, 라우터는 `skin` 을 EXECUTE 로 고를 수 없습니다.
   Skin 은 #100/D-040 이후 main backend 의 `/screen/*` 로 기술적으로 호출 가능하지만,
   multipart 업로드와 통제 문구 보존이 필요한 전용 플로우라 Card 1 역할은 그대로
   HANDOFF 입니다. Gait 는 여전히 `gait` profile 뒤의 별도 프로세스이고 #98도 미머지입니다.

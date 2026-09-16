@@ -16,6 +16,7 @@ from daengs_backend.orchestration.contracts import (
     RoutePlan,
     RouterKind,
     ScreeningContext,
+    SkinPayload,
     TrainingPayload,
 )
 from daengs_backend.orchestration.semantic import ExecuteName
@@ -67,7 +68,7 @@ def test_route_plan_has_no_scalar_mode() -> None:
 
 def test_unsupported_capability_fails_predictably() -> None:
     with pytest.raises(ValidationError):
-        CapabilityRequest(capability="skin", payload={"question": "피부가 이상해"})
+        CapabilityRequest(capability="gait", payload={"question": "걸음이 이상해"})
 
 
 def test_capability_payload_must_match_its_identity() -> None:
@@ -118,10 +119,18 @@ def test_screening_verdict_stays_the_three_the_capability_owns() -> None:
         ScreeningContext(verdict="inconclusive", days_ago=0)
 
 
-def test_skin_is_still_not_an_executable_capability() -> None:
-    """기록을 읽는 것은 실행이 아니다 — 인가 매트릭스의 `Skin EXECUTE = NO` 는 그대로다
-    (docs/orchestration/routing.md §5). #307 이 넓힌 것은 컨텍스트이지 능력이 아니다."""
-    assert "skin" not in {capability.value for capability in CapabilityName}
+def test_skin_executes_only_as_an_explainer_of_the_narrow_verdict() -> None:
+    """D-079 이 D-036 의 `Skin EXECUTE = NO` 를 좁게 열었다 — 이미 끝난 판정을 **해설**하는
+    실행 하나다. #307 의 좁힘은 그대로다: 해설 payload 의 판정은 `ScreeningContext` 자체라서
+    병변 이름 · 확률 · 통제 문구가 들어갈 칸이 없다. 판정을 새로 내는 실행은 여전히 없다 —
+    업로드가 필요한 `gait` 도 능력이 아니라 HANDOFF 다."""
+    assert set(SkinPayload.model_fields) == {"question", "screening", "history"}
+    assert SkinPayload.model_fields["screening"].annotation is ScreeningContext
+    with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
+        SkinPayload.model_validate(
+            {"question": "q", "screening": {"verdict": "abnormal", "days_ago": 0}, "top1": "A6"}
+        )
+    assert "gait" not in {capability.value for capability in CapabilityName}
 
 
 # ---------------------------------------------- 능력 이름의 사본 (#269)
@@ -140,5 +149,12 @@ def test_capability_names_have_exactly_three_copies_and_they_agree() -> None:
     # `general` (D-057) 은 v9 부터 라우터 목적지이기도 하다.
     # `vet_contact` 는 라우터가 고를 수 없는 능력이라 세 사본이 더는 완전히 같지 않다 —
     # 결정론적 어휘 게이트와 명시 신호로만 들어온다.
-    assert set(get_args(ExecuteName)) == names - {"vet_contact"}, "라우터가 고를 수 있는 목적지가 어긋났다"
+    # `care_log` (D-075) 도 라우터 밖이고, 한 겹 더 좁다 — 명시 신호로도 못 부르고,
+    # 사용자가 앞 턴의 제안에 승낙했을 때만 들어온다.
+    # `skin` (D-079) 도 라우터 밖이다 — 판정 기록이 붙은 `skin` 명시 신호로만 들어온다.
+    router_reachable = names - {"vet_contact", "care_log", "skin"}
+    assert set(get_args(ExecuteName)) == router_reachable, "라우터가 고를 수 있는 목적지가 어긋났다"
+    # **꼬리표는 안 좁힌다.** 라우터가 못 고르는 능력이라도 결과가 OK 면 `categories_of()` 가
+    # 이름을 그대로 넣고, 그 행을 읽을 때 `AgentCategory` 가 좁으면 500 이 난다 — 그것이
+    # 위 독스트링의 #269 사고다.
     assert names == set(get_args(AgentCategory)), "저장된 대화를 읽어 줄 꼬리표가 어긋났다"

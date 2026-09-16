@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from enum import StrEnum
 from typing import Any, Literal, TypedDict
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -27,6 +28,20 @@ class CapabilityName(StrEnum):
     #: 이유가 정반대다 — GENERAL 은 모델이 근거 있는 능력과 바꿔치기하지 못하게 뺐고,
     #: 이것은 **모델을 아예 안 태우려고** 뺐다. 결정론적 어휘 게이트와 명시 신호로만 들어온다.
     VET_CONTACT = "vet_contact"
+    #: 케어 기록 쓰기 (#331 후속, D-075). **이 저장소에서 유일하게 쓰는 능력이다.**
+    #:
+    #: `vet_contact` 와 같은 이유로 `semantic.ExecuteName` 에 없다 — 모델을 아예 안 태운다.
+    #: 다만 여기서는 한 단계 더 좁다: `vet_contact` 는 어휘 게이트가 **질의 원문**으로 열지만,
+    #: 이것은 **사용자가 앞 턴의 제안에 승낙했을 때만** 열린다 (`planner.resolve_care_log_write`).
+    #: 라우터가 낼 수 있는 것은 같은 뜻의 HANDOFF 하나뿐이고, 그 HANDOFF 는 아무것도 안 쓴다.
+    CARE_LOG = "care_log"
+    #: 피부 판정 해설 (D-079). **판정을 새로 내지 않는다** — 이미 끝난 스크리닝 기록 한 건을 받아
+    #: 무슨 뜻인지 풀고 다음 행동(다시 찍기 · 진료 · 지켜보기)을 고른다.
+    #:
+    #: `vet_contact` 와 같이 `semantic.ExecuteName` 에 없다. 들어오는 길은 명시 신호
+    #: `requested_capability="skin"` 에 **서버가 소유를 확인한 판정 기록이 붙었을 때** 하나뿐이고
+    #: (`planner.resolve_skin_route`), 기록이 없으면 같은 신호가 예전처럼 HANDOFF 다.
+    SKIN = "skin"
 
 
 class CapabilityStatus(StrEnum):
@@ -130,6 +145,99 @@ class CareLogContext(ContractModel):
     last_meal_at: str | None = Field(default=None, pattern=_CLOCK_PATTERN)
     last_medication_at: str | None = Field(default=None, pattern=_CLOCK_PATTERN)
     last_snack_at: str | None = Field(default=None, pattern=_CLOCK_PATTERN)
+
+
+class CareLogKind(StrEnum):
+    """기록할 수 있는 케어 종류. `care_events.kind` 의 CHECK 제약과 같은 값이다 (#332).
+
+    **`walk` 가 없다.** 산책은 `walks` 가 진실이라 `care_events` 에도 없고, 여기에도 없다 —
+    한 사실이 두 곳에 있으면 반드시 어긋난다 (`db/init/23_care_events.sql` 머리말).
+
+    `schemas/care_event.CareEventKind`(Literal)의 **사본**이다. 두 벌인 것은 방향 때문이다:
+    orchestration 계약은 HTTP 스키마를 import 하지 않는다(D-035 의 반대 방향). 사본끼리는
+    `tests/test_assistant_care_log_write.py` 가 대조한다 (`aggregate._SCREENING_VERDICTS` 와
+    같은 장치).
+    """
+
+    MEAL = "meal"
+    MEDICATION = "medication"
+    SNACK = "snack"
+
+
+class CareLogProposal(ContractModel):
+    """"이대로 기록할까요?" 의 **이대로** — 그리고 승낙 뒤 실제로 쓰이는 값 (#331 후속, D-075).
+
+    한 타입이 제안과 payload 를 겸하는 것이 의도다. 확인 단계의 약속은 "보여 준 것만
+    들어간다" 이고, 제안과 payload 가 다른 타입이면 그 약속을 **코드가 아니라 사람이** 지켜야
+    한다 — 필드를 하나 더한 payload 는 아무 검증도 안 걸리고 통과한다.
+
+    **모델이 만든 값이 하나도 없다** (D-051). `kind` 는 결정론 어휘가 읽고
+    (`care_log.kind_of`), `occurred_at` 은 **서버 시계**이고, `pet_id` 는 신뢰된
+    `context["active_dog_id"]` 이고, `proposal_id` 는 서버가 만든 UUID 다.
+
+    `occurred_at` 이 제안 시점인 이유: 이 기능이 받는 말은 "방금 먹였어" 다. 사용자가 말한
+    시점이 곧 챙긴 시점이고, 그 값을 사용자가 확인 문장에서 눈으로 보고 승낙한다. 지난 시각을
+    적는 것은 기록 화면의 일이다 — 그쪽은 시각을 손으로 고른다.
+
+    `proposal_id` 가 `care_events.client_event_id` 로 간다. 그 칸은 원래 **앱이** 만드는
+    멱등키인데(`db/init/23_care_events.sql`) 이 경로에서는 서버가 만든다 — 채팅에는 그 키를
+    만들 앱 코드가 없고, 같은 제안에 두 번 "네" 라고 답해도 한 줄이어야 한다. 키의 출처가
+    갈리는 것은 감수한 것이고, 유일성은 어느 쪽이 만들어도 같은 UNIQUE 가 보장한다.
+    """
+
+    kind: CareLogKind
+    pet_id: UUID
+    occurred_at: datetime
+    proposal_id: UUID
+
+    @field_validator("occurred_at")
+    @classmethod
+    def occurred_at_is_aware(cls, value: datetime) -> datetime:
+        # `schemas/care_event.CareEventCreate` 와 같은 규칙. naive 로 받으면 어느 하루에
+        # 넣을지 서버가 추측하게 되고, 이 값은 `public_response` 로 JSON 왕복을 한다.
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("occurred_at requires a timezone")
+        return value
+
+
+class WalkActivityContext(ContractModel):
+    """오늘 앱이 **실제로 기록한** 산책: 건수, 그중 측정이 끝난 건수, 그 합계 거리와 이동 시간.
+
+    `CareLogContext` 의 형제이고 규칙이 같다 — 소유권을 확인해 읽고, 좁혀서 넘기고, 없으면
+    None. 다른 것은 **무엇을 빼느냐**다.
+
+    **좌표가 한 칸도 없다.** 위경도 · 폴리라인 · 지점 목록이 여기 있으면 D-051 이 "지명은
+    좌표가 아니다" 로 막아 둔 것을 뒷문으로 여는 셈이 된다 — 모델이 경로를 받으면 그것으로
+    다른 경로를 추정한다. 답 문장에 필요한 것은 합계뿐이다.
+
+    **`walk_count` 와 `measured_walk_count` 가 따로인 것이 요점이다.** 한 산책에 분석 행이
+    여러 개 달릴 수 있고(`walk_analyses` 의 유니크 제약이 6칸이다), 봉인이 안 끝난 산책도
+    있다. 합계는 **측정이 끝난 것만** 더한 값이고, 둘이 다르면 답이 그 사실을 말한다 —
+    "3건 중 2건만 계산됐어요" 는 참이지만 "3건에 1.2km" 는 거짓이다.
+
+    **거리를 km 로 미리 나누지 않는다.** 반올림은 답을 쓰는 자리에서 하고, 계약은 원값을
+    나른다. `CareLogContext` 가 시각을 타임스탬프가 아니라 `HH:MM` 로 나르는 것과 반대
+    방향처럼 보이지만 이유는 같다 — 소비자가 필요로 하는 모양으로만 준다.
+
+    기록이 하나도 없는 날은 여기 안 온다(resolver 가 None 을 낸다): 빈 기록은 "안 걸었다"
+    가 아니라 "이 기능을 안 쓴다" 일 수 있고, 프롬프트가 둘 중 어느 쪽도 말하면 안 된다.
+    """
+
+    day: date
+    walk_count: int = Field(ge=0, le=200)
+    measured_walk_count: int = Field(ge=0, le=200)
+    #: 측정이 끝난 산책의 합계 거리(m). 하루 500km 를 넘는 값은 기록이 아니라 사고다.
+    distance_m: int = Field(ge=0, le=500_000)
+    #: 같은 산책들의 합계 이동 시간(s). 하루를 넘을 수 없다.
+    moving_s: int = Field(ge=0, le=86_400)
+    #: 마지막 산책이 시작된 시각. `CareLogContext` 와 같은 `HH:MM`(서울)이고 타임스탬프가 아니다.
+    last_started_at: str | None = Field(default=None, pattern=_CLOCK_PATTERN)
+
+    @model_validator(mode="after")
+    def measured_never_exceeds_recorded(self) -> WalkActivityContext:
+        if self.measured_walk_count > self.walk_count:
+            raise ValueError("measured_walk_count cannot exceed walk_count")
+        return self
 
 
 class LastVetVisitContext(ContractModel):
@@ -292,12 +400,19 @@ class GeneralPayload(ContractModel):
     ``vet_spend`` (#353 Task 7) is the same rule applied to confirmed vet visits: "피부로
     1년간 얼마 썼지" and "그 병원 번호 뭐였지" are general questions, and Life's documents
     do not carry either answer.
+
+    ``walk_activity`` (D-073) 는 오늘 기록된 산책의 합계다. 여기 **좌표가 없는 것이 설계**이고,
+    이유는 `WalkActivityContext` 독스트링에 있다.
     """
 
     question: str = Field(min_length=1, max_length=1_000)
     dog: DogContext | None = None
     care_log: CareLogContext | None = None
     vet_spend: VetSpendContext | None = None
+    #: 오늘 기록된 산책 (D-073). `care_log`·`vet_spend` 와 같은 규칙 — 폴백에만 오고,
+    #: Life 의 조례·보조금 문서는 오늘 걸은 거리로 달라지지 않는다. None 이면 프롬프트가
+    #: 이 카드 전과 한 글자도 다르지 않다.
+    walk_activity: WalkActivityContext | None = None
     #: 대화 맥락 (#416). **이력 원문이 아니다** — Turn Resolver(`orchestration/resolver.py`)가
     #: 만든 제한된 구조화 컨텍스트다. `relation=NEW` 이거나 확신이 낮으면 `None` 이고,
     #: 그것이 프롬프트를 오늘과 바이트 동일하게 유지하는 방법이다(#416 Task 5).
@@ -330,8 +445,47 @@ class VetContactPayload(ContractModel):
         return self
 
 
+class SkinPayload(ContractModel):
+    """피부 판정 해설의 입력: 사용자 원문 + #307 의 좁은 판정 둘 + 같은 아이의 이전 판정.
+
+    **병변 이름 · 확률 · 통제 문구의 칸이 없는 것이 이 타입의 전부다** (불변식 15, D-023).
+    `ScreeningContext` 를 그대로 품는 이유는 `ScreeningHistory` 와 같다 — "말해도 되는 판정"의
+    두 번째, 더 느슨한 정의가 생기지 않게. 모델이 모르는 것은 말할 수 없다.
+
+    `dog` 가 없는 것도 의도다. 견종·나이로 피부 이야기를 하기 시작하면 판정이 말하지 않은
+    것(이 견종에 흔한 병)을 모델이 채운다.
+    """
+
+    question: str = Field(min_length=1, max_length=1_000)
+    screening: ScreeningContext
+    history: ScreeningHistory | None = None
+
+
+class FacilitySessionPayload(ContractModel):
+    """Continue an owner-bound facility view; coordinates belong to the saved search."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=False)
+    query: str = Field(min_length=1, max_length=1_000)
+    facility_session_id: UUID
+
+    @field_validator("query")
+    @classmethod
+    def query_is_not_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("query must not be blank")
+        return value
+
+
 CapabilityPayload = (
-    TrainingPayload | LifePayload | WalkPayload | PlacePayload | GeneralPayload | VetContactPayload
+    TrainingPayload
+    | LifePayload
+    | WalkPayload
+    | PlacePayload
+    | FacilitySessionPayload
+    | GeneralPayload
+    | VetContactPayload
+    | CareLogProposal
+    | SkinPayload
 )
 _PAYLOAD_TYPES = {
     CapabilityName.TRAINING: TrainingPayload,
@@ -340,6 +494,10 @@ _PAYLOAD_TYPES = {
     CapabilityName.PLACE: PlacePayload,
     CapabilityName.GENERAL: GeneralPayload,
     CapabilityName.VET_CONTACT: VetContactPayload,
+    # 제안과 payload 가 같은 타입이다 — 확인 단계의 약속("보여 준 것만 들어간다")을
+    # 사람이 아니라 타입이 지키게 하려는 것이고, 이유는 `CareLogProposal` 독스트링에 있다.
+    CapabilityName.CARE_LOG: CareLogProposal,
+    CapabilityName.SKIN: SkinPayload,
 }
 
 
@@ -356,12 +514,23 @@ class CapabilityRequest(ContractModel):
         data = dict(value)
         capability = CapabilityName(data.get("capability"))
         payload_type = _PAYLOAD_TYPES[capability]
+        payload = data.get("payload")
+        if capability == CapabilityName.PLACE and (
+            isinstance(payload, FacilitySessionPayload)
+            or isinstance(payload, dict)
+            and "facility_session_id" in payload
+        ):
+            payload_type = FacilitySessionPayload
         data["payload"] = payload_type.model_validate(data.get("payload"))
         return data
 
     @model_validator(mode="after")
     def payload_matches_capability(self) -> CapabilityRequest:
         expected = _PAYLOAD_TYPES[self.capability]
+        if self.capability == CapabilityName.PLACE and isinstance(
+            self.payload, FacilitySessionPayload
+        ):
+            return self
         if not isinstance(self.payload, expected):
             raise TypeError(f"{self.capability.value} requires {expected.__name__}")
         return self
@@ -408,6 +577,15 @@ class ClarifyRequest(ContractModel):
     #: 넣어 주지 않는다. 모델이 안 고르면 빈 채로 나가고, `#416` 은 그것을 "축을 모른다"
     #: 로 읽어야지 "물은 것이 없다" 로 읽으면 안 된다.
     missing_axes: list[ObservationAxis] = Field(default_factory=list, max_length=2)
+    #: **이 되묻기가 승낙을 받으려는 기록** (#331 후속, D-075). 케어 기록 확인일 때만 채워지고,
+    #: 다른 되묻기(좌표 게이트 · 관찰 되묻기)에서는 늘 `None` 이다.
+    #:
+    #: 새 칸도 새 테이블도 필요 없다 — `services/chat.public_response_of` 가
+    #: `model_dump(mode="json")` 라 이 값은 `chat_turns.public_response` 에 통째로 저장되고,
+    #: `pending_clarification_of` 가 다음 턴에 그대로 읽어 온다 (`missing_axes` 와 같은 길).
+    #: 그것이 "확인 단계" 를 **상태 없이** 만드는 방법이다: 대기 중인 쓰기를 담아 둘 서버
+    #: 메모리도, 만료 잡도 없다. 대기가 한 턴짜리인 것도 거기서 따라온다.
+    care_log: CareLogProposal | None = None
 
 
 class TurnRelation(StrEnum):
@@ -569,6 +747,8 @@ __all__ = [
     "CapabilityRequest",
     "CapabilityResult",
     "CapabilityStatus",
+    "CareLogKind",
+    "CareLogProposal",
     "ClarifyRequest",
     "ConversationContext",
     "ErrorDetail",
@@ -591,5 +771,6 @@ __all__ = [
     "TurnRelation",
     "VetContactPayload",
     "VetSpendContext",
+    "WalkActivityContext",
     "WalkPayload",
 ]

@@ -36,6 +36,14 @@ name: DB 마이그레이션 적용
 on:
   workflow_dispatch:
     inputs:
+      territory_action:
+        description: 'Territory worker maintenance; none uses the existing migration path'
+        type: choice
+        options: [none, Inspect, Pause, Resume, Verify]
+        default: none
+      expected_live_sha:
+        description: 'Exact deployed commit required for territory maintenance'
+        type: string
       inspect_walk:
         description: "Read-only Walk runtime inventory; ignores migration inputs"
         required: false
@@ -68,8 +76,30 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  territory_runtime:
+    if: ${{ inputs.territory_action != '' && inputs.territory_action != 'none' }}
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 8
+    concurrency:
+      group: deploy
+      cancel-in-progress: false
+    env:
+      TERRITORY_ACTION: ${{ inputs.territory_action }}
+      TERRITORY_LIVE_SHA: ${{ inputs.expected_live_sha }}
+    steps:
+      # Isolated tools only: never replace bind-mounted application code before its SQL.
+      - uses: actions/checkout@v5
+        with:
+          path: _territory-runtime
+          clean: false
+      - name: Operate on the exact deployed territory runtime
+        shell: powershell
+        run: |
+          $script = Join-Path $env:GITHUB_WORKSPACE '_territory-runtime/tools/territory-vision-runtime.ps1'
+          & $script -Action $env:TERRITORY_ACTION -LiveRoot $env:GITHUB_WORKSPACE -ExpectedLiveSha $env:TERRITORY_LIVE_SHA
+
   inspect_walk:
-    if: ${{ inputs.inspect_walk }}
+    if: ${{ inputs.inspect_walk && (inputs.territory_action == '' || inputs.territory_action == 'none') }}
     runs-on: [self-hosted, Windows, X64]
     steps:
       - name: Read inspection tool in an isolated checkout
@@ -99,7 +129,7 @@ jobs:
           }
 
   migrate:
-    if: ${{ !inputs.inspect_walk }}
+    if: ${{ !inputs.inspect_walk && (inputs.territory_action == '' || inputs.territory_action == 'none') }}
     name: ${{ inputs.file }} 적용
     runs-on: [self-hosted, Windows, X64]
     defaults:
@@ -176,6 +206,23 @@ jobs:
       # ⚠️ **옛 백업을 자동으로 지우지 않습니다.** 연달아 돌리면 제일 오래된 것부터
       #    밀려 나가는데, 크게 되돌려야 할 때 필요한 것이 바로 그 "아무것도 안 바뀐
       #    상태" 의 백업입니다. 목록만 보여 주고, 지우는 판단은 사람이 합니다.
+      #
+      # ⚠️ **크기와 매직만으로는 복구 가능성을 못 봅니다.** 앞 4KB 만 남은 잘린 덤프도
+      #    `크기 > 1024` 와 선두 `PGDMP` 를 그대로 통과합니다 — 2026-09-13 에 일회용 DB 로
+      #    실측했습니다(450,686 바이트 덤프를 4,096 바이트로 자름 → 두 검사 모두 통과).
+      #    그래서 `pg_restore -l` 로 아카이브의 **TOC 를 실제로 읽습니다.** 잘렸거나 헤더가
+      #    깨졌으면 `could not read from input file: end of file` 로 여기서 멈춥니다.
+      #
+      # 🔴 **그래도 이것은 "구조 검사" 일 뿐 전체 복원 성공을 보장하지 않습니다.**
+      #    보장하는 것은 *"TOC 를 끝까지 읽을 수 있고 항목이 하나 이상 있다"* 까지입니다.
+      #    TOC 뒤 데이터 블록의 손상, 복원 대상의 디스크 여유, 확장·롤 유무는 안 봅니다
+      #    (롤은 이 덤프에 **아예 없습니다** — runbook 의 `globals.sql`).
+      #    진짜 확신이 필요하면 버리는 DB 에 `pg_restore` 로 실제 복원해 보는 수밖에 없고,
+      #    그것은 이 워크플로가 하기에는 너무 무겁습니다(운영 DB 크기만큼의 디스크·시간).
+      #
+      # ⚠️ 검사 대상은 **호스트로 꺼낸 그 파일**입니다. 컨테이너 안 원본이 아니라
+      #    `docker cp` 산출물이 나중에 복원에 쓰이므로, 그것을 다시 넣어 검사합니다.
+      #    복사가 한 번 더 도는 대가를 그래서 치릅니다.
       - name: Backup (pg_dump)
         if: ${{ inputs.backup }}
         shell: powershell
@@ -204,6 +251,18 @@ jobs:
           # If the binary ever goes through a text pipe again, this catches it.
           $magic = [System.Text.Encoding]::ASCII.GetString([byte[]](Get-Content $out -Encoding Byte -TotalCount 5))
           if ($magic -ne 'PGDMP') { throw "not a pg_dump archive (magic='$magic') - aborting" }
+
+          # Structure check: actually read the archive table of contents.
+          # Size and magic pass on a truncated dump; this does not.
+          docker cp $out ('pgvector:' + '/tmp/verify-backup.dump')
+          if ($LASTEXITCODE -ne 0) { throw "docker cp (verify) failed - aborting before any change" }
+          $toc = docker compose exec -T pgvector sh -c 'pg_restore -l /tmp/verify-backup.dump'
+          $rc = $LASTEXITCODE
+          docker compose exec -T pgvector rm -f /tmp/verify-backup.dump
+          if ($rc -ne 0) { throw "pg_restore -l failed (exit $rc) - dump not readable, aborting before any change" }
+          $entries = @($toc | Where-Object { $_ -match '^[0-9]+;' }).Count
+          if ($entries -lt 1) { throw "pg_restore -l listed no TOC entries - aborting before any change" }
+          Write-Host "pg_restore -l ok: $entries TOC entries (structure only, NOT a full restore test)"
 
           Write-Host "backup ok: $out ($([math]::Round($size/1MB,1)) MB)"
           Write-Host "restore: docker cp <file> pgvector:/tmp/r.dump then pg_restore"

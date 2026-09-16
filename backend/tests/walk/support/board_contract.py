@@ -4,12 +4,12 @@ from dataclasses import replace
 from unittest.mock import patch
 from uuid import UUID
 
-from daengs_backend.services.walk_diary_base_board import assemble_saved_base_board
-from daengs_backend.services.walk_diary_board_writing import complete_board
-from daengs_backend.services.walk_diary_generation import result
-from daengs_backend.services.walk_diary_prepare import PreparedWalkDiary
-from daengs_walk.diary_input import Behavior, DiaryInput, digest
-from daengs_walk.diary_writing import accept_writing, prepare_writing
+from daengs_backend.services.walk_diary.legacy.board_bundle import complete_board
+from daengs_backend.services.walk_diary.lifecycle.snapshot import result
+from daengs_backend.services.walk_diary.preparation.board import assemble_saved_base_board
+from daengs_backend.services.walk_diary.preparation.diary import PreparedWalkDiary
+from daengs_walk.diary.contracts.input import Behavior, DiaryInput, digest
+from daengs_walk.diary.legacy.writing import accept_writing, prepare_writing
 from tests.walk.support.base_board import policy, saved_case
 from tests.walk.support.diary import nearby, prose, record
 
@@ -38,7 +38,8 @@ def board_contract():
     )
     base = assemble_saved_base_board(replace(assembled, source=source), policy())
     prepared = PreparedWalkDiary(base.input, base.plan.intermediate, base)
-    # Exercise the same accepted writer bridge as the API, without a live model call.
+    # Preserve the existing published Android fixture through its original writer
+    # bridge. New slot-writer behavior is covered separately; old boards stay readable.
     old_plan = prepared.prepared.plan
     writing = prepare_writing(source, prepared.prepared)
     output = complete_board(

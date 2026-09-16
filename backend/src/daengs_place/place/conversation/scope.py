@@ -35,7 +35,6 @@ FACILITY_WORDS = (
     "|".join(KIND_WORDS.values())
     + r"|시설|장소|주차|반경|전용|동반|찜|저장|조건|후보|목록|여기|거기|이곳|그곳|첫\s*번째|두\s*번째|\d+\s*번|새로운\s*곳|다른\s*곳|아무\s*데나|한\s*곳|하나\s*골라"
 )
-FOLLOWUP = r"(?:더|다시|다음|다른\s*곳|가까운\s*곳|주변|한\s*곳|하나|아무\s*데나)?\s*(?:보여줘|보여주세요|찾아줘|찾아주세요|골라줘|골라주세요|추천해줘|처음부터|새로고침)[.!~ ]*"
 
 
 class OutsideFacilityScope(ValueError):
@@ -43,7 +42,7 @@ class OutsideFacilityScope(ValueError):
 
 
 def validate_scope(intent, query, previous=None):
-    """Live proposals need literal facility evidence before compilation or any operation."""
+    """Validate quoted authority and operation bounds, not natural-language vocabulary."""
     if intent.kind is None:  # Existing deterministic planners/research have no provider authority.
         return
     ScopedInterpretation.model_validate(intent.model_dump())
@@ -57,12 +56,13 @@ def validate_scope(intent, query, previous=None):
     ):
         raise OutsideFacilityScope("facility definitions are not state queries")
     undo_kinds = set()
+    relative_undo = re.fullmatch(r"(?:방금|아까)\s*추가한\s*(?:것|거)만?\s*취소해줘[.!~ ]*", quote)
     if (
         previous
         and previous.history
         and intent.changes.kinds
         and intent.changes.kinds.operation == "remove"
-        and re.fullmatch(r"(?:방금|아까)\s*추가한\s*(?:것|거)만?\s*취소해줘[.!~ ]*", quote)
+        and relative_undo
     ):
         last = previous.history[-1]
         if last.goal in {"show", "edit_only"} and re.search(r"도|추가", last.query):
@@ -71,24 +71,19 @@ def validate_scope(intent, query, previous=None):
                 for kind in previous.filters.candidate_kinds
                 if re.search(KIND_WORDS[kind], last.query)
             }
-    if not (re.search(FACILITY_WORDS, quote) or re.fullmatch(FOLLOWUP, quote) or undo_kinds):
-        raise ValueError("no supported facility request evidence")
     if intent.kind != "facility_action":
         return
     changes = intent.changes
     if intent.goal == "pick_one" and not re.search(r"골라|선택|하나|한\s*곳|아무\s*데나", quote):
         raise ValueError("selection lacks a current request")
-    if (
-        intent.goal == "show"
-        and not changes.model_dump(exclude_defaults=True)
-        and not (intent.bookmark or intent.place_edit or intent.familiarity)
-        and intent.search_scope == "keep"
-        and intent.navigation == "stay"
-        and not re.search(r"찾|보여|추천|다음|다른|다시|새로|처음부터|갖고와|가져", quote)
-    ):
-        raise ValueError("search lacks a current request")
+    # The model resolves paraphrases and nominal requests ("먹을 수 있는 곳").
+    # Literal category words are only a contradiction check when actually present;
+    # absence of a word from this finite list is not evidence against a request.
+    named_kinds = {kind for kind, pattern in KIND_WORDS.items() if re.search(pattern, quote)}
     for kind in changes.kinds.values if changes.kinds else ():
-        if not re.search(KIND_WORDS[kind], quote) and kind not in undo_kinds:
+        if relative_undo and kind not in undo_kinds:
+            raise ValueError("relative category undo lacks a committed addition")
+        if named_kinds and kind not in named_kinds and kind not in undo_kinds:
             raise ValueError("category change lacks evidence")
     for changed, pattern in [
         (changes.parking != "keep", r"주차"),

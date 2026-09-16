@@ -505,6 +505,18 @@ async def test_carer_cannot_remove_another_carer(store: Store, pet: FakePet):
     assert client_as(CARER).delete(f"/app/pets/{pet.id}/members/{other}").status_code == 403
 
 
+async def test_owner_cannot_remove_a_non_member(store: Store, pet: FakePet):
+    """IDOR — 구성원이 아닌 id 를 지워도 204 가 나가면 "지웠다" 와 "원래 없었다" 가
+    같아 보인다. 그 사람이 이 강아지와 엮여 있는지를 떠보는 창구가 된다."""
+    store.pet_members.append((pet.id, CARER))
+    stranger = uuid.uuid4()
+
+    r = client_as(OWNER).delete(f"/app/pets/{pet.id}/members/{stranger}")
+
+    assert r.status_code == 404
+    assert store.pet_members == [(pet.id, CARER)]
+
+
 async def test_owner_cannot_remove_self(store: Store, pet: FakePet):
     """대표는 승계 엔드포인트로 가야 한다."""
     assert client_as(OWNER).delete(f"/app/pets/{pet.id}/members/{OWNER}").status_code == 409

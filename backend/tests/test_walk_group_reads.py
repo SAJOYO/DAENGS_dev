@@ -362,6 +362,43 @@ def test_스스로_나간_보호자도_그룹_산책을_못_본다(store: Store,
     assert client_as(B).get(f"/app/pets/{b_pet.id}/walks/{wa.id}").status_code == 404
 
 
+def test_자기_카드_id_로_나간_보호자도_그룹_산책을_못_본다(store: Store, linked):
+    """앱이 보내는 것은 **자기 카드 id** 다 — 연결한 보호자에게 그것은 자기가 대표인 행이라,
+    행 대표로 판단하던 동안은 이 요청이 409 로 막혀 나가기가 아예 안 됐다.
+
+    나간 **뒤에** 주보호자가 남긴 산책까지 안 보여야 한다. 반대로 **자기가 남긴 산책은
+    자기 카드에 그대로 남는다** — 나가기는 기록을 옮기거나 지우지 않는다.
+    """
+    a_pet, b_pet = linked
+    wa = add_walk(store, A, [a_pet], T0)
+    wb = add_walk(store, B, [b_pet], T0 + timedelta(hours=1))
+
+    assert client_as(B).delete(f"/app/pets/{b_pet.id}/members/{B}").status_code == 204
+
+    later = add_walk(store, A, [a_pet], T0 + timedelta(days=1))
+    assert walk_ids(client_as(B).get(f"/app/pets/{b_pet.id}/walks")) == [str(wb.id)]
+    assert client_as(B).get(f"/app/pets/{b_pet.id}/walks/{wa.id}").status_code == 404
+    assert client_as(B).get(f"/app/pets/{b_pet.id}/walks/{later.id}").status_code == 404
+    assert client_as(B).get(f"/app/pets/{a_pet.id}/walks").status_code == 404
+    assert client_as(B).get(f"/app/pets/{a_pet.id}/walks/{later.id}").status_code == 404
+    # 주보호자 쪽에서도 나간 사람 행의 산책이 더는 안 섞인다.
+    assert walk_ids(client_as(A).get(f"/app/pets/{a_pet.id}/walks")) == [str(later.id), str(wa.id)]
+
+
+def test_그룹_여러_행의_돌보미는_한_번에_전부_끊긴다(store: Store, linked):
+    """C 는 앵커 행과 B 의 행 **둘 다**의 돌보미다. 요청받은 행 하나만 지우면 남은 행의
+    멤버십으로 그룹을 계속 읽는다 — 그것이 이 테스트가 잡는 회귀다."""
+    a_pet, b_pet = linked
+    store.pet_members += [(a_pet.id, C), (b_pet.id, C)]
+    add_walk(store, A, [a_pet], T0)
+    add_walk(store, B, [b_pet], T0 + timedelta(hours=1))
+
+    assert client_as(A).delete(f"/app/pets/{a_pet.id}/members/{C}").status_code == 204
+
+    assert client_as(C).get(f"/app/pets/{a_pet.id}/walks").status_code == 404
+    assert client_as(C).get(f"/app/pets/{b_pet.id}/walks").status_code == 404
+
+
 def test_연결_없이_참여했다_나간_보호자는_404(store: Store, solo: FakePet):
     walk = add_walk(store, O, [solo], T0)
     assert client_as(J).delete(f"/app/pets/{solo.id}/members/{J}").status_code == 204

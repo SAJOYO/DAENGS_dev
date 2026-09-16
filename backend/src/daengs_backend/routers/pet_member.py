@@ -360,7 +360,13 @@ async def list_members(pet_id: uuid.UUID, user: CurrentAppUser, session: Session
 async def remove_member(
     pet_id: uuid.UUID, target_id: uuid.UUID, user: CurrentAppUser, session: Session
 ) -> None:
-    """내보내기(대표) 또는 나가기(본인). **대표는 자기를 못 뺍니다** — 승계로 가야 합니다."""
+    """내보내기(그룹 주보호자) 또는 나가기(본인). **그룹 주보호자는 자기를 못 뺍니다** —
+    승계로 가야 합니다.
+
+    `pet_id` 는 **부른 사람의 카드 id**(`display_pet_id`)입니다. 연결한 공동 보호자에게 그
+    id 는 자기가 대표인 자기 행이고, 앵커 행 id 는 앱에 안 내려갑니다 — 그래서 판정은 행이
+    아니라 **논리 그룹** 기준입니다 (docs/co-care.md §3 「퇴장 · 내보내기」 표).
+    """
     try:
         await member_service.remove_member(session, user.app_user_id, pet_id, target_id)
     except PetNotFoundError:

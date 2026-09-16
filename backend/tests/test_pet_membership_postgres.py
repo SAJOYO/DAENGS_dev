@@ -699,3 +699,182 @@ async def test_record_profile_sees_other_members_walks():
         await session.rollback()
         await session.close()
         await engine.dispose()
+
+
+# ── 나가기의 트랜잭션 경계 ──────────────────────────────────────────────────
+#
+# 멤버십 제거와 논리 연결 해제는 **둘이 갈라지는 순간이 있으면 안 된다** (docs/co-care.md
+# 「연결 수명주기」). 멤버십만 지워지고 연결이 남으면 나간 사람의 pet 행이 그룹에 그대로
+# 있어 **공동 조회로 남의 집 케어·산책을 계속 읽는다.** 가짜 저장소에는 트랜잭션이 없어
+# 이 성질은 여기서만 증명된다.
+
+
+async def _seed_linked_group(session):
+    """수락 직후의 모양 그대로. A 의 앵커 행 · B 의 연결된 행 · B 의 앵커 행 돌보미 자리."""
+    from sqlalchemy import text
+
+    a_user, b_user = uuid.uuid4(), uuid.uuid4()
+    a_pet, b_pet, identity = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+    for uid in (a_user, b_user):
+        await session.execute(
+            text(
+                "INSERT INTO app_users (id, kakao_id, status)"
+                " VALUES (CAST(:i AS uuid), :k, 'active')"
+            ),
+            {"i": str(uid), "k": uuid.uuid4().int % 10**12},
+        )
+    await session.execute(
+        text(
+            "INSERT INTO pets (id, app_user_id, name, breed)"
+            " VALUES (CAST(:a AS uuid), CAST(:au AS uuid), '롱이씨', '믹스'),"
+            "        (CAST(:b AS uuid), CAST(:bu AS uuid), '롱롱씨', '믹스')"
+        ),
+        {"a": str(a_pet), "au": str(a_user), "b": str(b_pet), "bu": str(b_user)},
+    )
+    await session.execute(
+        text(
+            "INSERT INTO pet_identities (id, owner_pet_id)"
+            " VALUES (CAST(:i AS uuid), CAST(:a AS uuid))"
+        ),
+        {"i": str(identity), "a": str(a_pet)},
+    )
+    await session.execute(
+        text(
+            "UPDATE pets SET identity_id = CAST(:i AS uuid)"
+            " WHERE id IN (CAST(:a AS uuid), CAST(:b AS uuid))"
+        ),
+        {"i": str(identity), "a": str(a_pet), "b": str(b_pet)},
+    )
+    await session.execute(
+        text(
+            "INSERT INTO pet_members (pet_id, app_user_id)"
+            " VALUES (CAST(:a AS uuid), CAST(:u AS uuid))"
+        ),
+        {"a": str(a_pet), "u": str(b_user)},
+    )
+    await session.flush()
+    return {
+        "a_user": a_user, "b_user": b_user,
+        "a_pet": a_pet, "b_pet": b_pet, "identity": identity,
+    }
+
+
+async def _leave_state(session, ids) -> tuple[int, int, int]:
+    """(B 의 돌보미 행 수, 아직 연결된 pet 행 수, 그룹 행 수). 셋이 **같이** 움직여야 한다."""
+    from sqlalchemy import text
+
+    members = await session.scalar(
+        text(
+            "SELECT count(*) FROM pet_members WHERE app_user_id = CAST(:u AS uuid)"
+        ),
+        {"u": str(ids["b_user"])},
+    )
+    linked = await session.scalar(
+        text(
+            "SELECT count(*) FROM pets WHERE identity_id = CAST(:i AS uuid)"
+        ),
+        {"i": str(ids["identity"])},
+    )
+    groups = await session.scalar(
+        text("SELECT count(*) FROM pet_identities WHERE id = CAST(:i AS uuid)"),
+        {"i": str(ids["identity"])},
+    )
+    return int(members), int(linked), int(groups)
+
+
+async def test_leave_commits_membership_and_identity_together():
+    """**진짜 `remove_member` 를 진짜 DB 에서**, 그것도 나가는 사람의 **자기 카드 id** 로.
+
+    연결한 공동 보호자에게 `display_pet_id` 는 자기가 대표인 행이라, 행 대표로 판단하던
+    동안은 이 호출이 `CannotRemoveOwnerError` 로 막혔다 — 앵커 행 id 로만 통했고 앱은 그
+    id 를 알 방법이 없었다. 여기서는 그 호출이 통하는 것과, 멤버십·연결·그룹 행이 **한
+    번의 commit 으로 함께** 사라지는 것을 같이 본다.
+    """
+    dsn = _sqlalchemy_dsn_or_skip()
+
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+    from daengs_backend.services import pet_member as member_service
+
+    engine = create_async_engine(dsn)
+    conn = await engine.connect()
+    outer = await conn.begin()
+    session = AsyncSession(bind=conn, join_transaction_mode="create_savepoint")
+    try:
+        ids = await _seed_linked_group(session)
+        assert await _leave_state(session, ids) == (1, 2, 1), "씨앗이 안 섰다"
+
+        # ⚠️ `pet_id` 는 **B 의 행**이다. 앵커(A 의 행)가 아니다.
+        await member_service.remove_member(
+            session, ids["b_user"], ids["b_pet"], ids["b_user"]
+        )
+
+        assert await _leave_state(session, ids) == (0, 0, 0), (
+            "멤버십·연결·그룹 행 중 남은 것이 있다 — 하나라도 남으면 나간 사람이"
+            " 공동 조회로 계속 읽는다"
+        )
+        # 행도 기록도 안 지워진다 — 나가기는 관계만 끊는다.
+        from sqlalchemy import text
+
+        rows = await session.scalar(
+            text(
+                "SELECT count(*) FROM pets"
+                " WHERE id IN (CAST(:a AS uuid), CAST(:b AS uuid))"
+            ),
+            {"a": str(ids["a_pet"]), "b": str(ids["b_pet"])},
+        )
+        assert int(rows) == 2, "나가기가 pet 행을 지웠다"
+    finally:
+        await session.close()
+        await outer.rollback()
+        await conn.close()
+        await engine.dispose()
+
+
+async def test_leave_rolls_back_everything_when_a_later_step_fails(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """마지막 단계가 터지면 **앞의 것도 안 일어난 것이 된다.**
+
+    `remove_member` 는 commit 을 끝에 한 번만 한다. 중간에 commit 이 하나라도 끼면
+    "멤버십은 지워졌는데 연결은 남은" 상태가 **DB 에 남아** 나간 사람이 계속 읽는다.
+    여기서는 대표 강아지 수선 직전 단계를 일부러 터뜨려 그 경계를 잰다 — 가짜 저장소에는
+    트랜잭션이 없어 이 회귀는 여기서만 걸린다.
+    """
+    dsn = _sqlalchemy_dsn_or_skip()
+
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+    from daengs_backend.repositories import app_user as app_user_repo
+    from daengs_backend.services import pet_member as member_service
+
+    engine = create_async_engine(dsn)
+    conn = await engine.connect()
+    outer = await conn.begin()
+    session = AsyncSession(bind=conn, join_transaction_mode="create_savepoint")
+    try:
+        ids = await _seed_linked_group(session)
+        # 씨앗을 바깥 트랜잭션에 올려 둔다 — 아래 rollback 이 씨앗까지 지우면 안 된다.
+        await session.commit()
+        assert await _leave_state(session, ids) == (1, 2, 1)
+
+        async def boom(*_args, **_kw):
+            raise RuntimeError("일부러 터뜨림")
+
+        monkeypatch.setattr(app_user_repo, "get_by_id", boom)
+
+        with pytest.raises(RuntimeError):
+            await member_service.remove_member(
+                session, ids["b_user"], ids["b_pet"], ids["b_user"]
+            )
+        # 요청 세션이 닫히며 도는 것과 같다 (`core/database.py::get_session`).
+        await session.rollback()
+
+        assert await _leave_state(session, ids) == (1, 2, 1), (
+            "중간에 터졌는데 멤버십이나 연결 중 일부가 이미 적용돼 있다"
+        )
+    finally:
+        await session.close()
+        await outer.rollback()
+        await conn.close()
+        await engine.dispose()

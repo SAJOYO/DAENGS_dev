@@ -44,3 +44,6 @@ class AiCardListResponse(BaseModel):
     #: 0 이면 막는다 — 이 칸이 없는 옛 서버에서는 앱이 막지 않고 서버 429/409 문장에 맡긴다.
     daily_limit: int | None = None
     daily_remaining: int | None = None
+    #: 업로드 화면에 띄우는 사진 안내 (#572 Task 6, `daengs_cardimage.catalog.PHOTO_GUIDANCE`). 앱은
+    #: 문구를 그리기만 한다 — 고치려면 배포 없이 이 값만 바꾸면 된다.
+    photo_guidance: str

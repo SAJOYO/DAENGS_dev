@@ -31,7 +31,7 @@ from daengs_backend.services.ai_card_quota import (
     AiCardMonthTakenError,
 )
 from daengs_cardimage import CardImageUnavailable
-from daengs_cardimage.catalog import MonthNotOpenError
+from daengs_cardimage.catalog import PHOTO_GUIDANCE, MonthNotOpenError
 from daengs_cardimage.photo import MAX_PHOTO_BYTES, PhotoError
 
 log = logging.getLogger(__name__)
@@ -157,7 +157,10 @@ async def list_cards(user: CurrentAppUser, session: Session) -> AiCardListRespon
     cards = await ai_card_service.list_cards(session, user.app_user_id)
     daily_limit, daily_remaining = await ai_card_service.daily_status(session, user.app_user_id)
     return AiCardListResponse(
-        cards=[_to_response(c) for c in cards], daily_limit=daily_limit, daily_remaining=daily_remaining
+        cards=[_to_response(c) for c in cards],
+        daily_limit=daily_limit,
+        daily_remaining=daily_remaining,
+        photo_guidance=PHOTO_GUIDANCE,
     )
 
 

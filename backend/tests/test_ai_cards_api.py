@@ -291,6 +291,12 @@ def test_list_unlimited_is_null(client: TestClient, monkeypatch: pytest.MonkeyPa
     assert body["daily_limit"] is None and body["daily_remaining"] is None
 
 
+def test_list_carries_photo_guidance(client: TestClient) -> None:
+    """엎드린 옆모습 사진은 몇 장을 뽑아도 쓸 게 없다(#557 E2) — 앞에서 막는 유일한 수단이 안내다."""
+    body = client.get("/app/ai-cards").json()
+    assert body["photo_guidance"] and "정면" in body["photo_guidance"]
+
+
 @pytest.mark.parametrize(
     ("name", "expected"),
     [("네오", "네오는"), ("콩", "콩은"), ("KONG", "KONG은(는)"), ("보리 2", "보리 2은(는)")],

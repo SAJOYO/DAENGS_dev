@@ -21,6 +21,16 @@ class MonthNotOpenError(Exception):
 DEFAULT_SEEDS: tuple[int, ...] = (1, 2, 3, 4, 5, 6)
 
 
+#: 업로드 화면에 띄우는 사진 안내 (#572 Task 6). `GET /app/ai-cards` 응답의 `photo_guidance` 로 나가
+#: `SAJOYO/DAENGS_APP` 과 이 저장소의 관리자 콘솔(`frontend/app/components/cardimage-inspect.tsx`)이
+#: 같은 문구를 쓴다 — 콘솔 쪽 상수는 이 값과 글자까지 맞춰야 한다.
+#: 근거: 정면 사진 72장의 판정기 닮음 평균이 4.11/5 였고(`docs/cardimage/compare-2026-09-16-months-seeds.md`),
+#: 엎드린 옆모습 사진은 #557 E2 에서 4장을 뽑아도 쓸 만한 장이 0장이었다
+#: (`docs/cardimage/compare-2026-09-16-klein-e2-e3.md`). 사진이 보증하는 것은 아니다 — 이와 별개로
+#: 4월은 seed 와 무관하게 사용자 사진이 아닌 참조 카드 강아지로 나오는 미해결 결함이 있다(같은 문서).
+PHOTO_GUIDANCE = "얼굴이 정면으로 보이고 앉아 있는 사진이 가장 잘 나와요. 엎드려 있거나 옆을 보는 사진은 닮지 않게 나올 수 있어요."
+
+
 #: 9월 틀의 검은 제목판 — 4월보다 11px 위에 있다(y 40~135, 4월은 53~145) 그리고 약 40px 좁다.
 #: 09-14 실측: 세로는 x=270~640 다섯 열 모두 중심 87.5~88.0, 오른쪽 경계 y65→x750 · y100→731 · y135→709.
 SEPTEMBER_PLATE = Plate(center_y=88, edge=((65, 750), (135, 709)), top_y=40)

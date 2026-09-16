@@ -470,6 +470,18 @@ class SkinPayload(ContractModel):
     question: str = Field(min_length=1, max_length=1_000)
     screening: ScreeningContext
     history: ScreeningHistory | None = None
+    #: 앞 대화 (#570). **이력 원문이 아니다** — Turn Resolver 가 만든 제한된 구조화 컨텍스트이고,
+    #: `GeneralPayload.conversation` 과 같은 값이다.
+    #:
+    #: **채워지는 길은 하나뿐이다.** 라우터가 낸 `skin` HANDOFF 를 해설로 바꾼 경로(D-081)에서만
+    #: 온다. 명시 신호(칩)는 판정 직후 첫 질문이고 그 게이트는 Turn Resolver 보다 앞에 서므로
+    #: 애초에 앞 대화가 없다.
+    #:
+    #: ⚠️ **불변식 15 는 이 칸에도 그대로다.** 여기 실려 오는 것은 사용자와 비서가 한 말이라,
+    #: 보호자가 수의사에게 들은 병명이 들어 있을 수 있다 — 그것은 모델의 추측이 아니라 진료
+    #: 결과다. 프롬프트가 그 구분을 시키고(보호자의 것으로 인정하되 따라 쓰지 않는다), 답에
+    #: 섞여 나오면 `speaks_beyond_screening` 가드가 문장을 통째로 바꾼다.
+    conversation: ConversationContext | None = None
 
 
 #: 비교를 해설할 수 없는 이유. **사용자가 비교 화면에서 명시적으로 눌러 들어온 요청**이라

@@ -232,6 +232,7 @@ def resolve_skin_route(
     context: dict[str, Any],
     requested_capability: str | None,
     enabled: bool,
+    resolved: ConversationContext | None = None,
 ) -> RoutePlan | None:
     """판정 기록이 붙은 `skin` 신호면 피부 해설 하나짜리 계획을, 아니면 None 을 낸다 (D-079).
 
@@ -257,6 +258,10 @@ def resolve_skin_route(
     history = screening_history(context)
     if history is not None:
         payload["history"] = history
+    # 앞 대화 (#570). 명시 신호(칩)로 들어온 요청에는 `None` 이다 — 그 게이트는 Turn Resolver
+    # 보다 앞이라 해소된 대화가 아직 없고, 판정 직후 첫 질문이라 있을 것도 없다.
+    if resolved is not None:
+        payload["conversation"] = resolved.model_dump(mode="json")
 
     return RoutePlan.model_validate(
         {
@@ -529,13 +534,22 @@ _HANDOFF_EXPLAINERS = (_SKIN,)
 
 
 def _explainer_plan_for(
-    target: str, *, query: str, context: dict[str, Any], enabled: bool
+    target: str,
+    *,
+    query: str,
+    context: dict[str, Any],
+    enabled: bool,
+    resolved: ConversationContext | None = None,
 ) -> dict[str, Any] | None:
     """라우터 HANDOFF 를 대신할 해설 요청. 조건이 안 맞으면 None 이고 HANDOFF 가 그대로 나간다."""
     if target != _SKIN:
         return None
     plan = resolve_skin_route(
-        query=query, context=context, requested_capability=_SKIN, enabled=enabled
+        query=query,
+        context=context,
+        requested_capability=_SKIN,
+        enabled=enabled,
+        resolved=resolved,
     )
     if plan is None:
         return None
@@ -631,7 +645,9 @@ def assemble_route_plan(
     for target in decision.handoffs:
         if target not in _HANDOFF_EXPLAINERS:
             continue
-        explainer = _explainer_plan_for(target, query=query, context=context, enabled=skin_agent)
+        explainer = _explainer_plan_for(
+            target, query=query, context=context, enabled=skin_agent, resolved=resolved
+        )
         if explainer is None:
             continue
         return RoutePlan.model_validate(

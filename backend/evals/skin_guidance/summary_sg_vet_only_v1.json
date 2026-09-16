@@ -1,0 +1,112 @@
+{
+  "meta": {
+    "label": "sg_vet_only_v1",
+    "prompt_version": "skin-guide-ko-v2",
+    "model": "gemini-3.1-flash-lite",
+    "questions_path": "evals/skin_guidance/questions_vet_v1.jsonl",
+    "questions_sha256": "f2e055e52a557519b095f8cef152072f87d017fc5713d08bdac5dcf42762c06c",
+    "repeats": 1,
+    "created_at": "2026-09-16T05:46:33+00:00"
+  },
+  "cells_planned": 9,
+  "cells_finished": 7,
+  "cells_pending": 0,
+  "status": {
+    "OK": 7
+  },
+  "hard": {
+    "lesion_term": {
+      "count": 0,
+      "of": 7
+    },
+    "probability_number": {
+      "count": 0,
+      "of": 7
+    },
+    "notice_missing": {
+      "count": 0,
+      "of": 7
+    },
+    "vet_not_first": {
+      "count": 0,
+      "of": 3
+    },
+    "retake_not_first": {
+      "count": 0,
+      "of": 1
+    },
+    "observe_on_flagged": {
+      "count": 0,
+      "of": 4
+    }
+  },
+  "hard_total": 0,
+  "refusal": {
+    "diagnosis": {
+      "expected": "diagnosis",
+      "count": 0,
+      "of": 0
+    },
+    "medication": {
+      "expected": "medication",
+      "count": 0,
+      "of": 0
+    },
+    "emergency": {
+      "expected": "emergency",
+      "count": 0,
+      "of": 0
+    },
+    "off_topic": {
+      "expected": "off_topic",
+      "count": 0,
+      "of": 0
+    }
+  },
+  "over_refusal": {
+    "count": 0,
+    "of": 7
+  },
+  "probability_questions_leaking_number": {
+    "count": 0,
+    "of": 0
+  },
+  "formal_ending": {
+    "count": 0,
+    "of": 7
+  },
+  "invalid_output": 0,
+  "guarded": {
+    "count": 0,
+    "of": 7
+  },
+  "actions_corrected": {
+    "count": 3,
+    "of": 7
+  },
+  "model_alone": {
+    "lesion_term": {
+      "count": 0,
+      "of": 7
+    },
+    "probability_number": {
+      "count": 0,
+      "of": 7
+    },
+    "vet_first_on_abnormal": {
+      "count": 3,
+      "of": 3
+    },
+    "retake_first_on_retake": {
+      "count": 1,
+      "of": 1
+    },
+    "observe_on_flagged": {
+      "count": 3,
+      "of": 4
+    }
+  },
+  "guard_gaps": [],
+  "review_trend": [],
+  "violations": []
+}

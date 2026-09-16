@@ -38,12 +38,14 @@ from daengs_backend.orchestration.contracts import (
     CapabilityRequest,
     CapabilityResult,
     CapabilityStatus,
+    ConversationContext,
     GeneralPayload,
     PrincipalContext,
     RouterKind,
     ScreeningContext,
     ScreeningHistory,
     SkinPayload,
+    TurnRelation,
 )
 from daengs_backend.orchestration.graph import OrchestrationEngine
 from daengs_backend.orchestration.planner import (
@@ -143,6 +145,9 @@ def test_payload_is_the_narrow_contract_and_nothing_else() -> None:
         "question": QUERY,
         "screening": {"verdict": "abnormal", "days_ago": 2},
         "history": {"entries": [{"verdict": "normal", "days_ago": 40}]},
+        # 칩 경로라 앞 대화가 없다 (#570). 그래도 칸이 있다는 것 자체를 여기서 고정한다 —
+        # 병변 이름 · 확률이 들어갈 칸은 여전히 없다.
+        "conversation": None,
     }
 
 
@@ -257,6 +262,66 @@ def test_a_walk_question_still_goes_to_walk_even_with_a_record_attached() -> Non
     context = {**SCREENED, "location": {"lat": 37.5, "lon": 127.0}}
     plan = routed([], execute=["walk"], context=context)
     assert [r.capability for r in plan.requests] == [CapabilityName.WALK]
+
+
+# ── 앞 대화 (#570) ────────────────────────────────────────────────────
+
+CONVERSATION = ConversationContext(
+    relation=TurnRelation.FOLLOW_UP,
+    referenced_original_request="이 결과가 무슨 뜻이에요?",
+    referenced_assistant_answer="이번 사진에서는 특이 소견이 보이지 않았어요.",
+    standalone_query="피부 판정 결과가 어떤지 다시 묻는다",
+)
+
+
+def test_the_chip_path_carries_no_conversation() -> None:
+    """칩은 판정 직후 첫 질문이고, 그 게이트는 Turn Resolver 보다 앞이라 앞 대화가 없다."""
+    plan = skin_route()
+    assert plan is not None and plan.requests[0].payload.conversation is None
+
+
+def test_the_router_follow_up_carries_the_conversation() -> None:
+    plan = assemble_route_plan(
+        SemanticRoutingDecision(execute=[], handoffs=["skin"]),
+        query=QUERY,
+        context=dict(SCREENED),
+        router=RouterKind.LLM,
+        skin_agent=True,
+        resolved=CONVERSATION,
+    )
+    carried = plan.requests[0].payload.conversation
+    assert carried is not None
+    assert carried.referenced_assistant_answer == CONVERSATION.referenced_assistant_answer
+
+
+def test_the_prompt_puts_the_conversation_right_before_the_query() -> None:
+    """맥락을 질의 뒤에 두면 모델이 이전 요청에 답하는 퇴행이 실측됐다."""
+    with_conversation = payload()
+    prompt = build_skin_prompt(with_conversation.model_copy(update={"conversation": CONVERSATION}))
+    assert prompt.index("CONVERSATION") < prompt.index("USER_QUERY:")
+    assert "이번 사진에서는 특이 소견이 보이지 않았어요." in prompt
+
+
+def test_no_conversation_means_no_line_at_all() -> None:
+    """빈 이력과 달리 빈 대화는 사실이 아니라 '방금 시작됐다' 다 — 줄 자체를 안 쓴다."""
+    prompt = build_skin_prompt(payload())
+    assert "CONVERSATION:" not in prompt and "CONVERSATION_INSTRUCTION:" not in prompt
+
+
+def test_the_prompt_tells_the_model_to_understand_but_not_repeat() -> None:
+    prompt = build_skin_prompt(payload())
+    assert "do not repeat the name" in prompt
+    assert "their vet's finding" in prompt
+
+
+async def test_a_disease_name_echoed_from_the_conversation_is_still_replaced() -> None:
+    """알아듣는 것과 따라 말하는 것은 다르다 — 출력 가드는 그대로다."""
+    raw = guide(
+        text="말씀하신 농피증은 수의사 선생님 진단이니 그 지시를 따르세요.", actions=["vet_visit"]
+    )
+    result = await adapter_returning(raw).run(request(), request_id="r")
+    assert result.status is CapabilityStatus.OK
+    assert result.data["guarded"] is True and "농피증" not in result.data["answer"]
 
 
 # ── 계약 ─────────────────────────────────────────────────────────────
@@ -581,3 +646,86 @@ def test_emergency_resolver_is_untouched_by_the_skin_signal() -> None:
         )
         is None
     )
+
+
+# ── 진입: general 하나뿐인 계획 → 해설 (#573, D-083) ───────────────────
+#
+# 실기기에서 판정을 보고 이어 물었는데 "피부" 라는 말을 다시 안 쓰면 답이 해설 밖으로 샜다.
+# `며칠 지켜보면 돼?` 는 앞 답의 "며칠 지켜보시고" 를 모르는 되묻기가 됐고, `아토피래 어떡해`
+# 는 보호자가 말한 병명을 그대로 따라 썼다 — #570 의 규칙 8 과 넓힌 가드가 해설 안에만 있어서다.
+
+
+def general_only(
+    *,
+    execute: list[str] | None = None,
+    handoffs: list[str] | None = None,
+    context=None,
+    skin_agent: bool = True,
+    resolved: ConversationContext | None = CONVERSATION,
+    general_fallback: bool = True,
+):
+    """`general` 하나로 조립되는 계획. `routed` 와 달리 `resolved` 와 폴백 플래그를 넘긴다."""
+    return assemble_route_plan(
+        SemanticRoutingDecision(execute=execute or [], handoffs=handoffs or []),
+        query=QUERY,
+        context=dict(SCREENED) if context is None else context,
+        router=RouterKind.LLM,
+        general_fallback=general_fallback,
+        skin_agent=skin_agent,
+        resolved=resolved,
+    )
+
+
+@pytest.mark.parametrize("execute", [[], ["general"]])
+def test_a_general_only_follow_up_with_a_record_becomes_the_explainer(execute: list[str]) -> None:
+    """라우터가 general 을 대놓고 골랐는지, 아무것도 못 골라 폴백됐는지는 **구분하지 않는다** —
+    두 경우 모두 계획은 `general` 하나로 같고, 어느 쪽이었는지는 이 판단을 바꾸지 않는다."""
+    plan = general_only(execute=execute)
+    [only] = plan.requests
+    assert only.capability == CapabilityName.SKIN
+    assert only.payload.screening.verdict == "abnormal"
+    assert plan.handoffs == [] and plan.clarify is None
+
+
+def test_the_converted_follow_up_carries_the_conversation() -> None:
+    """이어 묻기라서 열린 길이다 — 앞 대화가 payload 에 실려야 앞 답을 알아듣는다."""
+    carried = general_only().requests[0].payload.conversation
+    assert carried is not None
+    assert carried.referenced_assistant_answer == CONVERSATION.referenced_assistant_answer
+
+
+def test_a_new_question_right_after_a_verdict_is_not_converted() -> None:
+    """**경계가 여기다.** `service` 가 NEW · 저확신 턴을 `resolved = None` 으로 버리므로, 판정
+    직후 새로 꺼낸 밥 이야기는 이 규칙에 안 걸리고 평소대로 일반 답변이 답한다."""
+    plan = general_only(resolved=None)
+    assert [r.capability for r in plan.requests] == [CapabilityName.GENERAL]
+
+
+def test_without_a_record_the_general_plan_stays_general() -> None:
+    plan = general_only(context={})
+    assert [r.capability for r in plan.requests] == [CapabilityName.GENERAL]
+
+
+def test_the_kill_switch_also_turns_off_this_entry() -> None:
+    plan = general_only(skin_agent=False)
+    assert [r.capability for r in plan.requests] == [CapabilityName.GENERAL]
+
+
+def test_a_handoff_in_the_same_turn_keeps_the_router_choice() -> None:
+    """핸드오프는 라우터가 목적지를 고른 것이다 — 위 HANDOFF 규칙이 이미 자기 몫을 처리했다."""
+    plan = general_only(execute=["general"], handoffs=["gait"])
+    assert [r.capability for r in plan.requests] == [CapabilityName.GENERAL]
+    assert [h.target for h in plan.handoffs] == ["gait"]
+
+
+def test_a_specialized_selection_is_never_converted() -> None:
+    """가로채기가 없다는 것이 이 설계의 요점이다 — 산책 질문은 이어 묻기여도 산책이 답한다."""
+    context = {**SCREENED, "location": {"lat": 37.5, "lon": 127.0}}
+    plan = general_only(execute=["walk"], context=context)
+    assert [r.capability for r in plan.requests] == [CapabilityName.WALK]
+
+
+def test_the_fallback_flag_off_leaves_the_old_empty_plan() -> None:
+    """플래그가 꺼져 있으면 `general` 은 애초에 조립되지 않는다 — 이 규칙이 그 뒤를 바꾸지 않는다."""
+    plan = general_only(execute=["general"], general_fallback=False)
+    assert plan.requests == [] and plan.handoffs == []

@@ -103,12 +103,20 @@ def test_screening_context_carries_no_lesion_identity_and_no_control_copy() -> N
     프롬프트를 지날 것이 아니다 (PR #79).
     """
     assert set(ScreeningContext.model_fields) == {"verdict", "days_ago"}
-    for 금지 in ("distribution", "group", "top1", "headline", "body", "action",
-               "disclaimer", "stage1", "stage2", "photo_url"):
+    for 금지 in (
+        "distribution",
+        "group",
+        "top1",
+        "headline",
+        "body",
+        "action",
+        "disclaimer",
+        "stage1",
+        "stage2",
+        "photo_url",
+    ):
         with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
-            ScreeningContext.model_validate(
-                {"verdict": "abnormal", "days_ago": 1, 금지: "x"}
-            )
+            ScreeningContext.model_validate({"verdict": "abnormal", "days_ago": 1, 금지: "x"})
 
 
 def test_screening_verdict_stays_the_three_the_capability_owns() -> None:
@@ -121,11 +129,17 @@ def test_screening_verdict_stays_the_three_the_capability_owns() -> None:
 
 def test_skin_executes_only_as_an_explainer_of_the_narrow_verdict() -> None:
     """D-079 이 D-036 의 `Skin EXECUTE = NO` 를 좁게 열었다 — 이미 끝난 판정을 **해설**하는
-    실행 하나다. #307 의 좁힘은 그대로다: 해설 payload 의 판정은 `ScreeningContext` 자체라서
-    병변 이름 · 확률 · 통제 문구가 들어갈 칸이 없다. 판정을 새로 내는 실행은 여전히 없다 —
-영상을 새로 분석하는 실행은
-    여전히 없다 — `gait` 도 D-080 으로 **이미 계산된 비교를 해설하는** 실행 하나만 열렸다."""
-    assert set(SkinPayload.model_fields) == {"question", "screening", "history"}
+        실행 하나다. #307 의 좁힘은 그대로다: 해설 payload 의 판정은 `ScreeningContext` 자체라서
+        병변 이름 · 확률 · 통제 문구가 들어갈 칸이 없다. 판정을 새로 내는 실행은 여전히 없다 —
+    영상을 새로 분석하는 실행은
+        여전히 없다 — `gait` 도 D-080 으로 **이미 계산된 비교를 해설하는** 실행 하나만 열렸다."""
+    assert set(SkinPayload.model_fields) == {
+        "question",
+        "screening",
+        "history",
+        # 앞 대화 (D-082). 이력 원문이 아니라 Turn Resolver 가 좁힌 구조화 컨텍스트다.
+        "conversation",
+    }
     assert SkinPayload.model_fields["screening"].annotation is ScreeningContext
     with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
         SkinPayload.model_validate(

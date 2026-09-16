@@ -32,6 +32,13 @@ strips `general` from the decision, so production builds the plans it built befo
 `general` orders last, never needs coordinates, and the explicit
 `requested_capability` signal is untouched — `general` is not a resolvable signal.
 
+**그 `general` 하나짜리 계획에는 예외가 하나 있다** (#573, D-083). 판정 기록이 붙어 있고 Turn
+Resolver 가 이 턴을 앞 턴에 이어붙였으면, 그 계획은 일반 답변이 아니라 **피부 해설**이 받는다.
+라우터 정책이 `execute.general` 에 "이상이 없는지 걱정하는 질문" 을 맡기고 있어서, 판정을 보고
+이어 묻는 말이 자연스럽게 그쪽으로 가는데 — 그쪽에는 D-082 의 규칙 8 도 병명 어휘 가드도 없다.
+실기기에서 `아토피래 어떡해` 가 병명을 그대로 따라 쓴 경로가 이것이다. 경계는 `resolved` 이고,
+그래서 판정 직후 **새로 꺼낸** 밥·산책 이야기는 걸리지 않는다.
+
 **`vet_contact` skips this module's semantic path entirely.** `resolve_emergency_route`
 runs before any LLM call (deterministic lexicon gate or explicit signal), builds an
 exclusive single-request plan itself, and never lets `vet_contact` reach the shared
@@ -232,6 +239,7 @@ def resolve_skin_route(
     context: dict[str, Any],
     requested_capability: str | None,
     enabled: bool,
+    resolved: ConversationContext | None = None,
 ) -> RoutePlan | None:
     """판정 기록이 붙은 `skin` 신호면 피부 해설 하나짜리 계획을, 아니면 None 을 낸다 (D-079).
 
@@ -257,6 +265,10 @@ def resolve_skin_route(
     history = screening_history(context)
     if history is not None:
         payload["history"] = history
+    # 앞 대화 (#570). 명시 신호(칩)로 들어온 요청에는 `None` 이다 — 그 게이트는 Turn Resolver
+    # 보다 앞이라 해소된 대화가 아직 없고, 판정 직후 첫 질문이라 있을 것도 없다.
+    if resolved is not None:
+        payload["conversation"] = resolved.model_dump(mode="json")
 
     return RoutePlan.model_validate(
         {
@@ -529,13 +541,22 @@ _HANDOFF_EXPLAINERS = (_SKIN,)
 
 
 def _explainer_plan_for(
-    target: str, *, query: str, context: dict[str, Any], enabled: bool
+    target: str,
+    *,
+    query: str,
+    context: dict[str, Any],
+    enabled: bool,
+    resolved: ConversationContext | None = None,
 ) -> dict[str, Any] | None:
     """라우터 HANDOFF 를 대신할 해설 요청. 조건이 안 맞으면 None 이고 HANDOFF 가 그대로 나간다."""
     if target != _SKIN:
         return None
     plan = resolve_skin_route(
-        query=query, context=context, requested_capability=_SKIN, enabled=enabled
+        query=query,
+        context=context,
+        requested_capability=_SKIN,
+        enabled=enabled,
+        resolved=resolved,
     )
     if plan is None:
         return None
@@ -575,8 +596,10 @@ def assemble_route_plan(
     caller (`service._plan_and_execute`) is the only layer that holds both the Turn
     Resolver's `ResolvedTurn` and the `PendingClarification` it may anchor to, so it builds
     this value once (`resolver.conversation_context_of`) and passes the same object here and
-    to the semantic router. This function does no conversion; it only threads the value to
-    `_payload_for`, which puts it on `GeneralPayload.conversation` and nowhere else.
+    to the semantic router. This function does no conversion; it only threads the value on.
+    목적지는 셋이다 — `_payload_for` 가 `GeneralPayload.conversation` 에 넣고, #570 부터
+    `_explainer_plan_for` 가 `SkinPayload.conversation` 에도 넣으며, #573(D-083)부터는 `resolved`
+    자체가 **`general` 하나짜리 계획을 해설로 바꿀지**를 가르는 조건이기도 하다.
     """
     needs_coordinates = _NEEDS_COORDINATES.intersection(decision.execute)
     if "place" in needs_coordinates and (
@@ -631,7 +654,9 @@ def assemble_route_plan(
     for target in decision.handoffs:
         if target not in _HANDOFF_EXPLAINERS:
             continue
-        explainer = _explainer_plan_for(target, query=query, context=context, enabled=skin_agent)
+        explainer = _explainer_plan_for(
+            target, query=query, context=context, enabled=skin_agent, resolved=resolved
+        )
         if explainer is None:
             continue
         return RoutePlan.model_validate(
@@ -644,6 +669,41 @@ def assemble_route_plan(
                 "prompt_version": prompt_version,
             }
         )
+
+    # ── general 하나뿐인 계획 → 해설 실행 (#573, D-083) ────────────────
+    # 판정을 보고 이어 물었는데 "피부" 라는 말을 다시 안 쓰면 라우터는 그 질문을 일반 돌봄
+    # 질문으로 읽는다 — 정책의 `execute.general` 이 "반려견에게 이상이 없는지 걱정하는
+    # 질문" 을 명시적으로 담당하기 때문이다. 그러면 방금 본 판정도 바로 앞 답도 모르는 답이
+    # 나가고, 더 나쁘게는 #570 의 규칙 8 과 넓힌 출력 가드가 **해설 안에만** 있어서 보호자가
+    # 말한 병명이 그대로 따라 나간다. 실기기에서 `며칠 지켜보면 돼?` 와 `아토피래 어떡해` 가
+    # 둘 다 이 길로 샜다 (#573 본문).
+    #
+    # **라우터가 general 을 대놓고 골랐는지, 아무것도 못 골라 폴백됐는지는 구분하지 않는다.**
+    # 두 경우 모두 조립된 계획은 `general` 하나로 같고, 어느 쪽이었는지는 이 판단을 바꾸지
+    # 않는다 — 그래서 둘을 가르려고 라우터 트레이스를 읽지 않는다.
+    #
+    # **경계는 `resolved` 다.** `service._plan_and_execute` 가 `NEW` 와 저확신 턴을 이미
+    # `resolved = None` 으로 버리고, `conversation_context_of` 는 그때 `None` 을 낸다. 그래서
+    # 여기 걸리는 것은 리졸버가 확신을 갖고 앞 턴에 이어붙인 **이어 묻기**뿐이고, 판정 직후
+    # 새로 꺼낸 밥·산책 이야기는 안 걸린다.
+    #
+    # **핸드오프가 하나라도 있으면 열지 않는다** — 그것은 라우터가 목적지를 고른 것이고, 위
+    # HANDOFF 규칙이 이미 자기 몫을 처리했다.
+    if selected == [_GENERAL] and not decision.handoffs and resolved is not None:
+        explainer = _explainer_plan_for(
+            _SKIN, query=query, context=context, enabled=skin_agent, resolved=resolved
+        )
+        if explainer is not None:
+            return RoutePlan.model_validate(
+                {
+                    "requests": [explainer],
+                    "handoffs": [],
+                    "clarify": None,
+                    "router": router,
+                    "model": model,
+                    "prompt_version": prompt_version,
+                }
+            )
 
     requests: list[dict[str, Any]] = []
     # An unrecognized name sorts last rather than raising here, so the precise

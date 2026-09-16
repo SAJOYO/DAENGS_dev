@@ -430,7 +430,7 @@ Place 는 PR #196 에서 실행 registry 에 들어왔고 `requested_capability=
 | Walk | YES | YES |
 | Place | YES | YES |
 | Skin 판정 EXECUTE (`/screen/*`) | NO | NO |
-| Skin 판정 해설 EXECUTE — 기록이 붙은 `skin` 신호, 또는 기록이 붙은 라우터 `skin` HANDOFF (D-079 · D-081) | YES | NO (기록이 없어 HANDOFF) |
+| Skin 판정 해설 EXECUTE — 기록이 붙은 `skin` 신호, 기록이 붙은 라우터 `skin` HANDOFF, 또는 기록이 붙은 **이어 묻기**의 `general` 하나짜리 계획 (D-079 · D-081 · D-083) | YES | NO (기록이 없어 HANDOFF) |
 | Gait 변화 관찰 해설 EXECUTE — 비교 참조가 붙은 `gait` 신호 (D-080) | **YES** | NO (참조를 해소할 주체가 없어 HANDOFF) |
 | Gait 분석 EXECUTE (영상 업로드) | NO | NO |
 
@@ -452,6 +452,15 @@ Place 는 PR #196 에서 실행 registry 에 들어왔고 `requested_capability=
   Skin 은 #100/D-040 이후 main backend 의 `/screen/*` 로 기술적으로 호출 가능하지만,
   multipart 업로드와 통제 문구 보존이 필요한 전용 플로우라 Card 1 역할은 그대로
   HANDOFF 입니다.
+
+  **그 예외에는 진입이 셋 있습니다** (D-079 · D-081 · D-083). 명시 신호(칩), 라우터가 낸
+  `skin` HANDOFF, 그리고 조립된 계획이 `general` 하나뿐인 **이어 묻기**입니다. 셋째는
+  실기기에서 찾은 구멍을 막습니다 — 보호자가 "피부" 라는 말을 다시 쓰지 않으면 라우터가
+  그 질문을 일반 돌봄 질문으로 읽고(정책이 `execute.general` 에 "이상이 없는지 걱정하는
+  질문" 을 맡깁니다), 그쪽에는 D-082 의 규칙 8 도 병명 어휘 가드도 없어서 보호자가 말한
+  병명이 그대로 따라 나갔습니다. 경계는 Turn Resolver 입니다 — `NEW` 와 저확신 턴은
+  `resolved = None` 이라 걸리지 않으므로, 판정 직후 **새로 꺼낸** 밥·산책 이야기는 평소대로
+  답합니다. 라우터 프롬프트와 `ExecuteName` 은 그대로입니다.
 
   **Gait 에도 같은 예외가 하나 생겼습니다** (D-080, `planner.resolve_gait_route`). 앱이
   **비교 참조 둘**(`gait_compare`)을 붙여 `gait` 신호를 보내면, 서버가 소유를 확인하고

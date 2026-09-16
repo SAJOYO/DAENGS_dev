@@ -79,11 +79,23 @@ class PetFarewelledError(Exception):
 
 
 class CannotRemoveOwnerError(Exception):
-    """대표는 이 경로로 못 나갑니다. 승계 엔드포인트로 가야 합니다."""
+    """**그룹 주보호자가 자기 자신**을 지목했습니다. 승계 엔드포인트로 가야 합니다.
+
+    남이 그룹 주보호자를 지목한 경우는 이것이 아니라 `NotAllowedError` 입니다 — 그 사람은
+    애초에 남을 내보낼 수 없고, 여기서 409 를 주면 "지목한 그 사람이 이 그룹의 주보호자다"
+    가 새 나갑니다.
+    """
 
 
 class NotAllowedError(Exception):
-    """남을 내보낼 수 있는 것은 대표뿐입니다."""
+    """**남을 내보낼 수 있는 것은 그룹 주보호자뿐입니다.** 라우터가 403 으로 바꿉니다.
+
+    ⚠️ **요청한 행의 대표인지로 갈리지 않습니다.** 예전에는 그 행의 대표이기만 한 사람
+    (= 연결한 공동 보호자가 자기 카드 id 로 부른 경우)에게만 409 `not_group_owner` 를
+    주고 생 돌보미에게는 403 을 줬는데, 사용자 눈에는 둘 다 "공동 보호자가 남을 내보내려
+    한 것" 하나입니다. 행 소유라는 **내부 사정**이 상태 코드를 가르면 앱이 같은 상황을 두
+    갈래로 그려야 하고, 응답만 보고 "나는 이 행의 대표다" 를 알아낼 수 있습니다.
+    """
 
 
 class NotAMemberError(Exception):
@@ -772,23 +784,51 @@ async def remove_member(
     공동 조회로 **남의 집 기록을 계속 읽습니다.** 둘이 갈라지는 순간이 있으면 안 됩니다.
 
     내보내기는 **그룹 주보호자만** 합니다 — 연결된 아이에서 행 대표라는 것만으로 남을
-    내보내면, 그룹의 주인이 아닌 사람이 그룹 구성을 바꾸게 됩니다.
+    내보내면, 그룹의 주인이 아닌 사람이 그룹 구성을 바꾸게 됩니다. **그룹 주보호자가
+    아닌 사람이 남을 지목하면 행 소유와 무관하게 전부 403 입니다** (`NotAllowedError`).
+
+    ⚠️ **판단은 전부 논리 그룹 기준입니다. 요청한 행의 대표가 누구인지로 정하지 않습니다.**
+    `pet_id` 로 오는 것은 부른 사람이 화면에서 쥐고 있는 id, 즉 **자기 표시용 행**
+    (`display_pet_id`)입니다. 연결한 공동 보호자에게 그 행은 **자기가 대표인 자기 행**이라,
+    행 대표로 판단하면 자기 자신을 지목한 나가기가 `CannotRemoveOwnerError` 로 막혔습니다 —
+    앵커 행 id 로만 나갈 수 있었는데 앱은 그 id 를 알 방법이 없어 **나가기가 아예 불가능**
+    했습니다. 그래서 대표 보호는 **공통 행의 대표(= 그룹 주보호자)** 에만 겁니다.
+
+    지우는 범위도 그룹 전체입니다 — 한 사람이 그룹 안 여러 행의 돌보미일 수 있어
+    (연결 수락이 앵커 행 멤버십을 같이 만듭니다) 요청한 행 하나만 지우면 다른 행의
+    멤버십으로 그룹을 계속 읽습니다.
     """
     pet = await pet_repo.get_accessible(session, app_user_id, pet_id)
     if pet is None:
         raise PetNotFoundError
-    if target_id == pet.app_user_id:
-        raise CannotRemoveOwnerError
 
     common = await identity_service.common_of(session, pet)
-    if app_user_id != target_id:
-        # 남을 내보내는 것은 그룹 주보호자만. 행 대표이기만 한 사람은 409 입니다.
-        if app_user_id != pet.app_user_id:
-            raise NotAllowedError
-        if common.app_user_id != app_user_id:
-            raise identity_service.NotGroupOwnerError(common.name)
 
-    await member_repo.remove(session, pet_id, target_id)
+    # ① 권한. **남을 내보내는 것은 그룹 주보호자뿐이고, 아니면 전부 403 입니다.**
+    #    `pet.app_user_id`(요청한 행의 대표)는 **안 봅니다** — 연결한 공동 보호자는 자기
+    #    카드 행의 대표라, 행 소유로 가르면 같은 상황이 부른 id 에 따라 409 와 403 으로
+    #    갈렸습니다. 행 소유는 사용자가 모르는 내부 사정입니다.
+    if app_user_id != target_id and app_user_id != common.app_user_id:
+        raise NotAllowedError
+
+    # ② 대표 보호. ① 을 지났으므로 여기 걸리는 것은 **그룹 주보호자가 자기를 지목한 것**
+    #    하나뿐입니다 (남이 주보호자를 지목한 것은 ① 에서 403 으로 끝났습니다). 승계로
+    #    가라는 안내라, 자기 자신에게만 주는 것이 맞습니다.
+    if target_id == common.app_user_id:
+        raise CannotRemoveOwnerError
+
+    # ⚠️ **연결을 풀기 전에** 그룹 행 id 를 뽑습니다 — `detach_user` 가 `identity_id` 를
+    #    비우고 나면 같은 질문에 다른 답이 나옵니다.
+    group_ids = await identity_service.group_pet_ids_of(session, pet)
+
+    # IDOR 가드. 그룹의 보호자가 아닌 id 를 넣으면 **아무 일도 없이 204** 가 나가
+    # "이 사람은 원래 없었다" 와 "지웠다" 가 같아 보였습니다. 그룹 밖 사람은 404 입니다 —
+    # 그 사람이 존재하는지조차 안 알려줍니다.
+    if target_id not in await identity_service.guardians_of(session, pet):
+        raise PetNotFoundError
+
+    # 그룹의 **모든 행**에서 지웁니다. 요청한 행 하나만 지우면 앵커 행 멤버십이 남습니다.
+    await member_repo.remove_from_pets(session, group_ids, target_id)
 
     # 나간 사람의 행을 그룹에서 뗍니다. 혼자 남은 그룹은 `prune` 이 정리합니다.
     if pet.identity_id is not None:
@@ -796,11 +836,19 @@ async def remove_member(
 
     # ⚠️ `primary_pet_id` 의 FK 는 ON DELETE SET NULL 이지만 **강아지 행은 안 지워지므로
     #    안 돕니다.** 여기서 명시로 비웁니다 — 안 그러면 접근 못 하는 아이를 가리킵니다.
+    #
+    # 그룹 행 **아무거나** 가리키고 있을 수 있어(앵커 행을 대표로 세워 둔 공동 보호자)
+    # `pet_id` 하나만 보지 않습니다. 반대로 나간 사람이 **계속 볼 수 있는** 행(자기 행)을
+    # 가리키고 있으면 건드리지 않습니다 — 멀쩡한 첫 화면을 흔들 이유가 없습니다.
     user = await app_user_repo.get_by_id(session, target_id)
-    if user is not None and user.primary_pet_id == pet_id:
+    if user is not None and user.primary_pet_id in set(group_ids):
         remaining = await pet_repo.list_accessible(session, target_id)
-        user.primary_pet_id = remaining[0].id if remaining else None
+        if all(p.id != user.primary_pet_id for p in remaining):
+            user.primary_pet_id = remaining[0].id if remaining else None
 
+    # commit 은 여기 한 번뿐입니다 — 멤버십 삭제·연결 해제·대표 수선이 **같은 트랜잭션**
+    # 이라, 중간에서 터지면 셋 다 안 일어난 것이 됩니다 (`get_session` 은 commit 하지
+    # 않고 빠져나갈 때 rollback 합니다).
     await session.commit()
 
 

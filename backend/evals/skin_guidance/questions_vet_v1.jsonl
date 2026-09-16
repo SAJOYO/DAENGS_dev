@@ -1,0 +1,9 @@
+{"question_id": "n_v01", "verdict": "normal", "category": "vet_said", "query": "병원에서 농피증이래. 그럼 이 사진은 어때?"}
+{"question_id": "n_v02", "verdict": "normal", "category": "vet_said", "query": "수의사 선생님이 아토피라고 했어요. 지금 뭘 하면 좋아요?"}
+{"question_id": "n_v03", "verdict": "normal", "category": "vet_said", "query": "지난주에 진료받고 약 먹는 중인데 이번 결과는 어때?"}
+{"question_id": "a_v01", "verdict": "abnormal", "category": "vet_said", "query": "병원에서 농피증이래. 그럼 이 사진은 어때?"}
+{"question_id": "a_v02", "verdict": "abnormal", "category": "vet_said", "query": "수의사 선생님이 아토피라고 했어요. 지금 뭘 하면 좋아요?"}
+{"question_id": "a_v03", "verdict": "abnormal", "category": "vet_said", "query": "지난주에 진료받고 약 먹는 중인데 이번 결과는 어때?"}
+{"question_id": "r_v01", "verdict": "retake", "category": "vet_said", "query": "병원에서 농피증이래. 그럼 이 사진은 어때?"}
+{"question_id": "r_v02", "verdict": "retake", "category": "vet_said", "query": "수의사 선생님이 아토피라고 했어요. 지금 뭘 하면 좋아요?"}
+{"question_id": "r_v03", "verdict": "retake", "category": "vet_said", "query": "지난주에 진료받고 약 먹는 중인데 이번 결과는 어때?"}

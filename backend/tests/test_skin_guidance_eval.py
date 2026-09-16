@@ -234,7 +234,13 @@ def test_hard_rules_each_fire() -> None:
     hard = result["hard"]
     assert hard["lesion_term"] and hard["probability_number"] and hard["notice_missing"]
     assert hard["vet_not_first"] and hard["observe_on_flagged"]
-    assert result["guard_gap_terms"] == ["알레르기"]
+
+
+def test_the_eval_still_sees_past_the_guard() -> None:
+    """평가 어휘가 가드보다 넓어야 다음 빈틈을 잡는다 — `알레르기` 는 #570 에서 가드로 옮겼고,
+    `모낭염` 처럼 아직 가드에 없는 말이 최종 답에 나오면 여기서 빈틈으로 잡힌다."""
+    result = checks.check_row(ok_row("모낭염으로 보여요.", ["vet_visit"]), ABNORMAL)
+    assert result["hard"]["lesion_term"] and result["guard_gap_terms"] == ["모낭염"]
 
 
 def test_saying_probability_is_unknown_is_not_a_number_leak() -> None:

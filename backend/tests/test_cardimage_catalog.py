@@ -43,12 +43,29 @@ def test_april_uses_default_outfit_and_plate():
     assert c.outfit == catalog.NO_OUTFIT and c.plate == catalog.APRIL_PLATE and c.subtitle == "APRIL SPECIAL"
 
 
-def test_month_with_empty_scene_is_not_open_even_if_listed():
+def test_month_with_empty_scene_is_not_open_even_if_listed(monkeypatch):
+    """1월은 이제 열려 있으므로, 존재하지 않는 달 대신 빈 MonthCard 를 직접 만들어 검사한다."""
+    blank = catalog.MonthCard(1, "1_new_year", "NEW YEAR", "26JAN", "", "JANUARY SPECIAL")
+    monkeypatch.setitem(catalog._CARDS, 1, blank)
     with pytest.raises(catalog.MonthNotOpenError):
-        catalog.require_open(1, frozenset({1}))   # 틀은 있지만 무대 묘사가 비어 있다
+        catalog.require_open(1, frozenset({1}))
 
 
 def test_all_twelve_months_have_templates_in_repo():
     base = Path(__file__).resolve().parents[2] / "cardimage"
     for m in range(1, 13):
         assert catalog.template_path(m, base).exists(), m
+
+
+def test_every_month_is_openable():
+    """12달 전부 무대 문장과 부제를 갖는다 — 하나라도 비면 require_open 이 404 로 막는다."""
+    for m in range(1, 13):
+        c = catalog.require_open(m, frozenset(range(1, 13)))
+        assert c.scene.strip(), m
+        assert c.subtitle.strip(), m
+
+
+def test_every_month_has_its_own_measured_plate():
+    """제목판은 달마다 다르다. 4월 말고 다른 달이 APRIL_PLATE 를 그대로 쓰면 제목이 어긋난다."""
+    others = [catalog.get(m).plate for m in range(1, 13) if m != 4]
+    assert all(p != catalog.APRIL_PLATE for p in others)

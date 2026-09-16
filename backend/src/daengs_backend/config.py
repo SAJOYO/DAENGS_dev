@@ -255,14 +255,15 @@ class Settings(BaseSettings):
         default=Path(__file__).resolve().parents[3] / "cardimage",
         validation_alias=AliasChoices("DAENGS_CARDIMAGE_DIR"),
     )
-    # 허용된 달. 틀은 12장 다 있지만 이 카드(#496)는 4월만 엽니다. "4,9" 처럼 CSV.
+    # 허용된 달. 틀은 12장 다 있고 12달 전부 엽니다 — task-2(2026-09-16)에서 무대·의상·
+    # 제목판을 다 채웠습니다. "4,9" 처럼 CSV 로 좁힐 수도 있습니다.
     #
     # ⚠ pydantic-settings 는 env 값을 우리 before-validator 가 보기 전에 먼저 JSON 으로
     #   디코드하려 합니다 — frozenset[int] 는 "복합 타입"이라 CSV 문자열("4, 9,12")을
     #   JSON 으로 못 읽어 여기까지 오기 전에 실패합니다. `NoDecode` 로 그 선(先)디코드를
     #   끄고, 아래 before-validator 가 원문 문자열을 그대로 받아 직접 나눕니다.
     cardimage_months: Annotated[frozenset[int], NoDecode] = Field(
-        default=frozenset({4, 9}), validation_alias=AliasChoices("DAENGS_CARDIMAGE_MONTHS")
+        default=frozenset(range(1, 13)), validation_alias=AliasChoices("DAENGS_CARDIMAGE_MONTHS")
     )
     # 유사도 검수. 텍스트 모델이라 채팅과 같은 계열이어도 됩니다 — 여기서는 "같은 개인가"만 묻습니다.
     cardimage_judge_model: str = Field(default="gemini-3.1-flash-lite", validation_alias=AliasChoices("DAENGS_CARDIMAGE_JUDGE_MODEL"))

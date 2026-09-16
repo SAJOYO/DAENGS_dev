@@ -34,6 +34,7 @@ def project(receipt, session_id):
     results = {r["task_id"]: r for r in receipt["writing"]["results"]}
     cards = []
     for card in receipt["cards"]:
+        scene_title = receipt.get("scene_titles", {}).get(card["scene_id"], {})
         comparison = card["comparison"]
         parts = {}
         for stage in ("space", "action"):
@@ -50,6 +51,10 @@ def project(receipt, session_id):
         cards.append(
             {
                 "scene_id": card["scene_id"],
+                "title": scene_title.get("text")
+                if scene_title.get("status") == "returned"
+                else None,
+                "title_status": scene_title.get("status", "not_requested"),
                 "anchor": card["anchor"],
                 "header": comparison["header"],
                 **parts,
@@ -125,6 +130,12 @@ def read_result(raw, *, walk_id, session_id, revision, generation):
     else:
         raise ValueError("unsupported relational publication")
     value = project(body["receipt"], session_id)
-    if value.model_dump(mode="json") != body["public"]:
+    # Historical v1 cards omitted the additive title fields. Normalize only those
+    # defaults; all actual saved values still compare byte-for-value.
+    saved_public = deepcopy(body["public"])
+    for card in saved_public["cards"]:
+        card.setdefault("title", None)
+        card.setdefault("title_status", "not_requested")
+    if value.model_dump(mode="json") != saved_public:
         raise ValueError("stored public projection changed")
     return value

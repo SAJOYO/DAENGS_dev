@@ -366,7 +366,9 @@ def test_full_prepared_pipeline_preserves_originals_and_saves_final_requests(tmp
         return await passing_double(stage, payload, schema)
     result = asyncio.run(generate_prepared_relational_diary(data, send=send, model='test-double'))
     assert data == original
-    assert result['receipt']['execution']['model_call_attempts'] == 10
+    expected_calls = len(result['receipt']['writing']['results']) + sum(
+        t['status'] != 'not_requested' for t in result['receipt']['scene_titles'].values())
+    assert result['receipt']['execution']['model_call_attempts'] == expected_calls
     assert result['receipt']['execution']['sender_kind'] == 'injected_sender'
     assert result['prepared']['snapshot']['originals'] == original['snapshot']['originals']
     for entry in original['snapshot']['originals']:
@@ -391,7 +393,8 @@ def test_old_v4_receipt_is_read_only_and_still_readable(tmp_path):
     assert '울창한' in receipt['cards'][2]['body']
 
 
-def test_rejected_title_never_replaces_fallback():
+def test_legacy_rejected_title_never_replaces_fallback():
+    from daengs_backend.services.walk_diary.writing.relational_title import write_relational_title
     async def send(stage, payload, schema):
         if stage == 'title':
             return json.dumps({'title': '울창한 숲길에서 느낀 행복'})
@@ -399,7 +402,7 @@ def test_rejected_title_never_replaces_fallback():
             return json.dumps(assessment([], supported=False, issues=['invented title']))
         return await passing_double(stage, payload, schema)
     result = asyncio.run(generate_prepared_relational_diary(prepared([frame(0)]), send=send))
-    title = result['receipt']['title']
+    title = asyncio.run(write_relational_title(result['receipt'], send=send, review=True))
     assert title['status'] == 'failed' and title['text'] == '산책 기록'
     assert title['candidate'] == '울창한 숲길에서 느낀 행복'
 
@@ -413,4 +416,4 @@ def test_explicit_unreviewed_ablation_never_claims_semantic_success():
 def test_empty_publication_never_calls_model():
     result = asyncio.run(generate_prepared_relational_diary(prepared([]), send=passing_double))
     assert result['receipt']['execution']['model_call_attempts'] == 0
-    assert result['receipt']['title']['status'] == 'not_requested'
+    assert result['receipt']['scene_titles'] == {}

@@ -72,7 +72,7 @@ def answer(stage, payload):
     )
 
 
-async def test_runtime_uses_canonical_briefs_and_one_title_without_review(
+async def test_runtime_uses_canonical_briefs_and_scene_titles_without_review(
     base, prepare, monkeypatch
 ):
     from daengs_backend.services.walk_diary.collection import relational as collection
@@ -106,7 +106,9 @@ async def test_runtime_uses_canonical_briefs_and_one_title_without_review(
     )
     assert result.receipt["version"] == "relational-diary-skeleton-v8"
     assert not result.receipt["execution"]["semantic_review_enabled"]
-    assert [s for s, _, _ in seen].count("title") == 1 and seen[-1][0] == "title"
+    assert [s for s, _, _ in seen].count("title") == len(result.receipt["cards"]) and seen[-1][
+        0
+    ] == "title"
     assert "review" not in [s for s, _, _ in seen]
     assert checked == [len(result.prepared["snapshot"]["frames"])]
     tasks = {
@@ -136,10 +138,10 @@ async def test_runtime_uses_canonical_briefs_and_one_title_without_review(
     assert "registered_count" not in json.dumps(seen) and "changed_fields" not in json.dumps(seen)
     assert "source_bindings" not in json.dumps(seen) and "originals" not in json.dumps(seen)
     assert (
-        result.receipt["title"]["request"]["scenes"][0]["space"]
+        result.receipt["scene_titles"][result.receipt["cards"][0]["scene_id"]]["request"]["space"]
         == result.receipt["cards"][0]["parts"]["space"]["text"]
     )
-    assert not result.receipt["title"]["review_enabled"]
+    assert all("semantic_review" not in t for t in result.receipt["scene_titles"].values())
     assert writing_prompt("action", actions[0]).startswith("required_event")
 
 

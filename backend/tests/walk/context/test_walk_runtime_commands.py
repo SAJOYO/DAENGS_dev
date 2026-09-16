@@ -18,6 +18,24 @@ def powershell_command(executable, script, *arguments):
     return [*command, "-File", str(script), *arguments]
 
 
+def run_powershell(command, **kwargs):
+    """PowerShell 출력은 **UTF-8 이 아닐 수 있습니다** — 그래서 깨진 바이트를 버립니다.
+
+    `pwsh`(PowerShell 7)는 UTF-8 로 쓰지만 Windows PowerShell 5.1(`powershell.exe`)은
+    **콘솔 코드페이지**로 씁니다. 한글 Windows(cp949)에서는 오류 메시지 한 글자가
+    `UnicodeDecodeError` 를 일으키는데, 그 예외가 `subprocess` 의 **읽기 스레드** 안에서
+    나기 때문에 호출 쪽에는 전파되지 않고 **`stdout`/`stderr` 가 조용히 `None`** 이 됩니다.
+    그 뒤 `result.stdout + result.stderr` 가 `TypeError` 로 죽습니다 (#566 ⓐ).
+
+    아래 단언들은 전부 ASCII 조각(`dummysecret` 등)을 찾으므로 `errors="replace"` 로
+    충분합니다 — 못 읽은 바이트만 대체 문자가 되고 찾는 문자열은 그대로 남습니다.
+    ⚠️ `docker compose config` 는 **진짜 UTF-8** 이라 이 함수를 쓰지 않습니다.
+    """
+    return subprocess.run(
+        command, text=True, encoding="utf-8", errors="replace", capture_output=True, **kwargs
+    )
+
+
 @pytest.mark.parametrize(
     "action,reject", [("Prepare", False), ("Start", False), ("Start", True), ("Stop", False)]
 )
@@ -63,11 +81,8 @@ catch { $failed = $true }
 """,
         encoding="utf-8",
     )
-    response = subprocess.run(
+    response = run_powershell(
         powershell_command(pwsh, harness, action, str(reject).lower()),
-        text=True,
-        encoding="utf-8",
-        capture_output=True,
         check=True,
         timeout=20,
     )
@@ -227,30 +242,14 @@ def test_configure_is_create_only_and_refuses_incomplete_secrets(tmp_path, valid
         "-SettingsFile",
         str(target),
     )
-    first = subprocess.run(
-        command,
-        env=env,
-        text=True,
-        encoding="utf-8",
-        capture_output=True,
-        timeout=20,
-        check=False,
-    )
+    first = run_powershell(command, env=env, timeout=20, check=False)
     assert (first.returncode == 0) is valid
     assert "dummysecret" not in first.stdout + first.stderr
     assert target.exists() is valid
     assert "EXISTING=keep" in root_env.read_text()
     if valid:
         value = target.read_bytes()
-        second = subprocess.run(
-            command,
-            env=env,
-            text=True,
-            encoding="utf-8",
-            capture_output=True,
-            timeout=20,
-            check=False,
-        )
+        second = run_powershell(command, env=env, timeout=20, check=False)
         assert second.returncode != 0
         assert target.read_bytes() == value
         assert "DAENGS_WALK_PUBLIC_CONTEXT_ENABLED=false" in value.decode()

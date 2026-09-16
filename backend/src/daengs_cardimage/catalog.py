@@ -91,6 +91,12 @@ class MonthCard:
 # scene 은 실험(worklog 09-13~14)에서 검증된 달만 채워져 있다. 다른 달을 열 때는 그 달의
 # 무대(소품·매트·배경)와 의상을 같은 식으로 적고, 제목판(세로 중심·오른쪽 경계)을 재고, 실험으로 검증한 뒤
 # DAENGS_CARDIMAGE_MONTHS 에 넣는다.
+#
+# ⚠ 4월과 같은 판 범위(y 52~145)인 달은 center_y 를 99(APRIL_PLATE 값)로 맞춘다.
+#   `plate_probe.measure()` 는 정수 나눗셈이라 (52+145)//2 = 98 을 내놓지만, 99 는
+#   2026-09-14 에 바로 이 기하로 사람이 눈으로 보고 고른 값이다(두 번 교정 끝). 1px 차이라
+#   `measure()` 의 결과가 "틀렸다"는 뜻이 아니다 — 그 도구는 참고용이고, 카드에 실제로
+#   나가는 값은 이 상수다. `measure()` 자체는 고치지 않는다.
 _CARDS: dict[int, MonthCard] = {
     1: MonthCard(
         1, "1_new_year", "NEW YEAR", "26JAN",
@@ -100,7 +106,7 @@ _CARDS: dict[int, MonthCard] = {
         "the magpie perched on the branch, the sunrise over the snowy mountains",
         "JANUARY SPECIAL",
         JANUARY_OUTFIT,
-        Plate(center_y=98, edge=((55, 749), (142, 678)), top_y=52),
+        Plate(center_y=99, edge=((55, 749), (142, 678)), top_y=52),
     ),
     2: MonthCard(
         2, "2_love", "LOVE", "26FEB",
@@ -110,7 +116,7 @@ _CARDS: dict[int, MonthCard] = {
         "backdrop",
         "FEBRUARY SPECIAL",
         NO_OUTFIT,
-        Plate(center_y=98, edge=((55, 775), (142, 703)), top_y=52),
+        Plate(center_y=99, edge=((55, 775), (142, 703)), top_y=52),
     ),
     3: MonthCard(
         3, "3_first_day", "FIRST DAY", "26MAR",
@@ -120,7 +126,7 @@ _CARDS: dict[int, MonthCard] = {
         "pavement",
         "MARCH SPECIAL",
         MARCH_OUTFIT,
-        Plate(center_y=98, edge=((55, 776), (142, 706)), top_y=52),
+        Plate(center_y=99, edge=((55, 776), (142, 706)), top_y=52),
     ),
     4: MonthCard(
         4, "4_blossom", "BLOSSOM", "26APR",
@@ -136,7 +142,7 @@ _CARDS: dict[int, MonthCard] = {
         "photos and red ribbon on the lace doily, the small gold trinket box",
         "MAY SPECIAL",
         NO_OUTFIT,
-        Plate(center_y=98, edge=((55, 748), (142, 677)), top_y=52),
+        Plate(center_y=99, edge=((55, 748), (142, 677)), top_y=52),
     ),
     6: MonthCard(
         6, "6_pool", "POOL", "26JUN",
@@ -146,7 +152,7 @@ _CARDS: dict[int, MonthCard] = {
         "striped beach ball floating nearby",
         "JUNE SPECIAL",
         JUNE_OUTFIT,
-        Plate(center_y=98, edge=((55, 745), (142, 677)), top_y=52),
+        Plate(center_y=99, edge=((55, 745), (142, 677)), top_y=52),
     ),
     7: MonthCard(
         7, "7_beach", "BEACH", "26JUL",
@@ -156,7 +162,7 @@ _CARDS: dict[int, MonthCard] = {
         "ocean and distant island",
         "JULY SPECIAL",
         JULY_OUTFIT,
-        Plate(center_y=98, edge=((55, 774), (142, 702)), top_y=52),
+        Plate(center_y=99, edge=((55, 774), (142, 702)), top_y=52),
     ),
     8: MonthCard(
         8, "8_rain", "RAIN", "26AUG",
@@ -166,7 +172,7 @@ _CARDS: dict[int, MonthCard] = {
         "reflections in the puddle",
         "AUGUST SPECIAL",
         AUGUST_OUTFIT,
-        Plate(center_y=98, edge=((55, 804), (142, 733)), top_y=52),
+        Plate(center_y=99, edge=((55, 804), (142, 733)), top_y=52),
     ),
     9: MonthCard(
         9, "9_harvest_moon", "CHUSEOK", "26SEP",   # 원본 제목은 HARVEST MOON — 너무 길어 사용자가 CHUSEOK 으로 (09-14)
@@ -188,17 +194,19 @@ _CARDS: dict[int, MonthCard] = {
         "with lit windows against the starry purple sky",
         "OCTOBER SPECIAL",
         OCTOBER_OUTFIT,
-        Plate(center_y=98, edge=((55, 784), (142, 713)), top_y=52),
+        Plate(center_y=99, edge=((55, 784), (142, 713)), top_y=52),
     ),
     11: MonthCard(
         11, "11_thanks", "THANKS", "26NOV",
         "the pose (driving the tractor with both front paws on the steering wheel), the red vintage tractor "
         "pulling the wooden trailer loaded with pumpkins, corn husks, apples and gourds under the plaid "
-        "blanket, the red maple leaves scattered on the ground, the red barn with the rooster weathervane, the "
+        # 풍향계 실루엣은 부채꼴로 펼친 꽁지깃·볏(wattle)·칠면조 머리 모양이다 — 수탉이 아니라
+        # 칠면조다(리뷰 09-16, 확대 확인). 추수감사절 카드의 핵심 소품이라 잘못 쓰면 안 된다.
+        "blanket, the red maple leaves scattered on the ground, the red barn with the turkey weathervane, the "
         "wooden fence and the sunset over the hills",
         "NOVEMBER SPECIAL",
         NOVEMBER_OUTFIT,
-        Plate(center_y=98, edge=((55, 771), (142, 701)), top_y=52),
+        Plate(center_y=99, edge=((55, 771), (142, 701)), top_y=52),
     ),
     12: MonthCard(
         12, "12_santa", "SANTA", "26DEC",
@@ -208,7 +216,7 @@ _CARDS: dict[int, MonthCard] = {
         "with lit windows and the Christmas tree below",
         "DECEMBER SPECIAL",
         DECEMBER_OUTFIT,
-        Plate(center_y=98, edge=((55, 771), (142, 712)), top_y=52),
+        Plate(center_y=99, edge=((55, 771), (142, 712)), top_y=52),
     ),
 }
 

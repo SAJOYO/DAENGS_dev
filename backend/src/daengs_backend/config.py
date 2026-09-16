@@ -269,7 +269,8 @@ class Settings(BaseSettings):
     cardimage_judge_model: str = Field(default="gemini-3.1-flash-lite", validation_alias=AliasChoices("DAENGS_CARDIMAGE_JUDGE_MODEL"))
     # 1~5 중 이 값 미만이면 한 번 다시 만듭니다. 실험에서 정면 사진은 6장 중 1장이 어긋났습니다.
     cardimage_judge_min: int = Field(default=3, ge=1, le=5, validation_alias=AliasChoices("DAENGS_CARDIMAGE_JUDGE_MIN"))
-    # 앱 사용자 하루 생성 한도 (KST 하루, `ready` 만 셈). 0 이면 한도 없음. 테스트 단계라 1 이고,
+    # 앱 사용자 하루 생성 한도 (KST 하루, 요청 단위 — 닮음이 `cardimage_judge_min` 이상인 카드가 나온
+    # 요청만 셈, D-084). 0 이면 한도 없음. 테스트 단계라 1 이고,
     # 제품 규칙이 정해지면 `services/ai_card_quota.py` 의 함수를 통째로 바꿉니다 (D-076).
     cardimage_daily_limit: int = Field(default=1, ge=0, validation_alias=AliasChoices("DAENGS_CARDIMAGE_DAILY_LIMIT"))
     # 서버 전체 동시 생성 수. backend 프로세스 안 백그라운드 작업이라 스레드를 씁니다 (D-076).
@@ -280,8 +281,9 @@ class Settings(BaseSettings):
                                       validation_alias=AliasChoices("DAENGS_CARDIMAGE_PICK_COUNT"))
 
     # GPU 카드 생성 서비스(D-078, Cloud Run asia-southeast1 L4). **비어 있으면 Nano Banana 2(D-074)
-    # 그대로** — 되돌리기가 이 한 줄이다. ⚠ 앱 경로(`/app/ai-cards`)의 정리 기준은 아직
-    # `cardimage_timeout_ms` 만 보므로 콜드 스타트(가중치 로드 수 분)를 모른다 — #544 에서는 VM 에 넣지 않는다.
+    # 그대로** — 되돌리기가 이 한 줄이다. 값이 있으면 앱 경로(`/app/ai-cards`)의 정리 기준
+    # (`ai_card_quota.stale_after`)에 `cardgen_timeout_s` 를 더해 콜드 스타트를 넘긴다(#572, D-084) —
+    # #544 에서는 그것이 없어 VM 에 넣지 않았다.
     cardgen_url: str = Field(default="", validation_alias=AliasChoices("DAENGS_CARDGEN_URL"))
     # 콜드 스타트 + 생성. `infra/gcp/cardgen.sh` 의 `--timeout=900` 과 맞춘다.
     cardgen_timeout_s: float = Field(default=900.0, gt=0, validation_alias=AliasChoices("DAENGS_CARDGEN_TIMEOUT_S"))

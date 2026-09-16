@@ -239,6 +239,30 @@ GAIT_RECORDS_POSE_MODEL_ROWS = (
 # **모듈 수준에 둔다** — `coverage_checks()` 가 "등록됐나"를 이 목록에서 읽는다. 함수 안에
 # 있으면 그 검사가 소스를 정규식으로 긁어야 하고, 그러면 목록을 고칠 때마다 정규식이 낡는다.
 CHECKS = (
+        # 닮음 미달 표시 칸(#572 Task 5, D-084). 픽스처에 ready 카드 한 장 + 그 사용 기록(09-15 백필)을
+        # 넣어 **기존 줄이 있는 표에** NOT NULL 칸이 붙게 한다 — 빈 표면 NOT NULL·기본값 변조가 아무것도
+        # 안 건드린다. 기본값을 잃거나 true 로 뒤집는 변조가 이 항목의 핵심이다 — 칸을 안 적는
+        # INSERT(옛 코드 · 09-15 백필 재실행)가 죽거나 전부 미달 표시가 되어 하루 한도가 아무것도 안 센다.
+        ('2026-09-16', 'ai_card_usage_below_judge_min',
+         APP_USERS + PETS_ONLY + SET_UPDATED_AT
+         + "\n".join([prerequisites('2026-09-14_ai_cards'),
+                      "INSERT INTO ai_cards(id, app_user_id, month, dog_name, title, status,"
+                      " storage_key, generation, size_bytes, width, height) VALUES"
+                      " ('77777777-7777-7777-7777-777777777777', '11111111-1111-1111-1111-111111111111',"
+                      "  4, 'x', 'BLOSSOM X', 'ready', 'k', 'g', 1, 994, 1582);",
+                      prerequisites('2026-09-15_ai_card_usage')]),
+         'ai_card_usage', [
+            'ALTER TABLE ai_card_usage DROP COLUMN below_judge_min',
+            'ALTER TABLE ai_card_usage ALTER COLUMN below_judge_min DROP NOT NULL',
+            'ALTER TABLE ai_card_usage ALTER COLUMN below_judge_min DROP DEFAULT',
+            'ALTER TABLE ai_card_usage ALTER COLUMN below_judge_min SET DEFAULT true',
+            # 기본값을 먼저 지워야 타입 변경 자체가 성공한다(false 는 smallint 로 자동 변환이 안 된다) —
+            # 그래야 ALTER 가 죽은 것이 아니라 verify 가 잡은 것이 된다.
+            'ALTER TABLE ai_card_usage ALTER COLUMN below_judge_min DROP DEFAULT;'
+            ' ALTER TABLE ai_card_usage ALTER COLUMN below_judge_min TYPE smallint'
+            ' USING below_judge_min::int;'
+            ' ALTER TABLE ai_card_usage ALTER COLUMN below_judge_min SET DEFAULT 0',
+        ]),
         # 한 요청에서 나온 카드들을 묶는 칸(#572 Task 4) + 「사용자별 동시 1장」을 요청의
         # 대표 행(id = pick_group) 하나로 좁힌다(fix round 1 Critical). 컬럼·인덱스 전환이
         # 한 파일·한 트랜잭션에 있다(fix round 2 R2-1 — 갈라져 있으면 적용 순서에 따라

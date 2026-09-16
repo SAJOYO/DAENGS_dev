@@ -10,12 +10,21 @@
 --    탈퇴 경로(services/ai_card.py::cleanup_for_owner)가 명시로 지운다 — 단 KST 오늘 기록은 남긴다.
 --    같은 카카오 계정으로 재로그인하면 같은 app_user_id 라, 오늘 기록을 지우면 그날 한도가 초기화된다.
 -- 실패한 카드는 줄을 남기지 않는다 — 실패는 한도에 세지 않는다.
+--
+-- #572(D-084) 부터 **한 요청(pick_group)에 한 줄**이다. 닮음이 기준(DAENGS_CARDIMAGE_JUDGE_MIN)
+-- 이상인 카드가 처음 ready 가 될 때 사용 기록(below_judge_min = false)을 남긴다. 그 전에 기준 미만
+-- 카드만 나왔으면 미달 표시(below_judge_min = true, card_id = 그 요청의 pick_group)를 남기고, 뒤에
+-- 기준 이상 카드가 나오면 같은 트랜잭션에서 그 표시를 지운다. 하루 한도는 false 줄만 세고, true 줄은
+-- 돈 나간 헛시도 상한(services/ai_card_quota.py::MAX_PAID_FAILURES_PER_DAY)이 센다. 카드 행이 아니라
+-- 이 표에 두는 이유는 같다 — 미달 카드를 지워도 표시는 남아야 한다.
 
 CREATE TABLE IF NOT EXISTS ai_card_usage (
     -- 카드 하나에 기록 하나. 백필을 여러 번 돌려도 ON CONFLICT 로 같은 결과가 된다.
     card_id UUID PRIMARY KEY,
     app_user_id UUID NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
-    used_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    used_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    -- 기본 false — 옛 줄과 백필 줄은 전부 사용 기록이다. true 가 기본이면 하루 한도가 아무것도 안 센다.
+    below_judge_min BOOLEAN NOT NULL DEFAULT FALSE
 );
 
 -- 한도는 늘 "내 오늘 기록 수".

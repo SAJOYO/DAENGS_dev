@@ -13,6 +13,7 @@ import datetime
 import uuid
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -112,9 +113,12 @@ class AiCard(Base):
 
 
 class AiCardUsage(Base):
-    """AI 카드 하루 한도를 세는 사용 기록 (#543, D-077). 스키마 원본은 `db/init/39_ai_card_usage.sql`.
+    """AI 카드 한도를 세는 기록 (#543 · #572, D-077 · D-084). 스키마 원본은 `db/init/39_ai_card_usage.sql`.
 
-    카드가 `ready` 가 되는 순간 한 줄. **카드를 지워도 남습니다** — 그래서 `card_id` 에 FK 가 없습니다.
+    **요청(`pick_group`) 하나에 한 줄.** 닮음이 기준(`cardimage_judge_min`) 이상인 카드가 처음 `ready`
+    가 될 때 사용 기록(`below_judge_min=False`, 하루 한도가 셈)을, 그 전에 기준 미만 카드만 나왔으면
+    미달 표시(`below_judge_min=True`, 돈 나간 헛시도 상한이 셈)를 남깁니다 — 규칙은
+    `services/ai_card_quota.py`. **카드를 지워도 남습니다** — 그래서 `card_id` 에 FK 가 없습니다.
     """
 
     __tablename__ = "ai_card_usage"
@@ -128,5 +132,10 @@ class AiCardUsage(Base):
 
     used_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), server_default=text("NOW()"))
 
+    #: `True` 면 사용 기록이 아니라 **닮음 기준 미만 카드만 나온 요청**의 표시다 (#572, D-084).
+    #: 그때 `card_id` 는 그 요청의 `pick_group`(대표 행 id)이다 — 같은 요청에서 기준 이상 카드가
+    #: 나오면 `_finish_ready` 가 그 값으로 이 줄을 찾아 지운다.
+    below_judge_min: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
+
     def __repr__(self) -> str:
-        return f"<AiCardUsage {self.card_id} {self.used_at}>"
+        return f"<AiCardUsage {self.card_id} {self.used_at} below_judge_min={self.below_judge_min}>"

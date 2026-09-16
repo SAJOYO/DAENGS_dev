@@ -785,6 +785,117 @@ def test_choose_a_failed_card_is_rejected_and_deletes_nothing(store, storage, jo
     assert store.ai_cards == [primary, sibling]  # 아무것도 안 지워졌다
 
 
+def test_follower_is_not_expired_while_the_leader_is_still_generating(store, storage, jobs, monkeypatch) -> None:
+    """#572 Task 5 — 요청 시각이 오래전이라(대기열이 길었다) 두 번째 카드의 `updated_at` 이 이미
+    정리 기준을 넘었어도, 첫 카드가 슬롯을 잡고 도는 동안 누가 목록을 열면 두 번째를 덮으면 안 된다.
+    덮으면 사용자는 돈 한 푼 안 나간 채 약속받은 두 장 중 한 장을 조용히 잃는다."""
+    monkeypatch.setattr(settings, "cardimage_pick_count", 2)
+    monkeypatch.setattr(settings, "cardgen_url", "")
+    requested = datetime.now(UTC) - quota.stale_after() - timedelta(minutes=1)
+    _start(now=requested)
+    primary, sibling = store.ai_cards
+    engine = _SideEffectEngine(lambda: asyncio.run(service.list_cards(FakeSession(), OWNER)))
+    monkeypatch.setattr(ai_card_engine, "default_engine", lambda: engine)
+
+    _run_all(jobs)
+
+    assert len(engine.calls) == 2  # 두 번째 카드도 실제로 만들어졌다
+    assert primary.status == "ready" and sibling.status == "ready"
+
+
+def _judge_scores(monkeypatch: pytest.MonkeyPatch, scores: list) -> None:
+    monkeypatch.setattr(settings, "cardimage_judge_min", 3)
+    monkeypatch.setattr(ai_card_engine, "default_judge", lambda: FakeJudge(scores))
+
+
+def test_below_min_card_is_ready_but_does_not_use_the_daily_limit(store, jobs, monkeypatch) -> None:
+    """닮음이 기준 미만이면 카드는 돌려주되 하루치는 안 쓴다 — 사진 각도가 나쁘면 다시 뽑아도
+    안 구해지므로(#557 E2 엎드린 옆모습 0장) 사용자가 그날을 통째로 잃는다. 대신 표시가 남는다."""
+    _judge_scores(monkeypatch, [2])
+    card = _start()
+    _run_all(jobs)
+    assert card.status == "ready" and card.likeness == 2
+    assert [(u.card_id, u.below_judge_min) for u in store.ai_card_usage] == [(card.pick_group, True)]
+    assert asyncio.run(service.daily_status(FakeSession(), OWNER)) == (1, 1)
+    assert _start(month=9).status == "generating"
+
+
+def test_card_at_the_threshold_uses_the_daily_limit(store, jobs, monkeypatch) -> None:
+    _judge_scores(monkeypatch, [3])
+    card = _start()
+    _run_all(jobs)
+    assert [(u.card_id, u.below_judge_min) for u in store.ai_card_usage] == [(card.id, False)]
+    with pytest.raises(quota.AiCardLimitError):
+        _start()
+
+
+def test_judge_outage_uses_the_daily_limit(store, jobs, monkeypatch) -> None:
+    """검수 장애로 점수가 없으면(`None`) 기준을 넘은 것으로 센다 — 장애가 공짜 무한 생성이 되면 안 된다."""
+    from daengs_cardimage.judge import JudgeError
+
+    monkeypatch.setattr(ai_card_engine, "default_judge", lambda: FakeJudge(error=JudgeError("down")))
+    card = _start()
+    _run_all(jobs)
+    assert card.status == "ready" and card.likeness is None
+    assert [u.below_judge_min for u in store.ai_card_usage] == [False]
+    with pytest.raises(quota.AiCardLimitError):
+        _start()
+
+
+def test_below_min_then_good_card_leaves_only_the_usage(store, jobs, monkeypatch) -> None:
+    """한 요청에서 한 장이라도 기준을 넘으면 그 요청은 성공한 뽑기다 — 앞서 남긴 미달 표시는 같은
+    트랜잭션에서 지우고 사용 기록 하나만 남는다(헛시도 상한에 이중으로 잡히지 않는다)."""
+    monkeypatch.setattr(settings, "cardimage_pick_count", 2)
+    _judge_scores(monkeypatch, [2, 5])
+    _start()
+    _run_all(jobs)
+    primary, sibling = store.ai_cards
+    assert primary.status == "ready" and sibling.status == "ready"
+    assert [(u.card_id, u.below_judge_min) for u in store.ai_card_usage] == [(sibling.id, False)]
+
+
+def test_good_then_below_min_card_leaves_only_the_usage(store, jobs, monkeypatch) -> None:
+    monkeypatch.setattr(settings, "cardimage_pick_count", 2)
+    _judge_scores(monkeypatch, [5, 2])
+    card = _start()
+    _run_all(jobs)
+    assert [(u.card_id, u.below_judge_min) for u in store.ai_card_usage] == [(card.id, False)]
+
+
+def test_two_below_min_cards_leave_one_mark_per_request(store, jobs, monkeypatch) -> None:
+    """헛시도는 **요청 단위**로 센다 — 두 장이 다 미달이어도 뽑기 한 번이다."""
+    monkeypatch.setattr(settings, "cardimage_pick_count", 2)
+    _judge_scores(monkeypatch, [2])
+    card = _start()
+    _run_all(jobs)
+    assert [(u.card_id, u.below_judge_min) for u in store.ai_card_usage] == [(card.pick_group, True)]
+
+
+def test_deleting_below_min_cards_does_not_reset_the_paid_cap(store, jobs, monkeypatch) -> None:
+    """5번 연속 미달이면 여섯 번째는 거절된다 — **카드를 지워도** 표시는 남는다. 같은 강아지·같은 달을
+    다시 뽑으려면 그 카드를 지워야 하므로(`month_taken`), 카드 행으로 셌다면 매번 초기화됐다."""
+    monkeypatch.setattr(settings, "cardimage_pick_count", 2)
+    _judge_scores(monkeypatch, [1])
+    pet = FakePet(app_user_id=OWNER, name="네옹", breed="mix")
+    store.pets.append(pet)
+    for _ in range(quota.MAX_PAID_FAILURES_PER_DAY):
+        _start(dog_id=pet.id, month=4)
+        _run_all(jobs)
+        for card in list(store.ai_cards):
+            asyncio.run(service.delete_card(FakeSession(), OWNER, card.id))
+    assert store.ai_cards == []
+    with pytest.raises(quota.AiCardLimitError):
+        _start(dog_id=pet.id, month=4)
+
+
+def test_finish_ready_refuses_contradictory_usage_flags(store, storage, jobs) -> None:
+    """사용 기록과 미달 표시를 한 카드에 둘 다 남기라는 호출은 조용히 하나를 고르지 않고 거절한다."""
+    card = _start()
+    with pytest.raises(ValueError):
+        asyncio.run(service._finish_ready(card.id, "k", None, None, record_usage=True, mark_below_min=True))
+    assert card.status == "generating" and store.ai_card_usage == []
+
+
 def test_choose_a_generating_card_is_rejected_and_deletes_nothing(store, storage, jobs, monkeypatch) -> None:
     """#572 Task 4 fix round 2 R2-3 — 아직 `generating` 인(형제가 먼저 `ready` 가 됐을 수 있는)
     카드를 고르면 그 `ready` 형제를 지워 버릴 수 있다. 그래서 막는다."""

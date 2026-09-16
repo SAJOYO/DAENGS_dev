@@ -8,6 +8,7 @@ from datetime import datetime
 from sqlalchemy import delete as sql_delete
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from daengs_backend.models import AiCard, AiCardUsage
 
@@ -66,17 +67,49 @@ async def has_month_card(session: AsyncSession, app_user_id: uuid.UUID, dog_id: 
 
 
 def add_usage(session: AsyncSession, usage: AiCardUsage) -> AiCardUsage:
-    """카드가 `ready` 가 된 기록. 커밋은 부르는 쪽(ready 로 바꾸는 같은 트랜잭션)이 합니다."""
+    """사용 기록 또는 닮음 미달 표시 한 줄. 커밋은 부르는 쪽(ready 로 바꾸는 같은 트랜잭션)이 합니다."""
     session.add(usage)
     return usage
 
 
 async def count_usage_since(session: AsyncSession, app_user_id: uuid.UUID, since: datetime) -> int:
-    """`since` 이후의 사용 기록 수. **지운 카드도 셉니다** — 기록은 카드와 따로 남습니다."""
+    """`since` 이후의 사용 기록 수. **지운 카드도 셉니다** — 기록은 카드와 따로 남습니다.
+
+    **닮음 미달 표시(`below_judge_min`)는 세지 않습니다** — 그것은 하루 한도가 아니라 돈 나간 헛시도
+    상한이 셉니다(`count_below_judge_min_since`, D-084).
+    """
     stmt = select(func.count()).select_from(AiCardUsage).where(
-        AiCardUsage.app_user_id == app_user_id, AiCardUsage.used_at >= since
+        AiCardUsage.app_user_id == app_user_id,
+        AiCardUsage.used_at >= since,
+        AiCardUsage.below_judge_min.is_(False),
     )
     return int(await session.scalar(stmt) or 0)
+
+
+async def count_below_judge_min_since(session: AsyncSession, app_user_id: uuid.UUID, since: datetime) -> int:
+    """`since` 이후 **닮음 기준 미만 카드만 나온 요청** 수 — 요청마다 표시가 한 줄뿐이라 행 수가 곧 요청 수다.
+
+    카드 행(`ai_cards`)으로 세지 않는 이유: 같은 강아지·같은 달을 다시 뽑으려면 미달 카드를 지워야
+    하므로(`has_month_card`) 카드 행으로 세면 지울 때마다 초기화된다.
+    """
+    stmt = select(func.count()).select_from(AiCardUsage).where(
+        AiCardUsage.app_user_id == app_user_id,
+        AiCardUsage.used_at >= since,
+        AiCardUsage.below_judge_min.is_(True),
+    )
+    return int(await session.scalar(stmt) or 0)
+
+
+async def delete_below_judge_min_mark(session: AsyncSession, pick_group: uuid.UUID) -> int:
+    """이 요청의 닮음 미달 표시를 지웁니다 — 같은 요청에서 기준 이상 카드가 나와 사용 기록으로 바뀔 때.
+
+    **표시(`below_judge_min = true`)만** 지웁니다. 대표 행의 사용 기록도 `card_id = pick_group` 이라
+    조건이 없으면 그것까지 지울 수 있습니다. 커밋은 부르는 쪽(같은 트랜잭션)이 합니다.
+    """
+    result = await session.execute(
+        sql_delete(AiCardUsage).where(AiCardUsage.card_id == pick_group, AiCardUsage.below_judge_min.is_(True))
+    )
+    return result.rowcount or 0
 
 
 async def count_failed_since(
@@ -95,19 +128,36 @@ async def count_failed_since(
 async def expire_generating(
     session: AsyncSession, app_user_id: uuid.UUID, *, stale_before: datetime, now: datetime
 ) -> int:
-    """정리 기준보다 오래된 `generating` 을 `failed`/`interrupted` 로 바꿉니다.
+    """정리 기준보다 오래 **진척이 없는 요청**의 `generating` 을 `failed`/`interrupted` 로 바꿉니다.
 
-    **`updated_at` 기준입니다**(`created_at` 이 아닙니다) — `services/ai_card.py::_claim_slot`
-    이 슬롯을 잡을 때마다 이 칸을 지금으로 찍으므로, 대기열에서 오래 기다린 것이 아니라
-    **슬롯을 잡고 실제로 도는 데** 걸린 시간만 이 기준에 들어갑니다. 배포 재시작과 겹쳐
-    사라진 백그라운드 작업의 행이 여기 걸립니다. 커밋은 부르는 쪽이 합니다.
+    **진척은 행 하나가 아니라 요청(`pick_group`) 전체의 가장 최근 `updated_at` 입니다** (#572
+    Task 5, D-084). 이 칸은 `services/ai_card.py` 가 슬롯을 잡을 때(`_claim_slot`)와 카드를 끝낼
+    때(`_finish_ready`·`_finish_failed`) 찍습니다. 한 요청의 카드는 **하나씩 순서대로** 만들어지므로
+    두 번째 카드의 `updated_at` 은 요청 시각 그대로이고, 첫 카드가 도는 동안에도 제 예산이
+    흘러갑니다. 행마다 따로 재면 대기열이 길 때 첫 카드가 멀쩡히 도는 중에 두 번째가 `interrupted`
+    로 덮여, 사용자가 돈 한 푼 안 나간 채 약속받은 카드 한 장을 조용히 잃었습니다.
+
+    그래서 두 번째 카드는 **자기 그룹이 마지막으로 움직인 시각**부터 잽니다 — 첫 카드가 방금 슬롯을
+    잡았거나 방금 끝났으면 살아 있고, 프로세스가 죽어 그룹 전체가 멈췄으면 그 마지막 진척에서
+    `stale_after()` 가 지난 뒤 **그룹의 남은 행이 한꺼번에** 정리됩니다. 다른 요청의 진척은 보지
+    않습니다. `pick_group` 이 없는 옛 행은 서브쿼리가 비어 제 `updated_at` 으로 잽니다.
+
+    **여전히 이 예산 밖인 것:** 요청의 첫 카드가 세마포어(`cardimage_concurrency`)를 기다리는 시간.
+    그 동안은 그룹의 어느 행도 안 움직입니다 — 그렇게 정리된 요청은 `_claim_slot` 이 엔진을 부르지
+    않으므로 돈은 안 나갑니다. 커밋은 부르는 쪽이 합니다.
     """
+    sibling = aliased(AiCard)
+    last_progress = (
+        select(func.max(sibling.updated_at))
+        .where(sibling.app_user_id == app_user_id, sibling.pick_group == AiCard.pick_group)
+        .scalar_subquery()
+    )
     result = await session.execute(
         update(AiCard)
         .where(
             AiCard.app_user_id == app_user_id,
             AiCard.status == "generating",
-            AiCard.updated_at < stale_before,
+            func.coalesce(last_progress, AiCard.updated_at) < stale_before,
         )
         .values(status="failed", error_code="interrupted", updated_at=now)
     )

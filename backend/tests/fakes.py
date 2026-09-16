@@ -1919,7 +1919,23 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
         return usage
 
     async def ai_card_count_usage_since(session, app_user_id, since):
-        return sum(1 for u in store.ai_card_usage if u.app_user_id == app_user_id and u.used_at >= since)
+        # 미달 표시(below_judge_min)는 하루 한도가 아니다 (#572 Task 5). 칸을 안 준 옛 테스트 객체는
+        # None 이라 사용 기록으로 센다 — 진짜 DB 의 기본값 false 와 같다.
+        return sum(
+            1 for u in store.ai_card_usage
+            if u.app_user_id == app_user_id and u.used_at >= since and not u.below_judge_min
+        )
+
+    async def ai_card_count_below_judge_min_since(session, app_user_id, since):
+        return sum(
+            1 for u in store.ai_card_usage
+            if u.app_user_id == app_user_id and u.used_at >= since and u.below_judge_min is True
+        )
+
+    async def ai_card_delete_below_judge_min_mark(session, pick_group):
+        gone = [u for u in store.ai_card_usage if u.card_id == pick_group and u.below_judge_min is True]
+        store.ai_card_usage = [u for u in store.ai_card_usage if u not in gone]
+        return len(gone)
 
     async def ai_card_count_failed_since(session, app_user_id, since, codes):
         return sum(
@@ -1932,10 +1948,20 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
         )
 
     async def ai_card_expire_generating(session, app_user_id, *, stale_before, now):
+        # 진짜 쿼리와 같은 규칙 (#572 Task 5): 행 하나가 아니라 **같은 pick_group 의 가장 최근
+        # updated_at** 으로 잰다. pick_group 이 없는 옛 행은 제 updated_at 으로.
+        def last_progress(card):
+            if card.pick_group is None:
+                return card.updated_at
+            return max(
+                c.updated_at for c in store.ai_cards
+                if c.app_user_id == app_user_id and c.pick_group == card.pick_group
+            )
+
         expired = [
             c
             for c in store.ai_cards
-            if c.app_user_id == app_user_id and c.status == "generating" and c.updated_at < stale_before
+            if c.app_user_id == app_user_id and c.status == "generating" and last_progress(c) < stale_before
         ]
         for c in expired:
             c.status, c.error_code, c.updated_at = "failed", "interrupted", now
@@ -1984,6 +2010,8 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
     monkeypatch.setattr(ai_card_repo, "has_month_card", ai_card_has_month_card)
     monkeypatch.setattr(ai_card_repo, "add_usage", ai_card_add_usage)
     monkeypatch.setattr(ai_card_repo, "count_usage_since", ai_card_count_usage_since)
+    monkeypatch.setattr(ai_card_repo, "count_below_judge_min_since", ai_card_count_below_judge_min_since)
+    monkeypatch.setattr(ai_card_repo, "delete_below_judge_min_mark", ai_card_delete_below_judge_min_mark)
     monkeypatch.setattr(ai_card_repo, "delete_usage_for_owner", ai_card_delete_usage_for_owner)
     monkeypatch.setattr(ai_card_repo, "count_failed_since", ai_card_count_failed_since)
     monkeypatch.setattr(ai_card_repo, "expire_generating", ai_card_expire_generating)

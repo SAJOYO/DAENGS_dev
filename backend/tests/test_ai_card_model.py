@@ -1,6 +1,6 @@
 """`models/ai_card.py` 가 `db/init/38_ai_cards.sql` 을 따라가는지 (모델은 SQL 을 따라가는 쪽)."""
 
-from sqlalchemy import Integer
+from sqlalchemy import Boolean, Integer
 
 from daengs_backend.models import AI_CARD_STATUSES, AiCard, AiCardUsage
 
@@ -47,8 +47,16 @@ def test_usage_columns_follow_sql() -> None:
     """`db/init/39_ai_card_usage.sql` 을 따라간다 (#543, D-077)."""
     table = AiCardUsage.__table__
     assert table.name == "ai_card_usage"
-    assert set(table.c.keys()) == {"card_id", "app_user_id", "used_at"}
+    assert set(table.c.keys()) == {"card_id", "app_user_id", "used_at", "below_judge_min"}
     assert [c.name for c in table.primary_key.columns] == ["card_id"]
+
+
+def test_usage_below_judge_min_is_not_null_and_false_by_default() -> None:
+    """#572 Task 5 — 미달 표시 칸. 기본이 `true` 거나 비면 모든 사용 기록이 하루 한도에서 빠진다."""
+    column = AiCardUsage.__table__.c.below_judge_min
+    assert type(column.type) is Boolean
+    assert not column.nullable
+    assert str(column.server_default.arg) == "false"
 
 
 def test_usage_card_id_has_no_foreign_key() -> None:

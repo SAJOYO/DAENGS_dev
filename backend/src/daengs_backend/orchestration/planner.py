@@ -69,7 +69,7 @@ from __future__ import annotations
 
 import re
 import uuid
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from datetime import datetime
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -527,17 +527,69 @@ def resolve_deterministic_route(
     )
 
 
-#: 라우터가 낸 HANDOFF 를 해설 실행으로 바꿀 수 있는 목록 (#569).
+# 라우터가 낸 HANDOFF 를 해설 실행으로 바꾸는 능력별 어댑터 (#569 · D-081).
+#
+# **payload 를 만드는 함수는 `resolve_*_route` 와 같은 것을 쓴다** — 진입이 둘이어도 계획은
+# 한 곳에서 만들어져야 두 길이 다른 답을 낼 수 없다 (D-051 ② 와 같은 이유).
+#: (프롬프트 · 컨텍스트) → 해설 하나짜리 계획. 조건이 안 맞으면 None 이고 HANDOFF 가 그대로 나간다.
+_HandoffExplainer = Callable[..., "RoutePlan | None"]
+
+
+def _skin_handoff_explainer(
+    *,
+    query: str,
+    context: dict[str, Any],
+    enabled: bool,
+    resolved: ConversationContext | None,
+) -> RoutePlan | None:
+    return resolve_skin_route(
+        query=query,
+        context=context,
+        requested_capability=_SKIN,
+        enabled=enabled,
+        resolved=resolved,
+    )
+
+
+def _gait_handoff_explainer(
+    *,
+    query: str,
+    context: dict[str, Any],
+    enabled: bool,
+    resolved: ConversationContext | None,
+) -> RoutePlan | None:
+    """보행은 **비교 해소가 성공했을 때만** HANDOFF 를 바꾼다 (D-081).
+
+    ⚠️ 여기가 피부와 갈리는 자리다. `resolve_gait_route` 는 **비교를 못 했을 때도 계획을
+    만든다** — 칩에서는 그게 맞다(사용자가 비교 화면에서 눌러 들어왔으니 이유를 말하고 닫는
+    것이 그 행동에 대한 답이다, D-080). 그런데 **타이핑 경로에서 낡은 참조가 실리면 그 대화의
+    모든 질문이 고정 실패 문구로 닫힌다** — 산책 질문까지 "비교 정보를 불러올 수 없어요" 가
+    된다. 라우터가 gait 로 보낸 질문은 전부 이 길을 지나기 때문이다.
+
+    그래서 비교 불가면 **열지 않고 None** 을 내서 오늘과 같은 gait HANDOFF 로 되돌린다.
+    칩 경로(`requested_capability="gait"`)는 이 함수를 지나지 않으므로 **한 글자도 안 바뀐다**.
+    """
+    # 보행 해설은 아직 앞 대화를 받지 않는다 — `GaitComparePayload` 에 칸이 없다 (D-082).
+    del resolved
+    if _gait_compare(context) is None:
+        return None
+    return resolve_gait_route(
+        query=query,
+        context=context,
+        requested_capability=_GAIT,
+        enabled=enabled,
+    )
+
+
+#: 라우터 HANDOFF 를 해설 실행으로 바꿀 수 있는 능력과 **그 바꾸는 방법**.
 #:
-#: **왜 표인가.** `skin` 한 곳에 박으면 형제 기능(gait, D-080)이 같은 길을 쓰려 할 때 같은 모양의
-#: 분기가 두 벌이 된다. 여는 조건이 셋으로 똑같으므로(라우터가 그 HANDOFF 를 냈다 · 서버가 해소한
-#: 컨텍스트가 있다 · 킬 스위치가 켜져 있다) 표로 두고 한 줄로 늘린다.
-#:
-#: **payload 를 만드는 함수는 `resolve_*_route` 와 같은 것을 쓴다** — 진입이 둘이어도 계획은 한 곳에서
-#: 만들어져야 두 길이 다른 답을 낼 수 없다 (D-051 ② 와 같은 이유).
-#:
-#: gait 가 빠져 있는 것은 의도다. D-080 의 진입은 아직 신호 전용이고, 여는 것은 그쪽 담당자 결정이다.
-_HANDOFF_EXPLAINERS = (_SKIN,)
+#: 능력마다 해석기의 모양이 달라서 함수 이름만으로는 표를 만들 수 없다 — `resolve_skin_route`
+#: 는 앞 대화(`resolved`)를 받고 `resolve_gait_route` 는 안 받으며, 보행에는 위의 "비교 불가면
+#: 열지 않는다" 규칙이 하나 더 붙는다. 그래서 **능력별 어댑터 함수**를 값으로 둔다.
+_HANDOFF_EXPLAINERS: dict[str, _HandoffExplainer] = {
+    _SKIN: _skin_handoff_explainer,
+    _GAIT: _gait_handoff_explainer,
+}
 
 
 def _explainer_plan_for(
@@ -545,17 +597,21 @@ def _explainer_plan_for(
     *,
     query: str,
     context: dict[str, Any],
-    enabled: bool,
+    enabled: Mapping[str, bool],
     resolved: ConversationContext | None = None,
 ) -> dict[str, Any] | None:
-    """라우터 HANDOFF 를 대신할 해설 요청. 조건이 안 맞으면 None 이고 HANDOFF 가 그대로 나간다."""
-    if target != _SKIN:
+    """라우터 HANDOFF 를 대신할 해설 요청. 조건이 안 맞으면 None 이고 HANDOFF 가 그대로 나간다.
+
+    `enabled` 는 **능력별 킬 스위치**다. 하나의 불리언으로 두면 보행을 열 때 피부까지 같이
+    켜지거나 꺼진다 — 둘은 따로 끌 수 있어야 한다 (`settings.skin_agent` · `settings.gait_agent`).
+    """
+    explainer = _HANDOFF_EXPLAINERS.get(target)
+    if explainer is None:
         return None
-    plan = resolve_skin_route(
+    plan = explainer(
         query=query,
         context=context,
-        requested_capability=_SKIN,
-        enabled=enabled,
+        enabled=enabled.get(target, False),
         resolved=resolved,
     )
     if plan is None:
@@ -578,6 +634,10 @@ def assemble_route_plan(
     prompt_version: str | None = PROMPT_VERSION,
     general_fallback: bool = False,
     skin_agent: bool = False,
+    #: 보행 해설의 킬 스위치 (D-081). **피부와 따로 끈다** — 하나의 불리언으로 두면 한쪽을
+    #: 열 때 다른 쪽까지 같이 켜지거나 꺼진다. 기본 False 는 `skin_agent` 와 같은 이유다:
+    #: 동결된 라우터 벤치마크 러너가 오늘과 똑같은 계획을 계속 만들어야 한다 (#279).
+    gait_agent: bool = False,
     resolved: ConversationContext | None = None,
 ) -> RoutePlan:
     """Build the real Card 1 RoutePlan using only trusted query/context values.
@@ -651,11 +711,12 @@ def assemble_route_plan(
     #
     # **라우터가 고르지 않은 것은 열리지 않는다.** 이 규칙은 라우터의 판단을 바꾸지 않고, 그
     # 판단이 HANDOFF 일 때 목적지만 바꾼다 — 그래서 산책 질문은 그대로 산책이 답한다.
+    agents = {_SKIN: skin_agent, _GAIT: gait_agent}
     for target in decision.handoffs:
         if target not in _HANDOFF_EXPLAINERS:
             continue
         explainer = _explainer_plan_for(
-            target, query=query, context=context, enabled=skin_agent, resolved=resolved
+            target, query=query, context=context, enabled=agents, resolved=resolved
         )
         if explainer is None:
             continue
@@ -691,7 +752,7 @@ def assemble_route_plan(
     # HANDOFF 규칙이 이미 자기 몫을 처리했다.
     if selected == [_GENERAL] and not decision.handoffs and resolved is not None:
         explainer = _explainer_plan_for(
-            _SKIN, query=query, context=context, enabled=skin_agent, resolved=resolved
+            _SKIN, query=query, context=context, enabled=agents, resolved=resolved
         )
         if explainer is not None:
             return RoutePlan.model_validate(

@@ -69,7 +69,11 @@ from daengs_backend.orchestration.semantic import (
 
 # v1 (D-080): 첫 판본. 규칙 문장이나 `GaitGuidance` 스키마가 한 글자라도 바뀌면 올린다 —
 # 스키마가 프롬프트 본문에 그대로 들어가므로 칸 하나가 늘어도 본문이 달라진다.
-GAIT_PROMPT_VERSION = "gait-change-ko-v1"
+#: v2 (#576): 보호자가 **이미 받은** 진단을 말하는 경우를 규칙 8 로 갈라냈다. v1 실측
+#: (`evals/gait_change/report_gc_v1.md`)에서 그 질문이 **24/24 전부 거절**이었다 — 규칙 3 이
+#: "무슨 병인지 물으면 거절" 이라 질문 본문에 병명이 들어오는 순간 함께 밀렸다.
+#: **평가 메타가 이 값을 고정한다** — 올리지 않으면 새 결과가 옛 셀에 섞인다.
+GAIT_PROMPT_VERSION = "gait-change-ko-v2"
 GAIT_MODEL_ID = ROUTER_MODEL_ID
 GAIT_MAX_OUTPUT_TOKENS = 512
 
@@ -109,6 +113,17 @@ _VET_TERMS = ("수의사", "동물병원", "병원", "진료", "내원")
 #: 수치. 이 능력은 관절 이동범위를 받지 않으므로 단위가 붙은 숫자는 전부 지어낸 것이다.
 #: 잰 관절 수(`3개 중 2개`)까지 막지 않으려고 **단위가 붙은 것만** 잡는다.
 _MEASUREMENT = re.compile(r"\d+(?:\.\d+)?\s*(?:px|픽셀|%|퍼센트|프로|mm|cm|도)|이동범위")
+#: 방향을 **말하지 않는다고 밝히는** 표현 (#576). 이 말 **앞**에 있는 방향어는 주장이 아니다.
+#: 목록을 넓히면 진짜 방향 주장이 새므로, 방향을 부인하는 꼴로만 쓰이는 말만 넣는다.
+_DIRECTION_DISCLAIMER = re.compile(
+    r"의미는\s*아니|뜻은\s*아니|것은\s*아니|것이\s*아니|말하는\s*것은\s*아니"
+    r"|말할\s*수\s*(?:는\s*)?없|알\s*수\s*(?:는\s*)?없"
+    # `판단하지 않아요` 꼴. **`-지 않` 을 통째로 잡지 않는다** — "좋아지지 않았어요" 가
+    # 그것으로 면제되는데 그건 방향 주장이다. 방향을 **부인하는 동사**만 골라 적는다.
+    r"|(?:판단|말|의미|나타내|뜻|보여주)하?지\s*(?:는\s*)?않"
+)
+#: 문장 경계. 마침표가 없는 한 줄짜리 해설도 한 문장으로 다룬다.
+_SENTENCE_SPLIT = re.compile(r"(?<=[.!?])\s+")
 
 _POLICY = (
     "You are the gait-change guide of a Korean dog-care app. The owner has just seen a "
@@ -142,13 +157,23 @@ _POLICY = (
     "pain, inflammation and the like), and never give numbers with units. Do not repeat "
     "such words from the owner's question either.\n"
     "3. Never tell the owner to see a vet, and do not mention vets, clinics or treatment. "
-    'If the owner asks whether to see a vet, what illness this is, what caused it, or how '
+    "If the owner asks whether to see a vet, what illness this is, what caused it, or how "
     'serious it is: kind "refuse", reason "diagnosis".\n'
-    "4. Medicine, supplements, doses or treatment: kind \"refuse\", reason \"medication\".\n"
+    '4. Medicine, supplements, doses or treatment: kind "refuse", reason "medication".\n'
     "5. Signs of an emergency (collapse, seizure, heavy bleeding, trouble breathing, a leg "
     'that cannot bear weight at all): kind "refuse", reason "emergency".\n'
     '6. Not about dogs: kind "refuse", reason "off_topic".\n'
-    "7. Do not reassure the owner that the dog is fine, and do not alarm them.\n\n"
+    "7. Do not reassure the owner that the dog is fine, and do not alarm them.\n"
+    '8. If the owner reports a diagnosis they have ALREADY been given ("the vet said it is '
+    'X", "we were told at the clinic that ..."), that is NOT a request to diagnose: do NOT '
+    "refuse. Take it as context and answer their question about the comparison. Within that: "
+    "do not confirm or deny the diagnosis, do not repeat the name of the condition, give no "
+    "advice specific to it, and do NOT link it to this comparison as its cause, its evidence "
+    "or its confirmation. The comparison only shows whether movement differed between two "
+    "videos; it says nothing about why. Say that positively — describe only what the "
+    "comparison shows. Do NOT write words for illness, condition, disease or diagnosis at "
+    'all, not even to deny a link: "이 비교는 움직임의 차이만 보여줘요" is the right shape, '
+    '"질환과는 관련이 없어요" is not.\n\n'
     "Output:\n"
     '- kind "guide": text is 2-3 short Korean sentences that answer the owner within these '
     "rules.\n"
@@ -284,10 +309,39 @@ def plan_gait_actions(compare: GaitCompareContext, chosen: list[GaitAction]) -> 
     return [*leading, *rest] or ["keep_observing"]
 
 
+def _claims_direction(text: str) -> bool:
+    """방향을 **주장**했나. 방향을 말하지 않는다고 밝힌 문장은 주장이 아니다 (#576).
+
+    v1 실측에서 가드가 이 문장을 통째로 갈아 치웠다:
+
+        이 결과는 움직임의 변화를 나타낼 뿐, 상태가 좋아지거나 나빠졌다는 의미는 아니에요.
+
+    방향을 말하지 않는다고 **명시한** 문장인데 `좋아지`·`나빠졌` 만 보고 반응했다. 사용자에게
+    더 나은 문장이 사라지고 일반 요약으로 대체됐다 — 가드가 좁아서가 아니라 넓어서 생긴 일이다.
+
+    그래서 문장 단위로 보되 **면제 조건을 좁게** 둔다: 그 문장의 방향어가 **전부** 부정 표현
+    앞에 있어야 한다. 부정 뒤에 방향어가 또 나오면 그것은 진짜 주장이다 —
+    "좋아졌는지 말할 수는 없지만, 확실히 나아졌어요" 가 그 모양이고, 문장에 부정이 있다는
+    것만으로 봐주면 이런 문장이 그대로 나간다.
+
+    ⚠️ **이 면제는 방향어에만 준다.** 병명 · 진료 · 수치는 부정해도 해가 남는다 —
+    "관절염은 아니에요" 는 여전히 병명 판단이고, "병원 갈 필요 없어요" 는 여전히 진료
+    조언이며, 부정된 수치도 수치다. 실측으로 확인된 오탐도 방향어뿐이었다.
+    """
+    for sentence in _SENTENCE_SPLIT.split(text):
+        hits = list(_DIRECTION.finditer(sentence))
+        if not hits:
+            continue
+        disclaimer = _DIRECTION_DISCLAIMER.search(sentence)
+        if disclaimer is None or hits[-1].start() > disclaimer.start():
+            return True
+    return False
+
+
 def speaks_beyond_change(text: str) -> bool:
     """해설이 비교가 말하지 않은 것(방향 · 병명 · 진료 권유 · 수치)을 말했나."""
     return (
-        _DIRECTION.search(text) is not None
+        _claims_direction(text)
         or any(term in text for term in _DIAGNOSIS_TERMS)
         or any(term in text for term in _VET_TERMS)
         or _MEASUREMENT.search(text) is not None

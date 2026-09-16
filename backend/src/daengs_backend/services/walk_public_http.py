@@ -1,41 +1,22 @@
-"""Small provider requests without httpx's URL log (query strings contain service keys)."""
+"""Historical background imports; implementation belongs to walk_background."""
 
-import json
+from importlib import import_module
 
-import httpx
+_EXPORTS = {
+    "PublicSourceError": "daengs_backend.services.walk_background.http",
+    "get_json": "daengs_backend.services.walk_background.http",
+}
+
+__all__ = list(_EXPORTS)
 
 
-class PublicSourceError(Exception):
-    def __init__(self, reason, retryable=False):
-        super().__init__(reason)
-        self.reason, self.retryable = reason, retryable
+def __getattr__(name):
+    if name not in _EXPORTS:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    value = getattr(import_module(_EXPORTS[name]), name)
+    globals()[name] = value
+    return value
 
 
-async def get_json(transport, url, params, *, limit=2_000_000):
-    # Use the public transport interface directly: no client INFO log containing the URL.
-    request = httpx.Request(
-        "GET",
-        url,
-        params=params,
-        extensions={
-            "timeout": {"connect": 3.0, "read": 5.0, "write": 3.0, "pool": 3.0},
-        },
-    )
-    try:
-        response = await transport.handle_async_request(request)
-        try:
-            code = response.status_code
-            if code != 200:
-                raise PublicSourceError(f"http_{code}", code == 429 or code >= 500)
-            data = bytearray()
-            async for chunk in response.aiter_bytes():
-                data.extend(chunk)
-                if len(data) > limit:
-                    raise PublicSourceError("response_too_large")
-            return json.loads(data)
-        finally:
-            await response.aclose()
-    except httpx.RequestError:
-        raise PublicSourceError("transport_error", True) from None
-    except (ValueError, TypeError):
-        raise PublicSourceError("invalid_response") from None
+def __dir__():
+    return sorted(set(globals()) | set(__all__))

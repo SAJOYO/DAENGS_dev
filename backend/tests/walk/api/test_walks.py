@@ -17,7 +17,7 @@ from daengs_backend.core.deps import AppPrincipal, CurrentAppUser
 from daengs_backend.orchestration.adapters.life import WalkWeatherObservation
 from daengs_backend.routers import walk as walk_router
 from daengs_backend.schemas.walk import WalkFinalizeRequest
-from daengs_backend.services import walk as walk_service
+from daengs_backend.services.walk_session import lifecycle as walk_service
 
 OWNER = uuid.uuid4()
 STRANGER = uuid.uuid4()

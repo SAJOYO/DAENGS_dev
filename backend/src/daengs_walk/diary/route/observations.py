@@ -6,11 +6,13 @@ from datetime import timedelta
 from daengs_walk.diary.contracts.input import Anchor, MovementObservation, RouteVersion, digest
 from daengs_walk.evidence import WalkEvidenceBundle
 from daengs_walk.facts import MIN_STOP_S
-from daengs_walk.storyboard_input import route_nodes
-from daengs_walk.storyboard_selection import movement_candidates, session_speed_baseline
+from daengs_walk.route.nodes import route_nodes
+from daengs_walk.route.pace import PacePolicy, movement_candidates, session_speed_baseline
 
 OBSERVATION_POLICY_VERSION = "diary-canonical-motion-v1"
 MAX_OBSERVATIONS = 200
+# This versioned observation pool owns its criteria, independently of storyboard.
+OBSERVATION_PACE = PacePolicy(slow_ratio=0.5, fast_ratio=1.75, minimum_seconds=20)
 
 
 @dataclass(frozen=True)
@@ -114,12 +116,12 @@ def build_observation_pool(evidence: WalkEvidenceBundle, route: RouteVersion) ->
         )
 
     nodes = route_nodes(evidence)
-    baseline = session_speed_baseline(nodes)
+    baseline = session_speed_baseline(nodes, minimum_speed=0.5, minimum_samples=5)
     fixes = {p.client_seq: p for p in evidence.accepted_points}
     blocks = {}
     for node in nodes:
         blocks.setdefault(node["block"], []).append(node)
-    for candidate in movement_candidates(nodes, baseline, "session_speed"):
+    for candidate in movement_candidates(nodes, baseline, "session_speed", policy=OBSERVATION_PACE):
         movement = candidate["movement"]
         support = [
             n

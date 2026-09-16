@@ -19,11 +19,11 @@ from daengs_backend.repositories import walk as walks
 from daengs_backend.repositories import walk_upload as repo
 from daengs_backend.routers import walk as router
 from daengs_backend.schemas.walk import WalkPointsAppend, WalkRecordingRepair
-from daengs_backend.services import walk as legacy
-from daengs_backend.services import walk_upload_receipt as service
-from daengs_backend.services.walk_chunk import encode_chunk
-from daengs_backend.services.walk_finalize import FinalizeInputError
-from daengs_backend.services.walk_recording import recording_receipt, repair_recording
+from daengs_backend.services.walk_session import lifecycle as legacy
+from daengs_backend.services.walk_session import upload_receipt as service
+from daengs_backend.services.walk_session.chunk import encode_chunk
+from daengs_backend.services.walk_session.finalize import FinalizeInputError
+from daengs_backend.services.walk_session.recording import recording_receipt, repair_recording
 from tests.walk.api.test_walk_finalize_db import manifest, pending_finalize
 from tests.walk.api.test_walk_upload_db import body, http_client
 from tests.walk.support.paths import REPO

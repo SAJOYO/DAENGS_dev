@@ -16,6 +16,7 @@ from sqlalchemy.exc import IntegrityError
 from daengs_backend.core.subject import SubjectType
 from daengs_backend.repositories import admin_audit_log as admin_audit_log_repo
 from daengs_backend.repositories import admin_user as admin_user_repo
+from daengs_backend.repositories import ai_card as ai_card_repo
 from daengs_backend.repositories import answer_report as answer_report_repo
 from daengs_backend.repositories import app_user as app_user_repo
 from daengs_backend.repositories import care_event as care_repo
@@ -253,6 +254,12 @@ class Store:
 
         #: 뽑아 둔 도감 카드. id 는 **앱이 만든 것**이라 가짜가 안 채웁니다.
         self.dog_cards: list = []
+
+        #: 서버가 만든 AI 도감 카드 (#537, D-076). id 는 **서버가 만듭니다** (dog_cards 와 반대).
+        self.ai_cards: list = []
+
+        #: AI 카드 사용 기록 (#543, D-077). 카드를 지워도 남습니다 — 가짜 `ai_card_delete` 는 이것을 안 건드립니다.
+        self.ai_card_usage: list = []
 
         #: 대화 세션·turn·저장된 요약. 정렬은 가짜 리포지토리가 실제 기준을 따릅니다.
         self.chat_sessions: list[FakeChatSession] = []
@@ -858,6 +865,21 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
         carers = {uid for pid, uid in store.pet_members if pid in group}
         return owners | carers
 
+    async def identity_guardian_ids_many(session, *, pet_ids, identity_ids):
+        # 진짜와 같게 **보호자가 없는 열쇠는 키가 없습니다.** 그룹 쪽은
+        # `identity_guardian_ids` 를 그대로 써서 두 정의가 갈라지지 않게 합니다.
+        out: dict = {}
+        for pid in set(pet_ids):
+            owners = {p.app_user_id for p in store.pets if p.id == pid}
+            carers = {uid for rid, uid in store.pet_members if rid == pid}
+            if owners | carers:
+                out[pid] = owners | carers
+        for iid in set(identity_ids):
+            guardians = await identity_guardian_ids(session, iid)
+            if guardians:
+                out[iid] = guardians
+        return out
+
     async def identity_pet_of_user(session, identity_id, app_user_id):
         # 진짜와 같게 **많아야 하나**입니다 — `pets_identity_one_per_user` 부분 UNIQUE 가
         # "한 사람은 한 그룹에 행 하나" 를 보장합니다.
@@ -883,6 +905,7 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
     monkeypatch.setattr(identity_repo, "pet_ids_for", identity_pet_ids_for)
     monkeypatch.setattr(identity_repo, "count_pets", identity_count_pets)
     monkeypatch.setattr(identity_repo, "guardian_ids", identity_guardian_ids)
+    monkeypatch.setattr(identity_repo, "guardian_ids_many", identity_guardian_ids_many)
     monkeypatch.setattr(identity_repo, "pet_of_user", identity_pet_of_user)
     monkeypatch.setattr(identity_repo, "delete", identity_delete)
 
@@ -1840,6 +1863,116 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
     monkeypatch.setattr(card_repo, "list_for_owner_for_update", card_list_for_owner_for_update)
     monkeypatch.setattr(card_repo, "delete", card_delete)
     monkeypatch.setattr(card_repo, "delete_all_for_owner", card_delete_all_for_owner)
+
+    # ── AI 도감 카드 (#537, D-076) ────────────────────────────────────────
+    #
+    # 탈퇴가 이것도 명시로 지웁니다. 대역이 없으면 탈퇴 테스트가 진짜 DB 를 찾다가 깨집니다.
+
+    def ai_card_add(session, card):
+        # `idx_ai_cards_one_generating` 부분 UNIQUE 를 흉내 냅니다. 진짜 DB 는 commit 에서
+        # 터지고, 서비스가 add 와 commit 을 **같은 try** 로 감싸므로 여기서 내도 같은 길을 탑니다.
+        if card.status == "generating" and any(
+            c.app_user_id == card.app_user_id and c.status == "generating" for c in store.ai_cards
+        ):
+            # 진짜 드라이버 예외 문구에도 제약 이름이 들어 있습니다 — 서비스가 `exc.orig` 에서 그 이름을 봅니다.
+            raise IntegrityError(
+                "idx_ai_cards_one_generating", None, Exception("duplicate key idx_ai_cards_one_generating")
+            )
+        now = datetime.now(UTC)
+        if card.created_at is None:
+            card.created_at = now
+        if card.updated_at is None:
+            card.updated_at = now
+        store.ai_cards.append(card)
+        return card
+
+    async def ai_card_get_owned(session, app_user_id, card_id, *, for_update=False):
+        return next(
+            (c for c in store.ai_cards if c.id == card_id and c.app_user_id == app_user_id), None
+        )
+
+    async def ai_card_get_for_update(session, card_id):
+        return next((c for c in store.ai_cards if c.id == card_id), None)
+
+    async def ai_card_list_for_owner(session, app_user_id, *, limit=200):
+        rows = [c for c in store.ai_cards if c.app_user_id == app_user_id]
+        return sorted(rows, key=lambda c: c.created_at, reverse=True)[:limit]
+
+    async def ai_card_has_generating(session, app_user_id):
+        return any(c.app_user_id == app_user_id and c.status == "generating" for c in store.ai_cards)
+
+    async def ai_card_has_month_card(session, app_user_id, dog_id, month):
+        return any(
+            c.app_user_id == app_user_id
+            and c.dog_id == dog_id
+            and c.month == month
+            and c.status in ("generating", "ready")
+            for c in store.ai_cards
+        )
+
+    def ai_card_add_usage(session, usage):
+        store.ai_card_usage.append(usage)
+        return usage
+
+    async def ai_card_count_usage_since(session, app_user_id, since):
+        return sum(1 for u in store.ai_card_usage if u.app_user_id == app_user_id and u.used_at >= since)
+
+    async def ai_card_count_failed_since(session, app_user_id, since, codes):
+        return sum(
+            1
+            for c in store.ai_cards
+            if c.app_user_id == app_user_id
+            and c.status == "failed"
+            and c.error_code in codes
+            and c.created_at >= since
+        )
+
+    async def ai_card_expire_generating(session, app_user_id, *, stale_before, now):
+        expired = [
+            c
+            for c in store.ai_cards
+            if c.app_user_id == app_user_id and c.status == "generating" and c.updated_at < stale_before
+        ]
+        for c in expired:
+            c.status, c.error_code, c.updated_at = "failed", "interrupted", now
+        return len(expired)
+
+    async def ai_card_find_ready_by_storage_key(session, storage_key):
+        return next(
+            (c for c in store.ai_cards if c.storage_key == storage_key and c.status == "ready"), None
+        )
+
+    async def ai_card_list_for_owner_for_update(session, app_user_id):
+        return [c for c in store.ai_cards if c.app_user_id == app_user_id]
+
+    async def ai_card_delete(session, card):
+        store.ai_cards.remove(card)
+
+    async def ai_card_delete_all_for_owner(session, app_user_id):
+        mine = [c for c in store.ai_cards if c.app_user_id == app_user_id]
+        store.ai_cards = [c for c in store.ai_cards if c.app_user_id != app_user_id]
+        return len(mine)
+
+    async def ai_card_delete_usage_for_owner(session, app_user_id, *, before):
+        gone = [u for u in store.ai_card_usage if u.app_user_id == app_user_id and u.used_at < before]
+        store.ai_card_usage = [u for u in store.ai_card_usage if u not in gone]
+        return len(gone)
+
+    monkeypatch.setattr(ai_card_repo, "add", ai_card_add)
+    monkeypatch.setattr(ai_card_repo, "get_owned", ai_card_get_owned)
+    monkeypatch.setattr(ai_card_repo, "get_for_update", ai_card_get_for_update)
+    monkeypatch.setattr(ai_card_repo, "list_for_owner", ai_card_list_for_owner)
+    monkeypatch.setattr(ai_card_repo, "has_generating", ai_card_has_generating)
+    monkeypatch.setattr(ai_card_repo, "has_month_card", ai_card_has_month_card)
+    monkeypatch.setattr(ai_card_repo, "add_usage", ai_card_add_usage)
+    monkeypatch.setattr(ai_card_repo, "count_usage_since", ai_card_count_usage_since)
+    monkeypatch.setattr(ai_card_repo, "delete_usage_for_owner", ai_card_delete_usage_for_owner)
+    monkeypatch.setattr(ai_card_repo, "count_failed_since", ai_card_count_failed_since)
+    monkeypatch.setattr(ai_card_repo, "expire_generating", ai_card_expire_generating)
+    monkeypatch.setattr(ai_card_repo, "find_ready_by_storage_key", ai_card_find_ready_by_storage_key)
+    monkeypatch.setattr(ai_card_repo, "list_for_owner_for_update", ai_card_list_for_owner_for_update)
+    monkeypatch.setattr(ai_card_repo, "delete", ai_card_delete)
+    monkeypatch.setattr(ai_card_repo, "delete_all_for_owner", ai_card_delete_all_for_owner)
 
     async def audit_add(session, **kw):
         entry = FakeAuditEntry(

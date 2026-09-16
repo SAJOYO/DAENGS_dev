@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from daengs_backend.services.cardimage import catalog
+from daengs_cardimage import catalog
 
 
 def test_april_card():

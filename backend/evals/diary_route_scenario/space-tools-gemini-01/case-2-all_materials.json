@@ -1,0 +1,33 @@
+{
+  "status": "completed",
+  "variant": "all_materials",
+  "started_at": "2026-09-14T10:31:29.087293+00:00",
+  "requests": [
+    {
+      "status": "returned",
+      "elapsed_s": 1.187,
+      "usage": {
+        "candidates_token_count": 42,
+        "prompt_token_count": 821,
+        "prompt_tokens_details": [
+          {
+            "modality": "TEXT",
+            "token_count": 821
+          }
+        ],
+        "total_token_count": 863
+      },
+      "answer_text": "{\"text\": \"양재2동의 길을 따라 걸었다. 근처에 공원이 자리 잡고 있었다.\", \"evidence_ids\": [\"m1\", \"m3\", \"m4\"]}"
+    }
+  ],
+  "public_api_calls": 0,
+  "answer": {
+    "text": "양재2동의 길을 따라 걸었다. 근처에 공원이 자리 잡고 있었다.",
+    "evidence_ids": [
+      "m1",
+      "m3",
+      "m4"
+    ]
+  },
+  "elapsed_s": 1.219
+}

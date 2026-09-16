@@ -1,13 +1,31 @@
 # 문서
 
+산책 기능 전체의 후속 구조 정리 범위는 [소유권·의존 경계 조사](walk/ownership/README.md)를
+따릅니다. 기존 일기 패키징의 완료와 산책 전체 경계 정리의 완료를 구분합니다.
+
 | 파일 | 내용 |
 | --- | --- |
+<<<<<<< HEAD
+| [walk/relation-slots.md](walk/relation-slots.md) | 관계 모듈의 고정 결과 칸과 전체 장면 비교 입력·출력 계약, 단계별 연결 상태 |
+=======
+| [walk/session-package.md](walk/session-package.md) | 8단계 원본·업로드·봉인 패키징, 공통 오류·백업 독립 경계와 검증 |
+| [walk/remaining-packages.md](walk/remaining-packages.md) | 측정·공간 조회·과거 지원의 잔여 패키징, 최종 소유권과 완료 범위 |
+| [walk/records-package.md](walk/records-package.md) | 7단계 기록·사진 패키징과 outbox 트랜잭션 소유권 |
+| [walk/background-package.md](walk/background-package.md) | 6단계 배경 공급·계약·카탈로그 패키징 |
+>>>>>>> origin/dev
 | [walk/stored-measurements.md](walk/stored-measurements.md) | 불변 측정 저장·경로 청크와 일반 APP 상세 소비 계약 |
 | [walk/card-orchestration.md](walk/card-orchestration.md) | 실제 API의 SGIS·EGIS 준비, 독립 공간·조건부 행동·카드 제목 작업과 APP 저장 연결 |
 | [walk/diary-remaining-plan.md](walk/diary-remaining-plan.md) | 대화 경위·남은 기획·완료 기준, 실제 작성/미리보기/호환 분기와 SGIS·공간 선정·공통 실행의 혼동 방지 |
 | [walk/diary-service-package.md](walk/diary-service-package.md) | 일기 서비스 진입점·책임별 패키지·의존 경계와 이전 파일 이동표 |
 | [walk/diary-domain-package.md](walk/diary-domain-package.md) | 일기 기획 규칙의 책임·의존 경계, 장면 선정·공간 해석·슬롯 적용과 이전 파일 이동표 |
-| [walk/diary-activity.md](walk/diary-activity.md) | 동선·속도를 합친 활동 슬롯과 정규화·저장·전체 맥락 제목, 정책 선택의 이유 |
+| [walk/diary-action-boundary.md](walk/diary-action-boundary.md) | 행동 핀만 행동 작성을 여는 경계, 핀 시각의 이동 맥락 1개, 메모의 생성·제목 의존성 분리 (#527) |
+| [walk/diary-writing-context.md](walk/diary-writing-context.md) | 서비스·실험 공통 공간/행동 근거 조회와 생성 없는 입력 확인 도구 (#520 후속 2단계) |
+| [walk/diary-space-tools.md](walk/diary-space-tools.md) | 공간 작성기의 선택적 상세 도구·최대 2회 모델 왕복·열람 근거 인용·실행 기록 (#520 후속 3단계) |
+| [walk/diary-space-comparison.md](walk/diary-space-comparison.md) | 저장 공공자료 3장면의 실제 Gemini 공급 방식 비교와 행동 핀 서술 추가, 호출량과 서술 한계 (#520) |
+| [walk/diary-narration.md](walk/diary-narration.md) | 보호자 시점·실제 동행의 공통 입력, 도구 왕복 보존, 작성 예시와 동일 재료 Gemini 비교 (#520) |
+| [walk/diary-space-scene.md](walk/diary-space-scene.md) | 선정 근거의 설명 대상·범위·역할 조립, 실제 입력과 상세 반환 연결, 저장 3장면 오프라인 비교 (#520) |
+| [walk/diary-movement-materials.md](walk/diary-movement-materials.md) | #520 형상 판별 확장과 핀 시각 맥락 연결. 과거 서술 입력·실험의 폐기 이유 |
+| [walk/diary-activity.md](walk/diary-activity.md) | #508의 과거 구현 기록. 이동 분석은 유지하며 행동 생성·제목 입력 규칙은 #527로 대체 |
 | [walk/scene-writing.md](walk/scene-writing.md) | 장면과 선택적 행동의 입력·본문 출력, 특별한 순간 원문과 기존 영수증 보존 |
 | [walk/route-patterns.md](walk/route-patterns.md) | GPS 동선 패턴의 유한 사전·구간/꼭짓점 적용, 실제 슬롯·발행 연결과 GEO 동등성 |
 | [walk/space-policy.md](walk/space-policy.md) | 재료별 장면 적용·부분 갱신, 스냅샷 재생과 기존 공간 용량 비교 |
@@ -119,6 +137,7 @@
 | [place/UPSTREAM.md](place/UPSTREAM.md) | 운영 Place 정본의 출처·소유권, Geo에서 승격한 기준점과 포함·제외 범위 |
 | [place/discovery-migration.md](place/discovery-migration.md) | 자연어 Place 발견 기능의 운영 이주 계획·런타임 경계·단계별 금지선 |
 | [place/facility-tools.md](place/facility-tools.md) | 시설 검색 대화 스켈레톤: 정적 도구·계획·실행·CAS·답변·앱 연결 |
+| [place/native-tool-conversation.md](place/native-tool-conversation.md) | 네이티브 함수 호출 첫 실행 경로: 필터·검색과 카드 선택 구분, 생성 답변·별도 UI·로컬 실험과 남은 운영 연결 |
 | [place/conversation-exploration.md](place/conversation-exploration.md) | 다음 후보·명시적 제외의 세션 상태, SQL·캐시 경계와 연속 평가 |
 | [place/conversation-evaluation.md](place/conversation-evaluation.md) | 시설 검색 LLM 정상·엣지·경합 시나리오, 판정 원칙과 반복 검증 |
 | [place/conversation-corrections-2026-09-10.md](place/conversation-corrections-2026-09-10.md) | 시설 대화 교정·사용자 불만 뒤 재탐색 실험과 구조 연구 |

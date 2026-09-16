@@ -1,0 +1,6 @@
+# Preserve archived bytes so checksums survive checkout on Windows and Linux.
+calls.json -text whitespace=cr-at-eol
+manifest.json -text whitespace=cr-at-eol
+checksums.json -text whitespace=cr-at-eol
+결과.md -text whitespace=cr-at-eol
+*.gz binary

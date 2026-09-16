@@ -100,6 +100,7 @@ def test_unreadable_no_amount_still_rejects_a_total():
         {"visited_on": "2026-09-01"},
         {"suggested_reason_code": "skin"},
         {"is_emergency": True},
+        {"patient_count": 2},
     ],
 )
 def test_unreadable_rejects_every_other_field(reason, extra):
@@ -205,6 +206,202 @@ def test_prompt_states_cropped_total_line_is_no_amount():
     prompt = build_receipt_prompt()
     assert 'output status="unreadable" with unreadable_reason="no_amount"' in prompt
     assert "even when every individual item's amount_krw was legible" in prompt
+
+
+# ── 다견 영수증 ──────────────────────────────────────────────────────
+
+
+def test_schema_has_no_field_for_patient_names():
+    """**아이를 가르는 값은 인덱스지 이름이 아니다.** 환자명을 담을 칸을 만들면 §2 의
+    "개인정보는 칸이 없어서 안 나온다"가 그 자리에서 깨지고, `scrub_items` 는 항목명만
+    훑어서 그 칸으로 들어온 보호자 이름을 못 잡는다."""
+    fields = set(ReceiptExtraction.model_fields) | set(ReceiptItem.model_fields)
+    for banned in ("patient_name", "patient_names", "animal_name", "pet_name", "names"):
+        assert banned not in fields
+    assert "patient_count" in ReceiptExtraction.model_fields
+    assert "patient_index" in ReceiptItem.model_fields
+
+
+def test_single_patient_is_the_default():
+    """한 마리가 특수 케이스가 아니라 기본값이다 — 영수증 대부분이 이쪽이다."""
+    extraction = ReceiptExtraction(status="ok", total_krw=1000)
+    assert extraction.patient_count == 1
+    assert ReceiptItem(name="진찰료", amount_krw=1000).patient_index is None
+
+
+def test_items_carry_the_block_they_sat_under():
+    """다견 영수증은 `동물명` 블록이 반복되고 항목이 블록 안에 갈린다 (실측 2026-09-14)."""
+    extraction = ReceiptExtraction(
+        status="ok",
+        total_krw=191_300,
+        patient_count=2,
+        items=[
+            {"name": "*광견병백신(관납)", "amount_krw": 10000, "patient_index": 0},
+            {"name": "*검사-귀-도말", "amount_krw": 20000, "patient_index": 0},
+            {"name": "소염위생관리", "amount_krw": 15000, "patient_index": 1},
+        ],
+    )
+    assert [i.patient_index for i in extraction.items] == [0, 0, 1]
+
+
+def test_blurry_extraction_cannot_carry_a_patient_count():
+    """`unreadable` 은 아무것도 안 들고 온다 — 새 칸도 예외가 아니다."""
+    with pytest.raises(ValidationError):
+        ReceiptExtraction(status="unreadable", unreadable_reason="blurry", patient_count=2)
+
+
+def test_no_amount_may_carry_a_patient_count():
+    """`no_amount` 는 "읽었지만 합계가 없다" 라 나머지 칸은 살아 있다 — 총액 줄만 잘린
+    다견 영수증에서 블록 수까지 버리면 확인 화면이 손해를 본다."""
+    extraction = ReceiptExtraction(
+        status="unreadable", unreadable_reason="no_amount", patient_count=2
+    )
+    assert extraction.patient_count == 2
+
+
+def test_validate_lays_down_patient_count_on_blurry_instead_of_failing():
+    """**이 테스트가 `failed` 로 떨어지는 회귀를 막는다.** 모델이 사진을 못 읽으면서도
+    `patient_count` 를 2 로 내면, 그대로 검증에 넣을 때 `ValidationError` → `failed` 가
+    된다. `failed` 는 저장이 안 돼 멱등 ③ 이 안 걸리고, 유저가 다시 누를 때마다 Gemini 를
+    또 부른다 — 흐린 사진은 계속 흐리므로 같은 자리를 맴돈다."""
+    got = vet_receipt._validate_extraction(
+        {"status": "unreadable", "unreadable_reason": "blurry", "patient_count": 2}
+    )
+    assert got is not None, "눕히지 않으면 None 이 되어 failed 로 간다"
+    assert got.status == "unreadable"
+    assert got.unreadable_reason == "blurry"
+    assert got.patient_count == 1
+
+
+def test_prompt_states_patient_blocks_are_counted_not_named():
+    prompt = build_receipt_prompt()
+    assert "동물명" in prompt
+    assert "Never output the patient names themselves" in prompt
+
+
+def test_prompt_excludes_guardian_and_vet_from_the_patient_count():
+    """보호자·담당 수의사 이름이 블록으로 세어지면 1마리 집에서도 분할을 묻는다."""
+    prompt = build_receipt_prompt()
+    assert "보호자" in prompt and "고객" in prompt
+    assert "are not patients" in prompt
+
+
+def test_prompt_forbids_a_per_patient_total():
+    """블록별 소계는 영수증에 **안 찍혀 있다** (실측). 모델이 더하기 시작하면
+    `33bfe0ec` 이 막아 둔 "합계는 읽는 것이지 계산하는 것이 아니다"가 다시 샌다."""
+    prompt = build_receipt_prompt()
+    assert "Do not produce a per-patient total" in prompt
+    assert "not something you calculate" in prompt
+
+
+def test_prompt_prefers_the_higher_count_when_unsure():
+    """거짓 양성은 확인 한 번이고, 거짓 음성은 누계가 조용히 틀린다."""
+    prompt = build_receipt_prompt()
+    assert "prefer the higher patient_count" in prompt
+
+
+#: 2026-09-15 에 실제 Gemini(`gemini-3.1-flash-lite`, 프롬프트 v2)가 다견 영수증
+#: 사진에서 낸 **판독 결과 그대로**다. 사진은 저장소에 안 넣는다 — 판독값만 남긴다.
+#:
+#: **이 핀이 잡는 것은 모델이 아니라 계약이다.** 모델 출력은 매번 조금씩 다르지만,
+#: 이 모양(블록 인덱스가 0/1 로 갈리고, 합이 인쇄 총액과 같고, 이름이 없다)이 깨지면
+#: `_RECEIPT_RULE` 을 고친 쪽이 무엇을 밟았는지 여기서 보인다.
+REAL_MULTI_PET_ITEMS = [
+    ("광견병백신 (관납)", 10000, 0),
+    ("초진비", 10000, 0),
+    ("검사-귀-검이경", 11000, 0),
+    ("검사-귀-도말", 20000, 0),
+    ("처치-귀세정-중증 (-10kg)", 11000, 0),
+    ("주사-일반 피하/근육/정맥주사 (10kg 미만)", 6600, 0),
+    ("내복약-1일 2회 (5kg 미만)", 24500, 0),
+    ("내복약-특수-Itraconazole", 1100, 0),
+    ("귀연고 (Ear Oint.)", 15000, 0),
+    ("광견병백신 (관납)", 10000, 1),
+    ("소형위생관리", 15000, 1),
+    ("초진비", 10000, 1),
+    ("검사-귀-검이경", 11000, 1),
+    ("주사-일반 피하/근육/정맥주사 (10kg 미만)", 6600, 1),
+    ("내복약-1일 2회 (5kg 미만)", 24500, 1),
+    ("외용제-소독스프레이 30ml", 5000, 1),
+]
+
+
+def _real_multi_pet_extraction() -> ReceiptExtraction:
+    return ReceiptExtraction(
+        status="ok",
+        total_krw=191_300,
+        patient_count=2,
+        suggested_reason_code="ear",
+        items=[
+            {"name": name, "amount_krw": amount, "patient_index": index}
+            for name, amount, index in REAL_MULTI_PET_ITEMS
+        ],
+    )
+
+
+def test_real_multi_pet_reading_validates_against_the_contract():
+    """실제 판독 결과가 계약을 그대로 통과한다 (2026-09-15 손검증)."""
+    extraction = _real_multi_pet_extraction()
+    assert extraction.patient_count == 2
+    assert len(extraction.items) == 16
+    assert {i.patient_index for i in extraction.items} == {0, 1}
+
+
+def test_real_multi_pet_reading_assigns_every_item_to_a_block():
+    """미배정 0건이었다 — `patient_index` 가 null 인 항목을 버리는 규칙이 이 영수증에서는
+    발동조차 안 한다. 그 규칙이 흔한 경로가 되면 프롬프트가 흔들린 것이다."""
+    assert all(i.patient_index is not None for i in _real_multi_pet_extraction().items)
+
+
+def test_real_multi_pet_reading_blocks_sum_to_the_printed_total():
+    """**모델은 이 합을 낸 적이 없다.** 항목에 인덱스만 붙였고 더한 것은 코드다 —
+    그것이 "합계는 읽는 것이지 계산하는 것이 아니다"(`33bfe0ec`)를 지키는 방법이다."""
+    extraction = _real_multi_pet_extraction()
+    by_block: dict[int | None, int] = {}
+    for item in extraction.items:
+        by_block[item.patient_index] = by_block.get(item.patient_index, 0) + item.amount_krw
+    assert by_block == {0: 109_200, 1: 82_100}
+    assert sum(by_block.values()) == extraction.total_krw
+
+
+def test_real_multi_pet_reading_carries_no_patient_name():
+    """영수증에는 `동물명` 이 둘 다 인쇄돼 있었다. 출력에는 개수와 인덱스만 남는다."""
+    dumped = _real_multi_pet_extraction().model_dump(mode="json")
+    assert "patient_name" not in str(dumped)
+    assert all("동물명" not in item.name for item in _real_multi_pet_extraction().items)
+
+
+def test_real_single_pet_reading_stays_one_block():
+    """같은 프롬프트로 한 마리 영수증을 읽으면 블록이 하나다 (2026-09-15 손검증,
+    총액 116,000). **거짓 양성이 없다는 회귀 핀**이다 — 다견 규칙을 넣은 뒤 1마리
+    영수증이 2로 세어지면 대다수 유저가 매번 안 물어도 될 질문을 받는다."""
+    extraction = ReceiptExtraction(
+        status="ok",
+        total_krw=116_000,
+        patient_count=1,
+        suggested_reason_code="musculoskeletal",
+        items=[
+            {"name": "문진, 상담-재진 (-10kg)", "amount_krw": 9000},
+            {"name": "내복약-일반 (5-10kg)", "amount_krw": 28000},
+            {"name": "내복약-진통제-carprofen 1T (50mg)", "amount_krw": 12000},
+            {"name": "내복약-신경진통제-가바펜틴 (gaba) 1T (100mg)", "amount_krw": 12000},
+            {"name": "내복약-항생제-enro 1T", "amount_krw": 25000},
+            {"name": "처치-외과-드레싱", "amount_krw": 30000},
+        ],
+    )
+    assert extraction.patient_count == 1
+    assert all(i.patient_index is None for i in extraction.items)
+    assert sum(i.amount_krw for i in extraction.items) == extraction.total_krw
+
+
+def test_real_multi_pet_receipt_blocks_sum_to_the_printed_total():
+    """실측 2026-09-14 — 두 블록의 항목 합이 청구 금액과 **오차 0원**이다. 이것이
+    "합이 안 맞으면 항목을 놓쳤다"는 검산의 근거다."""
+    block_a = [10000, 10000, 11000, 20000, 11000, 6600, 24500, 1100, 15000]
+    block_b = [10000, 15000, 10000, 11000, 6600, 24500, 5000]
+    assert sum(block_a) == 109_200
+    assert sum(block_b) == 82_100
+    assert sum(block_a) + sum(block_b) == 191_300
 
 
 # 아래 셋은 압구정동물병원(2019-05-17) 실제 영수증의 문자열을 그대로 쓴 회귀 핀이다 —

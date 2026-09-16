@@ -8,7 +8,7 @@ from daengs_backend.services.walk_diary.storage.board import (
     source_revision,
     store_board,
 )
-from daengs_backend.services.walk_storyboard_state import complete
+from daengs_backend.services.walk_generation.state import complete
 from daengs_walk.diary.board.output import BOARD_FORMAT, publish_board
 
 FORMAT = "walk-diary-preparation-v1"
@@ -19,7 +19,7 @@ def fallback(prepared, revision, code="budget_exceeded"):
     base = prepared.board.board.model_copy(
         update={"model_status": "unavailable", "failure_code": code}
     )
-    return store_board(prepared, publish_board(base, prepared.board.plan), revision)
+    return store_board(prepared, publish_board(base, prepared.board.plan, prepared.board.slots), revision)
 
 
 def publication_reservation(prepared, revision, started, deadline):

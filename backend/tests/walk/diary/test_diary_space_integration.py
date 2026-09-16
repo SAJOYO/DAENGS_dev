@@ -10,18 +10,15 @@ import pytest
 from daengs_backend.config import settings
 from daengs_backend.schemas.walk_diary_slots import SlotPreviewRequest
 from daengs_backend.schemas.walk_storyboard import StoryboardRequest
+from daengs_backend.services.walk_background.catalogs.retention import retain_page, retained_fields
 from daengs_backend.services.walk_diary import preview as preview_service
 from daengs_backend.services.walk_diary.collection import service as collection
+from daengs_backend.services.walk_diary.collection.catalog import normalization_input
 from daengs_backend.services.walk_diary.legacy.slots import slot_payload
 from daengs_backend.services.walk_diary.lifecycle import generation
 from daengs_backend.services.walk_diary.preparation.board import (
     assemble_saved_base_board,
     with_scene_backgrounds,
-)
-from daengs_backend.services.walk_space_catalog_input import (
-    normalization_input,
-    retain_page,
-    retained_fields,
 )
 from daengs_backend.services.walk_storyboard_state import StoryboardConflict
 from daengs_walk.diary.contracts.slots import SlotPolicy
@@ -200,7 +197,7 @@ async def test_legacy_generation_persists_normalization_and_reopens_without_coll
         OWNER,
         WALK,
         StoryboardRequest.model_validate(request),
-        writer=state.writer,
+        writer=state.slot_writer,
         legacy_collector=spy,
     )
     result = response.model_dump(mode="json")
@@ -235,7 +232,7 @@ async def test_source_edit_during_legacy_collection_does_not_reserve_or_publish(
             OWNER,
             WALK,
             StoryboardRequest.model_validate(body(state, bundle_format="walk-diary-board-v1")),
-            writer=state.writer,
+            writer=state.slot_writer,
             legacy_collector=collect,
         )
     assert state.row is None

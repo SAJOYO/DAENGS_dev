@@ -49,9 +49,9 @@ async def main(dsn):
     from daengs_backend.routers import walk_motion
     from daengs_backend.schemas.walk import WalkPointUpload
     from daengs_backend.schemas.walk_motion import MotionManifest, MotionObservation
-    from daengs_backend.services.walk_chunk import encode_chunk
-    from daengs_backend.services.walk_finalize import walk_input_fingerprint
-    from daengs_backend.services.walk_motion_contract import (
+    from daengs_backend.services.walk_session.chunk import encode_chunk
+    from daengs_backend.services.walk_session.finalize import walk_input_fingerprint
+    from daengs_backend.services.walk_session.motion_contract import (
         chunk_digest,
         evidence_digest,
         manifest_digest,
@@ -293,7 +293,7 @@ async def main(dsn):
             assert empty_calc["distance_m"] == 0 and empty_calc["segments"] == []
             # Additive precision tables can arrive after the base deployment.
             from daengs_backend.schemas.walk_precision import PrecisionManifest, PrecisionPoint
-            from daengs_backend.services import walk_precision_contract as pc
+            from daengs_backend.services.walk_session import precision_contract as pc
 
             assert (await request("GET", "/app/walks/motion-capabilities"))[
                 "precision_versions"
@@ -411,7 +411,7 @@ async def main(dsn):
                 # A persisted input is served without rerunning the CPU engine.
                 from unittest.mock import patch
 
-                from daengs_backend.services import walk_measurement as measurement_service
+                from daengs_backend.services.walk_metrics import measurement as measurement_service
 
                 with patch.object(
                     measurement_service, "project", side_effect=AssertionError("recomputed")
@@ -474,7 +474,7 @@ async def main(dsn):
             import threading
             from unittest.mock import patch
 
-            from daengs_backend.services import walk_measurement as measurement_service
+            from daengs_backend.services.walk_metrics import measurement as measurement_service
 
             async with engine.begin() as conn:
                 await conn.execute(

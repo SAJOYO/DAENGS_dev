@@ -9,6 +9,7 @@ import pytest
 
 from daengs_backend.routers import walk_storyboard as router
 from daengs_backend.schemas.walk_storyboard import StoryboardRequest
+from daengs_backend.services.walk_diary.api import legacy_slot_writer
 from daengs_backend.services.walk_diary.legacy import slots as writer
 from daengs_backend.services.walk_diary.legacy.board_slots import (
     complete_slot_board,
@@ -139,7 +140,7 @@ async def test_timeout_and_external_cancel_have_distinct_results(monkeypatch):
 
 def test_explicit_slot_writer_override_preserves_slot_payload(api):
     client, state, _ = api
-    client.app.dependency_overrides[router.get_diary_writer] = lambda: state.writer
+    client.app.dependency_overrides[router.get_diary_writer] = lambda: state.slot_writer
     response = client.post(PATH, json=body(state, bundle_format=BOARD_FORMAT))
     assert response.status_code == 200, response.text
     assert response.json()["bundle"]["model_status"] == "accepted"
@@ -177,7 +178,7 @@ async def test_deadline_publishes_base_even_if_slot_provider_ignores_cancel(api)
                 StoryboardRequest.model_validate(
                     body(state, bundle_format=BOARD_FORMAT, preparation_budget_ms=10000)
                 ),
-                writer=bounded,
+                writer=legacy_slot_writer(bounded),
             ),
             timeout=2,
         )

@@ -15,10 +15,10 @@ from daengs_backend.schemas.walk_precision import (
     PrecisionManifest,
     PrecisionStatus,
 )
-from daengs_backend.services import walk_precision as service
-from daengs_backend.services.walk import WalkNotFoundError
-from daengs_backend.services.walk_motion import MotionUnavailable
-from daengs_backend.services.walk_motion_contract import MotionConflict
+from daengs_backend.services.walk_session import precision as service
+from daengs_backend.services.walk_session.errors import WalkNotFoundError
+from daengs_backend.services.walk_session.motion import MotionUnavailable
+from daengs_backend.services.walk_session.motion_contract import MotionConflict
 
 router = APIRouter(tags=["walk-motion-precision"])
 Session = Annotated[AsyncSession, Depends(get_session)]

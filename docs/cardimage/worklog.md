@@ -3,6 +3,83 @@
 세션이 끝날 때마다 한 절씩 위에 추가한다 (최신이 위). 무엇을 했고, 무엇을 정했고, 무엇을
 다음 세션에 넘기는지. 조사 내용 자체는 `research-*.md` 에, 요약·현재 상태는 `README.md` 에.
 
+## 2026-09-16 밤 — #557 FLUX.2-klein-4B 실험: E1 · E2 · 이미지 하나로 · E3 (무인 진행)
+
+> **아침에 볼 것 (사람)**
+> 1. 결과 문서 두 개: `compare-2026-09-16-klein-e1.md`(글씨) · `compare-2026-09-16-klein-e2-e3.md`(4장 뽑기·콜드 스타트). 판정은 전부 **잠정** — 격자를 직접 확인해 주세요:
+>    `cardimage/out/_cardgen/e1_panels_4.png` · `e1_panels_9.png`(글씨 크롭) · `e1_grid_4.png` · `e1_grid_9.png` · `e2-seq_panel_4.png` · `e2-seq_panel_9.png` · `e2-seq_card_4.png` · `e2-seq_card_9.png`.
+> 2. **정할 것:** ① 3번 카드에서 "달 틀마다 검증된 seed 목록에서 4장"으로 갈지(무작위 seed 대신) ② L4 에서 한 번에 여러 장이 안 되니 순차 4장(요청당 GPU 약 1분)을 받아들일지 ③ E3 파일 캐시(in-memory) 설정을 한 번 더 확인해 볼지 ④ E4(비용 실측)는 여전히 보류인지.
+> 3. GCP 는 서비스 `daengs-cardgen-klein`(리비전 `00005-rhn` 하나, 기본 마운트) · 잡 `cardgen-weights` · 이미지 `07e7a55` 하나만 남았다. 인스턴스는 요청이 없으면 스스로 내려간다.
+
+- **사용자 지시(09-16 밤):** E1 · E2 · E3 · 이미지 하나로 맞추기를 자는 동안 쭉 진행. 비용은 크레딧이라 매번 승인 대신 상한(L4 누적 3시간, 같은 원인 두 번 실패면 중단). E4 는 당장 못 함(보류), E5 는 안 하고 사진 안내 문구로.
+- **작업 방식:** 계획 `plan-2026-09-16-klein-e1.md`(Task 1~12)를 superpowers subagent-driven-development 로. 코드 태스크 6개(엔진 생성 크기 · 비교 도구 조건 · 격자 도구 · Qwen 제거 · 서비스 `count` · 클라이언트 여러 장)는 Sonnet 구현자 + 태스크 리뷰, 전부 승인(지적은 Minor 뿐). 유료 실행·배포·삭제·기록은 컨트롤러.
+- **E1 (02:05~02:14, 18장):** 문구 명시는 더 깨짐, 1280×2048 은 깨지는 자리를 옮김(40% 느림). **같은 틀·seed·크기면 사진이 달라도 같은 자리가 깨진다.** 서비스 로드 403.1초(옛 이미지).
+- **이미지 (02:05~02:36):** Qwen 제거 + `count` 넣은 `07e7a55` 빌드 14분 6초 → 서비스 리비전 `00002-dwn`(배포 4분, 배포만으로 인스턴스가 떠서 로드 374.9초) · 잡은 이미지만 교체(실행 안 함) · 스모크 1장이 09-15 카드와 제목판(이름 `MOMO`/`테스트` 로 다름)을 뺀 나머지 **픽셀 차이 0** · 옛 이미지 `c917c96`·`90a42ef`·옛 리비전 삭제.
+- **E2 (02:31~02:41):** 순차 seed 1~4 × 사진 3 × 4·9월 = 24장, 장당 16.2~16.4초. 한 번에 4장·2장은 **CUDA OOM**(두 번 같은 원인 → 중단). 글씨는 seed 로 갈림(seed 4 는 두 달 다 제목·아래 패널 깨끗), 쓸 만한 장 정면 1~2 · 엎드린 옆모습 0.
+- **E3 (02:42~02:57):** `enable-buffered-read=true` 로드 735.6초(2배 느림). in-memory 파일 캐시는 컨테이너가 마운트 단계에서 못 떠 실패(원인 미확정, 추측 재배포 안 함) → 기본 설정으로 되돌림(`00005-rhn`), V1·V2·옛 리비전 삭제.
+- **기록:** `compare-2026-09-16-klein-e1.md` · `compare-2026-09-16-klein-e2-e3.md` · `roadmap.md`(표·체크리스트·E1~E3 결과) · `infra/gcp/README.md`(이미지 하나, 배포만 해도 인스턴스가 뜬다, E3 실측).
+
+## 2026-09-16 — #544 마무리: Task 8 비교 · 둘 다 유지 결정 · 로드맵
+
+- **Task 8** (FLUX.2-klein-4B vs Nano Banana 2, 사진 3 × 4·9월 × seed 2 = 엔진당 12장): 결과는 `compare-2026-09-15-cardgen.md`. Nano Banana 2 닮음 4.42 · 결함 0, FLUX.2-klein-4B 닮음 3.17(정면만 5) · 목줄 2/6 · 문구 깨짐 3(전부 4월·seed 1) · 장당 18초. FLUX.2-klein-4B 12장 배치 과금 구간 22분 26초(깨움 14:18:53Z → 종료 14:41:19Z) → 장당 약 ₩43 추정.
+- **검수 함정**: 제목에 한글 이름("테스트")이 들어가면 검수가 깨진 글자로 판정한다(Nano Banana 2 1건). 실험은 영문 이름으로.
+- **사용자 결정**: Nano Banana 2 · FLUX.2-klein-4B **둘 다 유지.** FLUX.2-klein-4B 은 "4장 뽑아 고르기"·과일·채소 개인화 경로 후보. 하루 1회 한도는 Nano Banana 2 장당 과금 때문이었으니 FLUX.2-klein-4B 경로에선 다시 설계. seed 는 운영에서 장마다 다르게 + 저장, 실험은 고정. 운영 경로(11-17 이후) 결정은 지금 중요하지 않다고 봄 — 보류.
+- **정리**: D-078 기록, `roadmap.md`(2번 실험 카드 자세히 · 3·4번 간단히), `CLAUDE.md` 폴더 표, `infra/gcp/README.md` cardgen 절(실측·함정 표). FLUX.2-klein-4B 서비스·가중치·이미지는 남김. 가중치 잡은 `90a42ef` + `python -m daengs_cardgen.fetch klein-4b` 로 되돌림(실행 안 함).
+
+## 2026-09-15 밤 — #544 GPU 서비스 Task 7: Qwen-Image-Edit-2511 nf4 on L4 (잰 값만)
+
+- **가중치**: 잡 `cardgen-weights-7czsf` 성공 31분 3초(다운로드 30분 43초), 33파일 57.72GB(최대 9.99GB transformer 샤드), incomplete 0, 심볼릭 링크 33개 정상.
+- **1차 서비스** (이미지 `c917c96`, rev `00001-6dz`): Ready 25초, 로드 **1145.8초**(재시작·메모리 초과 없음). 카드 1장 → 확산 40/40 11분 19초(17s/step) 뒤 **CUDA OOM** — `autoencoder_kl_qwenimage` 정규화에서 612MiB 요청, GPU 22.03GiB 중 25MiB 남음, PyTorch 19.80GiB 할당·1.97GiB 예약만 됨. (처음엔 proxy 가 끊은 500 으로 추정했으나 서비스 Traceback 으로 반증.)
+- **수정**: `QwenModel.load` 에 `vae.enable_tiling()`(diffusers 0.40.0 에 있음을 임시 env 로 먼저 확인), Dockerfile `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True`, 테스트 1개(`96b5e6bf`). 이미지 재빌드 12분 54초 → `90a42ef`.
+- **2차 서비스** (rev `00002-zf2`): 새 이미지 첫 import 로 Ready 296초, 로드 **1237.8초**. 카드 1장 → 확산 11분 34초, 디코딩 ~4초, **200 OK (OOM 해결)**, 서비스 711.6초.
+  결과가 **깨짐**: 검수 닮음 2 · 글자 실패. 눈으로 보면 **틀의 갈색 푸들 그대로 + 화면 전체 고른 노이즈** — 강아지·아바타 교체가 일어나지 않았다(FLUX.2-klein-4B 은 교체됨). `cardimage/out/_cardgen/smoke-qwen/`.
+  원인은 가르지 못함(추정): text_encoder nf4 로 참조 이해 붕괴 / transformer nf4 로 디노이즈 붕괴 / VAE tiling. L4 에선 양자화를 빼면 메모리가 모자라 이 자리에서 싸게 가를 방법이 없다.
+- **판정**: L4 + nf4 로는 Qwen 비교 표본을 못 얻었다. 서빙 관점에서도 로드 ~20분·장당 ~12분이라 어렵다.
+- **비교 이미지**: `cardimage/out/_cardgen/compare_4_template_nanobanana_klein_qwen.png` (틀 · Nano Banana 2 09-14 `service_check_1.png` · FLUX.2-klein-4B · Qwen, 같은 사진 `_03`·4월). 눈으로: Nano Banana 2 는 교체·무대·글자 모두 깨끗, FLUX.2-klein-4B 은 교체·무대는 근접하나 목줄 추가·`PETL PPAUSE`, Qwen 은 교체 없음 + 노이즈.
+- **정리 (사용자 결정 "둘 다 지우자")**: 서비스 `daengs-cardgen-qwen` 삭제, 버킷 `hub/models--Qwen--Qwen-Image-Edit-2511/`(53.75GiB)·`hub/.locks/models--Qwen--…` 삭제, 로컬 proxy 8092 종료. FLUX.2-klein-4B 서비스·가중치(14.88GiB)는 남김. **Task 8 은 FLUX.2-klein-4B vs Nano Banana 2 만.**
+
+## 2026-09-15 오후 — #544 GPU 서비스 Task 6: FLUX.2-klein-4B 배포·첫 카드 (잰 값만)
+
+계획 `plan-2026-09-15-cardgen-gpu.md` Task 1~5(코드) 뒤 첫 유료 단계. 사용자 승인 뒤 진행.
+
+- **이미지**: Cloud Build `32a629a6`, 15분 32초, `asia-northeast3-docker.pkg.dev/daengs/daengs/cardgen:c917c96`. 빌드 안 확인 `torch 2.13.0+cu126 · cuda 12.6 · torchvision 0.28.0+cu126`.
+- **가중치 잡 `cardgen-weights`** (asia-southeast1) — 세 번째에 성공. 시도별 원인:
+  | 시도 | 결과 | 확인된 원인 | 바꾼 것 |
+  | --- | --- | --- | --- |
+  | 1 (python -m fetch, 4CPU/16Gi) | 7분 뒤 실패 | 메모리 한도 도달 — 큰 blob 3개(1.41·4.97·6.17GB)가 `.incomplete` 로 동시에 | 한 파일씩, xet 끔, 8CPU/32Gi |
+  | 2 (`hf download --include a b`) | 37초 실패 | `--include` 는 값 하나 — `*/*` 가 파일명으로 해석 | `--include` 두 번 |
+  | (거부) | 실행 안 됨 | gcloud `--args` 가 목록 안 `--include` 중복 거부 | `/bin/sh -c` 한 줄 + `set -f` |
+  | 3 | **성공 8분 59초** (다운로드 8분 38초, ~29MB/s) | — | — |
+  버킷 blobs 14.88GiB(transformer 7.75GB · text_encoder 4.97+3.08GB · vae 168MB). snapshots/ 링크는 gcsfuse 심볼릭 링크(`gcsfuse_symlink_target`)로 저장됨.
+  ⚠ 지금 잡의 command 는 `/bin/sh -c "set -f; exec /opt/venv/bin/hf download ..."` 로 덮어써진 상태 — 저장소의 `fetch.py`(max_workers=1)·`cardgen.sh`(8CPU/32Gi, `HF_HUB_DISABLE_XET=1`)는 같은 조건으로 고쳤지만 이미지는 다시 안 구웠다.
+- **Git Bash·PowerShell 함정 (전부 실측)**: ① `--set-env-vars=HF_XET_CACHE=/tmp/xet` 이 Git Bash 경로 변환으로 `C:/Users/.../Temp/xet` 저장 → `MSYS2_ARG_CONV_EXCL` 에 `--set-env-vars` 추가 ② PowerShell 은 따옴표 없는 인자의 쉼표를 배열로 쪼갬 → `--add-volume`·`--add-volume-mount`·`--set-env-vars` 는 따옴표 ③ `cardgen.sh STEP=deploy` 는 파일 해시로 태그를 다시 계산해, 빌드 뒤 파일을 고치면 없는 태그를 배포 → 이번엔 태그를 고정해 직접 배포 ④ `gcloud run services proxy` 는 `cloud-run-proxy` 컴포넌트가 필요하고, SDK 가 Program Files 라 관리자 권한으로 설치(사용자).
+- **서비스 `daengs-cardgen-klein`** (L4, min 0·max 1): 배포 수락 10:06:35Z → 인스턴스 시작 10:06:41Z → 포트 열림·기본 TCP 프로브 통과 10:06:45Z → Ready 10:07:03Z(이미지 가져오기 수 초). 백그라운드 로드 **`load_seconds` 430.3**(ready 10:14:05Z) — 대부분 버킷에서 ~15GB 읽기. 오프라인 캐시 로드·읽기 전용 마운트 문제 없음.
+- **카드 1장** (`KakaoTalk_20260913_220514335_03.jpg`, 4월, seed 1): 서비스 생성 26.2초(1024×1632, 4 step), 검수 포함 33.4초. 검수 닮음 5 · 아바타 OK · 글자 실패. 틀 밀림 dx 6·dy -2, 제목판 -1px. `cardimage/out/_cardgen/smoke-klein/`.
+  눈 확인(틀과 나란히): 강·다리·빌딩·바구니·매트·테두리·문구는 틀 그대로. **결함 ① 목줄이 생김**(프롬프트 금지, 검수가 못 잡음) **② `PETAL PAUSE` → `PETL PPAUSE`**. 한 장이라 경향인지는 Task 8 에서.
+- **요청 뒤 인스턴스가 내려간 시각**: 마지막 요청 10:14:54Z → `Shutting down` 10:24:59Z, **유휴 약 10분 5초**. 인스턴스 수명 10:06:41Z~10:24:59Z **약 18분 20초**(GPU 과금 구간).
+  → 요청이 드물면 카드 1장에 콜드 스타트 7분 + 생성 26초 + 유휴 10분 ≈ 18분이 붙는다. 가중치 잡에서 잰 L4(8CPU/32Gi) 단가 시간당 약 ₩1,400 을 서비스에 그대로 적용하면 **장당 약 ₩420 (추정 — 서비스 단가 미확인)** 으로 Nano Banana 2 2K($0.10) 보다 비쌀 수 있다. 떠 있는 동안 몰아 만들면 장당 비용은 크게 준다.
+
+## 2026-09-15 — #543 한도 제품 규칙
+
+- 계기: 앱(DAENGS_APP#414) 실기기에서 9월 카드를 만들고 지운 뒤 4월 카드가 또 만들어짐 — 한도가 남아 있는 ready 행을 셈.
+- 사용자 결정: 하루 1회(지워도 안 돌아옴·실패 안 셈) · 강아지마다 달마다 한 장(보호자마다 따로) · 제목에만 쓰는 이름 · 목록의 남은 횟수. D-077.
+- 구현: 표 `ai_card_usage`(카드 ready 때 한 줄, card_id FK 없음, 기존 ready 백필) · `check_quota` 교체(`AiCardMonthTakenError`) · `title_name` · `daily_limit`/`daily_remaining` · 탈퇴 정리. 계획 `plan-2026-09-15-ai-card-quota-rules.md`.
+- 확인한 것: `ai_cards.month` 는 연도가 없어 달별 한 장은 테마 달 기준 — 그 달 카드를 지우면 그 달은 다시 열린다.
+- 배포: `db/migrations/2026-09-15_ai_card_usage.sql` 을 코드보다 먼저 개발서버·GCP 에 적용.
+
+## 2026-09-14 저녁 — 앱 사용자 경로 (#537)
+
+설계 대화에서 정한 다섯 가지: ① 생성 로직만 `daengs_cardimage` 로 분리(나중에 Cloud Run 으로 뗄 부분을 한
+덩어리로) ② 앱 계약 비동기 ③ backend 프로세스 안 백그라운드 ④ 994×1582 그대로 ⑤ 하루 1장(테스트 단계). 전부
+D-076. 코드를 보다가 고친 것: 정리 기준을 5분에서 `4 × timeout + 60초`(9분)로 — 엔진·검수 120초에 재시도까지
+최악 8분이라 5분이면 정상 작업을 실패로 덮는다. `StoragePort` 에 서버 쓰기 메서드가 없어 local·GCS 를 갈라 쓴다.
+구현은 subagent-driven-development 로 Task 1~6. 리뷰에서 고친 것: 정리 기준의 시각을 `created_at` 이 아니라
+`updated_at` 으로 — 생성 차례를 기다리던 행이 그사이 만료돼도 유료 호출이 그대로 나가던 것을 막으려고, 차례를
+얻으면 행을 다시 읽고 `updated_at` 을 찍은 뒤 그 시각부터 잰다. `ai_cards` verify 는 처음에 부분 인덱스의
+`WHERE` 조건이 `'generating'` 문자열이 아니라 인덱스 이름에 속아 통과했는데, `'generating'::text` 로 고치고
+나서야 버리는 Postgres 하네스가 569건을 통과했다. 최종 리뷰에서 고친 것: 업로드 중 사용자 행 잠금 제거(POST 를
+토큰만 확인으로 받고 사진을 다 받은 뒤 서비스가 잠근다), 실패한 유료 호출(upstream·no_image·storage) 하루 5번 상한.
+
 ## 2026-09-14 오후 — 콘솔 확인 뒤 다듬기 · 9월 추가
 
 사용자가 콘솔(`uv run dev` + `npm run dev`)에서 4월 카드를 직접 만들어 "잘 나온다"고 확인했다. 그 자리에서 세 가지를 더 했다.

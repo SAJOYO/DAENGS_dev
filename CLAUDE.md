@@ -26,10 +26,12 @@ daengback.~  :80 ─┘                └─ nginx:8000 → backend:8000 (기�
 | 경로 | 내용 |
 | --- | --- |
 | `frontend/` | Next.js 16 앱 (App Router, TypeScript, Tailwind 4) |
-| `backend/` | 팀 Python 프로젝트, uv 로 관리 (Python 3.12). `src/`의 backend·life·training·place·journey·**screening**·**gait** 패키지와 단일 `pyproject.toml`·`uv.lock`을 가집니다 — D-039 · D-040 · D-038 |
+| `backend/` | 팀 Python 프로젝트, uv 로 관리 (Python 3.12). `src/`의 backend·life·training·place·journey·**screening**·**gait**·cardimage 패키지와 단일 `pyproject.toml`·`uv.lock`을 가집니다 — D-039 · D-040 · D-038 · D-076 |
 | `backend/src/daengs_gait/` | 강아지 보행 영상 분석 (PyTorch/RTMPose). 코드는 backend 프로젝트에 있고 Celery `gait-worker` 컨테이너에서만 실행됩니다 — D-038(D-029 의 소스 배치만 대체, runtime isolation 은 유지). 옛 `gait-analysis` HTTP 서비스는 D-063 4단계에서 제거됐고 nginx `/gait/` 는 410 묘비만 남습니다. compose `profile: gait` 라 **기본으로는 안 뜹니다.** 가중치는 저장소에 없습니다 |
 | `backend/src/daengs_place/` | Place 검색과 중립 점령지 읽기 (FastAPI + PostGIS). 코드는 backend의 단일 Python 프로젝트에 있고 `place-search` 컨테이너로 따로 실행됩니다. nginx `/v2/places/`·`/territory/sites/`, 자기 DB(place-db)·Alembic(`backend/infra/place/`)을 가지며 backend·Dog Profile과 독립입니다 — D-026, D-027, D-039. 원본·소유권은 `docs/place/UPSTREAM.md` |
 | `backend/src/daengs_journey/` | 장소 선택 뒤 단발 경로 스냅샷. 코드는 backend 프로젝트에 있고 `journey-service` 컨테이너로 따로 실행됩니다. nginx `/journey`로 공개되며 Place DB·Dog Profile과 독립입니다. 원본·범위는 `docs/journey/UPSTREAM.md` — D-039 |
+| `backend/src/daengs_cardimage/` | 도감 카드 AI 생성의 **순수 로직**(틀·사진·제목·Nano Banana 2 엔진·검수·파이프라인). DB·웹·`daengs_backend` 를 import 하지 않고, backend 는 `services/ai_card_engine.py` 한 곳에서만 부릅니다. 앱 경로 `/app/ai-cards` 는 backend 프로세스 안 비동기 — D-074 · D-076. 인수인계는 `docs/cardimage/` |
+| `backend/src/daengs_cardgen/` | 도감 카드 생성 **GPU 서비스**(diffusers — FLUX.2-klein-4B). backend 는 import 하지 않고 HTTP 로만 부릅니다(`DAENGS_CARDGEN_URL`, **비면 Nano Banana 2 그대로 — 지금 운영엔 안 넣음**). 전용 그룹 `cardgen`(`ml` 과 `[tool.uv] conflicts` 로 배타) + `docker/cardgen/` CUDA 이미지로 Cloud Run L4(asia-southeast1)에서만 돕니다 — D-078. 배포·함정은 `infra/gcp/README.md` 「cardgen.sh」, 다음 단계는 `docs/cardimage/roadmap.md`. 크레딧 만료(11-17) 전에 `infra/gcp/cardgen-teardown.sh` 여부 결정 |
 | `backend/src/daengs_evals/` | 재사용되는 평가·벤치마크 도구(`answer_quality`·`router_benchmark`·`training_quality`·`place_fixtures`). `orchestrator_comparison` 은 LangChain 에이전트를 지우며(D-072) 같이 지웠습니다 — 리포트·결과 데이터는 `backend/evals/orchestration_router/` 에 남아 있습니다. `uv run python -m daengs_evals.<pkg>…` 로 부릅니다. 결과는 `backend/evals/` 에 쌓입니다 |
 | `backend/evals/` | 위 도구가 읽고 쓰는 결과·골드 데이터(jsonl/json/md). 코드가 아니라 사람이 검토하는 산출물입니다. 상세는 `backend/evals/README.md` |
 | `backend/tools/` | 단일 파일 일회성 스크립트만 둡니다 — 패키지는 만들지 않습니다. `uv run python tools/x.py` 로 부릅니다. 루트 `tools/` 와 달리 backend 의존성(venv)을 그대로 씁니다 |
@@ -47,7 +49,7 @@ daengback.~  :80 ─┘                └─ nginx:8000 → backend:8000 (기�
 | `docs/` | 프로젝트 문서 |
 | `.github/workflows/deploy.yml` | 배포 워크플로우 |
 | `docs/ci/` | 🔴 **PR 마다 돌던 워크플로 일곱이 2026-09-10 에 여기로 빠졌습니다** — Actions 무료 한도가 소진돼 2~3초 만에 전부 빨갛게 뜨는데, 실패 이유가 annotation 에만 있어 **진짜 실패와 구별이 안 되기** 때문입니다. GitHub 은 `.github/workflows/` 만 읽으므로 여기 것은 안 돕니다. **그것들이 잡던 것을 이제 사람이 로컬에서 돌립니다 — 목록과 명령이 `docs/ci/README.md` 에 있습니다.** 특히 **버리는 DB 가 필요한 검사 둘은 `uv run pytest` 가 조용히 건너뜁니다**(실측 15건 skip). `db/` 나 walk 저장 경로를 건드렸으면 그 절을 보세요 |
-| `cardimage/` | 도감 카드 AI 생성(#496)의 자산 — 참조 카드 12장·글자 없는 틀 12장·글꼴(OFL). backend 는 `DAENGS_CARDIMAGE_DIR`(기본: 이 폴더, 컨테이너는 compose 마운트 `/cardimage`)로 읽는다. `test/`(실제 강아지 사진)·`out/`·`raw/` 는 내용 미추적. 인수인계는 `docs/cardimage/` |
+| `cardimage/` | 도감 카드 AI 생성(#496·#537)의 자산 — 참조 카드 12장·글자 없는 틀 12장·글꼴(OFL). backend 는 `DAENGS_CARDIMAGE_DIR`(기본: 이 폴더, 컨테이너는 compose 마운트 `/cardimage`)로 읽는다. `test/`(실제 강아지 사진)·`out/`·`raw/` 는 내용 미추적. 생성 코드 자체는 `backend/src/daengs_cardimage/` 에 있다(D-076). 인수인계는 `docs/cardimage/` |
 
 도감(네오 채소 홀로그램 카드)은 **이 저장소에 없습니다.** `SAJOYO/DAENGS_CARDS` 로
 나가서 GitHub Pages 로 뜹니다 — <https://cards.weareithero.cloud/> (D-025).

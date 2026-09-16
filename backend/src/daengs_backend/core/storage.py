@@ -221,6 +221,11 @@ def build_card_face_key(app_user_id: uuid.UUID, card_id: uuid.UUID) -> str:
     return f"cards/{app_user_id}/{card_id}/face.png"
 
 
+def build_ai_card_key(app_user_id: uuid.UUID, card_id: uuid.UUID) -> str:
+    """서버가 만든 AI 도감 카드 한 장 (#537). 사용자 폴더 아래라 탈퇴 정리를 접두사로도 할 수 있다."""
+    return f"ai-cards/{app_user_id}/{card_id}.png"
+
+
 # ── none: 미설정 ────────────────────────────────────────────────────────
 class NotConfiguredStorage:
     """자리 지킴이 — 모든 호출이 명확하게 실패합니다. 조용히 no-op 하지 않습니다."""
@@ -285,15 +290,31 @@ class LocalBridgeStorage:
 
         self._root = Path(root)
         self._root.mkdir(parents=True, exist_ok=True)
+        # 루트는 **여기서 한 번만** 실제 경로로 굳힙니다. 이유는 `_path()` 주석에.
+        self._resolved_root = self._root.resolve()
         # bridge 업로드/다운로드 URL 의 앞부분. 앱 기준이라 nginx 접두사가 붙습니다.
         self._base_url = base_url.rstrip("/")
 
     def _path(self, storage_key: str):
+        from pathlib import Path
 
         # key 는 backend 가 만든 `gait/<uuid>/...` 라 조작 위험이 없지만, 방어적으로
         # 루트 밖으로 못 나가게 확인합니다.
-        root = self._root.resolve()
-        p = (root / storage_key).resolve()
+        #
+        # ⚠️ **여기서 `resolve()` 를 부르면 안 됩니다** (#566 ⓒ). 다른 스레드·프로세스가
+        #    같은 트리를 `mkdir(parents=True)` 로 만드는 중이면 Windows 의 `resolve()`
+        #    (`_getfinalpathname`)가 **일시적으로 다른 형태를 돌려주고** `is_relative_to`
+        #    가 순간 False 가 됩니다. 그러면 멀쩡한 동시 업로드가 `StorageNotConfiguredError`
+        #    → 라우터의 **503** 을 받습니다. 이 클래스의 전제가 *"backend 와 두 워커가 같은
+        #    디렉터리를 본다"* 라서 실제로 나는 경합입니다 — 재현하면 예외 직후 같은 값을
+        #    다시 재는 것만으로 검사가 통과합니다.
+        #
+        #    `..` 로 루트를 벗어나는 것과 절대 경로 키는 아래 사전식 정규화가 **파일 시스템을
+        #    건드리지 않고** 그대로 막습니다. 없는 파일에 `resolve()` 를 걸어도 존재하는
+        #    접두사까지만 해석되므로 심볼릭 링크 방어는 원래도 없었고, 따라서 이 방식이
+        #    방어를 낮추지 않습니다.
+        root = self._resolved_root
+        p = Path(os.path.normpath(root / storage_key))
         if not p.is_relative_to(root):
             raise StorageNotConfiguredError("잘못된 storage_key")
         return p

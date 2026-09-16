@@ -1,0 +1,96 @@
+{
+  "baseline": "70a07371",
+  "compatibility": {
+    "walk_area_catalog": {
+      "FORWARD": "daengs_backend.services.walk_background.catalogs.area",
+      "REVERSE": "daengs_backend.services.walk_background.catalogs.area",
+      "label": "daengs_backend.services.walk_background.catalogs.area",
+      "area": "daengs_backend.services.walk_background.catalogs.area",
+      "xy": "daengs_backend.services.walk_background.catalogs.area",
+      "covers": "daengs_backend.services.walk_background.catalogs.area",
+      "pages": "daengs_backend.services.walk_background.catalogs.area",
+      "unique_rows": "daengs_backend.services.walk_background.catalogs.area",
+      "publish": "daengs_backend.services.walk_background.catalogs.area",
+      "read": "daengs_backend.services.walk_background.catalogs.area"
+    },
+    "walk_area_context": {
+      "snapshot": "daengs_backend.services.walk_background.providers.area",
+      "collect_area": "daengs_backend.services.walk_background.providers.area"
+    },
+    "walk_catalog_refresh": {
+      "LOCK": "daengs_backend.services.walk_background.catalogs.refresh",
+      "RELEASE": "daengs_backend.services.walk_background.catalogs.refresh",
+      "BUDGET": "daengs_backend.services.walk_background.catalogs.refresh",
+      "ERRORS": "daengs_backend.services.walk_background.catalogs.refresh",
+      "BudgetTransport": "daengs_backend.services.walk_background.catalogs.refresh",
+      "fresh": "daengs_backend.services.walk_background.catalogs.refresh",
+      "ready": "daengs_backend.services.walk_background.catalogs.refresh",
+      "cycle": "daengs_backend.services.walk_background.catalogs.refresh",
+      "run": "daengs_backend.services.walk_background.catalogs.refresh"
+    },
+    "walk_catalog_regions": {
+      "RADIUS_M": "daengs_backend.services.walk_background.catalogs.regions",
+      "REFRESH_DAYS": "daengs_backend.services.walk_background.catalogs.regions",
+      "region": "daengs_backend.services.walk_background.catalogs.regions",
+      "path_for": "daengs_backend.services.walk_background.catalogs.regions",
+      "automatic_ready": "daengs_backend.services.walk_background.catalogs.regions",
+      "can_prepare": "daengs_backend.services.walk_background.catalogs.regions",
+      "select": "daengs_backend.services.walk_background.catalogs.regions"
+    },
+    "walk_commerce_catalog": {
+      "ENDPOINT": "daengs_backend.services.walk_background.catalogs.commerce",
+      "shop": "daengs_backend.services.walk_background.catalogs.commerce",
+      "refresh": "daengs_backend.services.walk_background.catalogs.commerce",
+      "nearby": "daengs_backend.services.walk_background.catalogs.commerce"
+    },
+    "walk_park_catalog": {
+      "ENDPOINT": "daengs_backend.services.walk_background.catalogs.park",
+      "FORMAT": "daengs_backend.services.walk_background.catalogs.park",
+      "park_row": "daengs_backend.services.walk_background.catalogs.park",
+      "parse_page": "daengs_backend.services.walk_background.catalogs.park",
+      "refresh_catalog": "daengs_backend.services.walk_background.catalogs.park",
+      "read_catalog": "daengs_backend.services.walk_background.catalogs.park",
+      "distance_m": "daengs_backend.services.walk_background.catalogs.park",
+      "nearby_parks": "daengs_backend.services.walk_background.catalogs.park"
+    },
+    "walk_public_context": {
+      "collect_public": "daengs_backend.services.walk_background.providers.public"
+    },
+    "walk_public_http": {
+      "PublicSourceError": "daengs_backend.services.walk_background.http",
+      "get_json": "daengs_backend.services.walk_background.http"
+    },
+    "walk_river_catalog": {
+      "STANDARD": "daengs_backend.services.walk_background.catalogs.river",
+      "EGIS": "daengs_backend.services.walk_background.catalogs.river",
+      "TO_WEB": "daengs_backend.services.walk_background.catalogs.river",
+      "FROM_WEB": "daengs_backend.services.walk_background.catalogs.river",
+      "standard_row": "daengs_backend.services.walk_background.catalogs.river",
+      "standard_metadata": "daengs_backend.services.walk_background.catalogs.river",
+      "refresh": "daengs_backend.services.walk_background.catalogs.river",
+      "nearby": "daengs_backend.services.walk_background.catalogs.river"
+    },
+    "walk_sgis": {
+      "BASE": "daengs_backend.services.walk_background.providers.sgis",
+      "SgisSource": "daengs_backend.services.walk_background.providers.sgis",
+      "sgis": "daengs_backend.services.walk_background.providers.sgis"
+    },
+    "walk_space_catalog_input": {
+      "FIELDS": "daengs_backend.services.walk_background.catalogs.retention",
+      "retain_page": "daengs_backend.services.walk_background.catalogs.retention",
+      "retained_fields": "daengs_backend.services.walk_background.catalogs.retention"
+    },
+    "walk_weather_context": {
+      "LOOKUP_TIMEOUT_S": "daengs_backend.services.walk_background.providers.weather",
+      "outcome": "daengs_backend.services.walk_background.providers.weather",
+      "collect_temperature": "daengs_backend.services.walk_background.providers.weather"
+    },
+    "walk_entry_context_source": {
+      "KINDS": "daengs_backend.services.walk_background.providers.facility",
+      "Collected": "daengs_backend.services.walk_background.contracts",
+      "digest": "daengs_backend.services.walk_background.contracts",
+      "projection": "daengs_backend.services.walk_background.providers.facility",
+      "collect": "daengs_backend.services.walk_background.collection"
+    }
+  }
+}

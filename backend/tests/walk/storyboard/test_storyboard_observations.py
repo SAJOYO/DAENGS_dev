@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from daengs_backend.services.walk_storyboard_titles import title_input, title_storyboard
+from daengs_backend.services.walk_legacy.titles import title_input, title_storyboard
 from daengs_walk import analyze_walk
 from daengs_walk.contracts import WalkEvidencePoint
 from daengs_walk.storyboard import StoryboardBundleV4, build_storyboard, compatible_bundle

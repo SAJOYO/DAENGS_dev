@@ -71,7 +71,7 @@ docker rm -f daengs-ci-pg
 `walk-entry-v2-tests.yml` 의 `Require executed checks` 단계가 하던 일이 그것입니다.
 포트를 `55432` 로 둔 것은 운영 `5432` 와 안 겹치게 하려고입니다.
 
-### ② 마이그레이션 변조 하네스 (330건)
+### ② 마이그레이션 변조 하네스 (578건)
 
 `verify_*.sql` 이 **틀린 상태를 실제로 잡아내는지**를 봅니다. 마이그레이션을 버리는
 스키마에 적용한 뒤, verify 가 실패해야 마땅한 상태를 일부러 만들어 놓고 *"이때
@@ -83,16 +83,39 @@ docker run -d --rm --name daengs-ci-pgvector -p 55432:5432 \
   -e POSTGRES_PASSWORD=test-password -e POSTGRES_DB=migration_test \
   pgvector/pgvector:pg17
 
+PYTHONUTF8=1 PGCLIENTENCODING=UTF8 \
 PGHOST=127.0.0.1 PGPORT=55432 PGUSER=postgres PGPASSWORD=test-password \
 PGDATABASE=migration_test python tools/check_migration_verification.py sql
 
 docker rm -f daengs-ci-pgvector
 ```
 
+약 8분 걸립니다. 진행 로그가 없으니 조용한 것이 정상입니다 — 다만 아래를 보세요.
+
+🔴 **Windows 에서는 `PYTHONUTF8=1` 이 없으면 에러 하나 없이 멈춥니다** (2026-09-16 실측,
+#566). 마이그레이션 주석의 `⚠`(U+26A0)가 cp949 로 인코딩되지 않는데, 그
+`UnicodeEncodeError` 가 `subprocess` 의 **파이프 쓰기 스레드** 안에서 나면서 `psql` 의
+표준입력이 안 닫힙니다. psql 은 입력이 더 올 줄 알고 기다리고 파이썬은 psql 을 기다립니다.
+**첫 검사에서 0건 진행으로 한 시간이고 버팁니다.** 원래 Linux CI(기본 UTF-8)에서 돌던
+것이라 여태 안 드러났습니다.
+
+  **멈춘 것인지 보는 법** — 느린 것과 구별이 안 되니 증거로 가릅니다.
+
+  ```bash
+  # ⓐ 정상이면 검사마다 psql 이 새로 뜨고 집니다 (몇 초 사이에 PID 가 바뀝니다)
+  MSYS_NO_PATHCONV=1 tasklist /FO CSV | grep psql      # ⚠ //FO 는 명령 자체가 에러입니다
+  # ⓑ state=idle 이고 query 가 빈 연결이 수십 분째면 그것이 교착입니다
+  docker exec daengs-ci-pgvector psql -U postgres -d postgres \
+    -c "select pid, state, now()-backend_start age, query from pg_stat_activity
+        where datname='migration_test';"
+  ```
+
 ⚠ **`postgres:17` 이 아니라 `pgvector/pgvector:pg17`** 입니다. 마이그레이션 하나가
 `vector` 컬럼과 `hnsw` 인덱스를 만들어서, 확장 없는 Postgres 에서는 아예 안 돕니다.
 ⚠ 코드 첫 줄이 `PGHOST` 가 로컬인지 **단언**합니다 — 일부러 데이터를 망가뜨리는
 검사라 운영 DB 를 겨누면 안 됩니다. `psql` 이 없으면 컨테이너 안의 것을 쓰세요.
+⚠ **하네스를 두 개 띄우지 마세요.** 같은 DB 를 붙들고 서로를 느리게 만듭니다. "안 도는 것
+같다" 싶으면 새로 띄우기 전에 위 ⓐⓑ 로 **먼저 세세요**.
 
 **⚠ `db/` 를 건드리는 PR 이면 이것을 돌리세요.** 지금 이 검사가 도는 곳이
 어디에도 없습니다.

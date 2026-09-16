@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import ast
 import copy
+import functools
 import json
 import re
 from pathlib import Path
@@ -94,14 +95,20 @@ def _live_strings_and_imports(path: Path) -> list[str]:
     return out
 
 
+@functools.cache
+def _backend_live_values() -> tuple[tuple[str, str], ...]:
+    """`backend/src` 전체의 (경로, 살아 있는 값). 파라미터마다 AST 를 다시 읽지 않게 한 번만 모읍니다 (#519)."""
+    return tuple(
+        (str(path.relative_to(REPO)), value)
+        for path in sorted(SRC.rglob("*.py"))
+        for value in _live_strings_and_imports(path)
+    )
+
+
 @pytest.mark.parametrize("name", FORBIDDEN)
 def test_no_live_reference_in_backend_sources(name: str) -> None:
     """`backend/src` 전체를 AST 로 읽습니다. 주석·독스트링의 서술은 세지 않습니다."""
-    offenders = []
-    for path in sorted(SRC.rglob("*.py")):
-        for value in _live_strings_and_imports(path):
-            if name in value:
-                offenders.append(f"{path.relative_to(REPO)}: {value!r}")
+    offenders = [f"{path}: {value!r}" for path, value in _backend_live_values() if name in value]
     assert offenders == [], f"{name} 이(가) 코드에 살아 있습니다: {offenders}"
 
 

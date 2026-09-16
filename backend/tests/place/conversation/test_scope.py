@@ -153,6 +153,46 @@ async def test_current_filters_is_a_read_even_without_selection():
     assert len(searcher.calls) == 1
 
 
+@pytest.mark.parametrize(
+    "query,kinds",
+    [
+        ("강아지랑 먹을 수 있는 곳", ["cafe", "restaurant"]),
+        ("강아지랑 놀 수 있는 곳", ["travel", "leisure"]),
+    ],
+)
+@pytest.mark.parametrize("bootstrap", [False, True])
+async def test_activity_request_preserves_pet_requirement_and_proposes_supported_search(
+    query, kinds, bootstrap
+):
+    plan = scoped(
+        query,
+        changes={"kinds": {"operation": "set", "values": kinds}},
+        unsupported=["pet_allowed"],
+    )
+    service, searcher, before = await initial(Planner(plan))
+    if bootstrap:
+        before = await service.prepare(
+            None, PrepareRequest(mode="bootstrap", manual=manual().manual)
+        )
+    after = await chat(service, before.state, query)
+    assert after.receipt.code == "confirmation_required"
+    assert after.state.pending_proposal.candidate.candidate_kinds == tuple(kinds)
+    assert after.state.pending_proposal.unsupported == ("pet_allowed",)
+    assert after.state.filters == before.state.filters
+    assert after.state.snapshot == before.state.snapshot
+    assert len(searcher.calls) == 1
+
+
+async def test_nominal_search_in_current_category_needs_no_search_verb():
+    query = "먹을 수 있는 곳"
+    service, searcher, _ = await initial(Planner(scoped(query, refresh=True)))
+    before = await service.prepare(None, manual(kinds=["cafe", "restaurant"]))
+    after = await chat(service, before.state, query)
+    assert after.receipt.execution == "searched"
+    assert after.state.filters == before.state.filters
+    assert len(searcher.calls) == 3
+
+
 async def test_definition_misclassified_as_state_still_returns_puppy_without_history():
     plan = ScopedInterpretation(kind="facility_state", request_quote="주차란 뭐야?", goal="explain")
     service, searcher, before = await initial(Planner(plan))

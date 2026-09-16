@@ -40,8 +40,10 @@ class WritingJob(DiaryContract):
     stage: Literal["space", "action", "title"]
     request_revision: Digest
     request: dict[str, JsonValue]
-    # Exact model contents, distinct from the internal cache/publication dependencies.
+    # Normalized material. When tool_trace exists, its initial_input + tool results
+    # are the actual supplied facts; this complete seed stays server-side.
     llm_request: dict[str, JsonValue] | None = Field(default=None, exclude_if=lambda v: v is None)
+    tool_trace: dict[str, JsonValue] | None = Field(default=None, exclude_if=lambda v: v is None)
     evidence: dict[str, JsonValue] = Field(default_factory=dict)
     # Only accepted output is retained; failures never persist raw provider errors.
     accepted: dict[str, JsonValue] | None = None

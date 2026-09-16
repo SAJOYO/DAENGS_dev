@@ -1,0 +1,8 @@
+{
+  "baseline": "4d7407f6",
+  "schemas": {
+    "StoryboardRequest": "891a91a8a94226aee4c9e7261b6e7d06ef382ed6f96e71acd5b5d5bf89b1bef9",
+    "StoryboardResponse": "3c589604d59e144cffeff6b6e21ab050fdfb1b33bae5a5832b8cc5bf1bdf3294",
+    "DiaryStoryboardResponse": "1085d9dd03efd6b1b9d2ed7760fc1bea42f5af17df49f62c570ce69c85e546b9"
+  }
+}

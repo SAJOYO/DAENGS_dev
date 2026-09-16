@@ -59,13 +59,8 @@ async def prose(stage, payload, schema):
             ]
         }
     if stage == "action":
-        if "movement" in payload:
-            refs = [
-                f["id"]
-                for p in payload["movement"]["phases"]
-                for k in ("path", "pace")
-                for f in p[k]
-            ]
+        if "recorded_action" in payload:
+            refs = [payload["movement_context"]["id"]] if "movement_context" in payload else []
             action = payload.get("recorded_action")
             if action:
                 refs.append(action["id"])
@@ -75,6 +70,13 @@ async def prose(stage, payload, schema):
             }
         return {"text": "보리가 냄새를 맡았다."}
     refs = [m["id"] for m in payload["materials"]]
+    if "space_scene" in payload:
+        descriptive = {
+            b["material_id"]
+            for b in payload["space_scene"]["bindings"]
+            if b["purpose"] != "location_context"
+        }
+        refs = [ref for ref in refs if ref in descriptive]
     return {"text": "이 부근에 길이 있다." if refs else "", "evidence_ids": refs[:1]}
 
 
@@ -85,26 +87,26 @@ async def test_real_jobs_are_conditional_and_titles_see_only_frozen_bodies(has_p
     result = await writing.write_cards(base.input.source, base, generate=provider)
     calls = provider.call_args_list
     assert sum(c.args[0] == "space" for c in calls) == len(base.board.scenes)
-    assert sum(c.args[0] == "action" for c in calls) == len(base.board.scenes)
+    assert sum(c.args[0] == "action" for c in calls) == int(has_pin)
     assert calls[-1].args[0] == "title"
     for call in calls:
         stage, payload, _ = call.args
         if stage == "space":
             assert "action" not in payload and "original_text" not in payload
-            assert set(payload) == {"materials"}
+            assert set(payload) == {"materials", "narration", "space_scene"}
+            assert payload["narration"]["companions"] == [{"name": "보리"}]
         if stage == "action":
-            assert payload["movement"]["phases"]
+            assert payload["recorded_action"]
             if payload.get("recorded_action"):
                 assert payload["recorded_action"] == {
                     "id": "a1",
                     "actor": "보리",
                     "action": "냄새 맡기",
-                    "at_s": 0,
                 }
             assert not {"materials", "anchor", "place_reference", "space"} & payload.keys()
     assert all("보리" not in c.writing.space.text for c in result.bundle.scenes)
-    assert all(c.writing.actions for c in result.bundle.scenes)
-    assert sum(bool(c.writing.actions[0].action_id) for c in result.bundle.scenes) == int(has_pin)
+    assert sum(bool(c.writing.actions) for c in result.bundle.scenes) == int(has_pin)
+    assert all(c.writing.actions[0].action_id for c in result.bundle.scenes if c.writing.actions)
     titles = calls[-1].args[1]["context"]
     for card, sent in zip(result.bundle.scenes, titles, strict=True):
         assert sent["body"] == card.body
@@ -166,7 +168,7 @@ async def test_action_edit_does_not_change_space_request():
     assert len(provider.call_args_list[-1].args[1]["cards"]) == len(base.board.scenes)
 
 
-async def test_note_edit_reuses_bodies_and_refreshes_whole_board_titles():
+async def test_note_edit_reuses_all_generation_including_titles():
     from daengs_walk.diary.contracts.input import UserRecord, material_ref
 
     base = prepared_case().board
@@ -187,7 +189,8 @@ async def test_note_edit_reuses_bodies_and_refreshes_whole_board_titles():
     after = replace(after, cached_jobs=tuple(j.model_dump(mode="json") for j in previous.jobs))
     provider = AsyncMock(side_effect=prose)
     result = await writing.write_cards(after.input.source, after, generate=provider)
-    assert [c.args[0] for c in provider.call_args_list] == ["title"]
+    provider.assert_not_awaited()
+    assert [j.llm_request for j in result.jobs] == [j.llm_request for j in previous.jobs]
     assert any(c.writing.original_text == "수정한 원문 그대로" for c in result.bundle.scenes)
 
 
@@ -217,7 +220,7 @@ async def test_diary_and_existing_assistant_use_the_same_executor(monkeypatch):
     assert calls == ["request-1:0:walk"]
 
 
-async def test_note_is_preserved_and_only_final_titles_read_it():
+async def test_note_is_preserved_and_no_writer_reads_it():
     base = prepared_case().board
     provider = AsyncMock(side_effect=prose)
     result = await writing.write_cards(base.input.source, base, generate=provider)
@@ -227,11 +230,6 @@ async def test_note_is_preserved_and_only_final_titles_read_it():
             assert all(
                 original.body not in json.dumps(c.args[1], ensure_ascii=False)
                 for c in provider.call_args_list
-                if c.args[0] != "title"
-            )
-            assert any(
-                c["body"].endswith(original.body)
-                for c in provider.call_args_list[-1].args[1]["context"]
             )
     prepared_value = PreparedWalkDiary(base.input, base.plan.intermediate, base)
     stored = store_board(prepared_value, result.bundle, digest("test-generation"), writing=result)
@@ -343,7 +341,8 @@ async def test_title_batch_adopts_valid_siblings_only(damage):
     result = await writing.write_cards(base.input.source, base, generate=generate)
     failed = sum(c.writing.title_origin == "fallback" for c in result.bundle.scenes)
     assert failed == (len(result.bundle.scenes) if damage == "truncated" else 1)
-    assert all(c.body and c.writing.actions for c in result.bundle.scenes)
+    assert all(c.body for c in result.bundle.scenes)
+    assert sum(bool(c.writing.actions) for c in result.bundle.scenes) == 1
 
 
 def test_source_edit_during_actual_title_job_cannot_publish_old_card(api, monkeypatch):
@@ -447,7 +446,7 @@ async def collect_with_sgis(board):
 
 
 async def test_sgis_and_egis_follow_actual_normalizers_into_request_and_card(monkeypatch):
-    from daengs_backend.services.walk_sgis import SgisSource
+    from daengs_backend.services.walk_background.providers.sgis import SgisSource
 
     monkeypatch.setattr(collection, "sgis", SgisSource())
     base = prepared()
@@ -459,7 +458,7 @@ async def test_sgis_and_egis_follow_actual_normalizers_into_request_and_card(mon
         if call.stage == "space":
             assert call.request["sources"]["sgis"] == "known"
             assert call.request["sources"]["egis"] == "known"
-            assert call.request["scene_structure"]["current_ground"]
+            assert call.request["space_scene"]["background"]["basis_ids"]
     for card in result.bundle.scenes:
         assert card.place_reference[0].facts["dong"] == "도곡1동"
         assert card.place_reference[0].facts["sido"] == "서울특별시"

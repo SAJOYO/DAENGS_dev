@@ -1,0 +1,359 @@
+[
+  {
+    "card_id": "stamp:9e82be6f4ff6d65eb3d67647139cc351eff5446e36212071ff81b71a98d824bc",
+    "payload": {
+      "movement": {
+        "materials": [
+          {
+            "meaning": "대체로 곧게 이동",
+            "id": "m1",
+            "extent": "원래 이동의 시작 부분",
+            "changes": []
+          }
+        ]
+      }
+    }
+  },
+  {
+    "card_id": "stamp:0a1a08f3801cbe9ef7550551e07ad2227b1f304c053601501653c9fb1c7b08bc",
+    "payload": {
+      "movement": {
+        "materials": [
+          {
+            "meaning": "대체로 곧게 이동",
+            "id": "m1",
+            "extent": "원래 이동의 끝부분",
+            "changes": [
+              {
+                "id": "m2",
+                "scope": "이 이동의 끝부분",
+                "meaning": "위 이동을 이번 산책의 기준보다 상대적으로 느리게 이어감"
+              }
+            ]
+          },
+          {
+            "meaning": "대체로 곧게 이동",
+            "id": "m3",
+            "extent": "원래 이동의 시작 부분",
+            "changes": [
+              {
+                "id": "m4",
+                "scope": "이 이동 전체",
+                "meaning": "위 이동을 이번 산책의 기준보다 상대적으로 느리게 이어감"
+              }
+            ]
+          },
+          {
+            "id": "m5",
+            "meaning": "왼쪽으로 방향을 꺾음 (그 전환 시점의 이동은 상대적으로 느림)",
+            "occurrence": "한 번의 방향 전환"
+          },
+          {
+            "meaning": "대체로 곧게 이동",
+            "id": "m6",
+            "extent": "원래 이동 중간의 일부 구간",
+            "changes": [
+              {
+                "id": "m7",
+                "scope": "이 이동 전체",
+                "meaning": "위 이동을 이번 산책의 기준보다 상대적으로 느리게 이어감"
+              }
+            ]
+          },
+          {
+            "id": "m8",
+            "meaning": "오른쪽으로 방향을 꺾음",
+            "occurrence": "한 번의 방향 전환"
+          },
+          {
+            "meaning": "대체로 곧게 이동",
+            "id": "m9",
+            "extent": "원래 이동의 끝부분",
+            "changes": []
+          },
+          {
+            "meaning": "대체로 곧게 이동",
+            "id": "m10",
+            "extent": "원래 이동 전체",
+            "changes": []
+          }
+        ]
+      },
+      "recorded_action": {
+        "id": "a1",
+        "actor": "보리",
+        "action": "냄새 맡기",
+        "connections": [
+          {
+            "movement_id": "m7",
+            "relation": "이 속도가 적용되는 부분의 기록 시각"
+          }
+        ]
+      }
+    }
+  },
+  {
+    "card_id": "stamp:330bbd9b1be86ddf15657f4d2e04c4ad7fb6cfeb93d1f585ff5cb54e1a3bc927",
+    "payload": {
+      "movement": {
+        "materials": [
+          {
+            "id": "m1",
+            "meaning": "왼쪽으로 방향을 꺾음",
+            "occurrence": "한 번의 방향 전환"
+          },
+          {
+            "meaning": "대체로 곧게 이동",
+            "id": "m2",
+            "extent": "원래 이동 전체",
+            "changes": []
+          },
+          {
+            "meaning": "대체로 곧게 이동",
+            "id": "m3",
+            "extent": "원래 이동 전체",
+            "changes": []
+          },
+          {
+            "meaning": "대체로 곧게 이동",
+            "id": "m4",
+            "extent": "원래 이동의 시작 부분",
+            "changes": []
+          },
+          {
+            "id": "m5",
+            "meaning": "오른쪽으로 방향을 꺾음",
+            "occurrence": "한 번의 방향 전환"
+          },
+          {
+            "meaning": "대체로 곧게 이동",
+            "id": "m6",
+            "extent": "원래 이동의 끝부분",
+            "changes": []
+          },
+          {
+            "id": "m7",
+            "meaning": "오른쪽으로 방향을 꺾음",
+            "occurrence": "한 번의 방향 전환"
+          },
+          {
+            "meaning": "대체로 곧게 이동",
+            "id": "m8",
+            "extent": "원래 이동의 시작 부분",
+            "changes": []
+          }
+        ]
+      }
+    }
+  },
+  {
+    "card_id": "stamp:69e5333261f2e0ff7378511bd67f798a75ba6f7a40827c72b0fb2d3f065f9a22",
+    "payload": {
+      "movement": {
+        "materials": [
+          {
+            "meaning": "대체로 곧게 이동",
+            "id": "m1",
+            "extent": "원래 이동의 끝부분",
+            "changes": []
+          },
+          {
+            "id": "m2",
+            "meaning": "오른쪽으로 방향을 꺾음",
+            "occurrence": "한 번의 방향 전환"
+          },
+          {
+            "meaning": "이동",
+            "changes": [
+              {
+                "id": "m3",
+                "scope": "이 이동 전체",
+                "meaning": "위 이동을 이번 산책의 기준보다 상대적으로 느리게 이어감"
+              }
+            ]
+          },
+          {
+            "meaning": "대체로 곧게 이동",
+            "id": "m4",
+            "extent": "원래 이동의 시작 부분",
+            "changes": []
+          },
+          {
+            "meaning": "좁은 범위 안에 위치가 모이고 바깥으로의 진행이 제한됨, 대체로 곧게 이동",
+            "id": "m5",
+            "extent": "원래 이동 전체",
+            "changes": []
+          },
+          {
+            "id": "m6",
+            "meaning": "진행 방향을 반대로 바꿈 (그 전환 시점의 이동은 상대적으로 느림)",
+            "occurrence": "한 번의 방향 전환"
+          },
+          {
+            "meaning": "좁은 범위 안에 위치가 모이고 바깥으로의 진행이 제한됨, 대체로 곧게 이동",
+            "id": "m7",
+            "extent": "원래 이동 전체",
+            "changes": [
+              {
+                "id": "m8",
+                "scope": "이 이동의 시작 부분",
+                "meaning": "위 이동을 이번 산책의 기준보다 상대적으로 느리게 이어감"
+              }
+            ]
+          },
+          {
+            "meaning": "대체로 곧게 이동",
+            "id": "m9",
+            "extent": "원래 이동 중간의 일부 구간",
+            "changes": []
+          }
+        ]
+      }
+    }
+  },
+  {
+    "card_id": "stamp:e0669aa583712f22b365166e98641b791cd0c140739c0164eb0914273fe5a3ec",
+    "payload": {
+      "movement": {
+        "materials": [
+          {
+            "meaning": "대체로 곧게 이동",
+            "id": "m1",
+            "extent": "원래 이동의 끝부분",
+            "changes": []
+          },
+          {
+            "id": "m2",
+            "meaning": "왼쪽으로 방향을 꺾음",
+            "occurrence": "한 번의 방향 전환"
+          },
+          {
+            "meaning": "대체로 곧게 이동",
+            "id": "m3",
+            "extent": "원래 이동의 시작 부분",
+            "changes": []
+          },
+          {
+            "meaning": "앞서 지나온 구간을 역순으로 따라가며 대체로 곧게 이동",
+            "id": "m4",
+            "extent": "원래 이동 전체",
+            "changes": []
+          },
+          {
+            "id": "m5",
+            "meaning": "왼쪽으로 방향을 꺾음",
+            "occurrence": "한 번의 방향 전환"
+          },
+          {
+            "meaning": "앞서 지나온 구간을 역순으로 따라가며 대체로 곧게 이동",
+            "id": "m6",
+            "extent": "원래 이동의 시작 부분",
+            "changes": []
+          }
+        ]
+      }
+    }
+  },
+  {
+    "card_id": "stamp:0a18e6f64a40f0c299df4202957d6cad39d215c334bae957be4a3c2bbe9a0320",
+    "payload": {
+      "movement": {
+        "materials": [
+          {
+            "meaning": "앞서 지나온 구간을 역순으로 따라가며 대체로 곧게 이동",
+            "id": "m1",
+            "extent": "원래 이동의 끝부분",
+            "changes": []
+          },
+          {
+            "meaning": "대체로 곧게 이동",
+            "id": "m2",
+            "extent": "원래 이동의 끝부분",
+            "changes": []
+          },
+          {
+            "meaning": "대체로 곧게 이동",
+            "id": "m3",
+            "extent": "원래 이동 전체",
+            "changes": []
+          },
+          {
+            "meaning": "대체로 곧게 이동",
+            "id": "m4",
+            "extent": "원래 이동 전체",
+            "changes": []
+          },
+          {
+            "id": "m5",
+            "meaning": "오른쪽으로 크게 방향을 꺾음",
+            "occurrence": "한 번의 방향 전환"
+          },
+          {
+            "meaning": "대체로 곧게 이동",
+            "id": "m6",
+            "extent": "원래 이동의 시작 부분",
+            "changes": []
+          }
+        ]
+      }
+    }
+  },
+  {
+    "card_id": "stamp:42f42c051b214a48aeb32861326f96bea3e458603fced6431dbe36cb1c777e2a",
+    "payload": {
+      "movement": {
+        "materials": [
+          {
+            "meaning": "대체로 곧게 이동",
+            "id": "m1",
+            "extent": "원래 이동의 끝부분",
+            "changes": []
+          },
+          {
+            "id": "m2",
+            "meaning": "왼쪽으로 방향을 꺾음",
+            "occurrence": "한 번의 방향 전환"
+          },
+          {
+            "meaning": "대체로 곧게 이동",
+            "id": "m3",
+            "extent": "원래 이동의 시작 부분",
+            "changes": []
+          },
+          {
+            "id": "m4",
+            "meaning": "오른쪽으로 방향을 꺾음",
+            "occurrence": "한 번의 방향 전환"
+          },
+          {
+            "meaning": "대체로 곧게 이동",
+            "id": "m5",
+            "extent": "원래 이동의 끝부분",
+            "changes": []
+          },
+          {
+            "meaning": "대체로 곧게 이동",
+            "id": "m6",
+            "extent": "원래 이동의 시작 부분",
+            "changes": []
+          }
+        ]
+      }
+    }
+  },
+  {
+    "card_id": "stamp:2f9390dce5d99aeb89b76c1b24e94196de1ba28dc260c723fdcfa3788e3e742a",
+    "payload": {
+      "movement": {
+        "materials": [
+          {
+            "meaning": "대체로 곧게 이동",
+            "id": "m1",
+            "extent": "원래 이동의 끝부분",
+            "changes": []
+          }
+        ]
+      }
+    }
+  }
+]

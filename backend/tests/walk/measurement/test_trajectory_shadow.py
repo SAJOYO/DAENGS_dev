@@ -8,15 +8,15 @@ import pytest
 
 from daengs_backend.schemas.walk import WalkPointUpload
 from daengs_backend.schemas.walk_motion import MotionManifest, MotionObservation
-from daengs_backend.services import walk_motion
-from daengs_backend.services.walk_finalize import walk_input_fingerprint
-from daengs_backend.services.walk_motion_contract import MotionConflict
-from daengs_backend.services.walk_motion_engine import replay
-from daengs_backend.services.walk_trajectory_shadow import (
+from daengs_backend.services.walk_metrics.motion_engine import replay
+from daengs_backend.services.walk_metrics.trajectory_shadow import (
     ShadowAssembler,
     calculate_shadow,
     replay_shadow,
 )
+from daengs_backend.services.walk_session import motion as walk_motion
+from daengs_backend.services.walk_session.finalize import walk_input_fingerprint
+from daengs_backend.services.walk_session.motion_contract import MotionConflict
 from daengs_walk.trajectory import EvidenceJournal, JournalEvent, SourceRef
 from tools.check_walk_trajectory_shadow import calculate_export, main, summary
 

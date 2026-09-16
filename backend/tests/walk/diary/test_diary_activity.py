@@ -20,6 +20,7 @@ from daengs_backend.services.walk_diary.storage.board import load_board, store_b
 from daengs_backend.services.walk_diary.writing import jobs as activity_jobs
 from daengs_walk.diary.board.activity import activity_projection, movement_uses
 from daengs_walk.diary.board.models import VerifiedBoardRoute
+from daengs_walk.diary.board.title_context import generated_body
 from daengs_walk.diary.contracts.input import DiaryInput, digest
 from daengs_walk.diary.contracts.slots import SlotPolicy
 from daengs_walk.diary.route.movement import pace_claims, phases_for, prepare_movement
@@ -76,9 +77,8 @@ async def provider(stage, payload, schema):
     if stage == "title":
         return {"titles": [{"id": c["id"], "text": "돌아오는 길의 기록"} for c in payload["cards"]]}
     if stage == "action":
-        if "movement" in payload:
-            phases = payload["movement"]["phases"]
-            refs = [f["id"] for p in phases for k in ("path", "pace") for f in p[k]]
+        if "recorded_action" in payload:
+            refs = [payload["movement_context"]["id"]] if "movement_context" in payload else []
             if payload.get("recorded_action"):
                 refs.append(payload["recorded_action"]["id"])
             return {"text": "이 기록 무렵의 동선을 남겼다.", "evidence_ids": refs}
@@ -149,7 +149,7 @@ def test_turn_pivot_does_not_inherit_pace_before_the_turn():
     phases = phases_for(claims, 0, 30)
     assert phases == [
         {"start_s": 0, "end_s": 10, "claims": ["slow"]},
-        {"start_s": 10, "end_s": 30, "claims": ["turn"]},
+        {"start_s": 20, "end_s": 30, "claims": ["turn"]},
     ]
     request = {
         "movement": [
@@ -164,20 +164,25 @@ def test_turn_pivot_does_not_inherit_pace_before_the_turn():
             }
         ]
     }
+    request["action"] = {
+        "id": "pin",
+        "kind": "sniffing",
+        "material": {"무엇을": "냄새 맡기"},
+        "actor": {"id": None},
+    }
     wire, _ = activity_projection(request)
-    first, second = wire["movement"]["phases"]
-    assert not first["path"] and first["pace"]
-    assert not second["pace"]
-    assert second["path"][0]["at_s"] == 0
+    assert "느린" not in wire["movement_context"]["meaning"]
+    assert "왼쪽" in wire["movement_context"]["meaning"]
 
 
-def test_revisited_coordinates_bind_to_different_times_and_notes_receive_movement():
+def test_notes_keep_analysis_but_never_receive_an_action_job():
     base, _ = prepared(note=True)
     notes = [s for s in base.board.scenes if s.core.kind == "user_record"]
     assert notes
     requests = [activity_jobs.action_job(base, s) for s in base.board.scenes]
     note_job = activity_jobs.action_job(base, notes[0])
-    assert note_job.request["action"] is None and note_job.request["movement"]
+    assert note_job is None
+    assert not any(requests)
     for job in filter(None, requests):
         for item in job.request["movement"]:
             window = item["facts"]["window"]
@@ -191,7 +196,8 @@ async def test_real_request_result_storage_and_whole_titles(pin, note):
     fake = AsyncMock(side_effect=provider)
     result = await writing.write_cards(base.input.source, base, generate=fake)
     jobs = [j for j in result.jobs if j.stage == "action"]
-    assert jobs and all(j.accepted for j in jobs)
+    assert len(jobs) == int(pin and not note)
+    assert all(j.accepted for j in jobs)
     for job in jobs:
         assert job.llm_request == normalize("action", job.request).payload
         assert set(job.accepted.get("movement_ids", [])) <= {
@@ -200,12 +206,13 @@ async def test_real_request_result_storage_and_whole_titles(pin, note):
         assert len(job.request["movement"]) == 1
         wire = json.dumps(job.llm_request, ensure_ascii=False)
         assert not any(
-            k in wire for k in ("baseline_mps", "source_revision", "lat", "lng", "diagnostics")
+            f'"{k}"' in wire
+            for k in ("baseline_mps", "source_revision", "lat", "lng", "diagnostics")
         )
     titles = [j for j in result.jobs if j.stage == "title"]
     assert len(titles) == 1
     assert [c["body"] for c in titles[0].llm_request["context"]] == [
-        c.body for c in result.bundle.scenes
+        generated_body(c) for c in result.bundle.scenes
     ]
     prepared_value = PreparedWalkDiary(base.input, base.plan.intermediate, base)
     saved = store_board(prepared_value, result.bundle, digest("generation"), writing=result)
@@ -226,7 +233,7 @@ async def test_missing_selected_movement_fails_before_external_call(monkeypatch)
     def damaged(stage, request):
         model = original(stage, request)
         if stage == "action" and request.get("movement"):
-            model.payload["movement"]["phases"] = []
+            model.payload["movement_context"] = {}
         return model
 
     monkeypatch.setattr(diary, "normalize", damaged)
@@ -343,9 +350,11 @@ def test_missing_baseline_keeps_supported_path_without_normal_pace():
     assert catalog.baseline["baseline_mps"] is None
     assert catalog.baseline["excluded_seconds"] > 0
     assert catalog.claims and all(c["kind"] == "path" for c in catalog.claims)
-    job = activity_jobs.action_job(base, base.board.scenes[0])
+    scene = next(c for c in base.board.scenes if c.core.kind == "user_record")
+    job = activity_jobs.action_job(base, scene)
     wire = normalize("action", job.request).payload
-    assert all(not p["pace"] and p["path"] for p in wire["movement"]["phases"])
+    assert "movement_context" in wire
+    assert "걸음" not in wire["movement_context"]["meaning"]
     assert "정상" not in json.dumps(wire, ensure_ascii=False)
 
 
@@ -375,8 +384,8 @@ async def test_long_original_and_activity_fit_existing_app_body_limit():
     card = next(c for c in result.bundle.scenes if c.user_record)
     assert card.writing.original_text == "가" * 2000
     assert card.body.endswith("가" * 2000) and len(card.body) <= 2400
-    assert card.writing.actions[0].text == "나" * 220
-    assert not card.writing.space.text
+    assert not card.writing.actions
+    assert card.writing.space.text == "나" * 220
     bound = with_scene_backgrounds(base, result.scene_backgrounds)
     value = PreparedWalkDiary(bound.input, bound.plan.intermediate, bound)
     assert (
@@ -390,7 +399,7 @@ async def test_unknown_activity_citation_falls_back_without_losing_record():
 
     async def invalid(stage, payload, schema):
         result = await provider(stage, payload, schema)
-        if stage == "action" and "movement" in payload:
+        if stage == "action" and "recorded_action" in payload:
             result["evidence_ids"] = ["m-foreign"]
         return result
 

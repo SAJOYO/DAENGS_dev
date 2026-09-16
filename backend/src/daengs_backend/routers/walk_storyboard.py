@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from daengs_backend.core.database import get_session
 from daengs_backend.core.deps import CurrentAppUser
+from daengs_backend.schemas.walk_relational_diary import RELATIONAL_FORMAT, RelationalDiaryResponse
 from daengs_backend.schemas.walk_storyboard import (
     MAX_PREPARATION_BUDGET_MS,
     BundleFormat,
@@ -17,8 +18,8 @@ from daengs_backend.schemas.walk_storyboard import (
     StoryboardResponse,
 )
 from daengs_backend.services import walk_storyboard as service
-from daengs_backend.services.walk_storyboard_context import lookup_contexts
-from daengs_backend.services.walk_storyboard_titles import title_storyboard
+from daengs_backend.services.walk_legacy.context import lookup_contexts
+from daengs_backend.services.walk_legacy.titles import title_storyboard
 from daengs_walk.diary.board.output import BOARD_FORMAT
 
 router = APIRouter(prefix="/app/walks", tags=["walk-storyboard"])
@@ -43,7 +44,7 @@ async def capabilities(user: CurrentAppUser):
     from daengs_backend.config import settings
 
     return {
-        "diary_formats": ["walk-diary-bundle-v1", BOARD_FORMAT]
+        "diary_formats": ["walk-diary-bundle-v1", BOARD_FORMAT, RELATIONAL_FORMAT]
         if settings.walk_diary_enabled
         else [],
         "target_scene_count": {"min": 1, "max": 50},
@@ -54,7 +55,10 @@ async def capabilities(user: CurrentAppUser):
     }
 
 
-@router.get("/{walk_id}/storyboard", response_model=StoryboardResponse | DiaryStoryboardResponse)
+@router.get(
+    "/{walk_id}/storyboard",
+    response_model=StoryboardResponse | DiaryStoryboardResponse | RelationalDiaryResponse,
+)
 async def get_storyboard(
     walk_id: uuid.UUID,
     user: CurrentAppUser,
@@ -63,7 +67,7 @@ async def get_storyboard(
     target_scene_count: Annotated[int | None, Query(ge=1, le=50)] = None,
 ):
     try:
-        if bundle_format in {"walk-diary-bundle-v1", BOARD_FORMAT}:
+        if bundle_format in {"walk-diary-bundle-v1", BOARD_FORMAT, RELATIONAL_FORMAT}:
             return await service.get(
                 session,
                 user.app_user_id,
@@ -78,7 +82,10 @@ async def get_storyboard(
         raise HTTPException(409, str(exc)) from None
 
 
-@router.post("/{walk_id}/storyboard", response_model=StoryboardResponse | DiaryStoryboardResponse)
+@router.post(
+    "/{walk_id}/storyboard",
+    response_model=StoryboardResponse | DiaryStoryboardResponse | RelationalDiaryResponse,
+)
 async def generate_storyboard(
     walk_id: uuid.UUID,
     body: StoryboardRequest,
@@ -89,7 +96,7 @@ async def generate_storyboard(
     diary_writer: Annotated[Callable | None, Depends(get_diary_writer)],
 ):
     try:
-        if body.bundle_format in {"walk-diary-bundle-v1", BOARD_FORMAT}:
+        if body.bundle_format in {"walk-diary-bundle-v1", BOARD_FORMAT, RELATIONAL_FORMAT}:
             return await service.generate(
                 session, user.app_user_id, walk_id, body, lookup, titles, diary_writer=diary_writer
             )

@@ -211,7 +211,7 @@ def test_no_action_ordinary_route_reaches_api_as_checkpoints_not_fake_observatio
         "session_boundary",
     ]
     assert all(s["body"] for s in result["bundle"]["scenes"])
-    state.provider.assert_awaited_once()  # Ordinary path shape is usable without speed outliers.
+    state.provider.assert_not_awaited()  # Checkpoints alone do not create an action-writing job.
 
 
 def test_saved_v1_is_read_without_conversion_or_generation(api):

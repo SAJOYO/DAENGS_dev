@@ -1,6 +1,6 @@
 import pytest
 
-from daengs_backend.services.cardimage import judge
+from daengs_cardimage import judge
 
 
 def test_parse_valid_json():

@@ -153,7 +153,7 @@ context["dog"] → DogContext` 배관에 세 칸이 더 탑니다: `feeding_styl
 RoutePlan:
   requests:  list[CapabilityRequest]           # 실행할 능력 — 0개 이상
   handoffs:  list[{target: str, reason: str}]  # 전용 플로우 안내 — 0개 이상
-  clarify:   {question: str, missing: list[str]} | None
+  clarify:   {question: str, missing: list[str], missing_axes: [...], care_log: {...} | None} | None
   router:    deterministic | llm       # 출처 — 어느 경로가 이 판단을 냈는가
   model:     str | None                # router=llm 일 때 사용 모델 — `gemini-3.1-flash-lite` (routing 문서 §4)
   prompt_version: str | None           # router=llm 일 때 프롬프트 버전 — `semantic-router-ko-v8`
@@ -188,6 +188,16 @@ RoutePlan:
   ⚠ **코드가 축을 채우지 않습니다.** 모델이 고른 것만 실리고, 질문 문장이 식욕을 언급했다고
   해서 `APPETITE` 를 넣어 주지 않습니다. 비어 있으면 "물은 것이 없다" 가 아니라 **"축을
   모른다"** 로 읽어야 합니다.
+- **`clarify.care_log` 는 되묻기의 세 번째 부류입니다 — 승낙받으면 DB 에 쓸 것** (D-075).
+  `missing=["care_log_confirmation"]` 과 함께 `CareLogProposal` 이 실리고, 다른 두 부류
+  (좌표 게이트 · 관찰 되묻기)에서는 늘 `None` 입니다. 위 둘과 갈리는 지점이 하나 더 있습니다:
+  **후속 답변을 무엇에 묶을지가 아니라, 후속 답변이 행을 남길지의 문제**라 Turn Resolver 를
+  안 지납니다 — 승낙 판정은 결정론 어휘가 하고(`orchestration/care_log.py`), 모델은 이
+  경로에 한 번도 안 불립니다.
+  ⚠ **이 값이 다음 턴까지 사는 방법이 `chat_turns.public_response` 입니다.** `public_response_of`
+  가 `model_dump(mode="json")` 이라 통째로 저장되고 `pending_clarification_of` 가 읽습니다 —
+  `missing_axes` 와 같은 길이고, 그래서 확인 단계에 **서버 상태가 없습니다.** 대가는 대기가
+  한 턴짜리라는 것이고, 그 한 턴이 며칠 전일 수 있어 제안에 TTL(1시간)이 걸려 있습니다.
 - 요약이 필요하면 mode 는 세 목록에서 **파생**합니다 — 진실 원천이 아닙니다.
 - 이 구조를 범용 워크플로 액션 DSL 로 일반화하지 않습니다.
 - `router` 출처 필드는 관측용이자 회귀 판별용입니다. 결정적 경로가 낸 오답과 LLM 이 낸
@@ -204,9 +214,10 @@ RoutePlan:
 
 ```
 CapabilityRequest:
-  capability: training | life | walk | place | general
+  capability: training | life | walk | place | general | vet_contact | care_log
       # 실행 registry (place: PR #196, 의미 선택은 PR #204). `general` 은 PR #279 의 일반 답변
       # 폴백 — 실행되고 저장되지만 **라우터가 고르지 못하고** planner 규칙만이 넣는다 (아래 §3 끝)
+      # `care_log` (D-075) 는 **유일하게 쓰는 능력**이다 — 아래 「케어 기록 쓰기」
   payload:    <능력별 타입>                     # 능력이 소유하는 도메인 페이로드
   timeout_ms: int | None                       # 선택 — 능력별 기본값을 덮을 때만
 ```
@@ -236,6 +247,30 @@ grounding합니다), 좌표는 검증된 `context.location`에서 복사합니�
 "이런 경우 지원이 있어요" 를 만드는 조례·보조금 문서를 Life 가 검색하기 때문입니다.
 `ScreeningContext` 의 두 칸(§1 · 불변식 15)이 여기서도 그대로이고, `daengs_life` 로는
 원시값 둘로 건너갑니다 — 도메인이 오케스트레이션 타입을 알면 D-035 가 막은 방향이 됩니다.
+
+**케어 기록 쓰기 — payload 가 "사용자가 승낙한 것" 입니다** (CURRENT — D-075). `care_log` 는
+이 계약에서 **읽지 않고 쓰는 유일한 능력**입니다. payload 타입이
+`CareLogProposal {kind, pet_id, occurred_at, proposal_id}` 인데, **같은 타입이 앞 턴의 확인
+되묻기에도 실립니다** (`ClarifyRequest.care_log`) — 타입을 하나로 둔 것이 의도입니다: 확인
+단계의 약속은 "보여 준 것만 들어간다" 이고, 제안과 payload 가 다른 타입이면 그 약속을 코드가
+아니라 사람이 지켜야 합니다.
+
+- **모델이 만든 값이 하나도 없습니다** (D-051 그대로). `kind` 는 결정론 어휘가 읽고
+  (`orchestration/care_log.py`), `occurred_at` 은 **서버 시계**, `pet_id` 는 신뢰된
+  `context["active_dog_id"]`, `proposal_id` 는 서버가 만든 UUID 입니다. `note` 는 아예 없습니다.
+- **의미 라우터가 이 능력을 모릅니다.** `ExecuteName` 에도 `HandoffName` 에도 없고, 명시 신호
+  (`requested_capability`)로도 못 부릅니다. 계획에 들어가는 길은
+  `planner.resolve_care_log_write` 하나이고, 그것은 **사용자가 앞 턴의 제안에 승낙했을 때만**
+  엽니다 — "무엇이 DB 에 쓸 수 있나" 의 답이 함수 하나라, 감사하려면 그 호출자만 봅니다.
+  (`tests/test_orchestration_care_boundary.py` 가 이 두 부재를 고정합니다.)
+- **어댑터는 요청마다 만들어 넣습니다** — `CapabilityName` 중 유일하게 기본 어댑터가 없습니다.
+  `app_user_id` 를 들고 있고 그것이 "누구 이름으로 기록되는가" 라서, payload 에 사용자를 실어
+  전역 어댑터로 두면 그 값의 출처를 payload 검증이 보장하지 못합니다. `FacilityCapabilityAdapter`
+  와 같은 자리(`routers/assistant.py`)이고, 넣는 `if` 가 `context["care_log_writable"]` 를
+  세우는 `if` 와 **같습니다.**
+- **쓰기 규칙은 이 경계 밖에 있습니다.** 어댑터는 `services/care_event.record` 를 `/app/care-events`
+  POST 와 **같은 함수로** 부릅니다 — 소유권·멱등·약 중복 창·트랜잭션 경계가 전부 그쪽이라,
+  채팅으로 들어온 기록이 화면으로 들어온 기록과 다른 규칙을 통과할 경로가 없습니다.
 
 **이전 판정들도 같은 규칙으로 받습니다** (#79 3번). `LifePayload.screening_history` 는 §1 의
 `context["screening_history"]` 를 planner 가 **항목마다** 같은 화이트리스트로 옮긴 것이라,
@@ -461,6 +496,8 @@ AssistantResponse:
     가 셋을 대조합니다.
 
     `general` (D-057) 은 셋 다에 있습니다 — v9 부터 라우터 목적지이기도 해서입니다 (§3 끝).
+    `vet_contact` · `care_log` · `skin`(D-079) 은 `ExecuteName` 에 없고 나머지 둘에만 있습니다 —
+    라우터가 고를 수 없고 결정론 게이트나 명시 신호로만 들어오는 능력입니다.
     프론트의 `lib/assistant.ts CapabilityName` 도 손으로 맞추는 사본입니다.
 
 15. **스크리닝의 통제 문구와 병변 분포는 어떤 payload · 프롬프트 · 그래프 상태에도 들어가지

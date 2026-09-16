@@ -1,0 +1,570 @@
+{
+  "scenes": [
+    {
+      "scene": 1,
+      "time": "2026-09-08T06:00:00Z",
+      "reason": "every_selected_scene",
+      "parts": {
+        "space": {
+          "status": "returned",
+          "text": "성내천로를 따라 상업 시설이 밀집한 거리를 지나 산책을 시작했다. 근처에 근린공원이 자리 잡고 있어 차분한 분위기 속에서 걸음을 옮겼다."
+        },
+        "action": {
+          "status": "not_requested",
+          "text": ""
+        }
+      },
+      "movement_observations": []
+    },
+    {
+      "scene": 2,
+      "time": "2026-09-08T06:03:00Z",
+      "reason": "every_selected_scene",
+      "parts": {
+        "space": {
+          "status": "returned",
+          "text": "성내천로를 따라 상업 시설이 밀집한 거리를 지나왔다. 어느덧 근린공원인 공원 1에 가까워졌다."
+        },
+        "action": {
+          "status": "returned",
+          "text": "성내천로 상업 시설 근처를 지나던 보리가 잠시 멈춰 서서 냄새를 맡았다."
+        }
+      },
+      "movement_observations": [
+        {
+          "id": "motion1",
+          "subject": "recording_device",
+          "code": "straight_run",
+          "meaning": "대체로 곧게 이어지는 이동",
+          "source_ids": [
+            "movement-shape:aec572f1a230009fc41a4cf79d0dfae687082e404d241a28d5bedef648ac2aeb"
+          ],
+          "source_claim": {
+            "id": "movement-shape:aec572f1a230009fc41a4cf79d0dfae687082e404d241a28d5bedef648ac2aeb",
+            "kind": "path",
+            "meaning": "straight_run",
+            "start_s": 0.0,
+            "end_s": 480.0,
+            "block": 0,
+            "proof": {
+              "axis": "route_pattern",
+              "kind": "path",
+              "status": "candidate",
+              "subject": "recording_device",
+              "support": {
+                "chain_index": 0,
+                "pattern_run_index": 0,
+                "from_seq": 0,
+                "to_seq": 96,
+                "started_at": "2026-09-08T06:00:00+00:00",
+                "ended_at": "2026-09-08T06:08:00+00:00",
+                "window_s": 480.0,
+                "time_meaning": "observed_support_window"
+              },
+              "anchor": {
+                "client_seq": 0,
+                "at": "2026-09-08T06:00:00+00:00",
+                "lat": 37.0,
+                "lng": 130.0,
+                "route_offset_m": 0.0
+              },
+              "metrics": {
+                "max_deviation_m": 5.684341886080802e-14
+              },
+              "quality": {
+                "fix_count": 97,
+                "accuracy_p50_m": 5.0,
+                "unknown_accuracy_count": 0
+              },
+              "meaning": "straight_run",
+              "is_event": false
+            }
+          },
+          "from_pin_s": -180.0,
+          "to_pin_s": 0.0,
+          "duration_s": 180.0,
+          "text": "현재 기록 180~0초 전: 대체로 곧게 이어지는 이동",
+          "origin": "computed_observation"
+        }
+      ]
+    },
+    {
+      "scene": 3,
+      "time": "2026-09-08T06:08:00Z",
+      "reason": "every_selected_scene",
+      "parts": {
+        "space": {
+          "status": "returned",
+          "text": "음식점과 카페가 밀집한 성내천로를 따라 걸었다. 근린공원인 공원 1에서 조금 멀어진 거리에서 산책을 이어갔다."
+        },
+        "action": {
+          "status": "returned",
+          "text": "성내천로의 상업 시설 앞을 지나던 보리가 잠시 멈춰 서서 냄새를 맡았다."
+        }
+      },
+      "movement_observations": [
+        {
+          "id": "motion1",
+          "subject": "recording_device",
+          "code": "straight_run",
+          "meaning": "대체로 곧게 이어지는 이동",
+          "source_ids": [
+            "movement-shape:aec572f1a230009fc41a4cf79d0dfae687082e404d241a28d5bedef648ac2aeb"
+          ],
+          "source_claim": {
+            "id": "movement-shape:aec572f1a230009fc41a4cf79d0dfae687082e404d241a28d5bedef648ac2aeb",
+            "kind": "path",
+            "meaning": "straight_run",
+            "start_s": 0.0,
+            "end_s": 480.0,
+            "block": 0,
+            "proof": {
+              "axis": "route_pattern",
+              "kind": "path",
+              "status": "candidate",
+              "subject": "recording_device",
+              "support": {
+                "chain_index": 0,
+                "pattern_run_index": 0,
+                "from_seq": 0,
+                "to_seq": 96,
+                "started_at": "2026-09-08T06:00:00+00:00",
+                "ended_at": "2026-09-08T06:08:00+00:00",
+                "window_s": 480.0,
+                "time_meaning": "observed_support_window"
+              },
+              "anchor": {
+                "client_seq": 0,
+                "at": "2026-09-08T06:00:00+00:00",
+                "lat": 37.0,
+                "lng": 130.0,
+                "route_offset_m": 0.0
+              },
+              "metrics": {
+                "max_deviation_m": 5.684341886080802e-14
+              },
+              "quality": {
+                "fix_count": 97,
+                "accuracy_p50_m": 5.0,
+                "unknown_accuracy_count": 0
+              },
+              "meaning": "straight_run",
+              "is_event": false
+            }
+          },
+          "from_pin_s": -300.0,
+          "to_pin_s": 0.0,
+          "duration_s": 300.0,
+          "text": "현재 기록 300~0초 전: 대체로 곧게 이어지는 이동",
+          "origin": "computed_observation"
+        },
+        {
+          "id": "motion2",
+          "subject": "recording_device",
+          "code": "turn_reverse",
+          "meaning": "진행 방향이 반대로 바뀌는 이동",
+          "source_ids": [
+            "movement-shape:24f9e24a970a599883872752eb75d1c7ea1ed758978b35e884ea53792d08091e"
+          ],
+          "source_claim": {
+            "id": "movement-shape:24f9e24a970a599883872752eb75d1c7ea1ed758978b35e884ea53792d08091e",
+            "kind": "path",
+            "meaning": "turn_reverse",
+            "start_s": 370.0,
+            "end_s": 550.0,
+            "block": 0,
+            "event_s": 435.0,
+            "proof": {
+              "axis": "route_pattern",
+              "kind": "path",
+              "status": "candidate",
+              "subject": "recording_device",
+              "support": {
+                "chain_index": 0,
+                "pattern_run_index": 0,
+                "from_seq": 74,
+                "to_seq": 110,
+                "started_at": "2026-09-08T06:06:10+00:00",
+                "ended_at": "2026-09-08T06:09:10+00:00",
+                "window_s": 180.0,
+                "time_meaning": "observed_support_window"
+              },
+              "anchor": {
+                "client_seq": 87,
+                "at": "2026-09-08T06:07:15+00:00",
+                "lat": 37.003305006901755,
+                "lng": 130.0,
+                "route_offset_m": 345.0
+              },
+              "metrics": {
+                "signed_angle_deg": -180.0,
+                "absolute_rotation_deg": 180.0,
+                "peak_rotation_ratio": 1.0,
+                "heading_leg_m": 30,
+                "original_fix_count": 37,
+                "stable_before": true,
+                "stable_after": true
+              },
+              "quality": {
+                "fix_count": 37,
+                "accuracy_p50_m": 5.0,
+                "unknown_accuracy_count": 0
+              },
+              "meaning": "turn_reverse",
+              "is_event": true
+            }
+          },
+          "at_pin_s": -45.0,
+          "text": "현재 기록 45초 전: 진행 방향이 반대로 바뀌는 이동",
+          "origin": "computed_observation"
+        }
+      ]
+    },
+    {
+      "scene": 4,
+      "time": "2026-09-08T06:13:00Z",
+      "reason": "every_selected_scene",
+      "parts": {
+        "space": {
+          "status": "returned",
+          "text": "음식점과 카페가 밀집한 성내천로를 따라 걸었다. 근린공원 근처를 지나며 산책을 마무리했다."
+        },
+        "action": {
+          "status": "returned",
+          "text": "성내천로 상업 시설 근처를 곧게 걸어가던 보리가 잠시 멈춰 서서 냄새를 맡았다."
+        }
+      },
+      "movement_observations": [
+        {
+          "id": "motion1",
+          "subject": "recording_device",
+          "code": "straight_run",
+          "meaning": "대체로 곧게 이어지는 이동",
+          "source_ids": [
+            "movement-shape:cb784c78cad759bb88816c8ab8e7a30afdc278ad9691d3e424f4898dfc47f09c"
+          ],
+          "source_claim": {
+            "id": "movement-shape:cb784c78cad759bb88816c8ab8e7a30afdc278ad9691d3e424f4898dfc47f09c",
+            "kind": "path",
+            "meaning": "straight_run",
+            "start_s": 480.0,
+            "end_s": 900.0,
+            "block": 0,
+            "proof": {
+              "axis": "route_pattern",
+              "kind": "path",
+              "status": "candidate",
+              "subject": "recording_device",
+              "support": {
+                "chain_index": 0,
+                "pattern_run_index": 0,
+                "from_seq": 96,
+                "to_seq": 180,
+                "started_at": "2026-09-08T06:08:00+00:00",
+                "ended_at": "2026-09-08T06:15:00+00:00",
+                "window_s": 420.0,
+                "time_meaning": "observed_support_window"
+              },
+              "anchor": {
+                "client_seq": 96,
+                "at": "2026-09-08T06:08:00+00:00",
+                "lat": 37.003507354263085,
+                "lng": 130.0,
+                "route_offset_m": 360.0
+              },
+              "metrics": {
+                "max_deviation_m": 8.526512829121202e-14
+              },
+              "quality": {
+                "fix_count": 85,
+                "accuracy_p50_m": 5.0,
+                "unknown_accuracy_count": 0
+              },
+              "meaning": "straight_run",
+              "is_event": false
+            }
+          },
+          "from_pin_s": -300.0,
+          "to_pin_s": 0.0,
+          "duration_s": 300.0,
+          "text": "현재 기록 300~0초 전: 대체로 곧게 이어지는 이동",
+          "origin": "computed_observation"
+        },
+        {
+          "id": "motion2",
+          "subject": "recording_device",
+          "code": "retrace",
+          "meaning": "방금 지나온 구간을 되짚는 이동",
+          "source_ids": [
+            "movement-shape:7c0fbf3f329ee88f612bdd4229540ebbb873e277ad58bb17c8f8d730e1e5d37d"
+          ],
+          "source_claim": {
+            "id": "movement-shape:7c0fbf3f329ee88f612bdd4229540ebbb873e277ad58bb17c8f8d730e1e5d37d",
+            "kind": "path",
+            "meaning": "retrace",
+            "start_s": 520.0,
+            "end_s": 770.0,
+            "block": 0,
+            "proof": {
+              "axis": "route_pattern",
+              "kind": "path",
+              "status": "candidate",
+              "subject": "recording_device",
+              "support": {
+                "chain_index": 0,
+                "pattern_run_index": 0,
+                "from_seq": 104,
+                "to_seq": 154,
+                "started_at": "2026-09-08T06:08:40+00:00",
+                "ended_at": "2026-09-08T06:12:50+00:00",
+                "window_s": 250.0,
+                "time_meaning": "observed_support_window"
+              },
+              "anchor": {
+                "client_seq": 104,
+                "at": "2026-09-08T06:08:40+00:00",
+                "lat": 37.003237557781304,
+                "lng": 130.0,
+                "route_offset_m": 390.0
+              },
+              "metrics": {
+                "matched_reverse_m": 224.9999999995773,
+                "past_from_seq": 84,
+                "past_to_seq": 27,
+                "past_positions_m": [
+                  342.4999999997341,
+                  324.9999999998284,
+                  307.49999999992275,
+                  290.00000000001705,
+                  270.0000000001248,
+                  250.00000000023263,
+                  230.00000000034046,
+                  214.9999999996312,
+                  194.99999999973903,
+                  174.9999999998468,
+                  154.9999999999546,
+                  135.0000000000624
+                ]
+              },
+              "quality": {
+                "fix_count": 51,
+                "accuracy_p50_m": 5.0,
+                "unknown_accuracy_count": 0
+              },
+              "meaning": "retrace",
+              "is_event": false
+            }
+          },
+          "from_pin_s": -260.0,
+          "to_pin_s": -10.0,
+          "duration_s": 250.0,
+          "text": "현재 기록 260~10초 전: 방금 지나온 구간을 되짚는 이동",
+          "origin": "computed_observation"
+        }
+      ]
+    },
+    {
+      "scene": 5,
+      "time": "2026-09-08T06:15:00Z",
+      "reason": "every_selected_scene",
+      "parts": {
+        "space": {
+          "status": "returned",
+          "text": "성내천로를 따라 상업 시설이 밀집한 거리를 지나왔다. 근린공원과 멀어지며 산책을 마무리했다."
+        },
+        "action": {
+          "status": "not_requested",
+          "text": ""
+        }
+      },
+      "movement_observations": [
+        {
+          "id": "motion1",
+          "subject": "recording_device",
+          "code": "straight_run",
+          "meaning": "대체로 곧게 이어지는 이동",
+          "source_ids": [
+            "movement-shape:cb784c78cad759bb88816c8ab8e7a30afdc278ad9691d3e424f4898dfc47f09c"
+          ],
+          "source_claim": {
+            "id": "movement-shape:cb784c78cad759bb88816c8ab8e7a30afdc278ad9691d3e424f4898dfc47f09c",
+            "kind": "path",
+            "meaning": "straight_run",
+            "start_s": 480.0,
+            "end_s": 900.0,
+            "block": 0,
+            "proof": {
+              "axis": "route_pattern",
+              "kind": "path",
+              "status": "candidate",
+              "subject": "recording_device",
+              "support": {
+                "chain_index": 0,
+                "pattern_run_index": 0,
+                "from_seq": 96,
+                "to_seq": 180,
+                "started_at": "2026-09-08T06:08:00+00:00",
+                "ended_at": "2026-09-08T06:15:00+00:00",
+                "window_s": 420.0,
+                "time_meaning": "observed_support_window"
+              },
+              "anchor": {
+                "client_seq": 96,
+                "at": "2026-09-08T06:08:00+00:00",
+                "lat": 37.003507354263085,
+                "lng": 130.0,
+                "route_offset_m": 360.0
+              },
+              "metrics": {
+                "max_deviation_m": 8.526512829121202e-14
+              },
+              "quality": {
+                "fix_count": 85,
+                "accuracy_p50_m": 5.0,
+                "unknown_accuracy_count": 0
+              },
+              "meaning": "straight_run",
+              "is_event": false
+            }
+          },
+          "from_pin_s": -120.0,
+          "to_pin_s": 0.0,
+          "duration_s": 120.0,
+          "text": "현재 기록 120~0초 전: 대체로 곧게 이어지는 이동",
+          "origin": "computed_observation"
+        }
+      ]
+    }
+  ],
+  "title": {
+    "status": "failed",
+    "text": "산책 기록",
+    "request": {
+      "version": "adopted-prose-title-v2",
+      "scenes": [
+        {
+          "scene_id": "stamp:6a0287e193884ccffc4fd973226a64bd68d9c4193d6ec5713c857e354b85b56c",
+          "order": 1,
+          "recorded_at": "2026-09-08T06:00:00+00:00",
+          "space": "성내천로를 따라 상업 시설이 밀집한 거리를 지나 산책을 시작했다. 근처에 근린공원이 자리 잡고 있어 차분한 분위기 속에서 걸음을 옮겼다."
+        },
+        {
+          "scene_id": "stamp:bc16fd93cbb2b3ec53d4243d58e792dfc28880c7d9d5073909181c3195e4e1c3",
+          "order": 2,
+          "recorded_at": "2026-09-08T06:03:00+00:00",
+          "space": "성내천로를 따라 상업 시설이 밀집한 거리를 지나왔다. 어느덧 근린공원인 공원 1에 가까워졌다.",
+          "action": "성내천로 상업 시설 근처를 지나던 보리가 잠시 멈춰 서서 냄새를 맡았다."
+        },
+        {
+          "scene_id": "stamp:4191e7707d2e40f82af36ea591420a1a4c58a84a821a744689ce44d7d798e389",
+          "order": 3,
+          "recorded_at": "2026-09-08T06:08:00+00:00",
+          "space": "음식점과 카페가 밀집한 성내천로를 따라 걸었다. 근린공원인 공원 1에서 조금 멀어진 거리에서 산책을 이어갔다.",
+          "action": "성내천로의 상업 시설 앞을 지나던 보리가 잠시 멈춰 서서 냄새를 맡았다."
+        },
+        {
+          "scene_id": "stamp:bd9787700079949f6a0a2ea820c60d225bd0ab3ed4e5aad7745855af76320b33",
+          "order": 4,
+          "recorded_at": "2026-09-08T06:13:00+00:00",
+          "space": "음식점과 카페가 밀집한 성내천로를 따라 걸었다. 근린공원 근처를 지나며 산책을 마무리했다.",
+          "action": "성내천로 상업 시설 근처를 곧게 걸어가던 보리가 잠시 멈춰 서서 냄새를 맡았다."
+        },
+        {
+          "scene_id": "stamp:ba650fbb13e14c9266f6833b59a3ef0caa3a04765adc7f67c5858c1ef956bbff",
+          "order": 5,
+          "recorded_at": "2026-09-08T06:15:00+00:00",
+          "space": "성내천로를 따라 상업 시설이 밀집한 거리를 지나왔다. 근린공원과 멀어지며 산책을 마무리했다."
+        }
+      ]
+    },
+    "writer_policy": "adopted-prose-title-v2",
+    "content_revision": "62d04739b6e91f30ee6efbb1c7ec95ee3764d700e33597d698005909ffe5edae",
+    "response_schema": {
+      "additionalProperties": false,
+      "properties": {
+        "title": {
+          "maxLength": 30,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "title"
+      ],
+      "title": "TitleAnswer",
+      "type": "object"
+    },
+    "prompt_revision": "ffb5156440dafae2e66b2e8e50cbc0d4cb70370f253249dd7de7598709473104",
+    "review_enabled": false,
+    "request_revision": "aa1f57eb30a519cce0fbb1779f7cca9d9f09221e042795df48b76f90e83bb5eb",
+    "failure_phase": "request",
+    "error_type": "ProviderFailure",
+    "http_status": 503
+  },
+  "execution": {
+    "model": "gemini-3.1-flash-lite",
+    "calls": [
+      {
+        "stage": "space",
+        "started_s": 121804.859,
+        "status": "returned",
+        "completed_s": 121809.687
+      },
+      {
+        "stage": "space",
+        "started_s": 121819.703,
+        "status": "returned",
+        "completed_s": 121823.265
+      },
+      {
+        "stage": "action",
+        "started_s": 121833.281,
+        "status": "returned",
+        "completed_s": 121836.89
+      },
+      {
+        "stage": "space",
+        "started_s": 121846.89,
+        "status": "returned",
+        "completed_s": 121851.25
+      },
+      {
+        "stage": "action",
+        "started_s": 121861.265,
+        "status": "returned",
+        "completed_s": 121862.984
+      },
+      {
+        "stage": "space",
+        "started_s": 121873.0,
+        "status": "returned",
+        "completed_s": 121875.656
+      },
+      {
+        "stage": "action",
+        "started_s": 121885.656,
+        "status": "returned",
+        "completed_s": 121889.046
+      },
+      {
+        "stage": "space",
+        "started_s": 121899.062,
+        "status": "returned",
+        "completed_s": 121901.546
+      },
+      {
+        "stage": "title",
+        "started_s": 121911.546,
+        "status": "failed",
+        "http_status": 503,
+        "completed_s": 121917.328
+      }
+    ],
+    "model_call_attempts": 9,
+    "minimum_interval_s": 10,
+    "automatic_retries": 0,
+    "semantic_review_enabled": false,
+    "stopped_on_rate_limit": false
+  }
+}

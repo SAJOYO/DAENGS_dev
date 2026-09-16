@@ -5,8 +5,8 @@ from runpy import run_path
 
 import pytest
 
+from daengs_backend.services.walk_background.providers.public import collect_public
 from daengs_backend.services.walk_diary.legacy.slots import write_slot_preview, writing_payload
-from daengs_backend.services.walk_public_context import collect_public
 from daengs_walk.diary.board.models import BaseBoardPolicy
 from daengs_walk.diary.board.preview import prepare_slot_preview
 from daengs_walk.diary.contracts.slots import SlotPolicy

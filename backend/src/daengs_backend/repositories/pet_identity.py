@@ -8,7 +8,7 @@ import uuid
 from collections.abc import Sequence
 
 from sqlalchemy import delete as sql_delete
-from sqlalchemy import func, select
+from sqlalchemy import func, select, union
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from daengs_backend.models import Pet, PetIdentity, PetMember
@@ -19,6 +19,7 @@ __all__ = [
     "delete",
     "get_many",
     "guardian_ids",
+    "guardian_ids_many",
     "pet_ids_for",
     "pet_of_user",
     "pets_for",
@@ -94,6 +95,48 @@ async def guardian_ids(session: AsyncSession, identity_id: uuid.UUID) -> set[uui
         .where(Pet.identity_id == identity_id)
     )
     return set(await session.scalars(owners.union(carers)))
+
+
+async def guardian_ids_many(
+    session: AsyncSession,
+    *,
+    pet_ids: Sequence[uuid.UUID],
+    identity_ids: Sequence[uuid.UUID],
+) -> dict[uuid.UUID, set[uuid.UUID]]:
+    """카드 여러 장의 보호자 집합을 **쿼리 한 번**에 받습니다 (대표 ∪ 돌보미, 중복 제거).
+
+    열쇠는 카드가 가리키는 단위입니다 — 연결 안 된 행은 `pet_ids` 의 pet id, 연결된 행은
+    `identity_ids` 의 그룹 id. 그룹 쪽 정의는 `guardian_ids` 와 **같은 식**이고, 행 쪽은
+    그 식을 행 하나로 좁힌 것입니다. 목록(`GET /app/pets`)이 카드마다 `guardian_ids` 를
+    부르면 카드 수만큼 왕복하므로 여기서 묶습니다.
+
+    두 id 는 서로 다른 테이블의 `gen_random_uuid()` 라 한 dict 에 섞어도 안 부딪힙니다.
+    보호자가 하나도 없는 열쇠(동시 삭제로 행이 사라진 경우)는 키가 아예 없습니다 —
+    부르는 쪽이 `.get(key, set())` 로 읽습니다. 둘 다 비면 쿼리도 안 날립니다.
+    """
+    parts = []
+    if pet_ids:
+        wanted = set(pet_ids)
+        parts += [
+            select(Pet.id, Pet.app_user_id).where(Pet.id.in_(wanted)),
+            select(PetMember.pet_id, PetMember.app_user_id).where(
+                PetMember.pet_id.in_(wanted)
+            ),
+        ]
+    if identity_ids:
+        groups = set(identity_ids)
+        parts += [
+            select(Pet.identity_id, Pet.app_user_id).where(Pet.identity_id.in_(groups)),
+            select(Pet.identity_id, PetMember.app_user_id)
+            .join(Pet, Pet.id == PetMember.pet_id)
+            .where(Pet.identity_id.in_(groups)),
+        ]
+    if not parts:
+        return {}
+    out: dict[uuid.UUID, set[uuid.UUID]] = {}
+    for key, uid in (await session.execute(union(*parts))).all():
+        out.setdefault(key, set()).add(uid)
+    return out
 
 
 async def pet_of_user(

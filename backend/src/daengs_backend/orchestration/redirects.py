@@ -72,13 +72,42 @@ DISTANCE_FROM_RECORDED_WALKS_ONLY = (
     "말씀해 주신 경로는 기록에 없어서 재어 드릴 수 없어요."
 )
 
+#: 피부 판정 해설(D-079)의 다음 행동. 모델은 **무엇을** 할지만 고르고 문장은 여기서 나간다 —
+#: "병원에 가 보라" 는 제품 문장이지 생성물이 아니다 (#278). `vet_visit` 은
+#: `SCOPED_REDIRECT_MESSAGES["diagnosis"]` 의 둘째 문장과 **같은 말**이다 — 거절로 가든
+#: 안내로 가든 병원 권유가 같은 문장으로 읽혀야 한다.
+SkinAction = Literal["retake", "vet_visit", "observe"]
+
+SKIN_ACTION_MESSAGES: dict[SkinAction, str] = {
+    "retake": "밝은 곳에서 부위가 잘 보이게 가까이 다시 찍어 주세요.",
+    "vet_visit": "가까운 동물병원에서 진료를 받아 보세요.",
+    "observe": "며칠 지켜보시고 달라 보이면 다시 찍어 확인해 보세요.",
+}
+
+#: 피부 해설 답 끝에 **조건 없이** 붙는다. 가끔만 나오는 고지는 기댈 수 없다
+#: (`VET_CONTACT_HOURS_UNKNOWN` 과 같은 판단). "진단" 이라는 말은 쓰지 않는다.
+SKIN_REFERENCE_NOTICE = "사진으로 본 판정은 참고용이에요. 정확한 확인은 수의사 진료로 해 주세요."
+
+#: 모델 해설이 병변 이름이나 확률을 말했을 때 **그 문장 대신** 나가는 판정 요약 (D-079).
+#: 판정 이름은 `aggregate._SCREENING_VERDICTS` 와 같은 말이다 — 같은 판정이 답변마다 다른
+#: 말로 나오면 사용자가 그것을 다른 판정으로 읽는다.
+SKIN_VERDICT_SUMMARY: dict[str, str] = {
+    "normal": "이번 사진에서는 특이 소견이 보이지 않았어요.",
+    "abnormal": "이번 사진에서 이상 소견이 보였어요.",
+    "retake": "이번 사진으로는 판정하지 못했어요.",
+}
+
 __all__ = [
     "DISTANCE_FROM_RECORDED_WALKS_ONLY",
     "NO_CAPABILITY_MESSAGE",
     "SCOPED_REDIRECT_MESSAGES",
+    "SKIN_ACTION_MESSAGES",
+    "SKIN_REFERENCE_NOTICE",
+    "SKIN_VERDICT_SUMMARY",
     "VET_CONTACT_CALL_FIRST",
     "VET_CONTACT_CURRENT_LOCATION_FRAME",
     "VET_CONTACT_HOURS_UNKNOWN",
     "VET_CONTACT_LOCATION_UNKNOWN",
     "RefusalReason",
+    "SkinAction",
 ]

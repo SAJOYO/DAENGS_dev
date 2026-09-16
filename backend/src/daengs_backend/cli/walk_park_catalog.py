@@ -5,8 +5,8 @@ import asyncio
 import httpx
 
 from daengs_backend.config import settings
-from daengs_backend.services.walk_park_catalog import refresh_catalog
-from daengs_backend.services.walk_public_http import PublicSourceError
+from daengs_backend.services.walk_background.catalogs.park import refresh_catalog
+from daengs_backend.services.walk_background.http import PublicSourceError
 
 
 async def main():

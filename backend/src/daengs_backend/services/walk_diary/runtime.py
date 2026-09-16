@@ -1,8 +1,32 @@
-"""Wire default card providers to the existing diary orchestrator. No legacy writer selection."""
+"""Explicit service entries for relational receipts and historical card contracts."""
 
-from daengs_backend.services.walk_diary.writing.provider import generate_card_prose
+__all__ = ["write_board", "write_cards", "write_relational_board"]
 
-__all__ = ["write_board", "write_cards"]
+
+async def generate_card_prose(stage, payload, schema):
+    """Load the historical provider only when the historical service is called."""
+    from daengs_backend.services.walk_diary.writing.provider import generate_card_prose as generate
+
+    return await generate(stage, payload, schema)
+
+
+async def write_relational_board(
+    source,
+    base,
+    *,
+    scene_ids=None,
+    prepare=None,
+    send=None,
+    execution_policy=None,
+):
+    """Service entry returning the new receipt; old API/DB activation is a separate step."""
+    from daengs_backend.orchestration.runtime import build_relational_diary_orchestrator
+
+    return await build_relational_diary_orchestrator(
+        prepare=prepare,
+        send=send,
+        execution_policy=execution_policy,
+    ).run(source, base, scene_ids=scene_ids)
 
 
 async def write_board(source, base, *, generate=None, collector=None):

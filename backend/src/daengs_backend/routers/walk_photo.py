@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from daengs_backend.core.database import get_session
 from daengs_backend.core.deps import CurrentAppUser
 from daengs_backend.schemas.walk_photo import PhotoManifestResponse, PhotoManifestWrite
-from daengs_backend.services import walk_photo as service
+from daengs_backend.services.walk_photos import api as service
 
 router = APIRouter(prefix="/app/walks", tags=["walk-photo-metadata"])
 

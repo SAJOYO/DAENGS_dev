@@ -8,7 +8,7 @@ from urllib.parse import urlparse
 import pytest
 from redis.asyncio import Redis
 
-from daengs_backend.services.walk_catalog_refresh import BUDGET, RELEASE
+from daengs_backend.services.walk_background.catalogs.refresh import BUDGET, RELEASE
 
 
 async def test_request_budget_is_atomic_and_old_lock_owner_cannot_unlock_new_owner():

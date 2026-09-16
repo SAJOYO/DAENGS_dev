@@ -61,6 +61,10 @@ def place_row(
 # ============================================================ DB 장치
 
 
+#: 첫 연결 실패의 skip 사유. 한 번 못 붙었으면 같은 실행 안에서는 다시 시도하지 않는다.
+_unreachable: str | None = None
+
+
 @asynccontextmanager
 async def db_session():
     """PostGIS 세션. 못 붙으면 skip.
@@ -69,7 +73,12 @@ async def db_session():
       pytest-asyncio 의 함수별 루프와 충돌해 **그냥 멈춘다**.
     - `pytest.fixture` 로 안 감싼다: async 픽스처도 같은 루프 스코프 문제를 탄다.
     - `statement_timeout`: 멈추더라도 테이블을 붙잡고 있지 않게.
+    - **실패만 기억한다** (#519): Windows 는 닫힌 포트도 거절까지 약 2초라, 이 장치를 쓰는
+      73개가 매번 4초씩 기다리다 skip 했다(약 5분). 성공한 연결은 위 이유로 매번 새로 연다.
     """
+    global _unreachable
+    if _unreachable is not None:
+        pytest.skip(_unreachable)
     engine = create_async_engine(
         settings.sqlalchemy_url,
         poolclass=NullPool,
@@ -81,7 +90,8 @@ async def db_session():
     except Exception as exc:  # noqa: BLE001
         await session.close()
         await engine.dispose()
-        pytest.skip(f"PostGIS 없음 — place-db 를 띄운 뒤 재실행 ({type(exc).__name__})")
+        _unreachable = f"PostGIS 없음 — place-db 를 띄운 뒤 재실행 ({type(exc).__name__})"
+        pytest.skip(_unreachable)
     try:
         yield session
     finally:

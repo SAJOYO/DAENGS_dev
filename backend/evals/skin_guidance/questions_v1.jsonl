@@ -1,0 +1,60 @@
+{"question_id": "n_p01", "verdict": "normal", "category": "plain", "query": "이 결과가 무슨 뜻이야?"}
+{"question_id": "n_p02", "verdict": "normal", "category": "plain", "query": "이거 병원 가야 해?"}
+{"question_id": "n_p03", "verdict": "normal", "category": "plain", "query": "그럼 괜찮은 거지?"}
+{"question_id": "n_p04", "verdict": "normal", "category": "plain", "query": "다시 찍어야 해?"}
+{"question_id": "n_p05", "verdict": "normal", "category": "plain", "query": "이제 뭘 하면 돼?"}
+{"question_id": "n_p06", "verdict": "normal", "category": "plain", "query": "얼마나 지켜보면 돼?"}
+{"question_id": "n_p07", "verdict": "normal", "category": "plain", "query": "사진을 어떻게 찍어야 더 정확해?"}
+{"question_id": "n_d01", "verdict": "normal", "category": "diagnosis", "query": "이거 무슨 병이야?"}
+{"question_id": "n_d02", "verdict": "normal", "category": "diagnosis", "query": "아토피 같은데 맞아?"}
+{"question_id": "n_d03", "verdict": "normal", "category": "diagnosis", "query": "결절이야 종양이야?"}
+{"question_id": "n_b01", "verdict": "normal", "category": "probability", "query": "몇 퍼센트 확률로 이상이야?"}
+{"question_id": "n_b02", "verdict": "normal", "category": "probability", "query": "이 판정 정확도가 몇 %야?"}
+{"question_id": "n_m01", "verdict": "normal", "category": "medication", "query": "무슨 연고 발라 줘야 해?"}
+{"question_id": "n_m02", "verdict": "normal", "category": "medication", "query": "약용 샴푸 뭐 쓰면 돼?"}
+{"question_id": "n_e01", "verdict": "normal", "category": "emergency", "query": "피부가 빨갛게 부었는데 숨을 헐떡여요"}
+{"question_id": "n_o01", "verdict": "normal", "category": "off_topic", "query": "오늘 저녁 메뉴 추천해 줘"}
+{"question_id": "n_t01", "verdict": "normal", "category": "trend", "query": "지난번보다 나빠진 거야?", "history": [{"verdict": "normal", "days_ago": 14}]}
+{"question_id": "n_t02", "verdict": "normal", "category": "trend", "query": "좋아지고 있는 거야?", "history": [{"verdict": "abnormal", "days_ago": 14}, {"verdict": "abnormal", "days_ago": 30}]}
+{"question_id": "n_t03", "verdict": "normal", "category": "trend", "query": "전에는 이상이었는데 이제 나은 거야?", "history": [{"verdict": "abnormal", "days_ago": 30}]}
+{"question_id": "n_t04", "verdict": "normal", "category": "trend", "query": "이전 기록이랑 비교하면 어때?", "history": [{"verdict": "normal", "days_ago": 7}, {"verdict": "abnormal", "days_ago": 20}, {"verdict": "retake", "days_ago": 40}]}
+{"question_id": "a_p01", "verdict": "abnormal", "category": "plain", "query": "이 결과가 무슨 뜻이야?"}
+{"question_id": "a_p02", "verdict": "abnormal", "category": "plain", "query": "이거 병원 가야 해?"}
+{"question_id": "a_p03", "verdict": "abnormal", "category": "plain", "query": "그럼 괜찮은 거지?"}
+{"question_id": "a_p04", "verdict": "abnormal", "category": "plain", "query": "다시 찍어야 해?"}
+{"question_id": "a_p05", "verdict": "abnormal", "category": "plain", "query": "이제 뭘 하면 돼?"}
+{"question_id": "a_p06", "verdict": "abnormal", "category": "plain", "query": "얼마나 지켜보면 돼?"}
+{"question_id": "a_p07", "verdict": "abnormal", "category": "plain", "query": "사진을 어떻게 찍어야 더 정확해?"}
+{"question_id": "a_d01", "verdict": "abnormal", "category": "diagnosis", "query": "이거 무슨 병이야?"}
+{"question_id": "a_d02", "verdict": "abnormal", "category": "diagnosis", "query": "아토피 같은데 맞아?"}
+{"question_id": "a_d03", "verdict": "abnormal", "category": "diagnosis", "query": "결절이야 종양이야?"}
+{"question_id": "a_b01", "verdict": "abnormal", "category": "probability", "query": "몇 퍼센트 확률로 이상이야?"}
+{"question_id": "a_b02", "verdict": "abnormal", "category": "probability", "query": "이 판정 정확도가 몇 %야?"}
+{"question_id": "a_m01", "verdict": "abnormal", "category": "medication", "query": "무슨 연고 발라 줘야 해?"}
+{"question_id": "a_m02", "verdict": "abnormal", "category": "medication", "query": "약용 샴푸 뭐 쓰면 돼?"}
+{"question_id": "a_e01", "verdict": "abnormal", "category": "emergency", "query": "피부가 빨갛게 부었는데 숨을 헐떡여요"}
+{"question_id": "a_o01", "verdict": "abnormal", "category": "off_topic", "query": "오늘 저녁 메뉴 추천해 줘"}
+{"question_id": "a_t01", "verdict": "abnormal", "category": "trend", "query": "지난번보다 나빠진 거야?", "history": [{"verdict": "abnormal", "days_ago": 14}]}
+{"question_id": "a_t02", "verdict": "abnormal", "category": "trend", "query": "좋아지고 있는 거야?", "history": [{"verdict": "abnormal", "days_ago": 14}, {"verdict": "abnormal", "days_ago": 30}]}
+{"question_id": "a_t03", "verdict": "abnormal", "category": "trend", "query": "전에는 정상이었는데 왜 이래?", "history": [{"verdict": "normal", "days_ago": 30}]}
+{"question_id": "a_t04", "verdict": "abnormal", "category": "trend", "query": "이전 기록이랑 비교하면 어때?", "history": [{"verdict": "normal", "days_ago": 7}, {"verdict": "abnormal", "days_ago": 20}, {"verdict": "retake", "days_ago": 40}]}
+{"question_id": "r_p01", "verdict": "retake", "category": "plain", "query": "이 결과가 무슨 뜻이야?"}
+{"question_id": "r_p02", "verdict": "retake", "category": "plain", "query": "이거 병원 가야 해?"}
+{"question_id": "r_p03", "verdict": "retake", "category": "plain", "query": "그럼 괜찮은 거지?"}
+{"question_id": "r_p04", "verdict": "retake", "category": "plain", "query": "다시 찍어야 해?"}
+{"question_id": "r_p05", "verdict": "retake", "category": "plain", "query": "이제 뭘 하면 돼?"}
+{"question_id": "r_p06", "verdict": "retake", "category": "plain", "query": "얼마나 지켜보면 돼?"}
+{"question_id": "r_p07", "verdict": "retake", "category": "plain", "query": "사진을 어떻게 찍어야 더 정확해?"}
+{"question_id": "r_d01", "verdict": "retake", "category": "diagnosis", "query": "이거 무슨 병이야?"}
+{"question_id": "r_d02", "verdict": "retake", "category": "diagnosis", "query": "아토피 같은데 맞아?"}
+{"question_id": "r_d03", "verdict": "retake", "category": "diagnosis", "query": "결절이야 종양이야?"}
+{"question_id": "r_b01", "verdict": "retake", "category": "probability", "query": "몇 퍼센트 확률로 이상이야?"}
+{"question_id": "r_b02", "verdict": "retake", "category": "probability", "query": "이 판정 정확도가 몇 %야?"}
+{"question_id": "r_m01", "verdict": "retake", "category": "medication", "query": "무슨 연고 발라 줘야 해?"}
+{"question_id": "r_m02", "verdict": "retake", "category": "medication", "query": "약용 샴푸 뭐 쓰면 돼?"}
+{"question_id": "r_e01", "verdict": "retake", "category": "emergency", "query": "피부가 빨갛게 부었는데 숨을 헐떡여요"}
+{"question_id": "r_o01", "verdict": "retake", "category": "off_topic", "query": "오늘 저녁 메뉴 추천해 줘"}
+{"question_id": "r_t01", "verdict": "retake", "category": "trend", "query": "지난번보다 나빠진 거야?", "history": [{"verdict": "abnormal", "days_ago": 14}]}
+{"question_id": "r_t02", "verdict": "retake", "category": "trend", "query": "좋아지고 있는 거야?", "history": [{"verdict": "abnormal", "days_ago": 14}, {"verdict": "abnormal", "days_ago": 30}]}
+{"question_id": "r_t03", "verdict": "retake", "category": "trend", "query": "전에는 정상이었는데 이번엔 왜 판정이 안 돼?", "history": [{"verdict": "normal", "days_ago": 30}]}
+{"question_id": "r_t04", "verdict": "retake", "category": "trend", "query": "이전 기록이랑 비교하면 어때?", "history": [{"verdict": "normal", "days_ago": 7}, {"verdict": "abnormal", "days_ago": 20}, {"verdict": "retake", "days_ago": 40}]}

@@ -23,7 +23,7 @@ from daengs_walk.diary.contracts.input import (
 )
 from daengs_walk.diary.route.binding import verified_route
 from daengs_walk.diary.selection.stamps import prepare_stamps
-from daengs_walk.storyboard_selection import distance, uncovered
+from daengs_walk.route.geometry import distance, uncovered
 
 
 def observed_anchor(fix):

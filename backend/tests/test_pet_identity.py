@@ -31,6 +31,7 @@ from fastapi.testclient import TestClient
 
 from daengs_backend.core.deps import AppPrincipal, CurrentAppUser
 from daengs_backend.repositories import pet as pet_repo
+from daengs_backend.repositories import pet_identity as pet_identity_repo
 from daengs_backend.routers import pet as pet_router
 from daengs_backend.routers import pet_member as pet_member_router
 from daengs_backend.schemas.pet import PetUpsert
@@ -189,6 +190,116 @@ async def test_연결_안_된_아이는_두_값이_언제나_같다(store: Store
     store.pets.append(FakePet(app_user_id=A, name="혼자", breed="믹스"))
     card = client_as(A).get("/app/pets").json()["pets"][0]
     assert card["is_owner"] == card["is_group_owner"] is True
+
+
+# ── has_other_carers ───────────────────────────────────────────────────────
+
+
+def _others(app_user_id: uuid.UUID) -> dict[str, bool]:
+    """카드 이름 → `has_other_carers`."""
+    pets = client_as(app_user_id).get("/app/pets").json()["pets"]
+    return {p["name"]: p["has_other_carers"] for p in pets}
+
+
+async def test_혼자_돌보는_아이는_다른_보호자가_없다(store: Store):
+    store.pets.append(FakePet(app_user_id=A, name="혼자", breed="믹스"))
+    assert _others(A) == {"혼자": False}
+
+
+async def test_연결_없이_참여하면_대표와_돌보미_둘_다_참이다(store: Store):
+    a_pet = FakePet(app_user_id=A, name="맥스", breed="믹스")
+    store.pets.append(a_pet)
+    store.pet_members.append((a_pet.id, B))
+
+    assert _others(A) == {"맥스": True}
+    assert _others(B) == {"맥스": True}
+
+
+async def test_행이_달라도_연결되면_둘_다_참이다(store: Store):
+    """돌보미 행 없이 **연결만** 있어도 다른 행의 대표가 다른 보호자로 잡힙니다 —
+    행 기준으로 세면 A 의 행에는 A 뿐이라 false 가 나옵니다."""
+    a_pet = FakePet(app_user_id=A, name="롱이씨", breed="dog_pug")
+    b_pet = FakePet(app_user_id=B, name="롱롱씨", breed="dog_beagle")
+    identity = FakeIdentity(owner_pet_id=a_pet.id)
+    a_pet.identity_id = b_pet.identity_id = identity.id
+    store.pets += [a_pet, b_pet]
+    store.pet_identities.append(identity)
+
+    assert _others(A) == {"롱이씨": True}
+    assert _others(B) == {"롱롱씨": True}
+
+
+async def test_연결_fixture_에서도_둘_다_참이다(store: Store, linked):
+    """수락이 만드는 실제 모양(연결 + B 가 앵커 행의 돌보미). B 는 두 경로로 잡히지만 한 명입니다."""
+    assert _others(A) == {"롱이씨": True}
+    assert _others(B) == {"롱롱씨": True}
+
+
+async def test_여러_경로로_잡힌_사람은_한_명이고_나뿐이면_거짓이다(store: Store):
+    """중복 제거와 '나 빼기' 의 회귀. A 가 그룹의 한 행 대표이면서 다른 행의 돌보미여도
+    보호자 집합은 {A} 하나라, A 에게는 다른 보호자가 없습니다."""
+    a_pet = FakePet(app_user_id=A, name="앵커", breed="믹스")
+    other = FakePet(app_user_id=A, name="같은아이", breed="믹스")
+    identity = FakeIdentity(owner_pet_id=a_pet.id)
+    a_pet.identity_id = identity.id
+    store.pets.append(a_pet)
+    store.pet_identities.append(identity)
+    store.pet_members.append((a_pet.id, A))
+    # 연결 안 된 행에도 같은 사람이 대표·돌보미로 두 번 잡히는 경우.
+    store.pets.append(other)
+    store.pet_members.append((other.id, A))
+
+    guardians = await pet_identity_repo.guardian_ids_many(
+        None, pet_ids=[other.id], identity_ids=[identity.id]
+    )
+    assert guardians == {other.id: {A}, identity.id: {A}}
+    assert _others(A) == {"앵커": False, "같은아이": False}
+
+
+async def test_다른_그룹끼리는_안_섞인다(store: Store, linked):
+    """A 의 연결된 아이에 B 가 있어도 A 의 다른 아이는 혼자입니다. 무관한 그룹의 보호자도 안 섞입니다."""
+    store.add_app_user(FakeAppUser(kakao_id=2003, id=STRANGER))
+    solo = FakePet(app_user_id=A, name="혼자", breed="믹스")
+    s_pet = FakePet(app_user_id=STRANGER, name="남의아이", breed="믹스")
+    store.pets += [solo, s_pet]
+    store.pet_members.append((s_pet.id, B))
+
+    assert _others(A) == {"롱이씨": True, "혼자": False}
+    assert _others(B) == {"롱롱씨": True, "남의아이": True}
+    assert _others(STRANGER) == {"남의아이": True}
+
+
+async def test_목록은_카드_수와_무관하게_한_번에_묻는다(
+    store: Store, linked, monkeypatch: pytest.MonkeyPatch
+):
+    """카드마다 보호자를 따로 읽는 N+1 의 회귀."""
+    store.pets += [FakePet(app_user_id=A, name=f"혼자{i}", breed="믹스") for i in range(3)]
+    calls = []
+    real = pet_identity_repo.guardian_ids_many
+
+    async def spy(session, **kwargs):
+        calls.append(kwargs)
+        return await real(session, **kwargs)
+
+    monkeypatch.setattr(pet_identity_repo, "guardian_ids_many", spy)
+    assert len(client_as(A).get("/app/pets").json()["pets"]) == 4
+    assert len(calls) == 1
+
+
+async def test_연결_그룹의_값은_그룹_보호자_집합과_같다(store: Store, linked):
+    """`guardian_ids`(보호자 상한·명단과 같은 그룹 정의)에서 나를 뺀 것과 같은 값입니다."""
+    a_pet, _b = linked
+    group = await pet_identity_repo.guardian_ids(None, a_pet.identity_id)
+    assert _others(A)["롱이씨"] is bool(group - {A})
+    assert _others(B)["롱롱씨"] is bool(group - {B})
+
+
+async def test_한_장짜리_응답도_같은_값을_낸다(store: Store, linked):
+    """수정 직후 앱이 받은 카드만 뱃지가 사라지면 안 됩니다."""
+    _a, b_pet = linked
+    res = client_as(B).patch(f"/app/pets/{b_pet.id}/display", json={"name": "롱롱이"})
+    assert res.status_code == 200
+    assert res.json()["has_other_carers"] is True
 
 
 # ── 마릿수 상한 ────────────────────────────────────────────────────────────
@@ -554,3 +665,110 @@ async def test_나간_뒤에도_대표로_못_세운다(store: Store):
     assert client_as(B).put(
         "/app/pets/primary", json={"pet_id": str(a_pet.id)}
     ).status_code == 404
+
+
+# ── 보호자 목록 — 논리 그룹 전체 ──────────────────────────────────────────
+#
+# `GET /app/pets/{pet_id}/members` 가 요청한 **행 하나만** 보면, 기존 강아지와 연결한 공동
+# 보호자는 자기 카드 id(= 자기가 대표인 행)로 부르므로 **자기 자신만 대표로** 뜨고 그룹
+# 주보호자와 다른 보호자가 사라졌습니다. 목록은 그룹 전체를 한 사람당 한 번씩, 대표는
+# 그룹 주보호자로 냅니다.
+
+C = uuid.uuid4()  # 연결 없이 새로 참여한 공동 보호자
+D = uuid.uuid4()  # 자기 강아지와 연결한 두 번째 공동 보호자
+
+
+def _members(user: uuid.UUID, pet_id: uuid.UUID) -> list[tuple[str, bool]]:
+    res = client_as(user).get(f"/app/pets/{pet_id}/members")
+    assert res.status_code == 200, res.text
+    return [(m["app_user_id"], m["is_owner"]) for m in res.json()["members"]]
+
+
+async def test_연결_없이_참여한_공동_보호자는_주보호자와_자신을_본다(store: Store):
+    a_pet = FakePet(app_user_id=A, name="롱이씨", breed="dog_pug")
+    store.pets.append(a_pet)
+    store.pet_members.append((a_pet.id, C))
+
+    expected = [(str(A), True), (str(C), False)]
+    assert _members(C, a_pet.id) == expected
+    assert _members(A, a_pet.id) == expected
+
+
+async def test_연결한_공동_보호자는_자기_카드로도_그룹_주보호자를_대표로_본다(store: Store, linked):
+    """B 는 자기 카드 id(`롱롱씨`, B 가 행 대표)로 부릅니다. 행 대표를 대표로 그리면 A 가 사라집니다."""
+    a_pet, b_pet = linked
+
+    assert _members(B, b_pet.id) == [(str(A), True), (str(B), False)]
+    assert _members(A, a_pet.id) == [(str(A), True), (str(B), False)]
+
+
+async def test_주보호자와_여러_공동_보호자가_각자_카드로_같은_명단을_받는다(store: Store, linked):
+    a_pet, b_pet = linked
+    d_pet = FakePet(app_user_id=D, name="롱이", breed="dog_pug")
+    d_pet.identity_id = a_pet.identity_id
+    store.pets.append(d_pet)
+    store.pet_members += [(a_pet.id, C), (a_pet.id, D)]
+
+    expected = [(str(A), True), (str(B), False), (str(C), False), (str(D), False)]
+    assert _members(A, a_pet.id) == expected
+    assert _members(B, b_pet.id) == expected
+    assert _members(C, a_pet.id) == expected
+    assert _members(D, d_pet.id) == expected
+
+
+async def test_여러_행에_걸친_같은_사람은_한_번만_나온다(store: Store, linked):
+    """B 는 자기 행의 대표이면서 A 행의 돌보미이고, C 는 두 행 모두의 돌보미입니다."""
+    a_pet, b_pet = linked
+    store.pet_members += [(b_pet.id, C), (a_pet.id, C)]
+
+    got = _members(A, a_pet.id)
+    assert got == [(str(A), True), (str(B), False), (str(C), False)]
+    assert _members(B, b_pet.id) == got
+
+
+async def test_무관한_사용자와_pet_id_로는_그룹_명단을_못_본다(store: Store, linked):
+    a_pet, b_pet = linked
+    other = FakePet(app_user_id=STRANGER, name="남의개", breed="믹스")
+    store.pets.append(other)
+
+    for pet_id in (a_pet.id, b_pet.id):
+        assert client_as(STRANGER).get(f"/app/pets/{pet_id}/members").status_code == 404
+    # 그룹 구성원이라도 **무관한 강아지 id** 로 넓혀 보지 못한다.
+    assert client_as(B).get(f"/app/pets/{other.id}/members").status_code == 404
+    assert client_as(A).get(f"/app/pets/{uuid.uuid4()}/members").status_code == 404
+
+
+async def test_내보내진_공동_보호자는_이전_그룹_명단을_못_본다(store: Store, linked):
+    a_pet, b_pet = linked
+    assert client_as(A).delete(f"/app/pets/{a_pet.id}/members/{B}").status_code == 204
+
+    assert client_as(B).get(f"/app/pets/{a_pet.id}/members").status_code == 404
+    # 자기 행은 연결이 풀린 혼자 강아지다 — A 가 명단에 새지 않는다.
+    assert _members(B, b_pet.id) == [(str(B), True)]
+    assert _members(A, a_pet.id) == [(str(A), True)]
+
+
+async def test_탈퇴한_공동_보호자는_이전_그룹_명단에서_빠지고_접근도_못_한다(store: Store, linked):
+    """탈퇴는 자기 행을 지우고(`delete_all_for_owner`), 돌보미 행은 DB 트리거가 지웁니다 —
+    가짜 저장소에는 그 트리거가 없어 효과만 손으로 재현합니다 (docs/co-care.md)."""
+    a_pet, b_pet = linked
+    b_pet.photo_storage_key = None  # 사진 파기 경로는 이 테스트의 대상이 아닙니다
+    await pet_service.delete_all_for_owner(None, B)
+    store.pet_members = [row for row in store.pet_members if row[1] != B]
+
+    assert client_as(B).get(f"/app/pets/{a_pet.id}/members").status_code == 404
+    assert _members(A, a_pet.id) == [(str(A), True)]
+
+
+async def test_명단을_볼_수_있어도_내보내기와_승계는_여전히_그룹_주보호자만(store: Store, linked):
+    """조회 권한을 그룹으로 넓혀도 관리 권한은 안 넓어진다."""
+    a_pet, b_pet = linked
+    store.pet_members.append((a_pet.id, C))
+    assert _members(B, b_pet.id)[0] == (str(A), True)
+
+    assert client_as(B).delete(f"/app/pets/{b_pet.id}/members/{C}").status_code != 204
+    assert client_as(B).delete(f"/app/pets/{a_pet.id}/members/{C}").status_code != 204
+    assert (a_pet.id, C) in store.pet_members
+    res = client_as(B).post(f"/app/pets/{b_pet.id}/owner", json={"app_user_id": str(C)})
+    assert res.status_code not in (200, 204)
+    assert a_pet.app_user_id == A and b_pet.app_user_id == B

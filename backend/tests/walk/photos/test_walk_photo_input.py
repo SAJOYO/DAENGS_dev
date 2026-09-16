@@ -15,9 +15,9 @@ from daengs_backend.core.database import get_session
 from daengs_backend.core.deps import AppPrincipal, CurrentAppUser
 from daengs_backend.routers import walk_photo as router
 from daengs_backend.schemas.walk_photo import PhotoManifestWrite
-from daengs_backend.services import walk_photo as service
 from daengs_backend.services.walk_diary.preparation import input as adapter
-from daengs_backend.services.walk_entry_v2 import legacy_pin
+from daengs_backend.services.walk_photos import api as service
+from daengs_backend.services.walk_records.v2 import legacy_pin
 from tests.walk.support.photo_input import (
     AT,
     OWNER,

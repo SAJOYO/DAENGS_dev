@@ -2,133 +2,29 @@
 
 from datetime import datetime
 
-from daengs_walk.diary.contracts.input import digest
-from daengs_walk.diary.route.patterns import PATTERN_CASES
-
-MEANINGS = {
-    **{key: next(iter(value.values())) for key, value in PATTERN_CASES.items()},
-    "relative_slow": "이번 산책의 기준 속도보다 상대적으로 느린 이동",
-    "relative_fast": "이번 산책의 기준 속도보다 상대적으로 빠른 이동",
-}
-
-
-def movement_uses(request):
-    uses = []
-    for item in request.get("movement", []):
-        facts = item["facts"]
-        if facts.get("format") != "diary-movement-material-v1":
-            raise ValueError("unsupported activity movement")
-        claims = {c["id"]: c for c in facts["claims"]}
-        for phase in facts["phases"]:
-            for ref in phase["claims"]:
-                claim = claims[ref]
-                left, right = phase["start_s"], phase["end_s"]
-                if not claim["start_s"] <= left < right <= claim["end_s"]:
-                    raise ValueError("phase exceeds original claim")
-                if claim["meaning"] not in MEANINGS:
-                    raise ValueError("unknown movement meaning")
-                uses.append(
-                    {
-                        "id": "movement-use:" + digest([item["id"], ref, left, right]),
-                        "slot_id": item["id"],
-                        "source_id": ref,
-                        "kind": claim["kind"],
-                        "meaning": claim["meaning"],
-                        "from_s": left - facts["scene_at_s"],
-                        "to_s": right - facts["scene_at_s"],
-                        "support_from_s": claim["start_s"] - facts["scene_at_s"],
-                        "support_to_s": claim["end_s"] - facts["scene_at_s"],
-                        **(
-                            {"at_s": claim["event_s"] - facts["scene_at_s"]}
-                            if "event_s" in claim
-                            else {}
-                        ),
-                    }
-                )
-    if len({u["id"] for u in uses}) != len(uses):
-        raise ValueError("duplicate activity claim")
-    if {u["slot_id"] for u in uses} != {m["id"] for m in request.get("movement", [])}:
-        raise ValueError("selected movement has no writing claims")
-    return uses
+from daengs_walk.diary.route.pin_context import MEANINGS, movement_uses
 
 
 def activity_projection(request):
-    uses = movement_uses(request)
-    phases, refs = {}, {}
-    for index, use in enumerate(uses, 1):
-        key = f"m{index}"
-        refs[key] = use["id"]
-        span = (use["from_s"], use["to_s"])
-        phase = phases.setdefault(
-            span, {"from_s": span[0], "to_s": span[1], "path": [], "pace": []}
-        )
-        phase[use["kind"] if use["kind"] == "path" else "pace"].append(
-            {
-                "id": key,
-                "meaning": MEANINGS[use["meaning"]],
-                **({"at_s": use["at_s"]} if "at_s" in use else {}),
-            }
-        )
-    payload = {"movement": {"phases": list(phases.values())}}
-    action = request.get("action")
-    if action:
-        refs["a1"] = action["id"]
-        payload["recorded_action"] = {
-            "id": "a1",
-            "actor": action["actor"].get("name"),
-            "action": action["material"]["무엇을"],
-            "at_s": 0,
-        }
-    return payload, refs
+    from daengs_walk.diary.board.action_context import project_action
+
+    return project_action(request)
 
 
 def require_activity_transfer(request, payload, references):
-    """Invocation guard: admission and actual request must cover the same claims."""
+    """Invocation guard: the actual request must match the pin-scoped projection."""
     expected, refs = activity_projection(request)
     if payload != expected or references != refs:
         raise ValueError("selected movement lost at model boundary")
 
 
 def activity_fallback(request):
-    uses = movement_uses(request)
-    # Fallback describes one nearest phase, without merging pace across its boundaries.
-    if uses:
-        spans = {(u["from_s"], u["to_s"]) for u in uses}
-        span = min(spans, key=lambda s: (max(s[0], -s[1], 0), s))
-        chosen = [u for u in uses if (u["from_s"], u["to_s"]) == span]
-        order = {
-            "retrace": 0,
-            "turn_reverse": 1,
-            "turn_left": 2,
-            "turn_right": 2,
-            "local_stay": 3,
-            "straight_run": 4,
-        }
-        paths = sorted(
-            (u for u in chosen if u["kind"] == "path"), key=lambda u: order[u["meaning"]]
-        )
-        paces = [u for u in chosen if u["kind"] == "pace"]
-        selected = paths[:1] + paces[:1]
-        when = (
-            "이 기록에 앞선 구간"
-            if span[1] <= 0
-            else ("이 기록 이후 구간" if span[0] >= 0 else "이 기록 무렵의 구간")
-        )
-        text = (
-            when + "에서는 " + ", ".join(MEANINGS[u["meaning"]] for u in selected) + "이 관측됐다."
-        )
-    else:
-        selected, text = [], ""
-    action = request.get("action")
-    if action:
-        name = action["actor"].get("name")
-        text += (
-            ("\n" if text else "")
-            + (f"{name}의 " if name else "")
-            + action["material"]["무엇을"]
-            + " 행동을 기록했다."
-        )
-    return text, tuple(u["id"] for u in selected)
+    from daengs_walk.diary.board.action_context import require_action
+
+    action = require_action(request)
+    name = action["actor"].get("name")
+    text = (f"{name}의 " if name else "") + action["material"]["무엇을"] + " 행동을 기록했다."
+    return text, ()
 
 
 def covers_observation(request, used_ids, observation):
@@ -151,3 +47,6 @@ def covers_observation(request, used_ids, observation):
             break
         cursor = right
     return cursor >= end
+
+
+__all__ = ["MEANINGS", "movement_uses"]

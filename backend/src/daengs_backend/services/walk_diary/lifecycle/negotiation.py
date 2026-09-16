@@ -2,7 +2,7 @@
 
 from daengs_backend.repositories import walk as walks
 from daengs_backend.repositories import walk_storyboard as repo
-from daengs_backend.services.walk_storyboard_state import StoryboardConflict, StoryboardNotFound
+from daengs_backend.services.walk_generation.state import StoryboardConflict, StoryboardNotFound
 from daengs_walk.diary.board.output import BOARD_FORMAT
 
 
@@ -21,7 +21,9 @@ def stored_format(row):
 
 
 def guard_old_writer(row):
-    if stored_format(row) == BOARD_FORMAT:
+    from daengs_backend.services.walk_diary.lifecycle.relational import is_relational
+
+    if stored_format(row) == BOARD_FORMAT or is_relational(row):
         raise StoryboardConflict("새 산책 장면을 보려면 앱을 업데이트해 주세요.")
 
 

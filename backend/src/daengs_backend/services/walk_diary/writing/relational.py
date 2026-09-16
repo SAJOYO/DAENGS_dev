@@ -37,6 +37,12 @@ JSON focus(드러낼 의미를 짧게), relation_ids(표현한 관계), evidence
 
 
 def writing_prompt(stage, payload):
+    from daengs_walk.diary.relational.scene_title_writer_view import SCENE_TITLE_WRITER_POLICY
+
+    if stage == "title" and payload.get("version") == SCENE_TITLE_WRITER_POLICY:
+        from daengs_backend.services.walk_diary.writing.scene_titles import SCENE_TITLE_PROMPT
+
+        return SCENE_TITLE_PROMPT
     if payload.get("version") in {"space-writing-brief-v1", "action-writing-brief-v1"}:
         from daengs_backend.services.walk_diary.writing.brief_prompts import BRIEF_PROMPTS
 
@@ -129,7 +135,7 @@ async def generate_relation_part(stage, payload, schema):
 
 
 def validate_prepared(prepared):
-    from daengs_backend.services.walk_diary.preparation.scene_snapshot import (
+    from daengs_backend.services.walk_diary.snapshot_validation import (
         validate_scene_snapshot_bindings,
     )
 

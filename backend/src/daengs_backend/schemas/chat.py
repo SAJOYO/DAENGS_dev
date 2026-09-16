@@ -29,6 +29,8 @@ AgentCategory = Literal[
     "care_log",
     # 피부 판정 해설 (D-079). 위와 같은 이유 — 라우터가 못 골라도 결과가 OK 면 저장된다.
     "skin",
+    # 보행 변화 관찰 해설 (D-080). 위와 같다.
+    "gait",
 ]
 
 

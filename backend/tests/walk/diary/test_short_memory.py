@@ -27,7 +27,9 @@ async def test_memory_preserves_failures_recovers_and_does_not_copy_prose():
             assert 'invented prose' not in json.dumps(payload)
             refs=payload['required_relation_ids'] or [payload['current_space'][0]['id']]
         return json.dumps({'text':'invented prose','evidence_ids':refs})
-    result=await write_with_short_memory({'snapshot':snapshot,'revision':digest(snapshot)},send=send)
+    result=await write_with_short_memory(
+        {'snapshot':snapshot,'revision':digest(snapshot)},send=send,review=True
+    )
     assert result['prepared']['snapshot']['plans'][1]['memory_recovery']
     space_calls=[payload for stage,payload in seen if stage=='space']
     assert space_calls[1]['short_memory'][0]['publication_status']=='failed'

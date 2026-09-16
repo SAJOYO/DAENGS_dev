@@ -304,7 +304,7 @@ async def test_production_dispatch_and_saved_v2_keep_their_own_vocabulary(distan
 
     result = await write_brief_task(task, send=send)
     assert result["status"] == "returned"
-    assert result["policy"] == "single-writing-brief-v6"
+    assert result["policy"] == "single-writing-brief-v7"
     assert validate_brief_result(task, result)
     request = seen[0]
     assert request["relation_slots"]["proximity"][0]["relationship"] == word
@@ -335,3 +335,38 @@ async def test_production_dispatch_and_saved_v2_keep_their_own_vocabulary(distan
     old["request"] = request
     with pytest.raises(ValueError, match="canonical"):
         validate_brief_result(task, old)
+
+
+def test_action_material_policy_filters_payload_schema_and_citations_but_keeps_history():
+    from daengs_walk.diary.relational.brief_response import (
+        brief_response_schema,
+        resolve_brief_answer,
+    )
+
+    walk, scenes, positions = case()
+    ctx = context(None, snapshot(scenes[0], walk), positions)
+    action = build_action_brief(scenes[0], walk, [("dog", "보리")], [], ctx)
+    before = action.model_dump_json()
+    road_ids = {
+        c.evidence.id
+        for c in action.context_options
+        if c.kind == "space" and c.evidence.meaning.kind == "road"
+    }
+    assert road_ids
+    current = brief_writer_view(action)
+    old = publication_writer_view(action, "single-writing-brief-v6")
+    assert "매헌로" not in json.dumps(current, ensure_ascii=False)
+    assert "매헌로" in json.dumps(old, ensure_ascii=False)
+    assert "walk" not in current and "position" not in current
+    assert current["required_event"]["anchor"]["event_at"]
+    assert any(c["evidence"]["meaning"]["kind"] == "land_cover" for c in current["context_options"])
+    allowed = brief_response_schema(action)["properties"]["evidence_ids"]["items"]["enum"]
+    assert allowed == current["citation_ids"] and not road_ids.intersection(allowed)
+    answer = {
+        "text": "보리가 냄새를 맡았다.",
+        "evidence_ids": [action.required_event.id, *road_ids],
+    }
+    with pytest.raises(ValueError):
+        resolve_brief_answer(action, answer)
+    resolve_brief_answer(action, answer, "single-writing-brief-v6")
+    assert before == action.model_dump_json()

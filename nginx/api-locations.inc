@@ -87,6 +87,27 @@ location = /journey {
     proxy_read_timeout    30s;
 }
 
+# 관계 일기 — 앱이 직접 부르는 경로. 접두사를 떼지 않습니다. 근거 주석의 원본은 default.conf.
+# 기본 상한: 64회 × 15s + 63간격 × 10s + 처리 15s + 수집 12s + 저장 15s.
+#
+# ⚠️ #559 까지가 default.conf 에만 넣어 여기서 빠져 있었습니다 (#561). 이 파일 머리의 #150
+#    경고가 말하는 모양 그대로입니다 — 아래 `location /` 의 60s 로 떨어져 **개발서버만 멀쩡하고
+#    GCP 에서만** 깨집니다. 지금은 `DAENGS_WALK_DIARY_ENABLED` 가 꺼져 있어 긴 경로가 404 라
+#    드러나지 않지만, 켜는 순간 504 가 됩니다.
+location ~ ^/app/walks/[0-9a-fA-F-]+/storyboard$ {
+    set $fastapi_upstream backend:8000;
+    proxy_pass http://$fastapi_upstream;
+    proxy_http_version 1.1;
+
+    proxy_set_header Host              $host;
+    proxy_set_header X-Real-IP         $remote_addr;
+    proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+
+    proxy_connect_timeout    5s;
+    proxy_read_timeout    1650s;
+}
+
 # 보행 분석 **새 흐름** — 접두사를 떼지 않고 backend 로 넘깁니다 (D-043). 위 `/gait/`
 # (옛 무인증 직접 HTTP)와는 다른 경로·다른 서비스입니다. 근거 주석의 원본은 default.conf.
 #

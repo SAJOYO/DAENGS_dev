@@ -145,6 +145,7 @@ def test_delivery_consumes_the_allowlist_without_reintroducing_old_distance_resu
     from daengs_walk.diary.relational import relation_delivery
     from daengs_walk.diary.relational import writer_view as writer_module
     from daengs_walk.diary.relational.relation_flow_contracts import RelationSelection
+    from daengs_walk.diary.relational.writer_time import local_writer_times
 
     flow = calculate(track([150, 110, 70]))
     brief = NS(context=NS(current=NS(position=NS(scene_id="s2"))), relation_ids=("old-distance",))
@@ -162,7 +163,8 @@ def test_delivery_consumes_the_allowlist_without_reintroducing_old_distance_resu
     assert view["citation_ids"] == ["f1", flow.id]
     assert view["relation_ids"] == [flow.id]
     assert "relation_slots" not in view
-    assert view["journey_relations"] == [flow_view(flow)]
+    expected = local_writer_times({"journey_relations": [flow_view(flow)]})
+    assert view["journey_relations"] == expected["journey_relations"]
     with pytest.raises(ValueError, match="another scene"):
         relation_delivery.deliver_relations(brief, replace(selected, scene_id="other"))
 

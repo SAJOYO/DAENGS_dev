@@ -6,6 +6,10 @@
 (`backend/tests/test_gait_v4_compare_parity.py`). 이 모듈은 그 계산 위에 v4 전용 출력
 (`message_kind`·`side_summary`·`condition_flags`, walk_demo 계약)만 조립합니다.
 
+`side_summary` 는 **다리별 변화 판정의 정본**입니다 (D-063 7단계). 앱이 같은 계산을 따로
+하지 않고 이 값을 쓰므로, `n_diff`·`n_unmeasured` 의 뜻을 바꾸면 앱 표시가 같이 바뀝니다 —
+`tests/test_gait_side_summary.py` 가 그 정의를 못 박아 두었습니다.
+
 `daengs_backend.services.gait._load_v4_compare()` 가 부릅니다 — `pose_model` 이 v4 인
 두 기록의 비교가 여기를 거칩니다.
 
@@ -24,6 +28,16 @@ from daengs_gait.config import COMPARE_DIFF_THRESHOLD
 #: v4 walk_demo 계약의 "한쪽만 다름" 판정 최소 개수. `daengs_gait.compare` 에는 없는
 #: v4 전용 규칙입니다(legacy 는 side_summary 자체가 없습니다).
 SIDE_MIN_DIFF = 2
+
+
+def _axis_unmeasured(ja: dict | None, jb: dict | None, key: str) -> bool:
+    """이 축을 **못 쟀는가** — 사용자용 문구가 아니라 **값의 유무**로 봅니다.
+
+    `direction_note` 는 `va is None or vb is None` 일 때만 "비교 불가(한쪽 기록에 없음)" 을
+    냅니다. 그 문자열을 세면 문구를 다듬는 순간 집계가 조용히 틀리므로 같은 조건을 값으로
+    직접 봅니다 (`tests/test_gait_side_summary.py` 가 둘이 같은 집합임을 못 박습니다).
+    """
+    return (ja or {}).get(key) is None or (jb or {}).get(key) is None
 
 
 def _side_of(joint: str) -> str:
@@ -110,11 +124,23 @@ def compare_records(a: dict, b: dict) -> dict:
     for joint, v in joint_comparison.items():
         note = v["comparison_note"]
         differs = note["x"] == "차이 관찰됨" or note["y"] == "차이 관찰됨"
-        s = side_summary.setdefault(_side_of(joint), {"n_joints": 0, "n_diff": 0, "diff_joints": []})
+        # **못 잰 관절** — 어느 축도 "차이 관찰됨" 이 아니면서 한 축이라도 값이 없는 경우.
+        # 앱 `GaitJointChange.of` 가 `Unknown` 을 내는 칸과 **같은 정의**입니다 (D-063 7단계).
+        # 잡힌 변화는 못 잰 축이 있어도 그대로 말합니다 — 그래서 `differs` 가 먼저입니다.
+        ja, jb = sa.get(joint), sb.get(joint)
+        unmeasured = not differs and (
+            _axis_unmeasured(ja, jb, "x_range") or _axis_unmeasured(ja, jb, "y_range")
+        )
+        s = side_summary.setdefault(
+            _side_of(joint), {"n_joints": 0, "n_diff": 0, "diff_joints": [], "n_unmeasured": 0}
+        )
         s["n_joints"] += 1
         if differs:
             s["n_diff"] += 1
             s["diff_joints"].append(joint)
+        if unmeasured:
+            s["n_unmeasured"] += 1
+    # ⚠️ `flagged` 규칙은 그대로입니다 — `n_unmeasured` 는 **세기만** 하고 판정에 안 들어갑니다.
     for s in side_summary.values():
         s["flagged"] = s["n_diff"] >= SIDE_MIN_DIFF
 

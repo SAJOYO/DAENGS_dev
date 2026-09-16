@@ -111,6 +111,12 @@ def title_request_revision(prompt_revision, request, schema):
 
 def validate_title_publication(receipt):
     """Check saved title/body binding, without today's prompts or a model call."""
+    from daengs_walk.diary.relational.scene_title_context import SCENE_TITLE_CONTRACT
+    from daengs_walk.diary.relational.scene_title_publication import validate_scene_titles
+
+    if receipt.get("title_contract") == SCENE_TITLE_CONTRACT or "scene_titles" in receipt:
+        validate_scene_titles(receipt)
+        return
     title = receipt.get("title", {})
     contract = receipt.get("title_contract")
     if contract is None:

@@ -97,6 +97,31 @@ class GaitCompareRequest(BaseModel):
     record_id_b: uuid.UUID
 
 
+class GaitSideSummary(BaseModel):
+    """한쪽 다리의 변화 집계 — **다리별 판정의 정본** (D-063 7단계).
+
+    지금까지 이 판정은 서버와 앱 양쪽에 있었습니다. 서버 `flagged`(= `n_diff >=
+    SIDE_MIN_DIFF`)와 앱 `verdictOf()` 가 각자 세었고, **임계값이 우연히 같아서**(둘 다 2)
+    결과가 맞아떨어졌을 뿐입니다. 한쪽만 바뀌면 조용히 갈라지므로 서버 하나로 모읍니다.
+
+    ⚠️ **`n_joints` 를 "화면에 그릴 관절 수"로 읽지 마세요.** 두 기록 중 **어느 쪽이든**
+       가진 관절만 셉니다 — 양쪽 다 없는 관절은 아예 안 들어갑니다. 실제로 잰 수는
+       `n_joints - n_unmeasured` 입니다.
+    """
+
+    #: 두 기록의 합집합 기준 이 다리의 관절 수.
+    n_joints: int
+    #: 그중 "차이 관찰됨" 이 난 수. `flagged` 는 이 값만 봅니다.
+    n_diff: int
+    #: 차이가 난 관절 이름.
+    diff_joints: list[str] = []
+    #: **못 잰 관절 수** — 어느 축도 "차이 관찰됨" 이 아니면서 한 축이라도 값이 없는 경우.
+    #: 앱이 "비교할 관절이 부족함" 을 말할 때 쓰는 수입니다.
+    n_unmeasured: int = 0
+    #: 이 다리에서 "여러 관절이 함께 달라졌다" 로 볼지. 임계값은 `compare_v4.SIDE_MIN_DIFF`.
+    flagged: bool
+
+
 class GaitCompareResponse(BaseModel):
     """`compare_records` 의 출력에서 `_dev_only_*` 만 뺀 것 (D-058).
 
@@ -120,3 +145,11 @@ class GaitCompareResponse(BaseModel):
     version_warning: str | None = None
     diff_threshold_note: str | None = None
     joint_movement_range_comparison: dict = {}
+    #: 다리별 변화 집계. 키는 `왼쪽`·`오른쪽`, 좌/우로 안 갈리는 관절 이름은 `전체` 한
+    #: 덩어리입니다 — 그래서 키를 enum 으로 못 박지 않습니다(못 박으면 그런 응답이 500 이
+    #: 됩니다).
+    #:
+    #: **legacy 기록끼리의 비교에는 없습니다(`null`).** 옛 기록의 관절 이름은 좌/우로
+    #: 갈리지 않아 다리별 판정 자체가 성립하지 않습니다 — 받는 쪽은 `null` 일 때
+    #: 자기 판정으로 떨어져야 합니다.
+    side_summary: dict[str, GaitSideSummary] | None = None

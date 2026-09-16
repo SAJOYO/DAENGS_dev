@@ -299,6 +299,9 @@ def test_no_care_capability_exists_in_the_contracts() -> None:
         # `skin` (D-079) 도 육아 질문을 받는 목적지가 아니다 — 판정 기록이 붙은 `skin` 신호로만
         # 들어와 **이미 끝난 판정을 해설**한다. 라우터는 못 고른다 (`ExecuteName` 에 없다).
         "skin",
+        # `gait` (D-080) 도 같다 — 비교 참조가 붙은 `gait` 신호로만 들어와 **이미 계산된
+        # 비교를 해설**한다. 영상을 새로 분석하는 실행은 여전히 없다.
+        "gait",
     }
     for invented in ("care", "husbandry", "nutrition"):
         assert invented not in {name.value for name in CapabilityName}

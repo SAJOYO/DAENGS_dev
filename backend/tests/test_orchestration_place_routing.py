@@ -324,6 +324,8 @@ def test_canonical_order_covers_every_execute_name() -> None:
         "care_log",
         # `skin` (D-079) — 배타 단일 요청이라 순서는 화면에 안 드러난다. 선언 순서 그대로 맨 끝.
         "skin",
+        # `gait` (D-080) — 위와 같다.
+        "gait",
     ]
 
 

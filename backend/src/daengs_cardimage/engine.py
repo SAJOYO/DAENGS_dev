@@ -3,12 +3,20 @@
 
 from __future__ import annotations
 
+import base64
 import io
+import random
+from collections.abc import Callable
 from typing import Protocol
 
+import httpx
 from PIL import Image, UnidentifiedImageError
 
 CARD_SIZE = (994, 1582)
+
+#: GPU 서비스(D-078)에 요청하는 생성 크기. 16의 배수이면서 카드 비율(0.628)에 가장 가깝다(0.627).
+#: 받은 뒤 CARD_SIZE 로 줄인다 — 가로·세로 배율 차이는 0.1% 라 눈에 안 띈다.
+GEN_SIZE = (1024, 1632)
 
 
 class EngineError(Exception):
@@ -134,3 +142,65 @@ class GeminiCardImageEngine:
             raise EngineError("upstream", f"이미지 모델 호출 실패: {exc}") from exc
         image_bytes = _extract_image_bytes(resp)
         return _decode_and_fit(image_bytes, pad=pad, padded_width=padded.width)
+
+
+class HttpCardImageEngine:
+    """GPU 카드 생성 서비스(`daengs_cardgen`, D-078)를 부르는 엔진.
+
+    인증은 `auth(audience) -> ID 토큰` 을 주입받는다 — 이 패키지는 backend 를 import 하지 않으므로
+    토큰 발급(메타데이터 서버)은 backend 가 넘긴다. `auth=None` 이면 헤더 없이 부른다
+    (`gcloud run services proxy` 로 연 로컬 포트 — 비교 도구가 쓴다).
+    `seed=None` 이면 호출마다 무작위. 마지막 호출의 seed·서비스 시간·모델·보낸 크기는 `last_meta` 에 남긴다.
+    `gen_size` 는 서비스에 요청하는 생성 크기다(기본 `GEN_SIZE`). 결과는 크기와 상관없이 `CARD_SIZE` 로 줄인다 —
+    #557 E1 이 1280×2048 을 비교한다. `generate_batch` 는 한 요청으로 여러 장을 받는다(#557 E2).
+    """
+
+    def __init__(self, *, base_url: str, timeout_s: float, seed: int | None = None,
+                 gen_size: tuple[int, int] = GEN_SIZE,
+                 auth: Callable[[str], str] | None = None,
+                 transport: httpx.BaseTransport | None = None) -> None:
+        self._base = base_url.strip().rstrip("/")
+        self._timeout_s, self._seed, self._auth, self._transport = timeout_s, seed, auth, transport
+        self._gen_size = gen_size
+        self.last_meta: dict | None = None
+
+    def _post(self, *, template_png: bytes, photo_jpeg: bytes, prompt: str, count: int) -> tuple[int, httpx.Response]:
+        if not self._base:
+            raise EngineError("no_key", "DAENGS_CARDGEN_URL 이 비어 있습니다")
+        seed = self._seed if self._seed is not None else random.randrange(2**31)
+        body = {
+            "images_b64": [base64.b64encode(template_png).decode(), base64.b64encode(photo_jpeg).decode()],
+            "prompt": prompt, "seed": seed, "width": self._gen_size[0], "height": self._gen_size[1],
+        }
+        if count != 1:
+            body["count"] = count
+        try:
+            headers = {"Authorization": f"Bearer {self._auth(self._base)}"} if self._auth else {}
+            with httpx.Client(timeout=self._timeout_s, transport=self._transport) as client:
+                resp = client.post(f"{self._base}/generate", json=body, headers=headers)
+        except Exception as exc:  # 토큰 발급 실패까지 "응답을 못 받은" 것으로 모은다 (realtime_client 와 같은 판단)
+            raise EngineError("upstream", f"카드 생성 서비스 호출 실패: {type(exc).__name__}: {exc}") from exc
+        if resp.status_code != 200:
+            raise EngineError("upstream", f"카드 생성 서비스가 {resp.status_code} 을 돌려줬습니다: {resp.text[:200]!r}")
+        return seed, resp
+
+    def generate(self, *, template_png: bytes, photo_jpeg: bytes, prompt: str) -> bytes:
+        seed, resp = self._post(template_png=template_png, photo_jpeg=photo_jpeg, prompt=prompt, count=1)
+        self.last_meta = {"seed": seed, "seconds": resp.headers.get("X-Cardgen-Seconds"),
+                          "model": resp.headers.get("X-Cardgen-Model"),
+                          "size": f"{self._gen_size[0]}x{self._gen_size[1]}"}
+        return _decode_and_fit(resp.content, pad=0, padded_width=CARD_SIZE[0])
+
+    def generate_batch(self, *, template_png: bytes, photo_jpeg: bytes, prompt: str, count: int) -> list[bytes]:
+        """한 요청에 `count` 장(서비스 `count`, #557 E2). 장마다 카드 크기 PNG, 장별 seed 는 `last_meta["seeds"]`."""
+        _, resp = self._post(template_png=template_png, photo_jpeg=photo_jpeg, prompt=prompt, count=count)
+        try:
+            data = resp.json()
+            images = [base64.b64decode(b) for b in data["images_png_b64"]]
+        except (ValueError, KeyError, TypeError) as exc:
+            raise EngineError("no_image", f"여러 장 응답을 읽을 수 없습니다: {exc}") from exc
+        if len(images) != count:
+            raise EngineError("no_image", f"{count} 장을 요청했는데 {len(images)} 장이 왔습니다")
+        self.last_meta = {"seeds": data.get("seeds"), "seconds": data.get("seconds"), "model": data.get("model"),
+                          "size": data.get("size"), "count": count}
+        return [_decode_and_fit(image, pad=0, padded_width=CARD_SIZE[0]) for image in images]

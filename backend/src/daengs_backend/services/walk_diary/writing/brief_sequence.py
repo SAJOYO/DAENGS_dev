@@ -3,10 +3,13 @@
 from copy import deepcopy
 
 from daengs_backend.services.walk_diary.writing.brief_prompts import BRIEF_POLICY, BRIEF_PROMPTS
-from daengs_walk.diary.relational.brief_contracts import BriefDeliveryState, DeliveredMeaning
-from daengs_walk.diary.relational.brief_planning import make_brief_plan
-from daengs_walk.diary.relational.brief_response import parse_brief
-from daengs_walk.diary.relational.writing_brief import advance_brief_delivery, build_space_brief
+from daengs_walk.diary.relational.brief_contracts import (
+    BriefDeliveryState,
+    DeliveredMeaning,
+    SpaceWritingBrief,
+)
+from daengs_walk.diary.relational.scene_requests import assemble_scene_requests
+from daengs_walk.diary.relational.writing_brief import advance_brief_delivery
 from daengs_walk.value_contracts import digest
 
 
@@ -27,22 +30,17 @@ async def write_brief_sequence(prepared, *, enabled=True, send=None, review=Fals
     positions = {f["scene_id"]: i for i, f in enumerate(frames)}
     memory, last = BriefDeliveryState(), {}
     for index, frame in enumerate(frames):
-        plan = make_brief_plan(
-            frame, frames[index - 1] if index else None, memory if enabled else BriefDeliveryState()
+        brief = SpaceWritingBrief(
+            context=frame["narrative_context"],
+            delivery=memory if enabled else BriefDeliveryState(),
         )
+        plan = assemble_scene_requests(frame, brief, frames[index - 1] if index else None)
         tasks = _validate_plans(snapshot, [plan], frame_positions=positions)
         last = await _write_validated_tasks(
             tasks, snapshot_revision=frozen["revision"], send=send, review=review, model=model
         )
         results.extend(last["results"])
         space = next((r for r in last["results"] if r["stage"] == "space"), None)
-        brief = (
-            parse_brief(plan["space_task"]["payload"])
-            if plan["space_task"]
-            else build_space_brief(
-                frame["narrative_context"], memory if enabled else BriefDeliveryState()
-            )
-        )
         selection = None
         if space and space["status"] == "returned":
             selection = DeliveredMeaning(

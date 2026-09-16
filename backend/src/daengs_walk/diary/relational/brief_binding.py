@@ -1,12 +1,7 @@
 """Reconstruct brief facts from frozen sources once; validate small plans separately."""
 
 from daengs_walk.diary.contracts.input import UserRecord
-from daengs_walk.diary.relational.brief_contracts import BriefDeliveryState
-from daengs_walk.diary.relational.brief_planning import (
-    BRIEF_PLAN,
-    BRIEF_PREPARATION,
-    make_brief_plan,
-)
+from daengs_walk.diary.relational.brief_contracts import BriefDeliveryState, SpaceWritingBrief
 from daengs_walk.diary.relational.comparison import aware_time
 from daengs_walk.diary.relational.comparison_writing import comparison_input
 from daengs_walk.diary.relational.contracts import WriterTask
@@ -15,6 +10,11 @@ from daengs_walk.diary.relational.current_action import (
     motion_from_evidence,
 )
 from daengs_walk.diary.relational.narrative_space import build_space_context
+from daengs_walk.diary.relational.scene_requests import (
+    BRIEF_PLAN,
+    BRIEF_PREPARATION,
+    assemble_scene_requests,
+)
 from daengs_walk.diary.relational.walk_phase import ScenePosition
 from daengs_walk.value_contracts import digest
 
@@ -33,6 +33,11 @@ def validate_brief_sources(snapshot):
     if len(set(subjects["pet_ids"])) != len(subjects["pet_ids"]):
         raise ValueError("duplicate event subjects")
     previous = None
+    interval_sources = None
+    if "interval_sources" in snapshot:
+        from daengs_walk.diary.relational.interval_sources import IntervalSources
+
+        interval_sources = IntervalSources.model_validate(snapshot["interval_sources"])
     for index, frame in enumerate(frames, 1):
         position = positions[frame["scene_id"]]
         if (
@@ -44,6 +49,15 @@ def validate_brief_sources(snapshot):
         ):
             raise ValueError("brief chronology differs from frozen frames")
         context = build_space_context(comparison_input(frame, previous), positions)
+        if interval_sources:
+            from daengs_walk.diary.relational.interval_materials import attach_interval_materials
+
+            if (
+                frame.get("journey")
+                and frame["journey"]["source_revision"] != interval_sources.route_revision
+            ):
+                raise ValueError("interval sources differ from the bound scene journey")
+            context = attach_interval_materials(context, interval_sources, frame, previous)
         if frame["narrative_context"] != context.model_dump(mode="json"):
             raise ValueError("narrative context differs from source facts")
         saved_record = frame["behavior_record"]
@@ -81,7 +95,8 @@ def validate_brief_plans(snapshot, plans=None, *, frame_positions=None):
         ):
             raise ValueError("brief plan changed")
         state = BriefDeliveryState.model_validate(plan["delivery_before"])
-        expected = make_brief_plan(frame, previous, state)
+        brief = SpaceWritingBrief(context=frame["narrative_context"], delivery=state)
+        expected = assemble_scene_requests(frame, brief, previous)
         supplied = {k: v for k, v in plan.items() if k not in {"revision", "delivery_after"}}
         if supplied != {k: v for k, v in expected.items() if k != "revision"}:
             raise ValueError("brief plan does not match its source context and delivery")

@@ -123,7 +123,7 @@ async def test_runtime_uses_canonical_briefs_and_one_title_without_review(
     spaces = [p for s, p, _ in seen if s == "space"]
     relations = [r for p in spaces for slot in p.get("relation_slots", {}).values() for r in slot]
     assert relations and all("relationship" in r and "result" not in r for r in relations)
-    assert result.receipt["writing"]["policy"] == "single-writing-brief-v3"
+    assert result.receipt["writing"]["policy"] == "single-writing-brief-v6"
     assert len(spaces) >= 2 and spaces[1]["delivery_memory"]
     assert (
         spaces[1]["delivery_memory"][0]["selected_in_scene"]

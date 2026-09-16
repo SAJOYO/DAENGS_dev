@@ -93,13 +93,21 @@ def _plate_top(card: Image.Image, x: int, expect: int) -> int | None:
     return None
 
 
-def _plate_shift(card: Image.Image, plate: Plate) -> int:
-    """모델이 그린 판이 틀보다 얼마나 위·아래로 어긋났는지(px). 못 재면 0."""
-    tops = [t for x in PLATE_PROBE_XS if (t := _plate_top(card, x, plate.top_y)) is not None]
+def plate_shift(card: Image.Image, plate: Plate = APRIL_PLATE) -> int | None:
+    """모델 출력의 제목판이 틀보다 몇 px 위(-)·아래(+)로 그려졌는지. **못 재면 None** — 비교 판정에서
+    "딱 맞음(0)"과 "판을 못 찾음"을 가르기 위해서다. 제목을 그릴 때는 `_plate_shift` 가 None 을 0 으로 쓴다."""
+    rgb = card.convert("RGB")
+    tops = [t for x in PLATE_PROBE_XS if (t := _plate_top(rgb, x, plate.top_y)) is not None]
     if len(tops) < 2:
-        return 0
+        return None
     tops.sort()
     return tops[len(tops) // 2] - plate.top_y
+
+
+def _plate_shift(card: Image.Image, plate: Plate) -> int:
+    """모델이 그린 판이 틀보다 얼마나 위·아래로 어긋났는지(px). 못 재면 0 (제목은 틀에서 잰 자리에 그린다)."""
+    shift = plate_shift(card, plate)
+    return 0 if shift is None else shift
 
 
 def _layout(text: str, font_path: Path, plate: Plate, center_y: int) -> list[_Run]:

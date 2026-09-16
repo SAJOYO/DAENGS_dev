@@ -3,6 +3,7 @@
 from daengs_walk.diary.relational.brief_contracts import ActionWritingBrief, SpaceWritingBrief
 from daengs_walk.diary.relational.contracts import WriterAnswer
 from daengs_walk.diary.relational.scene_comparison_contracts import SpaceComparisonAnswer
+from daengs_walk.diary.relational.writer_material_policy import WRITER_POLICY, writer_reference_ids
 from daengs_walk.value_contracts import digest
 
 
@@ -19,7 +20,8 @@ def parse_brief(payload):
     raise ValueError("unsupported writing brief")
 
 
-def brief_response_schema(brief):
+def brief_response_schema(brief, policy=WRITER_POLICY):
+    citation_ids, relation_ids = writer_reference_ids(brief, policy)
     schema = {
         "type": "object",
         "additionalProperties": False,
@@ -29,15 +31,15 @@ def brief_response_schema(brief):
                 "type": "array",
                 "minItems": 1,
                 "uniqueItems": True,
-                "items": {"type": "string", "enum": list(brief.citation_ids)},
+                "items": {"type": "string", "enum": list(citation_ids)},
             },
         },
         "required": ["text", "evidence_ids"],
     }
     if isinstance(brief, SpaceWritingBrief):
         relations = {"type": "array", "uniqueItems": True, "items": {"type": "string"}}
-        if brief.relation_ids:
-            relations["items"]["enum"] = list(brief.relation_ids)
+        if relation_ids:
+            relations["items"]["enum"] = list(relation_ids)
         else:
             relations["maxItems"] = 0
         schema["properties"].update(
@@ -47,7 +49,8 @@ def brief_response_schema(brief):
     return schema
 
 
-def resolve_brief_answer(brief, value):
+def resolve_brief_answer(brief, value, policy=WRITER_POLICY):
+    citation_ids, relation_ids = writer_reference_ids(brief, policy)
     space = isinstance(brief, SpaceWritingBrief)
     answer = (SpaceComparisonAnswer if space else WriterAnswer).model_validate(value)
     cited = set(answer.evidence_ids)
@@ -55,14 +58,14 @@ def resolve_brief_answer(brief, value):
         not answer.text.strip()
         or not cited
         or len(cited) != len(answer.evidence_ids)
-        or not cited <= set(brief.citation_ids)
+        or not cited <= set(citation_ids)
     ):
         raise ValueError("invalid brief evidence references")
     if space:
         if (
             not answer.focus.strip()
             or len(set(answer.relation_ids)) != len(answer.relation_ids)
-            or not set(answer.relation_ids) <= set(brief.relation_ids)
+            or not set(answer.relation_ids) <= set(relation_ids)
         ):
             raise ValueError("invalid narrative relation references")
     elif brief.required_event.id not in cited:

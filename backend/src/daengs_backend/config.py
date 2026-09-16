@@ -174,6 +174,14 @@ class Settings(BaseSettings):
         default=False, validation_alias=AliasChoices("DAENGS_GENERAL_FALLBACK")
     )
 
+    # ── 피부 판정 해설 킬 스위치 (D-079) ────────────────────────────────
+    # `turn_resolver` 와 같은 쪽 기본값(**켜짐**)이다. 켜 둬도 운영이 달라지지 않는 이유가
+    # 따로 있다 — 이 능력은 앱이 `requested_capability="skin"` 과 `screening_record_id` 를
+    # **함께** 보내고 서버가 그 기록의 소유를 확인했을 때만 돈다(`planner.resolve_skin_route`).
+    # 그 조합을 보내는 클라이언트가 생기기 전까지는 오늘과 같은 HANDOFF 이고, 끄면 그 뒤에도
+    # HANDOFF 로 돌아간다. 장애 대응·비용 급증 때 한 줄로 끄는 자리다.
+    skin_agent: bool = Field(default=True, validation_alias=AliasChoices("DAENGS_SKIN_AGENT"))
+
     # ── Turn Resolver 킬 스위치 (#416, R16) ────────────────────────────
     # `general_fallback` 과 정반대 기본값: 이건 **기본이 켜짐**입니다. 리졸버는 이미
     # 승인된 기능(Task 1~5)이라 배포 즉시 도는 것이 맞고, 끄는 쪽이 예외 상황(장애
@@ -257,6 +265,13 @@ class Settings(BaseSettings):
     cardimage_daily_limit: int = Field(default=1, ge=0, validation_alias=AliasChoices("DAENGS_CARDIMAGE_DAILY_LIMIT"))
     # 서버 전체 동시 생성 수. backend 프로세스 안 백그라운드 작업이라 스레드를 씁니다 (D-076).
     cardimage_concurrency: int = Field(default=2, ge=1, validation_alias=AliasChoices("DAENGS_CARDIMAGE_CONCURRENCY"))
+
+    # GPU 카드 생성 서비스(D-078, Cloud Run asia-southeast1 L4). **비어 있으면 Nano Banana 2(D-074)
+    # 그대로** — 되돌리기가 이 한 줄이다. ⚠ 앱 경로(`/app/ai-cards`)의 정리 기준은 아직
+    # `cardimage_timeout_ms` 만 보므로 콜드 스타트(가중치 로드 수 분)를 모른다 — #544 에서는 VM 에 넣지 않는다.
+    cardgen_url: str = Field(default="", validation_alias=AliasChoices("DAENGS_CARDGEN_URL"))
+    # 콜드 스타트 + 생성. `infra/gcp/cardgen.sh` 의 `--timeout=900` 과 맞춘다.
+    cardgen_timeout_s: float = Field(default=900.0, gt=0, validation_alias=AliasChoices("DAENGS_CARDGEN_TIMEOUT_S"))
 
     @field_validator("cardimage_months", mode="before")
     @classmethod

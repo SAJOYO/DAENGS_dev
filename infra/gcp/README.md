@@ -260,6 +260,49 @@ DAENGS_CORPUS_JOB=corpus-refresh
    (`corpus-pipeline@...`)은 코퍼스 파이프라인과 공유하므로 지우지 않는다 — 정말 지우려면
    `pipeline-teardown.sh` 를 보고 사람이 판단한다.
 
+## `cardgen.sh` — 도감 카드 생성 GPU 서비스 (D-078, #544)
+
+모델마다 Cloud Run **서비스** 하나, 싱가포르 L4, `min 0 · max 1`. 코드는 `docker/cardgen/`, 가중치는 버킷
+`daengs-cardgen-weights` 를 `/models` 로 마운트. **2026-09-16 기준 남아 있는 것:** 서비스 `daengs-cardgen-klein`과 잡
+`cardgen-weights` 가 **같은 이미지 `07e7a55` 하나**를 쓴다(잡은 `python -m daengs_cardgen.fetch klein-4b`, 실행 안 함). 옛 이미지
+`c917c96`·`90a42ef` 와 옛 리비전은 지웠다(#557). 버킷의 FLUX.2-klein-4B 가중치 14.88GiB. Qwen 서비스·가중치는 09-15 결과가 깨져
+지웠고, 코드(`QwenModel`·`MODEL=qwen`)도 #557 에서 걷어냈다(D-078). `/generate` 는 `count`(1~4)로 한 요청에 여러 장을 뽑는다.
+
+**실측 (09-15, #544 worklog):** 이미지 빌드 13~16분 · FLUX.2-klein-4B 가중치 받기 9분 · 서비스 기동→포트 10초 · 모델 로드 425~430초 ·
+장당 18~26초 · 요청 뒤 유휴 약 10분 뒤 종료. 새 이미지를 싱가포르에서 처음 가져오면 5분이 붙는다.
+**09-16 (#557):** 로드 340.7~403.1초(세 번), 장당 16.2~16.4초(1024×1632) · 23.4~23.8초(1280×2048). **한 번에 2장 이상(`count`)은 L4 에서 CUDA OOM.**
+FUSE `mount-options=enable-buffered-read=true` 는 로드 735.6초(2배 느림), in-memory 볼륨 + `cache-dir=cr-volume:<이름>` 은 컨테이너가 마운트 단계에서
+못 떴다(원인 미확정) — 기본 마운트 유지. 상세 `docs/cardimage/compare-2026-09-16-klein-e2-e3.md`.
+
+**⚠ 09-15 에 실제로 물린 것 (배포 전에 읽을 것):**
+
+| 무엇 | 증상 | 답 |
+| --- | --- | --- |
+| 가중치 잡 메모리 | 4CPU/16Gi 에서 "The configured memory limit was reached" — 큰 파일 여럿이 동시에 `.incomplete` | 한 파일씩(`max_workers=1`) + `HF_HUB_DISABLE_XET=1` + 8CPU/32Gi (Cloud Run 은 24GiB 넘으면 8 vCPU 필요) |
+| Git Bash 경로 변환 | `--set-env-vars=HF_XET_CACHE=/tmp/xet` 가 `C:/Users/.../Temp/xet` 로 저장 | `MSYS2_ARG_CONV_EXCL` 에 `--set-env-vars` 까지. 배포 뒤 **`jobs describe`·`services describe` 로 저장값 확인** |
+| PowerShell 쉼표 | `--add-volume=name=...,type=...` 가 배열로 쪼개져 "Key [type] required" | PowerShell 에서는 쉼표 든 인자(`--add-volume` · `--add-volume-mount` · `--set-env-vars` · `--args`)를 **따옴표로** |
+| 이미지 태그 재계산 | `STEP=deploy` 가 파일 해시로 태그를 다시 계산 — 빌드 뒤 파일을 고치면 **없는 태그**를 배포 | 빌드한 태그를 확인해 직접 `gcloud run deploy --image=...:<태그>` 로 |
+| `gcloud run services proxy` | `cloud-run-proxy` 컴포넌트가 필요한데 SDK 가 Program Files 라 일반 권한 설치 실패 | 관리자 권한 cmd 에서 `gcloud components install cloud-run-proxy` (한 번) |
+| `hf download --include` | 값을 하나만 받는다. gcloud `--args` 는 목록 안 같은 플래그 두 번을 거부 | 잡 command 를 `/bin/sh -c "set -f; exec hf download ... --include a --include b"`(`^@^` 구분자) — 지금은 `fetch.py` 가 같은 조건이라 필요 없음 |
+| 로그 조회 | PowerShell 에서 `labels."run.googleapis.com/execution_name"` 필터 따옴표가 깨짐 | `gcloud logging read` 는 Bash 로 |
+| 새 리비전 전 호출 | 새 리비전 Ready 전에 `/health` 를 부르면 옛 리비전 인스턴스가 떠 로드가 헛돈다 | `latestReadyRevisionName` 이 새 이름이 된 뒤에 호출 |
+| 이미지가 빌드마다 8GB | 서비스 `c917c96`·잡 `90a42ef` 가 레이어를 공유하지 않아 16GB(09-16 조회: 저장소 28.2GB vs 이미지 합 28.4GB). Dockerfile 앞쪽 `ENV` 가 바뀌면 뒤 설치 레이어가 전부 새로 생긴다 | 새로 빌드하면 서비스·잡을 **같은 태그로 함께** 배포하고, 서비스 확인 뒤 옛 태그 삭제(`gcloud artifacts docker images delete ...@sha256:... --delete-tags`). 09-16 에 `07e7a55` 하나로 맞췄다 |
+| 배포하면 인스턴스가 바로 뜬다 | `gcloud run deploy`/`services update` 로 새 리비전을 만들면 요청이 없어도 인스턴스가 떠서(로그 `Starting new instance. Reason: DEPLOYMENT_ROLLOUT`) 모델을 올린다 — 09-16 실측 시작 17:23:16Z → ready 383초. **배포 한 번 = L4 약 7분 로드 + 유휴 약 10분 과금** | 배포를 몰아서 한다. 설정만 바꿔 보는 실험도 배포마다 이 비용이 붙는다 |
+
+**Artifact Registry 정리 정책(cleanup policy)은 일부러 안 건다 (09-16).** 빌드가 드물어 손으로 지우는 것으로 충분하고,
+저장소 `daengs` 는 cardgen·pipeline·realtime 이 같이 쓴다 — 특히 `pipeline` 은 `cpu-*`(매일 04:00 `corpus-refresh`)와
+`cuda-*`(`corpus-embed-full`) **두 태그를 동시에** 쓰므로 "이미지마다 최근 N개" 같은 단순 규칙은 한쪽을 지워 다음 날
+잡을 죽인다. 11-17 이후 GCP 를 유지하게 되면 그때 이미지·태그별 규칙을 짜고 **dry-run 으로 먼저** 확인한다.
+
+- **돈이 나간다.** Cloud Build(CUDA 이미지), 가중치 받기 잡, 떠 있는 L4 시간. 요청 뒤에도 인스턴스가
+  내려가기 전까지 과금된다(인스턴스 기반 과금 필수). 돌리기 전에 사람 승인.
+- **부르는 법** — 개발 PC 의 `gcloud auth print-identity-token` 은 이 서비스에서 미인증으로 취급된다
+  (realtime 절 3번). 대신 `gcloud run services proxy daengs-cardgen-klein --region=asia-southeast1 --port=8091`
+  을 켜 두고 `http://127.0.0.1:8091` 을 부른다. `INVOKER` 로 준 계정에 `run.invoker` 가 걸려 있어야 한다.
+- **VM backend 에 연결하지 않는다** — `DAENGS_CARDGEN_URL` 을 VM 에 넣으면 앱 경로가 GPU 서비스를 쓰는데,
+  앱 경로 정리 기준이 콜드 스타트를 모른다(#544 남은 것).
+- **지울 때** — `PROJECT=daengs bash infra/gcp/cardgen-teardown.sh`. 서비스(`daengs-cardgen-klein`)·잡·가중치 버킷·이미지 태그.
+
 ## 자주 걸리는 것
 
 ### Windows 에서 gcloud 에 인자를 넘기는 법 — 셋 다 2026-09-11 에 물렸다

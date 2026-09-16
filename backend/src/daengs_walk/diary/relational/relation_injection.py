@@ -16,7 +16,11 @@ def select_relations(context, candidates):
     selected = tuple(f for f in candidates if previous < occurrence_at(f) <= now)
     if len({f.id for f in selected}) != len(selected):
         raise ValueError("duplicate selected relation")
-    target_ids = {f.target_id for f in selected if f.target_id}
+    target_ids = {
+        f.target_id
+        for f in selected
+        if f.target_id and f.started_at <= previous and f.ended_at >= now
+    }
     replaced, retained = [], []
     for relation in context.relation_slots.all_relations():
         identities = {

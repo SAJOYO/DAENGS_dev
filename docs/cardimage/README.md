@@ -1,12 +1,20 @@
 # cardimage — 사용자 강아지 사진으로 도감 카드 만들기
 
-카드 **#496** (`feat/comfyui-image-generation`, draft). 이 폴더는 그 카드의 **세션 인수인계 문서**입니다.
+카드 **#496**(첫 카드) → #537(앱 경로) → #543(한도) → #544(GPU 서비스·FLUX.2-klein-4B) → **#557(FLUX.2-klein-4B 실험)**. 이 폴더는 그 흐름의 **세션 인수인계 문서**입니다.
 다음 세션의 사람과 Claude 가 이 폴더만 읽고 이어서 하는 것이 목적입니다.
 
 | 문서 | 무엇 |
 | --- | --- |
 | 이 파일 | 목표 · 지금 상태 · 파일 위치 · 정해진 것과 안 정해진 것 · 다음에 할 일 |
+| [`roadmap.md`](roadmap.md) | **다음 카드들** — 2번 FLUX.2-klein-4B 실험(자세히) · 3번 여러 장 생성+고르기 · 4번 과일·채소 카드 |
 | [`worklog.md`](worklog.md) | 날짜별 진행 기록. **세션이 끝날 때마다 한 절 추가** |
+| [`compare-2026-09-15-cardgen.md`](compare-2026-09-15-cardgen.md) | FLUX.2-klein-4B vs Nano Banana 2 같은 조건 12장 비교 (#544 Task 8) |
+| [`plan-2026-09-15-cardgen-gpu.md`](plan-2026-09-15-cardgen-gpu.md) | #544 구현 계획 (Task 1~9) |
+| [`experiments-explained-2026-09-16.md`](experiments-explained-2026-09-16.md) | **#557 실험 읽는 법** — base/panel/2048/both 같은 용어, 설계, 결과 해석, 정할 것 (먼저 읽기 좋음) |
+| [`compare-2026-09-16-klein-e1.md`](compare-2026-09-16-klein-e1.md) | #557 E1 글씨 유지 — 문구 명시 · 1280×2048 · 둘 다, 18장 |
+| [`compare-2026-09-16-klein-e2-e3.md`](compare-2026-09-16-klein-e2-e3.md) | #557 E2 4장 뽑기(순차만 됨) · E3 콜드 스타트(FUSE 옵션) |
+| [`plan-2026-09-16-klein-e1.md`](plan-2026-09-16-klein-e1.md) | #557 구현 계획 (Task 1~12) |
+| [`research-2026-09-15.md`](research-2026-09-15.md) | 2026-09-15 조사 — 오픈 모델 후보·라이선스·실행 자리(Cloud Run GPU) |
 | [`research-2026-09-13.md`](research-2026-09-13.md) | 2026-09-13 조사 — 생성 방법 네 갈래 · 후보 모델 · 비용 · 서빙 방식 · 결제 |
 
 ## 목표
@@ -20,7 +28,26 @@
 - 앱에 이미 있는 사진 카드 경로(폰 안 누끼로 강아지를 오려 카드 얼굴창에 끼우는 것 — `DAENGS_APP` `ui/dogcard/Cutout.kt`, `docs/card-holes.md`)는 **그대로 두고**, 이것은 별도 경로다.
 - 엔진은 ComfyUI 로 못 박지 않는다. 브랜치 이름에 comfyui 가 남아 있는 것은 카드를 열 때의 짐작이다.
 
-## 지금 상태 (2026-09-14, 앱 경로 #537 + 1단계 + 9월)
+## 지금 상태 (2026-09-16 밤, #557 FLUX.2-klein-4B 실험 — 결과 정리, 사람 확인 대기)
+
+**다음 카드와 진행도는 [`roadmap.md`](roadmap.md) 맨 위 표를 본다.**
+
+**#557 (09-16).** E1·E2·E3·이미지 하나로 맞추기를 무인으로 돌렸다(판정은 잠정 — `worklog.md` 09-16 밤 「아침에 볼 것」).
+- **E1 글씨:** 프롬프트에 문구를 적으면 더 깨지고, 1280×2048 은 깨지는 자리만 옮긴다. **깨짐은 틀·seed·크기로 정해진다**(사진과 무관) → 달 틀마다 검증된 seed 를 쓰는 방향.
+- **E2 4장:** L4 에서 한 번에 여러 장은 CUDA OOM — 순차만(장당 약 16초). 쓸 만한 장 정면 1~2 · 엎드린 옆모습 0. seed 4 는 4·9월 모두 제목·아래 패널 글씨 깨끗(`_03` 4월 위 배지 한 곳만 `SPECCIAL`).
+- **E3 콜드 스타트:** FUSE buffered read 는 로드 2배 느림, in-memory 파일 캐시는 기동 실패 → 기본 유지(로드 341~403초).
+- **GCP:** 이미지 `07e7a55` 하나(서비스·잡 공용), 서비스 리비전 하나. `/generate` 에 `count` 가 생겼지만 L4 에선 1 만.
+
+**#544 (09-15~16, D-078).** 오픈 모델을 우리 GPU 서비스로 돌려 Nano Banana 2 와 비교했다. 새 패키지
+`backend/src/daengs_cardgen/`(FastAPI, diffusers)가 Cloud Run L4(asia-southeast1)에서 돌고, backend 는
+`DAENGS_CARDGEN_URL` 이 있을 때만 HTTP 로 부른다(**비어 있으면 Nano Banana 2 그대로 — 운영엔 아직 안 넣음**).
+- **FLUX.2-klein-4B**: 12장 닮음 3.17(정면 사진 5 · 옆 각도 3 · 엎드린 옆모습 1~3), 목줄 2/6, 문구 깨짐 3(전부 같은 seed), 장당 18초, 콜드 스타트 425~430초, 요청 뒤 유휴 약 10분.
+- **Nano Banana 2**: 같은 조건 12장 닮음 4.42, 목줄·문구 결함 0.
+- **Qwen-Image-Edit-2511**(L4 nf4): 로드는 됐지만 결과가 깨져 제외, 서비스·가중치 삭제.
+- **사용자 결정**: 둘 다 유지. FLUX.2-klein-4B 는 "여러 장 뽑아 고르기"·과일·채소 개인화 경로로 실험을 이어 간다. 결과 `compare-2026-09-15-cardgen.md`, 경위 `worklog.md` 09-15~16.
+- GCP 에 남긴 것: 서비스 `daengs-cardgen-klein`(평소 0대) · 가중치 14.88GiB · 잡 `cardgen-weights` · 이미지. 배포·함정은 `infra/gcp/README.md` 「cardgen.sh」.
+
+## 이전 상태 (2026-09-14, 앱 경로 #537 + 1단계 + 9월)
 
 **앱 사용자 경로 (09-14, #537 · D-076).** 앱이 `POST /app/ai-cards?month=&dog_name=&dog_id=`(본문 사진)로
 카드 만들기를 시작하면 202 + `status: generating` 을 받고, `GET /app/ai-cards/{id}` 가 `ready` +
@@ -76,6 +103,11 @@ backend`(의존성·마운트 변경이라 재생성 필요). nginx 는 `locatio
 | `backend/tools/cardimage_try.py` | 0단계 실험 스크립트 (full 모드만). `uv run --with pillow python tools/cardimage_try.py` | 커밋 |
 | `backend/src/daengs_cardimage/` | **생성 로직 패키지** (#537 에서 `daengs_backend/services/cardimage/` 에서 옮김) — catalog(틀·무대)·photo(검증·리사이즈)·title(Pillow 제목)·engine(Nano Banana 2 어댑터)·judge(닮음 검수)·generate(파이프라인). backend 를 import 하지 않는다 | 커밋 |
 | `backend/src/daengs_backend/services/ai_card_engine.py` · `ai_card.py` · `ai_card_quota.py` · `routers/ai_card.py` · `routers/admin_cardimage.py` | backend 쪽 — 설정으로 엔진 만들기(유일한 호출 자리) · 앱 경로 서비스 · 한도 · `/app/ai-cards` · `/admin/cardimage/generate` | 커밋 |
+| `backend/src/daengs_cardgen/` | **GPU 서비스 패키지** (#544) — app(FastAPI, 포트 먼저·백그라운드 로드)·models·diffusion(FLUX.2-klein-4B bf16, `count` 로 여러 장 — L4 는 1 만 됨. Qwen 코드는 #557 에서 뺌)·fetch(가중치 받기). backend·cardimage 를 import 하지 않는다. 의존성 그룹 `cardgen`(`ml` 과 배타) | 커밋 |
+| `daengs_cardimage/engine.py` `HttpCardImageEngine` · `drift.py` · `title.plate_shift` | backend 쪽 GPU 서비스 호출 엔진 · 틀 밀림 측정 · 제목판 어긋남 측정 (#544) | 커밋 |
+| `backend/tools/cardgen_compare.py` | 같은 사진·틀·seed 로 엔진을 비교하고 `results.jsonl` 에 닮음·글자·틀 밀림·제목판·시간을 남긴다. **돈이 나간다 — 승인 뒤 PowerShell 로** | 커밋 |
+| `docker/cardgen/` · `infra/gcp/cardgen.sh` · `cardgen-teardown.sh` | CUDA 이미지 · 배포(이미지·가중치·서비스) · 삭제. 함정 표는 `infra/gcp/README.md` 「cardgen.sh」 | 커밋 |
+| `cardimage/out/_cardgen/` | #544 산출물 — `smoke-klein`·`smoke-qwen`·`task8-gemini`·`task8-klein`(각 `results.jsonl`), 비교 격자 `task8_grid_*.png`, `compare_4_template_nanobanana_klein_qwen.png`. #557 — `e1-panel`·`e1-2048`·`e1-both`·`e2-seq`·`smoke-count`, 격자 `e1_grid_*`·`e1_panels_*`·`e2-seq_panel_*`·`e2-seq_card_*` | 미추적 (`cardimage/out/` 규칙) |
 | `docs/cardimage/plan-2026-09-14-phase1.md` | 1단계 구현 계획 (Task 1~11) | 커밋 |
 | `docs/cardimage/` | 이 폴더 | 커밋 |
 
@@ -87,7 +119,10 @@ backend`(의존성·마운트 변경이라 재생성 필요). nginx 는 `locatio
 | 항목 | 결정 | 근거 |
 | --- | --- | --- |
 | 범위 | 사진 한 장 입력 → 카드 한 장. **4월(BLOSSOM) + 9월(CHUSEOK)** 까지 이 카드에서, 나머지 달은 후속 | 사용자, 09-13 (4월) · 09-14 (9월 "하나 더", 카드명 CHUSEOK) |
-| 엔진 | **Nano Banana 2 (`gemini-3.1-flash-image`), 2K, 카드 통째** — D-074 | 사용자 결정 09-14 (후보 둘 중 실험 16장으로; Qwen/fal 비교는 접음) |
+| 엔진 | **Nano Banana 2 (`gemini-3.1-flash-image`), 2K, 카드 통째** — D-074. 운영 앱 경로는 지금 이것 하나 | 사용자 결정 09-14 (후보 둘 중 실험 16장으로; Qwen/fal 비교는 접음) |
+| 두 번째 엔진 | **FLUX.2-klein-4B 도 유지** — 자체 GPU 서비스 `daengs_cardgen`(Cloud Run L4), `DAENGS_CARDGEN_URL` 로만 켜짐. 여러 장 뽑아 고르기·개인화 경로 후보 — D-078 | 사용자 결정 09-15 (#544, 같은 조건 12장 비교 뒤) |
+| 실행 자리 | 오픈 모델은 **Cloud Run 서비스**(job 아님) · asia-southeast1 L4 · min 0 · max 1 · 포트 먼저 열고 모델은 백그라운드 로드 · **diffusers** 로 직접(ComfyUI 아님) — D-078 | 사용자 결정 09-15 |
+| seed | 실험은 고정, 운영은 장마다 다르게 두고 쓴 값을 저장 | 사용자 질문 09-15 — 같은 seed 면 사진이 달라도 같은 자리가 깨졌다 |
 | 생성 방식 | **full 모드(카드 통째)로 확정. art 모드(그림만 잘라 생성해 원본 틀에 되붙이기)는 폐기.** | 사용자 결정 09-14 — "합치는 부분이 어색하고 돈만 날린 정도". art 모드가 무엇인지 사전에 제대로 설명이 안 된 채 7장을 썼다. **다시 쓰지 말 것.** 글자 깨짐은 full 에서 닮음 심판과 함께 검사한다 |
 | 무대 고정 | 프롬프트로 매트 색·소품 금지(목줄·리드줄·하네스·옷) 명시. 변주는 강아지 쪽에만 | 사용자 결정 09-13 — "무대가 흔들리면 카드 정체성 훼손" |
 | 입력 크기 | 앱처럼 긴 변 1600px 로 줄여 보냄 | 실험 1·2, 원본과 차이 없음 |
@@ -106,20 +141,22 @@ backend`(의존성·마운트 변경이라 재생성 필요). nginx 는 `locatio
 - ~~입력 사진을 줄여 보낼지~~ → 실험 1·2 로 **1600px 로 줄여도 닮음 차이 없음** 확인 (09-13). 서비스는 앱이 하듯 1600 으로 보낸다.
 - **앱에서 AI 카드를 어떻게 보여 줄지.** 서버는 994×1582(5:8) 를 그대로 주기로 했다(D-076) — 기존 3:4 카드와 섞을지·탭을 나눌지는 DAENGS_APP 쪽 결정.
 - ~~**제품 규칙** — 카드를 몇 장·어떤 조건으로 줄지~~ → **D-077 로 확정 (09-15, #543).** 활동 보상·유료는 여전히 안 정했다.
-- **Qwen 을 어디서 돌릴지.** 실험은 fal 호스팅으로, 서비스·포트폴리오용은 diffusers 로 직접 돌리는 경로가 후보 (research §서빙).
-- ~~엔진 최종 결정 → `docs/decisions.md` 에 번호로.~~ → **D-074 로 확정 (09-14, Nano Banana 2)**
+- ~~**Qwen 을 어디서 돌릴지.**~~ → **09-15 L4 nf4 로 직접 돌려 봤고 결과가 깨져 제외 (D-078).** 원본 품질은 확인하지 않았다(96GB GPU·호스팅 API 로는 안 해 봄).
+- ~~엔진 최종 결정 → `docs/decisions.md` 에 번호로.~~ → **D-074 로 확정 (09-14, Nano Banana 2)** → **D-078 로 Nano Banana 2 · FLUX.2-klein-4B 둘 다 유지 (09-15)**
+- **FLUX.2-klein-4B 를 제품에 어떤 모양으로 넣을지** — 09-16 실험(#557)이 재료를 만들었고, 네 가지가 아직 사람 결정이다:
+  ① 달 틀마다 **검증된 seed 목록**에서 뽑을지 ② 여러 장(순차, 요청당 GPU 약 1분)을 쓸지·몇 장일지 ③ 업로드 **사진 안내 문구** ④ 콜드 스타트 6~7분을 화면에서 기다리게 할지·최소 인스턴스로 덮을지.
+  근거는 `experiments-explained-2026-09-16.md`, 설계 자리는 `roadmap.md` 3번.
+- **11-17 크레딧 만료 뒤 운영 경로** — 보류(사용자 09-15). `roadmap.md` 5번.
 
-## 다음에 할 일 (합의된 실험 순서)
+## 다음에 할 일
 
-호출마다 돈이 나간다. 1K 한 장 약 $0.067, 2K 약 $0.10. 전부 해도 $1 안쪽.
+**[`roadmap.md`](roadmap.md) 맨 위 표를 따른다.** 돈이 나가는 호출 전에 조건·장수·예상 비용을 설명하고 승인받는다(09-13 · 09-15 지적).
 
-1. **원본 그대로**(축소 없음) art 모드 1K 한 장 — 연결 확인 + 닮음 + 머리띠 경계(y≈235) 이음새 확인.
-2. 같은 사진을 **1600px 로 줄여** art 모드 1K 한 장 — 1 과 나란히 놓고 닮음 차이를 본다. 차이 없으면 서비스는 1600 으로 줄여 보낸다.
-3. 같은 조건 2~3장 더 — 생성은 매번 달라서 한 장은 운일 수 있다.
-4. full 모드 1~2장 — 글자가 깨지는지. 안 깨지면 덮어쓰기 없이도 되고, 깨지면 art 모드 확정.
-5. 다른 test 사진 2장으로 1 반복 — 각도·배경에 따른 흔들림.
-6. 결과를 보고 Nano Banana 2 를 「됨 / 조건부 / 안 됨」으로 적는다. 그 뒤 같은 입력을 Qwen-Image-Edit-2511(fal)로 — fal 크레딧 필요.
-7. 2K 는 1K 가 좋을 때 마지막에 한 장.
+**다음 세션 시작점 (2026-09-16 밤 #557 머지 뒤):**
+1. 먼저 읽기 — [`experiments-explained-2026-09-16.md`](experiments-explained-2026-09-16.md)(용어·해석) → `worklog.md` 09-16 밤 절 「아침에 볼 것」(격자 이미지 경로·정할 것).
+2. 2번 카드(#557)는 끝났다. 다음은 **3번 「여러 장 생성 + 고르기」 설계** — 위 「안 정해진 것」의 네 가지를 사람에게 하나씩 물어 정한 뒤 카드를 연다(Priority·Iteration 은 사람).
+3. 3번을 시작하기 전에 필요한 실험이 하나 남아 있다 — **달 틀마다 "글씨가 안 깨지는 seed" 목록 만들기**(사진 2~3장 × seed N, 카드 종류마다 한 번). 비용·장수를 설명하고 승인받는다.
+4. GCP 는 서비스 `daengs-cardgen-klein`(리비전 하나, 기본 마운트) · 잡 `cardgen-weights` · 이미지 `07e7a55` 하나 · 가중치 버킷 14.88GiB. **크레딧 만료 11-17 전에 유지/삭제 결정**(`roadmap.md` 5번).
+5. 코드에 미뤄 둔 정리 네 가지는 **다음 이미지 빌드 때 같이** — #557 본문 「남은 것」.
 
-그 뒤 단계(1단계 서비스 경계 · 2단계 닮음 심판 · 3단계 평가 하네스 · 4단계 오픈 모델 어댑터 · 5단계 앱 연결)의 그림은
-`worklog.md` 09-13 절과 PR #496 본문에 있다. **1단계부터는 계획 문서를 먼저 쓴다** (writing-plans).
+옛 실험 순서(09-13, Nano Banana 2 art/full 모드)는 끝났다 — 경위는 `worklog.md` 09-13·09-14 절.

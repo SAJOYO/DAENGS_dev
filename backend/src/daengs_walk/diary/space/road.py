@@ -1,9 +1,5 @@
-"""Road-name-only normalization; building addresses are never a fallback."""
+"""Compatibility import for the route-owned road-name normalizer."""
 
-import re
+from daengs_walk.route.road import road_name
 
-
-def road_name(value):
-    if isinstance(value, str) and re.fullmatch(r"[가-힣A-Za-z0-9·.\-]+(?:로|길)", value.strip()):
-        return value.strip()
-    return None
+__all__ = ["road_name"]

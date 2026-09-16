@@ -135,7 +135,7 @@ async def generate_relation_part(stage, payload, schema):
 
 
 def validate_prepared(prepared):
-    from daengs_backend.services.walk_diary.preparation.scene_snapshot import (
+    from daengs_backend.services.walk_diary.snapshot_validation import (
         validate_scene_snapshot_bindings,
     )
 

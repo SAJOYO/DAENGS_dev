@@ -4,10 +4,18 @@ import json
 import os
 import shutil
 import subprocess
+from pathlib import Path
 
 import pytest
 
 from tests.walk.support.paths import REPO
+
+
+def powershell_command(executable, script, *arguments):
+    command = [executable, "-NoProfile"]
+    if Path(executable).stem.casefold() == "powershell":
+        command.extend(["-ExecutionPolicy", "Bypass"])
+    return [*command, "-File", str(script), *arguments]
 
 
 @pytest.mark.parametrize(
@@ -56,8 +64,9 @@ catch { $failed = $true }
         encoding="utf-8",
     )
     response = subprocess.run(
-        [pwsh, "-NoProfile", "-File", str(harness), action, str(reject).lower()],
+        powershell_command(pwsh, harness, action, str(reject).lower()),
         text=True,
+        encoding="utf-8",
         capture_output=True,
         check=True,
         timeout=20,
@@ -210,18 +219,22 @@ def test_configure_is_create_only_and_refuses_incomplete_secrets(tmp_path, valid
         "WALK_SGIS_SECRET": "dummysecret",
         "WALK_PUBLIC_DATA_KEY": "dummy%3D" if valid else "",
     }
-    command = [
+    command = powershell_command(
         pwsh,
-        "-NoProfile",
-        "-File",
-        str(script),
+        script,
         "-Action",
         "Configure",
         "-SettingsFile",
         str(target),
-    ]
+    )
     first = subprocess.run(
-        command, env=env, text=True, capture_output=True, timeout=20, check=False
+        command,
+        env=env,
+        text=True,
+        encoding="utf-8",
+        capture_output=True,
+        timeout=20,
+        check=False,
     )
     assert (first.returncode == 0) is valid
     assert "dummysecret" not in first.stdout + first.stderr
@@ -230,7 +243,13 @@ def test_configure_is_create_only_and_refuses_incomplete_secrets(tmp_path, valid
     if valid:
         value = target.read_bytes()
         second = subprocess.run(
-            command, env=env, text=True, capture_output=True, timeout=20, check=False
+            command,
+            env=env,
+            text=True,
+            encoding="utf-8",
+            capture_output=True,
+            timeout=20,
+            check=False,
         )
         assert second.returncode != 0
         assert target.read_bytes() == value

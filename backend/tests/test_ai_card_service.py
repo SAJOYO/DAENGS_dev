@@ -829,7 +829,7 @@ def test_follower_is_not_expired_while_the_leader_is_still_generating(store, sto
     # 두 장은 GPU 경로에서만 나온다(#572 Task 8). `stale_after()` 는 그 경로의 예산(콜드 스타트 포함)으로
     # 아래에서 다시 재므로, 요청 시각은 여전히 정리 기준을 넘긴 채다.
     _two_card_gpu_path(monkeypatch)
-    requested =datetime.now(UTC) - quota.stale_after() - timedelta(minutes=1)
+    requested = datetime.now(UTC) - quota.stale_after() - timedelta(minutes=1)
     _start(now=requested)
     primary, sibling = store.ai_cards
     engine = _SideEffectEngine(lambda: asyncio.run(service.list_cards(FakeSession(), OWNER)))
@@ -1061,6 +1061,34 @@ def test_nano_banana_path_retry_still_below_the_bar_keeps_the_mark(store, jobs, 
     assert len(engine.calls) == 2
     assert card.status == "ready" and card.attempts == 2 and card.likeness == 2  # 둘 중 나은 첫 장
     assert [(u.card_id, u.unfulfilled_attempt) for u in store.ai_card_usage] == [(card.pick_group, True)]
+
+
+def test_nano_banana_path_delete_during_the_first_call_still_counts_once_and_leaves_nothing(
+    store, storage, jobs, monkeypatch
+) -> None:
+    """운영 경로에도 시작→생성 중 삭제 구멍(F1, D-084)이 있다 — 재시도가 한 행 안에서 돌기 때문에, 첫 유료
+    호출 도중 카드를 지워도 재시도 호출까지 나간다. 그래도 시도 표시는 호출 전에 한 줄만 남고(지워도 남는다),
+    사용 기록은 없고, 저장한 객체도 남지 않아야 한다."""
+    _nano_banana_path(monkeypatch)
+    _judge_scores(monkeypatch, [2, 4])  # 첫 장 미달 → 재시도, 둘째 장은 기준 이상
+    current: dict = {}
+    calls = {"n": 0}
+
+    def delete_on_first_call() -> None:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            asyncio.run(service.delete_card(FakeSession(), OWNER, current["id"]))
+
+    engine = _SideEffectEngine(delete_on_first_call)
+    monkeypatch.setattr(ai_card_engine, "default_engine", lambda: engine)
+    card = _start()
+    current["id"] = card.id
+    _run_all(jobs)
+
+    assert len(engine.calls) == 2  # 삭제는 첫 호출 안에서였고, 재시도 호출까지 나갔다
+    assert store.ai_cards == []
+    assert [(u.card_id, u.unfulfilled_attempt) for u in store.ai_card_usage] == [(card.pick_group, True)]
+    assert not storage.local_path(f"ai-cards/{OWNER}/{card.id}.png").exists()
 
 
 def test_gpu_path_passes_explicit_seeds_and_never_retries(store, jobs, monkeypatch) -> None:

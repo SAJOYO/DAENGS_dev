@@ -47,11 +47,13 @@
   테스트는 `cardgen_url` 을 명시로 켜서(`_two_card_gpu_path`) 계속 두 장 경로를 본다
 - **문서** — README 「지금 상태」·「정해진 것」, roadmap 3번 행, D-084, PR 본문 초안의 「요청마다 2장」
   서술을 엔진별로 고쳤다. PR 본문 「배포 영향」은 위 결정대로 다시 썼다: 개발서버 DB 는 `dev` 머지 직전
-  (`.github/workflows/deploy.yml` 이 `dev` push 로 배포), GCP DB 는 dev→main 머지 뒤 GCP 로 올리기 전.
-  수정 파동이 적은 「`db-migrate.yml` 로 개발서버·GCP DB 양쪽에」는 틀렸다 — 그 워크플로는
-  `runs-on: [self-hosted, Windows, X64]`(개발서버)라 GCP VM 의 DB 에는 닿지 않는다. GCP 는
-  `docs/deploy/runbook.md` §6 절차(① `git push gcp main` → ② VM `git fetch` → ③ 마이그레이션 →
-  ④ `git merge --ff-only origin/main` = 배포)를 따른다
+  (`.github/workflows/deploy.yml` 이 `dev` push 로 배포), GCP DB 는 dev→main 때
+  `docs/deploy/runbook.md` §6 절차를 따르되 ③(마이그레이션)을 ④(배포) 전에 한다 — ① 개발 PC 에서
+  `git push gcp main`(객체만 보낸다, 배포 아님) → ② VM `git fetch` · `git diff --stat HEAD origin/main` →
+  ③ VM 에서 새 마이그레이션을 파일 이름 순서로 `-v ON_ERROR_STOP=1` 을 붙여 적용하고 `verify_*.sql` 도 →
+  ④ VM `git merge --ff-only origin/main` = 배포. 수정 파동이 적은 「`db-migrate.yml` 로 개발서버·GCP DB
+  양쪽에」는 틀렸다 — 그 워크플로는 `runs-on: [self-hosted, Windows, X64]`(개발서버)라 GCP VM 의 DB 에는
+  닿지 않는다(수정 라운드 1 에서 그 항목에도 정정을 붙였다)
 
 ### 2026-09-16 — 최종 리뷰 수정 파동 (Critical 0, 머지 전 마지막 손질)
 
@@ -62,7 +64,8 @@ Important 1건(배포 영향 서술)·minor 5건을 한 번에 처리했다.
   `select(AiCard)` 가 없는 컬럼을 읽어 `/app/ai-cards` 전체와 **모든 사용자의 회원 탈퇴**가 500 이
   되는 것이다(`services/app_auth.py:370` · `repositories/ai_card.py:211` 확인). 마이그레이션 목록을
   참 파일 이름 순서로 바로잡고, `.github/workflows/db-migrate.yml`(self-hosted, `ref`·`verify`
-  입력 확인)로 머지 전에 개발서버·GCP DB 양쪽에 적용하는 절차를 적었다. 옛 코드로 롤백하면 옛
+  입력 확인)로 머지 전에 개발서버·GCP DB 양쪽에 적용하는 절차를 적었다 **(Task 8 에서 정정 — 그
+  워크플로는 `runs-on: [self-hosted, Windows, X64]` 라 개발서버 DB 만 닿는다. GCP 는 runbook §6)**. 옛 코드로 롤백하면 옛
   `count_usage_since` 가 오늘 미달·실패·삭제 시도까지 세어 429 를 낼 수 있다는 것도 남겼다
   (초과해서 세는 것뿐, 데이터 손실은 없다)
 - **`ai_cards.seed` 거짓 기록** — Nano Banana 2 는 seed 인자를 받고도 무시하는데 뽑은 값을 그대로

@@ -31,7 +31,7 @@ from daengs_backend.services.ai_card_quota import (
     AiCardMonthTakenError,
 )
 from daengs_cardimage import CardImageUnavailable
-from daengs_cardimage.catalog import MonthNotOpenError
+from daengs_cardimage.catalog import PHOTO_GUIDANCE, MonthNotOpenError
 from daengs_cardimage.photo import MAX_PHOTO_BYTES, PhotoError
 
 log = logging.getLogger(__name__)
@@ -57,7 +57,14 @@ def _with_topic(name: str) -> str:
     return name + "은(는)"
 
 
-def _to_response(card: AiCard, image_url: str | None = None) -> AiCardResponse:
+def _to_response(
+    card: AiCard,
+    image_url: str | None = None,
+    *,
+    done: int | None = None,
+    total: int | None = None,
+    finished: bool | None = None,
+) -> AiCardResponse:
     return AiCardResponse(
         id=card.id,
         dog_id=card.dog_id,
@@ -71,6 +78,10 @@ def _to_response(card: AiCard, image_url: str | None = None) -> AiCardResponse:
         width=card.width,
         height=card.height,
         created_at=card.created_at,
+        pick_group=card.pick_group,
+        done=done,
+        total=total,
+        finished=finished,
         image_url=image_url,
     )
 
@@ -136,7 +147,8 @@ async def create_card(
         raise _error(
             status.HTTP_429_TOO_MANY_REQUESTS, "limit_reached", "오늘은 카드를 더 만들 수 없어요. 내일 다시 시도해 주세요."
         ) from None
-    return _to_response(card)
+    done, total, finished = await ai_card_service.group_progress(session, user.app_user_id, card)
+    return _to_response(card, done=done, total=total, finished=finished)
 
 
 @router.get("", response_model=AiCardListResponse)
@@ -145,7 +157,10 @@ async def list_cards(user: CurrentAppUser, session: Session) -> AiCardListRespon
     cards = await ai_card_service.list_cards(session, user.app_user_id)
     daily_limit, daily_remaining = await ai_card_service.daily_status(session, user.app_user_id)
     return AiCardListResponse(
-        cards=[_to_response(c) for c in cards], daily_limit=daily_limit, daily_remaining=daily_remaining
+        cards=[_to_response(c) for c in cards],
+        daily_limit=daily_limit,
+        daily_remaining=daily_remaining,
+        photo_guidance=PHOTO_GUIDANCE,
     )
 
 
@@ -158,7 +173,26 @@ async def get_card(card_id: uuid.UUID, user: CurrentAppUser, session: Session) -
     except StorageNotConfiguredError as exc:
         log.warning("AI 카드 저장소가 준비되지 않았습니다: %s", exc)
         raise _error(status.HTTP_503_SERVICE_UNAVAILABLE, "storage", "카드 보관은 아직 준비 중이에요.") from None
-    return _to_response(card, url)
+    done, total, finished = await ai_card_service.group_progress(session, user.app_user_id, card)
+    return _to_response(card, url, done=done, total=total, finished=finished)
+
+
+@router.post("/{card_id}/choose", response_model=AiCardResponse)
+async def choose_card(card_id: uuid.UUID, user: CurrentAppUser, session: Session) -> AiCardResponse:
+    """고른 카드만 남기고, 같은 요청에서 나온 형제 카드를 지웁니다 (#572 Task 4)."""
+    try:
+        card, url = await ai_card_service.choose_card(session, user.app_user_id, card_id)
+    except ai_card_service.AiCardNotFoundError:
+        raise _not_found() from None
+    except ai_card_service.AiCardNotReadyError:
+        raise _error(
+            status.HTTP_409_CONFLICT, "not_ready", "아직 만들어지는 중이거나 실패한 카드는 고를 수 없어요."
+        ) from None
+    except StorageNotConfiguredError as exc:
+        log.warning("AI 카드 저장소가 준비되지 않았습니다: %s", exc)
+        raise _error(status.HTTP_503_SERVICE_UNAVAILABLE, "storage", "카드 보관은 아직 준비 중이에요.") from None
+    done, total, finished = await ai_card_service.group_progress(session, user.app_user_id, card)
+    return _to_response(card, url, done=done, total=total, finished=finished)
 
 
 @router.delete("/{card_id}", status_code=status.HTTP_204_NO_CONTENT)

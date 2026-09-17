@@ -7,6 +7,7 @@ DECLARE
     item record;
     relation regclass;
     definition text;
+    missing_backfill boolean;
 BEGIN
     IF to_regclass('ai_card_usage') IS NULL THEN
         RAISE EXCEPTION 'missing table: ai_card_usage';
@@ -70,16 +71,30 @@ BEGIN
         RAISE EXCEPTION 'index mismatch: idx_ai_card_usage_owner_used missing, invalid, or unique';
     END IF;
 
-    -- 백필: 남아 있는 ready 카드에는 전부 기록이 있어야 한다.
+    -- 백필: 남아 있는 **옛(#572 이전) ready 카드**에는 전부 자기 id 의 기록이 있어야 한다.
+    -- #572 부터(D-084) 요청 묶음(pick_group)이 있는 카드는 이 규칙이 아니다 — 한 요청에 기록이
+    -- 한 줄뿐이고(좋은 카드 id 또는 pick_group 의 시도 표시), 둘째 카드에는 줄이 없다. 그래서
+    -- pick_group 이 없는 카드만 본다. 새 DB 에서는 이 파일이 pick_group 을 만드는 2026-09-16 파일보다
+    -- **먼저** 돌므로 칸이 아직 없을 수 있다 — 그때는 모든 카드가 옛 카드다. 칸에 기대는 쿼리는
+    -- 칸이 없으면 계획 단계에서 죽으므로 EXECUTE 로 부른다.
     IF EXISTS (
-        SELECT 1 FROM ai_cards c
-        WHERE c.status = 'ready'
-          AND NOT EXISTS (SELECT 1 FROM ai_card_usage u WHERE u.card_id = c.id)
+        SELECT 1 FROM pg_attribute a
+        WHERE a.attrelid = to_regclass('ai_cards') AND a.attname = 'pick_group'
+          AND a.attnum > 0 AND NOT a.attisdropped
     ) THEN
-        RAISE EXCEPTION 'backfill mismatch: ready ai_cards without ai_card_usage rows';
+        EXECUTE 'SELECT EXISTS (SELECT 1 FROM ai_cards c WHERE c.status = ''ready'' AND c.pick_group IS NULL'
+                ' AND NOT EXISTS (SELECT 1 FROM ai_card_usage u WHERE u.card_id = c.id))'
+            INTO missing_backfill;
+    ELSE
+        EXECUTE 'SELECT EXISTS (SELECT 1 FROM ai_cards c WHERE c.status = ''ready'''
+                ' AND NOT EXISTS (SELECT 1 FROM ai_card_usage u WHERE u.card_id = c.id))'
+            INTO missing_backfill;
+    END IF;
+    IF missing_backfill THEN
+        RAISE EXCEPTION 'backfill mismatch: legacy ready ai_cards without ai_card_usage rows';
     END IF;
 END
 $verify$;
 
--- 사람이 눈으로 보는 자리. 적용 직후에는 ready 카드 수와 같다.
+-- 사람이 눈으로 보는 자리. 새 DB 에 적용한 직후에는 ready 카드 수와 같다(#572 뒤로는 같지 않다).
 SELECT count(*) AS usage_rows FROM ai_card_usage;

@@ -21,8 +21,8 @@ class FakeEngine:
         self.error = error
         self.calls: list[dict] = []
 
-    def generate(self, *, template_png: bytes, photo_jpeg: bytes, prompt: str) -> bytes:
-        self.calls.append({"template": template_png, "photo": photo_jpeg, "prompt": prompt})
+    def generate(self, *, template_png: bytes, photo_jpeg: bytes, prompt: str, seed: int | None = None) -> bytes:
+        self.calls.append({"template": template_png, "photo": photo_jpeg, "prompt": prompt, "seed": seed})
         if self.error:
             raise self.error
         return self.outputs[min(len(self.calls) - 1, len(self.outputs) - 1)]

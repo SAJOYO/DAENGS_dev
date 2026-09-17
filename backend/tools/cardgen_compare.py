@@ -76,9 +76,10 @@ class PromptSuffixEngine:
     def last_meta(self):
         return getattr(self._inner, "last_meta", None)
 
-    def generate(self, *, template_png: bytes, photo_jpeg: bytes, prompt: str) -> bytes:
+    def generate(self, *, template_png: bytes, photo_jpeg: bytes, prompt: str,
+                 seed: int | None = None) -> bytes:
         return self._inner.generate(template_png=template_png, photo_jpeg=photo_jpeg,
-                                    prompt=f"{prompt}\n\n{self._suffix}")
+                                    prompt=f"{prompt}\n\n{self._suffix}", seed=seed)
 
 
 class BatchReplayEngine:
@@ -91,7 +92,10 @@ class BatchReplayEngine:
         self._next = 0
         self.last_meta: dict | None = None
 
-    def generate(self, *, template_png: bytes, photo_jpeg: bytes, prompt: str) -> bytes:
+    def generate(self, *, template_png: bytes, photo_jpeg: bytes, prompt: str,
+                 seed: int | None = None) -> bytes:
+        # `seed` 는 서비스가 한 요청 안에서 스스로 정한다(장별 실제 값은 last_meta["seeds"]) —
+        # 여기서는 프로토콜을 맞추려고 받되, 안쪽 `generate_batch` 는 seed 인자를 안 받는다.
         if self._cards is None:
             self._cards = self._inner.generate_batch(template_png=template_png, photo_jpeg=photo_jpeg,
                                                      prompt=prompt, count=self._count)
@@ -171,6 +175,9 @@ def main(argv: list[str] | None = None) -> int:
                         photo=photo, content_type=MIME[photo_path.suffix.lower()], month=month,
                         dog_name=args.dog_name, engine=engine, judge=judge, base_dir=settings.cardimage_dir,
                         open_months=frozenset(months), judge_min=1,
+                        # 이 도구는 특정 seed 를 정확히 겨눠 비교한다 — pick_seeds 가 대신 고르면
+                        # results.jsonl 의 "seed" 열이 실제로 만든 이미지와 어긋난다(#572 fix round 1 F1).
+                        seed=seed,
                     )
                     seconds = round(time.monotonic() - started, 1)
                     name = f"{photo_path.stem}_{month}_s{seed}" + (f"_b{copy}" if args.batch else "")

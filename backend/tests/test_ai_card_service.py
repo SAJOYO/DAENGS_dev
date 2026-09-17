@@ -33,12 +33,24 @@ from daengs_backend.services import ai_card_engine
 from daengs_backend.services import ai_card_quota as quota
 from daengs_cardimage import CardImageUnavailable
 from daengs_cardimage.catalog import MonthNotOpenError
-from daengs_cardimage.engine import EngineError
+from daengs_cardimage.engine import EngineError, HttpCardImageEngine
 from daengs_cardimage.photo import PhotoError
 from daengs_cardimage.title import title_text
 
 OWNER = uuid.uuid4()
 STRANGER = uuid.uuid4()
+
+#: `jobs` 픽스처가 가짜로 바꾸기 **전의** 진짜 `default_engine` — 엔진 선택이 장수·seed 기록과 같은
+#: 판정을 쓰는지 보는 테스트(#572 Task 8)가 부른다. 모듈을 읽는 시점에 잡아 둔다.
+_REAL_DEFAULT_ENGINE = ai_card_engine.default_engine
+
+
+def _two_card_gpu_path(monkeypatch: pytest.MonkeyPatch) -> None:
+    """한 요청에 두 장을 만드는 경로를 켠다 — `FLUX.2-klein-4B` GPU 경로(`cardgen_url` 있음)에서만
+    `cardimage_pick_count` 장을 만든다(#572 Task 8, 사용자 결정 2026-09-17). Nano Banana 2 경로는
+    설정값과 상관없이 한 장이다."""
+    monkeypatch.setattr(settings, "cardimage_pick_count", 2)
+    monkeypatch.setattr(settings, "cardgen_url", "http://cardgen.example")
 
 
 class _SessionFactory:
@@ -77,6 +89,12 @@ def jobs(monkeypatch: pytest.MonkeyPatch, store: Store, storage: LocalBridgeStor
     monkeypatch.setattr(settings, "cardimage_gemini_api_key", SecretStr("test-key"))
     monkeypatch.setattr(settings, "cardimage_months", frozenset({4, 9}))
     monkeypatch.setattr(settings, "cardimage_daily_limit", 1)
+    # 이 파일의 기존 테스트는 모두 "카드 한 장" 세상(#537·#543)을 본다 — 여러 장(#572 Task 4)은
+    # 아래 전용 테스트에서만 pick_count 를 따로 올린다.
+    monkeypatch.setattr(settings, "cardimage_pick_count", 1)
+    # 기본은 지금 운영과 같은 Nano Banana 2 경로(`cardgen_url` 빈 값, #572 Task 8) — `.env` 에 무엇이
+    # 있든 이 파일의 결과가 달라지지 않게 못박는다. 두 장 경로는 `_two_card_gpu_path` 로 켠다.
+    monkeypatch.setattr(settings, "cardgen_url", "")
     monkeypatch.setattr(ai_card_engine, "default_engine", lambda: FakeEngine())
     monkeypatch.setattr(ai_card_engine, "default_judge", lambda: FakeJudge([5]))
     yield collected
@@ -129,6 +147,25 @@ def test_start_then_background_makes_ready_card(store, storage, jobs) -> None:
 
     got, url = asyncio.run(service.get_card(FakeSession(), OWNER, card.id))
     assert got is card and "/app/ai-cards/_bridge/download/" in url
+
+
+def test_ready_card_records_seed_when_cardgen_url_is_set(store, storage, jobs, monkeypatch) -> None:
+    """GPU 엔진(`cardgen_url` 있음)은 seed 를 실제로 쓰므로 그대로 기록한다(최종 리뷰 minor 3)."""
+    monkeypatch.setattr(settings, "cardgen_url", "http://cardgen.example")
+    card = _start()
+    drawn_seed = card.seed
+    assert drawn_seed is not None
+    _run_all(jobs)
+    assert card.status == "ready" and card.seed == drawn_seed
+
+
+def test_ready_card_seed_is_none_when_cardgen_url_is_empty(store, storage, jobs) -> None:
+    """Nano Banana 2(`cardgen_url` 빈 값)는 seed 를 버리므로 거짓 기록을 남기지 않는다."""
+    card = _start()
+    # #572 Task 8 — 이 경로는 seed 를 명시하지 않고 부른다(재시도 경로). 행에도 처음부터 없다.
+    assert card.seed is None
+    _run_all(jobs)
+    assert card.status == "ready" and card.seed is None
 
 
 def test_engine_failure_marks_failed_without_object(store, storage, jobs, monkeypatch) -> None:
@@ -408,20 +445,21 @@ def test_ready_records_usage(store, jobs) -> None:
     assert usage.card_id == card.id and usage.app_user_id == OWNER and usage.used_at is not None
 
 
-def test_failed_records_no_usage(store, jobs, monkeypatch) -> None:
+def test_failed_records_no_usage_but_an_attempt_mark(store, jobs, monkeypatch) -> None:
     monkeypatch.setattr(ai_card_engine, "default_engine", lambda: FakeEngine(error=EngineError("upstream", "x")))
-    _start()
+    card = _start()
     _run_all(jobs)
-    assert store.ai_card_usage == []
+    assert [(u.card_id, u.unfulfilled_attempt) for u in store.ai_card_usage] == [(card.pick_group, True)]
+    assert asyncio.run(service.daily_status(FakeSession(), OWNER)) == (1, 1)
 
 
-def test_row_deleted_mid_generation_records_no_usage(store, jobs, monkeypatch) -> None:
+def test_row_deleted_mid_generation_records_no_usage_but_an_attempt_mark(store, jobs, monkeypatch) -> None:
     card = _start()
     monkeypatch.setattr(
         ai_card_engine, "default_engine", lambda: _SideEffectEngine(lambda: store.ai_cards.remove(card))
     )
     _run_all(jobs)
-    assert store.ai_card_usage == []
+    assert [(u.card_id, u.unfulfilled_attempt) for u in store.ai_card_usage] == [(card.pick_group, True)]
 
 
 def test_deleting_ready_card_does_not_give_limit_back(store, jobs) -> None:
@@ -555,3 +593,532 @@ def test_cleanup_kst_boundary(store, jobs) -> None:
     store.ai_card_usage.extend([before_midnight, at_midnight])
     asyncio.run(service.cleanup_for_owner(FakeSession(), OWNER, now=now))
     assert store.ai_card_usage == [at_midnight]
+
+
+# ── #572 Task 4 — 한 요청에 2장, 고른 한 장만 저장 ──────────────────────
+
+
+class _FailSecondCallEngine(FakeEngine):
+    """두 번째 호출만 실패하는 엔진 — "한 장 실패해도 나머지 한 장은 남는다" 테스트용."""
+
+    def generate(self, *, template_png, photo_jpeg, prompt, seed=None):
+        self.calls.append({"template": template_png, "photo": photo_jpeg, "prompt": prompt, "seed": seed})
+        if len(self.calls) == 2:
+            raise EngineError("upstream", "두 번째 호출 실패")
+        return self.outputs[0]
+
+
+def test_start_creates_all_rows_up_front(store, jobs, monkeypatch) -> None:
+    """행은 `start` 가 전부 미리 만든다(controller ruling A) — 백그라운드가 돌기 전에도 둘 다 있다.
+
+    대표 행은 자기 id 를 `pick_group` 으로 쓴다 — `idx_ai_cards_one_generating` 이 그 한 행만
+    보게 하기 위해서다(fix round 1 Critical)."""
+    _two_card_gpu_path(monkeypatch)
+    card = _start()
+    assert card.pick_group == card.id
+    assert len(store.ai_cards) == 2
+    primary, sibling = store.ai_cards
+    assert primary is card and primary.status == "generating" and sibling.status == "generating"
+    assert sibling.pick_group == primary.pick_group
+    assert sibling.id != primary.id and sibling.seed != primary.seed
+    assert sibling.app_user_id == OWNER and sibling.dog_name == "네오" and sibling.title == card.title
+    assert len(jobs) == 1  # 요청 하나에 백그라운드 작업 하나 — 그 안에서 행마다 순서대로 돈다
+
+
+def test_two_cards_become_ready_and_only_first_records_usage(store, storage, jobs, monkeypatch) -> None:
+    """두 장 다 성공하면 둘 다 `ready` 가 된다 — 사용 기록은 한 번만(요청을 센다, 카드 수가 아니다)."""
+    _two_card_gpu_path(monkeypatch)
+    card = _start()
+    _run_all(jobs)
+
+    assert len(store.ai_cards) == 2
+    primary, sibling = store.ai_cards
+    assert primary is card and primary.status == "ready" and sibling.status == "ready"
+    assert sibling.storage_key != primary.storage_key
+    assert Image.open(storage.local_path(sibling.storage_key)).size == (994, 1582)
+    assert len(store.ai_card_usage) == 1 and store.ai_card_usage[0].card_id == primary.id
+
+
+def test_second_generation_failing_leaves_one_ready_and_one_failed(store, storage, jobs, monkeypatch) -> None:
+    """두 장 중 하나만 성공해도 실패로 떨어지지 않는다 — 실패한 행도 남는다(지워지지 않는다),
+    고를 카드는 하나 있다."""
+    _two_card_gpu_path(monkeypatch)
+    monkeypatch.setattr(ai_card_engine, "default_engine", lambda: _FailSecondCallEngine())
+    card = _start()
+    _run_all(jobs)
+
+    assert len(store.ai_cards) == 2
+    primary, sibling = store.ai_cards
+    assert primary is card and primary.status == "ready"
+    assert sibling.status == "failed" and sibling.error_code == "upstream"
+    assert len(store.ai_card_usage) == 1
+
+
+def test_one_seed_month_makes_exactly_one_row_and_one_card(store, jobs, monkeypatch) -> None:
+    """겹치지 않는 seed 가 하나뿐인 달은 `cardimage_pick_count=2` 여도 행을 하나만 만든다
+    (controller ruling B — 같은 이미지 두 장에 돈을 두 번 내지 않는다)."""
+    import dataclasses
+
+    from daengs_cardimage import catalog
+
+    _two_card_gpu_path(monkeypatch)
+    monkeypatch.setitem(catalog._CARDS, 4, dataclasses.replace(catalog.get(4), seeds=(7,)))
+    card = _start()
+    assert len(store.ai_cards) == 1 and card.seed == 7
+    _run_all(jobs)
+    assert len(store.ai_cards) == 1 and card.status == "ready"
+
+
+def test_deleting_generating_card_stops_the_next_card_and_records_no_usage(
+    store, storage, jobs, monkeypatch
+) -> None:
+    """생성 중에(첫 장이 아직 도는 사이) 카드를 지우면 형제도 같이 지워지고, `_run` 이 그 형제를
+    다시 만들지 않는다 — 취소된 요청은 만들지 않는다(#572 Task 4 fix round 1 Critical)."""
+    _two_card_gpu_path(monkeypatch)
+    engine = FakeEngine()
+    monkeypatch.setattr(ai_card_engine, "default_engine", lambda: engine)
+    card = _start()
+    assert len(store.ai_cards) == 2
+    asyncio.run(service.delete_card(FakeSession(), OWNER, card.id))
+    assert store.ai_cards == []  # 형제도 같이 지워졌다
+
+    _run_all(jobs)
+
+    assert engine.calls == []  # 엔진이 한 번도 안 불렸다 — 돈이 안 나갔다
+    assert store.ai_card_usage == []
+
+
+def test_deleting_ready_card_does_not_cancel_generating_sibling(store, storage, jobs, monkeypatch) -> None:
+    """카드 1이 이미 `ready` 면 아직 `generating` 인 카드 2 를 지우지 않는다(#572 Task 4 fix
+    round 2 R2-2) — 하루 한도는 이미 그 `ready` 카드로 다 썼으므로 형제를 지워도 한도가
+    돌아오지 않고, `month_taken` 도 그대로다. 오히려 지우면 사용자에게 카드가 하나도 안 남을
+    수 있다."""
+    _two_card_gpu_path(monkeypatch)
+    _start()
+    primary, sibling = store.ai_cards
+    primary.status = "ready"  # 실제로 만들어졌다고 흉내 낸다 — sibling 은 아직 generating.
+
+    asyncio.run(service.delete_card(FakeSession(), OWNER, primary.id))
+
+    assert store.ai_cards == [sibling]  # 형제는 살아 있다
+    assert sibling.status == "generating"
+
+
+def test_group_progress_before_and_after_generation(store, storage, jobs, monkeypatch) -> None:
+    _two_card_gpu_path(monkeypatch)
+    card = _start()
+    assert asyncio.run(service.group_progress(FakeSession(), OWNER, card)) == (0, 2, False)
+    _run_all(jobs)
+    assert asyncio.run(service.group_progress(FakeSession(), OWNER, card)) == (2, 2, True)
+
+
+def test_finished_is_false_while_generating_and_true_once_second_card_fails(
+    store, storage, jobs, monkeypatch
+) -> None:
+    """`finished` 는 `done == total` 이 아니라 "더 만들 카드가 없다" 를 본다 — 둘째 장이
+    실패해도(`done` 이 영영 `total` 에 못 미쳐도) `finished` 는 참이 된다(fix round 1 Important 1)."""
+    _two_card_gpu_path(monkeypatch)
+    monkeypatch.setattr(ai_card_engine, "default_engine", lambda: _FailSecondCallEngine())
+    card = _start()
+    assert asyncio.run(service.group_progress(FakeSession(), OWNER, card))[2] is False
+
+    _run_all(jobs)
+
+    done, total, finished = asyncio.run(service.group_progress(FakeSession(), OWNER, card))
+    assert (done, total, finished) == (1, 2, True)
+
+
+def test_multi_row_request_still_blocks_a_concurrent_request(store, jobs, monkeypatch) -> None:
+    """`has_generating` 은 행 수가 아니라 "generating 인 행이 있나" 를 본다 — 대표 행이든
+    형제 행이든 하나라도 있으면 여전히 막는다."""
+    _two_card_gpu_path(monkeypatch)
+    _start()
+    with pytest.raises(quota.AiCardBusyError):
+        _start()
+
+
+def test_multi_row_request_still_takes_the_month_once_ready(store, jobs, monkeypatch) -> None:
+    """두 장 다 `ready` 가 된 뒤에도 `has_month_card` 는 여전히 그 달을 막는다 — 행이 여럿이어도
+    조건(같은 dog_id·month·ready/generating)을 만족하는 행이 하나라도 있으면 걸린다."""
+    monkeypatch.setattr(settings, "cardimage_daily_limit", 0)
+    _two_card_gpu_path(monkeypatch)
+    pet = FakePet(app_user_id=OWNER, name="네옹", breed="mix")
+    store.pets.append(pet)
+    _start(dog_id=pet.id, month=4)
+    _run_all(jobs)
+    with pytest.raises(quota.AiCardMonthTakenError):
+        _start(dog_id=pet.id, month=4)
+
+
+def test_expire_generating_expires_every_row_of_an_abandoned_group(store, jobs, monkeypatch) -> None:
+    """정리 기준을 넘기면 그룹의 행 **전부**가 `failed`/`interrupted` 가 된다 — 대표 행만이 아니다."""
+    _two_card_gpu_path(monkeypatch)
+    card = _start()
+    primary, sibling = store.ai_cards
+    # GPU 경로의 정리 기준은 `cardgen_timeout_s` 만큼 길다(#572 Task 8 로 두 장이 그 경로에서만 나온다) —
+    # 고정 10분이 아니라 그 기준을 넘긴 시각으로 둔다.
+    old = datetime.now(UTC) - quota.stale_after() - timedelta(minutes=1)
+    primary.updated_at = old
+    sibling.updated_at = old
+
+    asyncio.run(service.list_cards(FakeSession(), OWNER))
+
+    assert primary.status == "failed" and primary.error_code == "interrupted"
+    assert sibling.status == "failed" and sibling.error_code == "interrupted"
+    assert card is primary
+
+
+def test_group_progress_is_finished_without_pick_group(store, jobs) -> None:
+    """옛 카드(마이그레이션 이전)는 `pick_group` 이 없다 — 기다릴 그룹이 없으니 `finished=True`."""
+    card = AiCard(
+        id=uuid.uuid4(), app_user_id=OWNER, month=4, dog_name="네오", title="BLOSSOM 네오", status="ready",
+    )
+    assert asyncio.run(service.group_progress(FakeSession(), OWNER, card)) == (None, None, True)
+
+
+def test_choose_keeps_picked_card_and_deletes_sibling_object(store, storage, jobs, monkeypatch) -> None:
+    _two_card_gpu_path(monkeypatch)
+    _start()
+    _run_all(jobs)
+    primary, sibling = store.ai_cards
+    sibling_path = storage.local_path(sibling.storage_key)
+    assert sibling_path.exists()
+
+    chosen, url = asyncio.run(service.choose_card(FakeSession(), OWNER, primary.id))
+
+    assert chosen is primary
+    assert store.ai_cards == [primary]
+    assert not sibling_path.exists()
+    assert "/app/ai-cards/_bridge/download/" in url
+
+
+def test_choose_without_siblings_is_a_no_op(store, storage, jobs) -> None:
+    """형제가 없으면(단일 생성 경로) 고른 카드를 그대로 돌려준다."""
+    card = _start()
+    _run_all(jobs)
+    chosen, _url = asyncio.run(service.choose_card(FakeSession(), OWNER, card.id))
+    assert chosen is card and store.ai_cards == [card]
+
+
+def test_choose_strangers_card_is_not_found(store, jobs) -> None:
+    card = _start()
+    with pytest.raises(service.AiCardNotFoundError):
+        asyncio.run(service.choose_card(FakeSession(), STRANGER, card.id))
+
+
+def test_choose_a_failed_card_is_rejected_and_deletes_nothing(store, storage, jobs, monkeypatch) -> None:
+    """#572 Task 4 fix round 2 R2-3 — `failed` 카드를 고르면 형제(그중 `ready` 인 좋은 카드일
+    수 있다)를 지워 사용자에게 카드가 하나도 안 남을 수 있다. 그래서 막는다."""
+    _two_card_gpu_path(monkeypatch)
+    monkeypatch.setattr(ai_card_engine, "default_engine", lambda: _FailSecondCallEngine())
+    _start()
+    _run_all(jobs)
+    primary, sibling = store.ai_cards
+    assert primary.status == "ready" and sibling.status == "failed"
+
+    with pytest.raises(service.AiCardNotReadyError):
+        asyncio.run(service.choose_card(FakeSession(), OWNER, sibling.id))
+
+    assert store.ai_cards == [primary, sibling]  # 아무것도 안 지워졌다
+
+
+def test_follower_is_not_expired_while_the_leader_is_still_generating(store, storage, jobs, monkeypatch) -> None:
+    """#572 Task 5 — 요청 시각이 오래전이라(대기열이 길었다) 두 번째 카드의 `updated_at` 이 이미
+    정리 기준을 넘었어도, 첫 카드가 슬롯을 잡고 도는 동안 누가 목록을 열면 두 번째를 덮으면 안 된다.
+    덮으면 사용자는 돈 한 푼 안 나간 채 약속받은 두 장 중 한 장을 조용히 잃는다."""
+    # 두 장은 GPU 경로에서만 나온다(#572 Task 8). `stale_after()` 는 그 경로의 예산(콜드 스타트 포함)으로
+    # 아래에서 다시 재므로, 요청 시각은 여전히 정리 기준을 넘긴 채다.
+    _two_card_gpu_path(monkeypatch)
+    requested = datetime.now(UTC) - quota.stale_after() - timedelta(minutes=1)
+    _start(now=requested)
+    primary, sibling = store.ai_cards
+    engine = _SideEffectEngine(lambda: asyncio.run(service.list_cards(FakeSession(), OWNER)))
+    monkeypatch.setattr(ai_card_engine, "default_engine", lambda: engine)
+
+    _run_all(jobs)
+
+    assert len(engine.calls) == 2  # 두 번째 카드도 실제로 만들어졌다
+    assert primary.status == "ready" and sibling.status == "ready"
+
+
+def _judge_scores(monkeypatch: pytest.MonkeyPatch, scores: list) -> None:
+    monkeypatch.setattr(settings, "cardimage_judge_min", 3)
+    monkeypatch.setattr(ai_card_engine, "default_judge", lambda: FakeJudge(scores))
+
+
+def test_below_min_card_is_ready_but_does_not_use_the_daily_limit(store, jobs, monkeypatch) -> None:
+    """닮음이 기준 미만이면 카드는 돌려주되 하루치는 안 쓴다 — 사진 각도가 나쁘면 다시 뽑아도
+    안 구해지므로(#557 E2 엎드린 옆모습 0장) 사용자가 그날을 통째로 잃는다. 대신 시도 표시가 남는다."""
+    _judge_scores(monkeypatch, [2])
+    card = _start()
+    _run_all(jobs)
+    assert card.status == "ready" and card.likeness == 2
+    assert [(u.card_id, u.unfulfilled_attempt) for u in store.ai_card_usage] == [(card.pick_group, True)]
+    assert asyncio.run(service.daily_status(FakeSession(), OWNER)) == (1, 1)
+    assert _start(month=9).status == "generating"
+
+
+def test_card_at_the_threshold_uses_the_daily_limit(store, jobs, monkeypatch) -> None:
+    _judge_scores(monkeypatch, [3])
+    card = _start()
+    _run_all(jobs)
+    assert [(u.card_id, u.unfulfilled_attempt) for u in store.ai_card_usage] == [(card.id, False)]
+    with pytest.raises(quota.AiCardLimitError):
+        _start()
+
+
+def test_judge_outage_uses_the_daily_limit(store, jobs, monkeypatch) -> None:
+    """검수 장애로 점수가 없으면(`None`) 기준을 넘은 것으로 센다 — 장애가 공짜 무한 생성이 되면 안 된다."""
+    from daengs_cardimage.judge import JudgeError
+
+    monkeypatch.setattr(ai_card_engine, "default_judge", lambda: FakeJudge(error=JudgeError("down")))
+    card = _start()
+    _run_all(jobs)
+    assert card.status == "ready" and card.likeness is None
+    assert [u.unfulfilled_attempt for u in store.ai_card_usage] == [False]
+    with pytest.raises(quota.AiCardLimitError):
+        _start()
+
+
+def test_below_min_then_good_card_leaves_only_the_usage(store, jobs, monkeypatch) -> None:
+    """한 요청에서 한 장이라도 기준을 넘으면 그 요청은 성공한 뽑기다 — 첫 슬롯에서 남긴 시도 표시는
+    같은 트랜잭션에서 지우고 사용 기록 하나만 남는다(시도 상한에 이중으로 잡히지 않는다)."""
+    _two_card_gpu_path(monkeypatch)
+    _judge_scores(monkeypatch, [2, 5])
+    _start()
+    _run_all(jobs)
+    primary, sibling = store.ai_cards
+    assert primary.status == "ready" and sibling.status == "ready"
+    assert [(u.card_id, u.unfulfilled_attempt) for u in store.ai_card_usage] == [(sibling.id, False)]
+
+
+def test_good_then_below_min_card_leaves_only_the_usage(store, jobs, monkeypatch) -> None:
+    _two_card_gpu_path(monkeypatch)
+    _judge_scores(monkeypatch, [5, 2])
+    card = _start()
+    _run_all(jobs)
+    assert [(u.card_id, u.unfulfilled_attempt) for u in store.ai_card_usage] == [(card.id, False)]
+
+
+def test_two_below_min_cards_leave_one_mark_per_request(store, jobs, monkeypatch) -> None:
+    """시도는 **요청 단위**로 센다 — 두 장이 다 미달이어도 뽑기 한 번이다."""
+    _two_card_gpu_path(monkeypatch)
+    _judge_scores(monkeypatch, [2])
+    card = _start()
+    _run_all(jobs)
+    assert [(u.card_id, u.unfulfilled_attempt) for u in store.ai_card_usage] == [(card.pick_group, True)]
+
+
+def test_deleting_below_min_cards_does_not_reset_the_paid_cap(store, jobs, monkeypatch) -> None:
+    """5번 연속 미달이면 여섯 번째는 거절된다 — **카드를 지워도** 표시는 남는다. 같은 강아지·같은 달을
+    다시 뽑으려면 그 카드를 지워야 하므로(`month_taken`), 카드 행으로 셌다면 매번 초기화됐다."""
+    _two_card_gpu_path(monkeypatch)
+    _judge_scores(monkeypatch, [1])
+    pet = FakePet(app_user_id=OWNER, name="네옹", breed="mix")
+    store.pets.append(pet)
+    for _ in range(quota.MAX_PAID_FAILURES_PER_DAY):
+        _start(dog_id=pet.id, month=4)
+        _run_all(jobs)
+        for card in list(store.ai_cards):
+            asyncio.run(service.delete_card(FakeSession(), OWNER, card.id))
+    assert store.ai_cards == []
+    with pytest.raises(quota.AiCardLimitError):
+        _start(dog_id=pet.id, month=4)
+
+
+def test_start_then_delete_mid_generation_loop_is_bounded(store, storage, jobs, monkeypatch) -> None:
+    """F1 (D-084) — 시작 → 유료 호출 도중 삭제를 되풀이하면 카드 행·사용 기록이 하나도 안 남는다. 시도
+    표시가 **호출 전에** 남으므로 5번째 뒤로는 거절되고, 엔진은 정확히 5번만 불린다."""
+    _two_card_gpu_path(monkeypatch)
+    monkeypatch.setattr(settings, "cardimage_daily_limit", 1)
+    current: dict = {}
+    engine = _SideEffectEngine(lambda: asyncio.run(service.delete_card(FakeSession(), OWNER, current["id"])))
+    monkeypatch.setattr(ai_card_engine, "default_engine", lambda: engine)
+    for _ in range(quota.MAX_PAID_FAILURES_PER_DAY):
+        current["id"] = _start().id
+        _run_all(jobs)
+        assert store.ai_cards == []  # 대표·형제 모두 지워졌다 — 카드 행으로는 셀 것이 없다
+    assert [u.unfulfilled_attempt for u in store.ai_card_usage] == [True] * quota.MAX_PAID_FAILURES_PER_DAY
+    with pytest.raises(quota.AiCardLimitError):
+        _start()
+    assert len(engine.calls) == quota.MAX_PAID_FAILURES_PER_DAY
+
+
+def test_failed_calls_leave_one_mark_per_request_even_after_deleting_the_cards(store, jobs, monkeypatch) -> None:
+    """두 장이 다 실패한 요청도 표시는 요청마다 한 줄이고, 실패 카드를 지워도 남는다."""
+    _two_card_gpu_path(monkeypatch)
+    monkeypatch.setattr(ai_card_engine, "default_engine", lambda: FakeEngine(error=EngineError("upstream", "x")))
+    card = _start()
+    _run_all(jobs)
+    assert [c.status for c in store.ai_cards] == ["failed", "failed"]
+    for c in list(store.ai_cards):
+        asyncio.run(service.delete_card(FakeSession(), OWNER, c.id))
+    assert [(u.card_id, u.unfulfilled_attempt) for u in store.ai_card_usage] == [(card.pick_group, True)]
+
+
+def test_attempt_mark_is_written_before_the_paid_call(store, jobs, monkeypatch) -> None:
+    seen: list = []
+    engine = _SideEffectEngine(lambda: seen.append([(u.card_id, u.unfulfilled_attempt) for u in store.ai_card_usage]))
+    monkeypatch.setattr(ai_card_engine, "default_engine", lambda: engine)
+    card = _start()
+    assert store.ai_card_usage == []  # 한도 검사를 통과한 것만으로는 안 남는다
+    _run_all(jobs)
+    assert seen == [[(card.pick_group, True)]]
+
+
+def test_choose_a_generating_card_is_rejected_and_deletes_nothing(store, storage, jobs, monkeypatch) -> None:
+    """#572 Task 4 fix round 2 R2-3 — 아직 `generating` 인(형제가 먼저 `ready` 가 됐을 수 있는)
+    카드를 고르면 그 `ready` 형제를 지워 버릴 수 있다. 그래서 막는다."""
+    _two_card_gpu_path(monkeypatch)
+    _start()
+    primary, sibling = store.ai_cards
+    primary.status = "ready"  # sibling 은 아직 generating 인 채로 둔다.
+
+    with pytest.raises(service.AiCardNotReadyError):
+        asyncio.run(service.choose_card(FakeSession(), OWNER, sibling.id))
+
+    assert store.ai_cards == [primary, sibling]  # 아무것도 안 지워졌다
+
+
+# ── #572 Task 8 — 장수는 엔진이 정한다 (사용자 결정 2026-09-17) ──────────────
+# Nano Banana 2(`cardgen_url` 빈 값, 지금 운영)는 한 요청에 **한 장**, seed 를 명시하지 않고 불러
+# `generate_card` 의 재시도(첫 장이 `cardimage_judge_min` 미만이면 한 번 더)가 돈다. 두 장은 앱의 고르기
+# 화면과 함께 `FLUX.2-klein-4B`(`cardgen_url` 있음)를 켤 때 나간다.
+
+
+def _nano_banana_path(monkeypatch: pytest.MonkeyPatch) -> None:
+    """설정값이 2여도 Nano Banana 2 경로는 한 장이다 — 그것을 보이려고 일부러 2로 둔다."""
+    monkeypatch.setattr(settings, "cardimage_pick_count", 2)
+    monkeypatch.setattr(settings, "cardgen_url", "")
+
+
+def _spy_generate_seeds(monkeypatch: pytest.MonkeyPatch) -> list:
+    """`_run` 이 `ai_card_engine.generate` 에 넘긴 `seed` 인자를 호출마다 모은다."""
+    seen: list = []
+    original = ai_card_engine.generate
+
+    def spy(**kw):
+        seen.append(kw.get("seed"))
+        return original(**kw)
+
+    monkeypatch.setattr(ai_card_engine, "generate", spy)
+    return seen
+
+
+def test_nano_banana_path_creates_exactly_one_row_without_a_seed(store, jobs, monkeypatch) -> None:
+    _nano_banana_path(monkeypatch)
+    card = _start()
+    assert store.ai_cards == [card] and card.seed is None and card.pick_group == card.id
+    assert asyncio.run(service.group_progress(FakeSession(), OWNER, card)) == (0, 1, False)
+
+
+def test_nano_banana_path_good_first_card_calls_the_engine_once(store, jobs, monkeypatch) -> None:
+    _nano_banana_path(monkeypatch)
+    _judge_scores(monkeypatch, [3])
+    engine = FakeEngine()
+    monkeypatch.setattr(ai_card_engine, "default_engine", lambda: engine)
+    seeds = _spy_generate_seeds(monkeypatch)
+    card = _start()
+    _run_all(jobs)
+    assert seeds == [None]  # seed 를 명시하지 않았다 — 재시도 경로다
+    assert len(engine.calls) == 1
+    assert card.status == "ready" and card.attempts == 1 and card.likeness == 3 and card.seed is None
+    assert [(u.card_id, u.unfulfilled_attempt) for u in store.ai_card_usage] == [(card.id, False)]
+    assert asyncio.run(service.group_progress(FakeSession(), OWNER, card)) == (1, 1, True)
+
+
+def test_nano_banana_path_retries_once_when_the_first_card_is_below_the_bar(store, jobs, monkeypatch) -> None:
+    """운영 경로의 재시도가 살아 있다 — 첫 장이 기준 미만이면 한 행 안에서 엔진을 한 번 더 부르고 나은 쪽을
+    남긴다. 시도 표시는 **첫 호출 전에 한 번만** 남고(재시도 전에 다시 남지 않는다), 남긴 카드가 기준
+    이상이면 사용 기록 하나로 바뀐다."""
+    _nano_banana_path(monkeypatch)
+    _judge_scores(monkeypatch, [2, 4])
+    seen_marks: list = []
+    engine = _SideEffectEngine(
+        lambda: seen_marks.append([(u.card_id, u.unfulfilled_attempt) for u in store.ai_card_usage])
+    )
+    monkeypatch.setattr(ai_card_engine, "default_engine", lambda: engine)
+    seeds = _spy_generate_seeds(monkeypatch)
+    card = _start()
+    _run_all(jobs)
+
+    assert seeds == [None]  # `_run` 은 한 번 불렀고, 재시도는 `generate_card` 안에서 돌았다
+    assert len(engine.calls) == 2
+    assert seen_marks == [[(card.pick_group, True)], [(card.pick_group, True)]]
+    assert store.ai_cards == [card]
+    assert card.status == "ready" and card.attempts == 2 and card.likeness == 4 and card.seed is None
+    assert [(u.card_id, u.unfulfilled_attempt) for u in store.ai_card_usage] == [(card.id, False)]
+    assert asyncio.run(service.group_progress(FakeSession(), OWNER, card)) == (1, 1, True)
+
+
+def test_nano_banana_path_retry_still_below_the_bar_keeps_the_mark(store, jobs, monkeypatch) -> None:
+    _nano_banana_path(monkeypatch)
+    _judge_scores(monkeypatch, [2, 1])
+    engine = FakeEngine()
+    monkeypatch.setattr(ai_card_engine, "default_engine", lambda: engine)
+    card = _start()
+    _run_all(jobs)
+    assert len(engine.calls) == 2
+    assert card.status == "ready" and card.attempts == 2 and card.likeness == 2  # 둘 중 나은 첫 장
+    assert [(u.card_id, u.unfulfilled_attempt) for u in store.ai_card_usage] == [(card.pick_group, True)]
+
+
+def test_nano_banana_path_delete_during_the_first_call_still_counts_once_and_leaves_nothing(
+    store, storage, jobs, monkeypatch
+) -> None:
+    """운영 경로에도 시작→생성 중 삭제 구멍(F1, D-084)이 있다 — 재시도가 한 행 안에서 돌기 때문에, 첫 유료
+    호출 도중 카드를 지워도 재시도 호출까지 나간다. 그래도 시도 표시는 호출 전에 한 줄만 남고(지워도 남는다),
+    사용 기록은 없고, 저장한 객체도 남지 않아야 한다."""
+    _nano_banana_path(monkeypatch)
+    _judge_scores(monkeypatch, [2, 4])  # 첫 장 미달 → 재시도, 둘째 장은 기준 이상
+    current: dict = {}
+    calls = {"n": 0}
+
+    def delete_on_first_call() -> None:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            asyncio.run(service.delete_card(FakeSession(), OWNER, current["id"]))
+
+    engine = _SideEffectEngine(delete_on_first_call)
+    monkeypatch.setattr(ai_card_engine, "default_engine", lambda: engine)
+    card = _start()
+    current["id"] = card.id
+    _run_all(jobs)
+
+    assert len(engine.calls) == 2  # 삭제는 첫 호출 안에서였고, 재시도 호출까지 나갔다
+    assert store.ai_cards == []
+    assert [(u.card_id, u.unfulfilled_attempt) for u in store.ai_card_usage] == [(card.pick_group, True)]
+    assert not storage.local_path(f"ai-cards/{OWNER}/{card.id}.png").exists()
+
+
+def test_gpu_path_passes_explicit_seeds_and_never_retries(store, jobs, monkeypatch) -> None:
+    """GPU 경로는 그대로다 — 행마다 미리 뽑은 seed 를 명시하고, 기준 미만이어도 재시도하지 않는다."""
+    _two_card_gpu_path(monkeypatch)
+    _judge_scores(monkeypatch, [2])
+    engine = FakeEngine()
+    monkeypatch.setattr(ai_card_engine, "default_engine", lambda: engine)
+    seeds = _spy_generate_seeds(monkeypatch)
+    _start()
+    primary, sibling = store.ai_cards
+    _run_all(jobs)
+    assert seeds == [primary.seed, sibling.seed] and None not in seeds
+    assert len(engine.calls) == 2 and primary.attempts == 1 and sibling.attempts == 1
+
+
+@pytest.mark.parametrize(
+    "url", ["http://cardgen.example", "  https://cardgen.example  ", "", "   "], ids=["set", "padded", "empty", "blank"]
+)
+def test_engine_choice_card_count_and_recorded_seed_agree(store, jobs, monkeypatch, url) -> None:
+    """「GPU 경로인가」는 `ai_card_engine.gpu_path_active` 한 곳이 정한다 — 엔진 선택·장수·seed 기록이
+    서로 다른 판정을 쓰면(예: 한쪽만 `strip()`) 공백뿐인 URL 에서 Nano Banana 2 로 두 장을 뽑거나
+    엔진이 버린 seed 를 기록하게 된다."""
+    monkeypatch.setattr(settings, "cardgen_url", url)
+    monkeypatch.setattr(settings, "cardimage_pick_count", 2)
+    gpu = ai_card_engine.gpu_path_active()
+    assert gpu is bool(url.strip())
+    assert isinstance(_REAL_DEFAULT_ENGINE(), HttpCardImageEngine) is gpu
+    _start()
+    assert len(store.ai_cards) == (2 if gpu else 1)
+    _run_all(jobs)
+    assert [c.status for c in store.ai_cards] == ["ready"] * len(store.ai_cards)
+    assert all((c.seed is not None) is gpu for c in store.ai_cards)

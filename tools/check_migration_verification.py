@@ -239,6 +239,75 @@ GAIT_RECORDS_POSE_MODEL_ROWS = (
 # **모듈 수준에 둔다** — `coverage_checks()` 가 "등록됐나"를 이 목록에서 읽는다. 함수 안에
 # 있으면 그 검사가 소스를 정규식으로 긁어야 하고, 그러면 목록을 고칠 때마다 정규식이 낡는다.
 CHECKS = (
+        # 시도 표시 칸(#572 Task 5, D-084). 픽스처에 ready 카드 한 장 + 그 사용 기록(09-15 백필)을
+        # 넣어 **기존 줄이 있는 표에** NOT NULL 칸이 붙게 한다 — 빈 표면 NOT NULL·기본값 변조가 아무것도
+        # 안 건드린다. 기본값을 잃거나 true 로 뒤집는 변조가 이 항목의 핵심이다 — 칸을 안 적는
+        # INSERT(옛 코드)가 죽거나 전부 시도 표시가 되어 하루 한도가 아무것도 안 센다.
+        ('2026-09-16', 'ai_card_usage_unfulfilled_attempt',
+         APP_USERS + PETS_ONLY + SET_UPDATED_AT
+         + "\n".join([prerequisites('2026-09-14_ai_cards'),
+                      "INSERT INTO ai_cards(id, app_user_id, month, dog_name, title, status,"
+                      " storage_key, generation, size_bytes, width, height) VALUES"
+                      " ('77777777-7777-7777-7777-777777777777', '11111111-1111-1111-1111-111111111111',"
+                      "  4, 'x', 'BLOSSOM X', 'ready', 'k', 'g', 1, 994, 1582);",
+                      prerequisites('2026-09-15_ai_card_usage')]),
+         'ai_card_usage', [
+            'ALTER TABLE ai_card_usage DROP COLUMN unfulfilled_attempt',
+            'ALTER TABLE ai_card_usage ALTER COLUMN unfulfilled_attempt DROP NOT NULL',
+            'ALTER TABLE ai_card_usage ALTER COLUMN unfulfilled_attempt DROP DEFAULT',
+            'ALTER TABLE ai_card_usage ALTER COLUMN unfulfilled_attempt SET DEFAULT true',
+            # 기본값을 먼저 지워야 타입 변경 자체가 성공한다(false 는 smallint 로 자동 변환이 안 된다) —
+            # 그래야 ALTER 가 죽은 것이 아니라 verify 가 잡은 것이 된다.
+            'ALTER TABLE ai_card_usage ALTER COLUMN unfulfilled_attempt DROP DEFAULT;'
+            ' ALTER TABLE ai_card_usage ALTER COLUMN unfulfilled_attempt TYPE smallint'
+            ' USING unfulfilled_attempt::int;'
+            ' ALTER TABLE ai_card_usage ALTER COLUMN unfulfilled_attempt SET DEFAULT 0',
+        ]),
+        # 한 요청에서 나온 카드들을 묶는 칸(#572 Task 4) + 「사용자별 동시 1장」을 요청의
+        # 대표 행(id = pick_group) 하나로 좁힌다(fix round 1 Critical). 컬럼·인덱스 전환이
+        # 한 파일·한 트랜잭션에 있다(fix round 2 R2-1 — 갈라져 있으면 적용 순서에 따라
+        # ai_cards 에 「동시 1장」 인덱스가 하나도 없는 채로 남을 수 있었다). NOT NULL 로
+        # 좁히는 변조·옛 predicate 로 되돌리는 변조가 이 항목의 핵심이다.
+        ('2026-09-16', 'ai_card_pick_group',
+         APP_USERS + PETS_ONLY + SET_UPDATED_AT + prerequisites('2026-09-14_ai_cards'),
+         'ai_cards', [
+            'ALTER TABLE ai_cards DROP COLUMN pick_group CASCADE',
+            # idx_ai_cards_one_generating 의 predicate(id = pick_group)가 uuid 비교라, 그 인덱스가
+            # 있는 채로 타입을 바꾸면 ALTER 자체가 "operator does not exist: uuid = text" 로 죽는다
+            # (verifier 가 잡은 것이 아니라 ALTER 가 실패한 것이 된다 — #271 의 NOT VALID 와
+            # 같은 함정). 인덱스를 먼저 지워야 타입 변경 자체는 성공하고, 그다음에야 verify 가
+            # "칸이 uuid 가 아니다" 로 잡는다.
+            'DROP INDEX idx_ai_cards_one_generating;'
+            ' ALTER TABLE ai_cards ALTER COLUMN pick_group TYPE text',
+            'ALTER TABLE ai_cards ALTER COLUMN pick_group SET NOT NULL',
+            'DROP INDEX ix_ai_cards_pick_group',
+            # 유일성이 잘못 붙는 변조 — 같은 pick_group 값을 공유하는 형제 행이 정상인데,
+            # UNIQUE 면 두 번째 형제를 만드는 순간 이 인덱스가 막는다.
+            'DROP INDEX ix_ai_cards_pick_group;'
+            ' CREATE UNIQUE INDEX ix_ai_cards_pick_group ON ai_cards (pick_group)',
+            'DROP INDEX idx_ai_cards_one_generating',
+            # 옛 정의로 되돌리는 변조 — 형제 행 하나만 더 생겨도 이 인덱스가 막는다.
+            'DROP INDEX idx_ai_cards_one_generating;'
+            " CREATE UNIQUE INDEX idx_ai_cards_one_generating ON ai_cards (app_user_id)"
+            " WHERE status = 'generating'",
+            # 유일성을 잃는 변조.
+            'DROP INDEX idx_ai_cards_one_generating;'
+            " CREATE INDEX idx_ai_cards_one_generating ON ai_cards (app_user_id)"
+            " WHERE status = 'generating' AND id = pick_group",
+            # predicate 를 통째로 잃는 변조 — WHERE 가 없으면 사용자 전체에서 generating 상태와
+            # 무관하게 유일해야 하므로, 카드를 하나라도 두 번째 만드는 순간(무슨 상태든) 막힌다.
+            'DROP INDEX idx_ai_cards_one_generating;'
+            ' CREATE UNIQUE INDEX idx_ai_cards_one_generating ON ai_cards (app_user_id)',
+        ]),
+        # seed 한 칸(#572 Task 3a). SmallInteger 로 좁아지는 변조가 이 항목의 핵심이다 —
+        # 카드 생성기가 32767 을 넘는 seed 를 쓸 수 있다.
+        ('2026-09-16', 'ai_card_seed',
+         APP_USERS + PETS_ONLY + SET_UPDATED_AT + prerequisites('2026-09-14_ai_cards'),
+         'ai_cards', [
+            'ALTER TABLE ai_cards DROP COLUMN seed',
+            'ALTER TABLE ai_cards ALTER COLUMN seed TYPE smallint',
+            'ALTER TABLE ai_cards ALTER COLUMN seed SET NOT NULL',
+        ]),
         # 사용 기록(#543). 픽스처에 ready 카드 한 장을 넣어 **백필이 실제로 돈다** — 'DELETE' 변조가 그것을 잰다.
         ('2026-09-15', 'ai_card_usage',
          APP_USERS + PETS_ONLY + SET_UPDATED_AT + prerequisites('2026-09-14_ai_cards')
@@ -257,6 +326,20 @@ CHECKS = (
             'DROP INDEX idx_ai_card_usage_owner_used',
             # 백필이 빠진 상태
             'DELETE FROM ai_card_usage',
+        ]),
+        # 같은 파일, **pick_group 칸이 이미 있는 DB** (#572 Task 5 fix round 1). verify 의 백필 단언이
+        # 칸이 있으면 옛 카드(pick_group IS NULL)만 보는 EXECUTE 갈래를 탄다 — 위 항목은 칸이 없는
+        # 갈래만 잰다. 픽스처의 옛 카드 기록을 지우는 변조를 그 갈래가 잡아야 한다. 요청 묶음 카드의
+        # 기록이 없는 것은 #572 뒤로 정상이라 변조가 아니다.
+        ('2026-09-15', 'ai_card_usage',
+         APP_USERS + PETS_ONLY + SET_UPDATED_AT + prerequisites('2026-09-14_ai_cards')
+         + "ALTER TABLE ai_cards ADD COLUMN pick_group uuid;"
+           "INSERT INTO ai_cards(id, app_user_id, month, dog_name, title, status,"
+           " storage_key, generation, size_bytes, width, height) VALUES"
+           " ('77777777-7777-7777-7777-777777777777', '11111111-1111-1111-1111-111111111111',"
+           "  4, 'x', 'BLOSSOM X', 'ready', 'k', 'g', 1, 994, 1582);",
+         'ai_card_usage', [
+            "DELETE FROM ai_card_usage WHERE card_id = '77777777-7777-7777-7777-777777777777'",
         ]),
         ('2026-09-14', 'ai_cards', APP_USERS + PETS_ONLY + SET_UPDATED_AT, 'ai_cards', [
             'ALTER TABLE ai_cards DROP COLUMN status CASCADE',

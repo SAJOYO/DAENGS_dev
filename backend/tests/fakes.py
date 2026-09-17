@@ -14,6 +14,7 @@ import pytest
 from sqlalchemy.exc import IntegrityError
 
 from daengs_backend.core.subject import SubjectType
+from daengs_backend.models import AiCardUsage
 from daengs_backend.repositories import admin_audit_log as admin_audit_log_repo
 from daengs_backend.repositories import admin_user as admin_user_repo
 from daengs_backend.repositories import ai_card as ai_card_repo
@@ -1882,10 +1883,14 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
     # 탈퇴가 이것도 명시로 지웁니다. 대역이 없으면 탈퇴 테스트가 진짜 DB 를 찾다가 깨집니다.
 
     def ai_card_add(session, card):
-        # `idx_ai_cards_one_generating` 부분 UNIQUE 를 흉내 냅니다. 진짜 DB 는 commit 에서
-        # 터지고, 서비스가 add 와 commit 을 **같은 try** 로 감싸므로 여기서 내도 같은 길을 탑니다.
-        if card.status == "generating" and any(
-            c.app_user_id == card.app_user_id and c.status == "generating" for c in store.ai_cards
+        # `idx_ai_cards_one_generating` 부분 UNIQUE 를 흉내 냅니다 — **요청의 대표 행
+        # (id == pick_group)만** 봅니다(#572 Task 4 fix round 1 Critical). 형제 행은 같은
+        # app_user_id·status='generating' 이어도 걸리지 않아야, 한 요청이 만드는 여러 행이
+        # 한꺼번에 들어갈 수 있습니다. 진짜 DB 는 commit 에서 터지고, 서비스가 add 와 commit 을
+        # **같은 try** 로 감싸므로 여기서 내도 같은 길을 탑니다.
+        if card.status == "generating" and card.id == card.pick_group and any(
+            c.app_user_id == card.app_user_id and c.status == "generating" and c.id == c.pick_group
+            for c in store.ai_cards
         ):
             # 진짜 드라이버 예외 문구에도 제약 이름이 들어 있습니다 — 서비스가 `exc.orig` 에서 그 이름을 봅니다.
             raise IntegrityError(
@@ -1928,23 +1933,47 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
         return usage
 
     async def ai_card_count_usage_since(session, app_user_id, since):
-        return sum(1 for u in store.ai_card_usage if u.app_user_id == app_user_id and u.used_at >= since)
-
-    async def ai_card_count_failed_since(session, app_user_id, since, codes):
+        # 시도 표시(unfulfilled_attempt)는 하루 한도가 아니다 (#572 Task 5). 칸을 안 준 옛 테스트 객체는
+        # None 이라 사용 기록으로 센다 — 진짜 DB 의 기본값 false 와 같다.
         return sum(
-            1
-            for c in store.ai_cards
-            if c.app_user_id == app_user_id
-            and c.status == "failed"
-            and c.error_code in codes
-            and c.created_at >= since
+            1 for u in store.ai_card_usage
+            if u.app_user_id == app_user_id and u.used_at >= since and not u.unfulfilled_attempt
         )
 
+    async def ai_card_add_attempt_mark(session, pick_group, app_user_id, *, marked_at):
+        # ON CONFLICT (card_id) DO NOTHING 과 같다.
+        if any(u.card_id == pick_group for u in store.ai_card_usage):
+            return
+        store.ai_card_usage.append(
+            AiCardUsage(card_id=pick_group, app_user_id=app_user_id, used_at=marked_at, unfulfilled_attempt=True)
+        )
+
+    async def ai_card_count_attempt_marks_since(session, app_user_id, since):
+        return sum(
+            1 for u in store.ai_card_usage
+            if u.app_user_id == app_user_id and u.used_at >= since and u.unfulfilled_attempt is True
+        )
+
+    async def ai_card_delete_attempt_mark(session, pick_group):
+        gone = [u for u in store.ai_card_usage if u.card_id == pick_group and u.unfulfilled_attempt is True]
+        store.ai_card_usage = [u for u in store.ai_card_usage if u not in gone]
+        return len(gone)
+
     async def ai_card_expire_generating(session, app_user_id, *, stale_before, now):
+        # 진짜 쿼리와 같은 규칙 (#572 Task 5): 행 하나가 아니라 **같은 pick_group 의 가장 최근
+        # updated_at** 으로 잰다. pick_group 이 없는 옛 행은 제 updated_at 으로.
+        def last_progress(card):
+            if card.pick_group is None:
+                return card.updated_at
+            return max(
+                c.updated_at for c in store.ai_cards
+                if c.app_user_id == app_user_id and c.pick_group == card.pick_group
+            )
+
         expired = [
             c
             for c in store.ai_cards
-            if c.app_user_id == app_user_id and c.status == "generating" and c.updated_at < stale_before
+            if c.app_user_id == app_user_id and c.status == "generating" and last_progress(c) < stale_before
         ]
         for c in expired:
             c.status, c.error_code, c.updated_at = "failed", "interrupted", now
@@ -1971,6 +2000,20 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
         store.ai_card_usage = [u for u in store.ai_card_usage if u not in gone]
         return len(gone)
 
+    async def ai_card_list_siblings(session, app_user_id, pick_group, *, exclude_id):
+        return [
+            c for c in store.ai_cards
+            if c.app_user_id == app_user_id and c.pick_group == pick_group and c.id != exclude_id
+        ]
+
+    async def ai_card_group_counts(session, app_user_id, pick_group):
+        mine = [c for c in store.ai_cards if c.app_user_id == app_user_id and c.pick_group == pick_group]
+        return (
+            len(mine),
+            sum(1 for c in mine if c.status == "ready"),
+            sum(1 for c in mine if c.status == "generating"),
+        )
+
     monkeypatch.setattr(ai_card_repo, "add", ai_card_add)
     monkeypatch.setattr(ai_card_repo, "get_owned", ai_card_get_owned)
     monkeypatch.setattr(ai_card_repo, "get_for_update", ai_card_get_for_update)
@@ -1979,13 +2022,17 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
     monkeypatch.setattr(ai_card_repo, "has_month_card", ai_card_has_month_card)
     monkeypatch.setattr(ai_card_repo, "add_usage", ai_card_add_usage)
     monkeypatch.setattr(ai_card_repo, "count_usage_since", ai_card_count_usage_since)
+    monkeypatch.setattr(ai_card_repo, "add_attempt_mark", ai_card_add_attempt_mark)
+    monkeypatch.setattr(ai_card_repo, "count_attempt_marks_since", ai_card_count_attempt_marks_since)
+    monkeypatch.setattr(ai_card_repo, "delete_attempt_mark", ai_card_delete_attempt_mark)
     monkeypatch.setattr(ai_card_repo, "delete_usage_for_owner", ai_card_delete_usage_for_owner)
-    monkeypatch.setattr(ai_card_repo, "count_failed_since", ai_card_count_failed_since)
     monkeypatch.setattr(ai_card_repo, "expire_generating", ai_card_expire_generating)
     monkeypatch.setattr(ai_card_repo, "find_ready_by_storage_key", ai_card_find_ready_by_storage_key)
     monkeypatch.setattr(ai_card_repo, "list_for_owner_for_update", ai_card_list_for_owner_for_update)
     monkeypatch.setattr(ai_card_repo, "delete", ai_card_delete)
     monkeypatch.setattr(ai_card_repo, "delete_all_for_owner", ai_card_delete_all_for_owner)
+    monkeypatch.setattr(ai_card_repo, "list_siblings", ai_card_list_siblings)
+    monkeypatch.setattr(ai_card_repo, "group_counts", ai_card_group_counts)
 
     async def audit_add(session, **kw):
         entry = FakeAuditEntry(

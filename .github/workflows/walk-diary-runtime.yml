@@ -5,7 +5,7 @@ on:
     inputs:
       operation:
         type: choice
-        options: [Configure, Check, Prepare, Start, Stop, Smoke, Backfill]
+        options: [Check, Prepare, Start, Stop, Smoke, Backfill]
         default: Check
         required: true
       latitude:
@@ -47,9 +47,6 @@ jobs:
       WALK_LATITUDE: ${{ inputs.latitude }}
       WALK_LONGITUDE: ${{ inputs.longitude }}
       WALK_RADIUS: ${{ inputs.radius }}
-      WALK_SGIS_KEY: ${{ secrets.WALK_SGIS_KEY }}
-      WALK_SGIS_SECRET: ${{ secrets.WALK_SGIS_SECRET }}
-      WALK_PUBLIC_DATA_KEY: ${{ secrets.WALK_PUBLIC_DATA_KEY }}
     steps:
       # No checkout: live backend/src is a bind mount. Operate only on the deployed commit.
       - name: Operate on the existing deployment
@@ -60,7 +57,7 @@ jobs:
           if ($LASTEXITCODE -ne 0 -or $head -ne $env:GITHUB_SHA) {
             throw 'Deploy this exact commit first; runtime control never checks out live source'
           }
-          git diff --quiet HEAD -- tools/walk-diary-runtime.ps1 tools/walk_runtime_smoke.py backend/.env.walk-public.example docker-compose.yml backend/src db/migrations
+          git diff --quiet HEAD -- tools/walk-diary-runtime.ps1 tools/walk_runtime_smoke.py .env.example docker-compose.yml backend/src db/migrations
           if ($LASTEXITCODE -ne 0) { throw 'Runtime source has local changes; inspect them first' }
           $culture = [Globalization.CultureInfo]::InvariantCulture
           $lat = [double]::Parse($env:WALK_LATITUDE, $culture)

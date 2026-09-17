@@ -98,10 +98,12 @@ async def get_by_id_for_update(session: AsyncSession, pet_id: uuid.UUID) -> Pet 
 def member_condition(app_user_id: uuid.UUID):
     """구성원 = 대표 ∪ 돌보미 — `WHERE` 에 그대로 넣는 조건입니다.
 
-    **쓰기·파기에는 쓰지 마세요** — 그쪽은 `get_owned` 입니다.
+    **쓰기·파기에는 쓰지 마세요** — 그쪽은 `get_owned` 입니다. (`care_event.get_deletable` 은
+    이것으로 권한을 **여는** 것이 아니라 "적은 사람" 갈래를 지금의 구성원으로 **좁히는** 데
+    씁니다, #574.)
 
-    이름에 밑줄이 없는 것이 의도입니다. `chat`·`gait_record`·`screening`·`territory_claim`·
-    `walk_entry` 다섯 리포지토리가 이것을 가져다 씁니다 — 구성원 판정은 **한 자리에만**
+    이름에 밑줄이 없는 것이 의도입니다. `care_event`·`chat`·`gait_record`·`screening`·
+    `territory_claim`·`walk_entry` 여섯 리포지토리가 이것을 가져다 씁니다 — 구성원 판정은 **한 자리에만**
     있어야 하므로 복사하지 말고 이것을 부르세요 (docs/co-care.md §2).
     """
     return or_(

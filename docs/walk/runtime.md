@@ -212,3 +212,20 @@ Cloud Run 서비스에 위임한다. 그 서비스는 `infra/gcp/realtime.sh`의
 이번 PR은 GitHub Secrets 기반 산책 Configure를 제거한 것이며, Cloud Run의
 Secret Manager 배포 구조를 변경하지 않는다. 별도 서비스 키 갱신은
 [실시간 서비스 운영 안내](../../infra/gcp/README.md)를 따른다.
+
+## 기존 설정의 한 번만 이관
+
+Windows Deploy는 Compose 적용 전에 `tools/migrate_walk_root_env.py`를 실행한다.
+최상단에 이미 있는 값(빈 값 포함)은 유지하고, 누락된 산책·Life 키만 기존
+`backend/.env` 및 별도 산책 파일의 적용 순서대로 복사한다. PLACE_*도 새 이름으로
+옮긴다. 원본은 `.env.walk-root-backup.local`에 보관하고 완료 표식을 남겨 이후
+배포에서 옛 설정을 다시 가져오지 않는다. 값은 로그에 출력하지 않는다.
+별도 파일 경로가 남아 있는데 파일이 없으면 배포를 멈춘다.
+GCP에서는 Compose 적용 전에 서버 루트에서 다음을 실행할 수 있다:
+
+```bash
+python3 tools/migrate_walk_root_env.py
+```
+
+자동 이관은 기존 활성화 값을 보존한다. GCP에서 기존 값이 False였다면 이관 후에도
+False이므로 활성화 여부를 직접 설정하고 위 적용 절차를 진행해야 한다.

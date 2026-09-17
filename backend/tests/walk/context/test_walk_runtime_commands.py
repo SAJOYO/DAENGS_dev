@@ -4,6 +4,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -289,3 +290,51 @@ def test_removed_configure_cannot_overwrite_root_env(tmp_path, shell):
     )
     assert result.returncode != 0
     assert root_env.read_text() == "EXISTING=keep\n"
+
+
+def test_root_migration_preserves_precedence_backup_and_runs_once(tmp_path):
+    (tmp_path / "backend").mkdir()
+    target = tmp_path / ".env"
+    original = "DAENGS_WALK_DIARY_ENABLED=false\nPLACE_KTO_SERVICE_KEY=old-kto\n"
+    target.write_text(original)
+    (tmp_path / "backend/.env").write_text(
+        "DATA_GO_KR_KEY='dummy$key'\nDAENGS_WALK_SGIS_KEY=app-key\nUNRELATED=hidden\n"
+    )
+    legacy = tmp_path / "backend/.env.walk-public.local"
+    legacy.write_text("DAENGS_WALK_DIARY_ENABLED=true\nDAENGS_WALK_SGIS_KEY=walk-key\n")
+    env = {k: v for k, v in os.environ.items() if k != "WALK_PUBLIC_ENV_FILE"}
+    command = [
+        sys.executable,
+        str(REPO / "tools/migrate_walk_root_env.py"),
+        "--root",
+        str(tmp_path),
+    ]
+    result = subprocess.run(command, env=env, capture_output=True, text=True, check=True)
+    actual = target.read_text()
+    assert "DAENGS_WALK_DIARY_ENABLED=false" in actual
+    assert "DAENGS_WALK_SGIS_KEY=walk-key" in actual
+    assert "DATA_GO_KR_KEY='dummy$key'" in actual
+    assert "DAENGS_KTO_SERVICE_KEY=old-kto" in actual
+    assert "UNRELATED" not in actual
+    assert (tmp_path / ".env.walk-root-backup.local").read_text() == original
+    assert "walk-key" not in result.stdout + result.stderr
+    target.write_text(actual.replace("DAENGS_WALK_SGIS_KEY=walk-key\n", ""))
+    retained = target.read_bytes()
+    subprocess.run(command, env=env, capture_output=True, check=True)
+    assert target.read_bytes() == retained
+
+
+def test_root_migration_missing_explicit_source_fails_without_mutation(tmp_path):
+    target = tmp_path / ".env"
+    original = b"WALK_PUBLIC_ENV_FILE=missing.env\n"
+    target.write_bytes(original)
+    env = {k: v for k, v in os.environ.items() if k != "WALK_PUBLIC_ENV_FILE"}
+    result = subprocess.run(
+        [sys.executable, str(REPO / "tools/migrate_walk_root_env.py"), "--root", str(tmp_path)],
+        env=env,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode != 0
+    assert target.read_bytes() == original
+    assert not (tmp_path / ".env.walk-root-backup.local").exists()

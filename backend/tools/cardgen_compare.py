@@ -172,7 +172,7 @@ def main(argv: list[str] | None = None) -> int:
                 for copy in range(args.batch or 1):
                     started = time.monotonic()
                     card = generate_card(
-                        photo=photo, content_type=MIME[photo_path.suffix.lower()], month=month,
+                        photo=photo, content_type=MIME[photo_path.suffix.lower()], card=month,
                         dog_name=args.dog_name, engine=engine, judge=judge, base_dir=settings.cardimage_dir,
                         open_months=frozenset(months), judge_min=1,
                         # 이 도구는 특정 seed 를 정확히 겨눠 비교한다 — pick_seeds 가 대신 고르면

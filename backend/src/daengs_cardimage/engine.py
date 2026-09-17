@@ -33,14 +33,32 @@ class CardImageEngine(Protocol):
         ...
 
 
-def build_prompt(*, scene: str, badge: str, subtitle: str, outfit: str, face_hidden: bool = False) -> str:
-    """달마다 다른 것은 무대(scene)·배지·부제·의상(outfit)뿐이다. 의상 문장은 catalog 가 준다 —
+def build_prompt(*, scene: str, badge: str, subtitle: str, outfit: str, face_hidden: bool = False,
+                 face_only: bool = False) -> str:
+    """카드마다 다른 것은 무대(scene)·배지·부제·의상(outfit)뿐이다. 의상 문장은 catalog 가 준다 —
     4월은 "아무것도 안 입는다", 9월은 "이미지 1 의 한복·쟁반 그대로".
+
+    앞부분(lead)은 **세 갈래가 배타**다 — 기본(본문에 강아지가 통째로 보임) · `face_hidden` · `face_only`.
+    둘을 같이 주면 `face_only` 가 이긴다.
 
     `face_hidden` 은 옷이 본문 강아지의 얼굴까지 덮는 틀(10월 유령 천)이다. 공통 앞부분의 「귀·주둥이·눈 색까지
     사진 강아지로」 요구가 그 틀에서는 천 위에 실제 얼굴을 합성했다(09-16 FLUX.2-klein-4B seed 2·3·4) —
-    그래서 사진 강아지는 배지 초상화와 옷 밖으로 나온 발로만 옮긴다."""
-    if face_hidden:
+    그래서 사진 강아지는 배지 초상화와 옷 밖으로 나온 발로만 옮긴다.
+
+    `face_only` 는 그 반대로, 본문에 **구멍 속 얼굴만** 보이는 틀(딸기·상추, #592)이다. 몸이 없으니 의상
+    문장이 맞지 않아 소품 금지 문장을 이 앞부분이 직접 갖는다 — 그 카드들의 `outfit` 은 빈 문자열이다."""
+    if face_only:
+        lead = (
+            "In image 1 only the dog's face is visible, framed by the hole in the produce body; the dog has no "
+            "visible body, legs or paws there. Edit image 1 so that this visible face becomes the face of the dog "
+            "from image 2 — same breed, same fur color, fur length and texture, same ear shape and color, same "
+            "muzzle length, same eye color and facial markings, with the same happy open-mouth expression and the "
+            "same head angle and size as in image 1. Keep the produce body, its hole and everything attached to it "
+            "exactly as in image 1 — do not draw the dog's body, legs, paws or tail anywhere. Do not carry over any "
+            "accessories from image 2 — no collar, no leash, no harness, no clothing. Also replace the small "
+            "circular portrait in the top-left badge with the face of the same dog from image 2."
+        )
+    elif face_hidden:
         lead = (
             "Edit image 1 so that the dog hidden under the costume in the main illustration becomes the dog from "
             "image 2. In the main illustration the dog's face and head stay completely covered by the costume — "
@@ -59,7 +77,8 @@ def build_prompt(*, scene: str, badge: str, subtitle: str, outfit: str, face_hid
         )
     return (
         "Image 1 is a collectible trading card. Image 2 is a photo of a real dog.\n\n"
-        f"{lead} {outfit}\n\n"
+        # `outfit` 이 빈 카드(face_only)에서 꼬리 공백이 남지 않게 rstrip. 달 카드는 글자까지 그대로다.
+        f"{f'{lead} {outfit}'.rstrip()}\n\n"
         f"Everything else must stay pixel-identical: {scene}, the background, the holographic border, the empty dark "
         f'title plate at the top (leave it empty — do not write anything on it), the badge "{badge}", the text '
         f'"{subtitle}", the bottom panel with all its text, stars and icons. Do not add, remove or alter any text. '

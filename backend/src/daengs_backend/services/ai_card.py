@@ -309,7 +309,8 @@ async def _run(
                         ai_card_engine.generate,
                         photo=photo_jpeg,
                         content_type="image/jpeg",
-                        month=month,
+                        # 앱 경로는 달 정수만 넘깁니다 — 달이 아닌 카드(딸기·상추)는 콘솔 전용입니다 (#592).
+                        card=month,
                         # `generate_card` 는 이 이름을 그림 제목에만 쓴다 — `ai_cards.title` 과 같은 글자여야 한다 (#543).
                         dog_name=title_name,
                         engine=engine,

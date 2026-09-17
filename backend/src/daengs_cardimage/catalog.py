@@ -1,4 +1,7 @@
-"""달 → 틀 파일·카드명·장면 설명. `cardimage/headers.json` 의 제목에서 ` NEO` 를 뗀 것이 카드명이다."""
+"""카드(달 1~12 + 종류) → 틀 파일·카드명·장면 설명. `cardimage/headers.json` 의 제목에서 ` NEO` 를 뗀 것이 카드명이다.
+
+달은 정수, 달이 아닌 카드(딸기·상추, 콘솔 전용 #592)는 문자열로 가리킨다 — `CardSelector` 와 `resolve`.
+"""
 
 from __future__ import annotations
 
@@ -111,6 +114,10 @@ class MonthCard:
     seeds: tuple[int, ...] = ()
     #: 옷이 본문 강아지의 얼굴까지 덮는 틀(10월 유령 천). 프롬프트가 사진 강아지를 배지와 발로만 옮긴다(`engine.build_prompt`).
     face_hidden: bool = False
+    #: 본문에 강아지 **얼굴만** 보이는 틀(딸기·상추). 10월 `face_hidden` 의 반대다 — `engine.build_prompt` 가 앞부분을 가른다.
+    face_only: bool = False
+    #: 달이 아닌 카드의 키("strawberry"·"lettuce"). 달 카드는 빈 문자열이고 `month` 로 식별한다.
+    kind: str = ""
 
 
 # scene 은 실험(worklog 09-13~14)에서 검증된 달만 채워져 있다. 다른 달을 열 때는 그 달의
@@ -274,20 +281,80 @@ _CARDS: dict[int, MonthCard] = {
 }
 
 
+#: 딸기 틀의 제목판 — 09-18 실측(판 y 59~152). `top_y` 는 측정값 59 가 아니라 62 다:
+#: 윗선을 다시 재는 네 열의 중앙값이 62 라, 59 로 두면 제목이 3px 내려간다(사용자 결정 09-18).
+STRAWBERRY_PLATE = Plate(center_y=105, edge=((62, 749), (149, 676)), top_y=62)
+
+#: 상추 틀의 제목판 — 09-18 실측(판 y 47~141). 달 카드보다 넓다.
+LETTUCE_PLATE = Plate(center_y=94, edge=((50, 790), (138, 717)), top_y=47)
+
+#: 달이 아닌 카드(콘솔 전용, #592). 앱 경로는 이것을 쓰지 않는다.
+#: `outfit` 은 비워 둔다 — 몸이 없어서 입힐 곳이 없고, 소품 금지 문장은 `face_only` 앞부분이 직접 갖는다
+#: (설계 ②). 여기에 `NO_OUTFIT` 을 넣으면 같은 문장이 프롬프트에 두 번 들어간다.
+_KIND_CARDS: dict[str, MonthCard] = {
+    "strawberry": MonthCard(
+        0, "strawberry", "BERRY", "NEO-S0824",
+        "the giant leaf parachute with its golden rigging lines, the heart-shaped strawberry body with its seeds "
+        "and the round hole in its middle, the pink and golden motion streaks, the floating golden seeds, the "
+        "pastel blue-violet starry sky and the pink clouds",
+        "FRUIT DOG",
+        "",
+        STRAWBERRY_PLATE,
+        face_only=True,
+        kind="strawberry",
+    ),
+    "lettuce": MonthCard(
+        0, "lettuce", "LETTUCE", "NEO-0824",
+        "the ruffled lettuce leaves with water droplets that form the body, the two crossed lettuce stems below, "
+        "the loose leaves floating around, the radiating rainbow holographic rays and the soft reflective floor",
+        "VEGGIE DOG",
+        "",
+        LETTUCE_PLATE,
+        face_only=True,
+        kind="lettuce",
+    ),
+}
+
+KINDS: tuple[str, ...] = tuple(_KIND_CARDS)
+
+#: 카드 하나를 가리키는 값 — 1~12 는 달, 문자열은 종류(`KINDS`)다.
+CardSelector = int | str
+
+
 def get(month: int) -> MonthCard:
     return _CARDS[month]
 
 
-def pick_seeds(month: int, count: int, rng: random.Random) -> list[int]:
-    """그 달의 검증된 seed 에서 `count` 개를 겹치지 않게 뽑는다. 목록이 모자라면 되풀이한다.
+def resolve(selector: CardSelector) -> MonthCard:
+    """달 정수 또는 종류 문자열로 카드 정의를 찾는다. 없으면 `MonthNotOpenError`.
 
-    아직 실험으로 확인되지 않은 달(`seeds == ()`)은 예외를 내지 않는다 — 12달이 이미 열려 있어서
+    잠금(`DAENGS_CARDIMAGE_MONTHS`)은 보지 않는다 — 그건 앱 경로의 `require_open` 몫이다."""
+    if isinstance(selector, bool):  # bool 은 int 의 하위형이다 — 달로 오인하지 않게 먼저 막는다
+        raise MonthNotOpenError(f"card {selector!r} is not a card")
+    if isinstance(selector, int):
+        card = _CARDS.get(selector)
+    else:
+        card = _KIND_CARDS.get(selector)
+    if card is None:
+        raise MonthNotOpenError(f"card {selector!r} is not a card")
+    return card
+
+
+def card_key(selector: CardSelector) -> str:
+    """저장·로그에 쓰는 문자열 키 — 달은 `"4"`, 종류는 `"strawberry"`."""
+    return str(selector)
+
+
+def pick_seeds(selector: CardSelector, count: int, rng: random.Random) -> list[int]:
+    """그 카드의 검증된 seed 에서 `count` 개를 겹치지 않게 뽑는다. 목록이 모자라면 되풀이한다.
+
+    아직 실험으로 확인되지 않은 카드(`seeds == ()`)는 예외를 내지 않는다 — 12달이 이미 열려 있어서
     막으면 검증이 끝나지 않은 열 달이 전부 500 이 된다(#572 Task 3a, controller ruling R5). 대신
     DEFAULT_SEEDS 로 대신하고, 나중에 실험 결과를 보고 이 로그를 찾을 수 있게 warning 을 남긴다.
     """
-    pool = list(get(month).seeds)
+    pool = list(resolve(selector).seeds)
     if not pool:
-        log.warning("cardimage month %s has no verified seeds — using unverified defaults %s", month, DEFAULT_SEEDS)
+        log.warning("cardimage card %s has no verified seeds — using unverified defaults %s", selector, DEFAULT_SEEDS)
         pool = list(DEFAULT_SEEDS)
     picked: list[int] = []
     while len(picked) < count:
@@ -303,8 +370,8 @@ def require_open(month: int, open_months: frozenset[int]) -> MonthCard:
     return card
 
 
-def template_path(month: int, base: Path) -> Path:
-    return base / f"{get(month).stem}_template.webp"
+def template_path(selector: CardSelector, base: Path) -> Path:
+    return base / f"{resolve(selector).stem}_template.webp"
 
 
 def font_path(base: Path) -> Path:

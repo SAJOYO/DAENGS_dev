@@ -53,7 +53,8 @@ async def generate(
             ai_card_engine.generate,
             photo=body,
             content_type=content_type,
-            month=month,
+            # 지금은 달만 고를 수 있다 — 종류 카드(딸기·상추)를 고르는 것은 #592 Task 5 가 넓힌다.
+            card=month,
             dog_name=dog_name,
             engine=default_engine(),
             judge=default_judge(),

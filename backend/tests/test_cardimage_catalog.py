@@ -79,6 +79,35 @@ def test_every_month_has_its_own_measured_plate():
     assert len({catalog.get(m).plate for m in range(1, 13)}) == 12
 
 
+# --- #592: 달이 아닌 카드(딸기·상추) ---------------------------------------------------
+
+
+def test_resolve_accepts_month_and_kind():
+    assert catalog.resolve(4).card_name == "BLOSSOM"
+    assert catalog.resolve("strawberry").card_name == "BERRY"
+    assert catalog.resolve("lettuce").card_name == "LETTUCE"
+    with pytest.raises(catalog.MonthNotOpenError):
+        catalog.resolve("banana")
+    with pytest.raises(catalog.MonthNotOpenError):
+        catalog.resolve(13)
+
+
+def test_kind_cards_are_face_only_with_their_own_template_and_plate():
+    base = Path(__file__).resolve().parents[2] / "cardimage"
+    for kind, name, badge in (("strawberry", "BERRY", "NEO-S0824"), ("lettuce", "LETTUCE", "NEO-0824")):
+        c = catalog.resolve(kind)
+        assert c.kind == kind and c.month == 0 and c.face_only and not c.face_hidden
+        assert c.card_name == name and c.badge == badge and c.scene.strip() and c.subtitle.strip()
+        assert catalog.template_path(kind, base).name == f"{kind}_template.webp"
+        assert catalog.template_path(kind, base).exists()
+    assert catalog.resolve("strawberry").plate == catalog.STRAWBERRY_PLATE
+    assert catalog.resolve("lettuce").plate == catalog.LETTUCE_PLATE
+
+
+def test_card_key_strings():
+    assert catalog.card_key(4) == "4" and catalog.card_key("lettuce") == "lettuce"
+
+
 # --- #572 Task 3a: seeds / pick_seeds -------------------------------------------------
 
 
@@ -121,4 +150,4 @@ def test_pick_seeds_falls_back_to_default_seeds_and_warns_for_unverified_month(m
         picked = catalog.pick_seeds(5, 3, rng)
     assert len(picked) == 3
     assert set(picked) <= set(catalog.DEFAULT_SEEDS)
-    assert any("month 5" in r.getMessage() for r in caplog.records)
+    assert any("card 5" in r.getMessage() for r in caplog.records)

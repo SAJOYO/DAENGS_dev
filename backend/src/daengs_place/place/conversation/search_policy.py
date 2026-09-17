@@ -1,6 +1,5 @@
 """Shared request meaning and search compilation; storage and UI remain adapters."""
 
-import re
 from dataclasses import dataclass
 
 from daengs_place.place.conversation.intent import Interpretation, SearchPool, SemanticChanges
@@ -20,37 +19,6 @@ def resolve_search(
     """No mention means retain the active pool, never infer it from a write."""
     requested = intent.search_scope
 
-    # A saved-action negation without a set reference cannot authorize a set transition.
-    # This is a narrow authority check, not a general Korean intent classifier.
-    def set_reference(text):
-        compact = "".join(text.split())
-        return bool(
-            re.search(
-                r"(?:찜한|찜해둔|저장한|저장해둔).*(?:곳|장소|시설|데)|"
-                r"(?:찜|저장)(?:한)?(?:목록|여부|범위|제한|에서|중)|"
-                r"(?:일반|전체|모든)(?:장소|시설|검색)|새로운|새후보|처음보는|안가본|"
-                r"(?:찜|저장)(?:도|만)?(?:찾|보여|봐)|^(?:찜|전체|전부|모두)$",
-                compact,
-            )
-        )
-
-    if query is not None and requested not in {"keep", current}:
-        if (
-            requested in {"all_places", "bookmarks"}
-            and intent.forbid_save
-            and not set_reference(query)
-        ):
-            requested = "keep"
-        elif (
-            not intent.search_scope_quote
-            or intent.search_scope_quote not in query
-            or not set_reference(intent.search_scope_quote)
-        ):
-            return SearchDirective(
-                current,
-                question="검색 범위를 바꾸라는 구절을 확인하지 못했어요. 찜한 곳만 볼지, 찜 여부 없이 볼지 알려주세요.",
-                code="scope_needs_reference",
-            )
     if requested in {"unbookmarked", "new_candidates"} and candidate_pools != "v1":
         return SearchDirective(
             current,

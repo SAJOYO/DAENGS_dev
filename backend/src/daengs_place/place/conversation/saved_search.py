@@ -6,7 +6,7 @@ from pydantic import Field, model_validator
 
 from daengs_place.place.bookmarks import BookmarkFilters
 from daengs_place.place.conversation.candidates import explicit_search, grounded_feedback
-from daengs_place.place.conversation.scope import OUT_OF_SCOPE, OutsideFacilityScope, validate_scope
+from daengs_place.place.conversation.scope import OUT_OF_SCOPE, validate_scope
 from daengs_place.place.conversation.search_compilation import SearchAdapterError, compile_search
 from daengs_place.place.conversation.search_policy import resolve_search
 from daengs_place.place.filters.contract import FilterState
@@ -42,10 +42,7 @@ def plan_saved(current, intent, *, search_policy=None, query=None, candidate_poo
     def clarify(message):
         return SavedSearchPlan(action="clarify", message=message)
 
-    try:
-        validate_scope(intent, query or "")
-    except OutsideFacilityScope:
-        return SavedSearchPlan(action="explain", message=OUT_OF_SCOPE)
+    validate_scope(intent, query or "")
     if intent.kind == "out_of_scope":
         return SavedSearchPlan(action="explain", message=OUT_OF_SCOPE)
     if intent.kind == "facility_state" and intent.state_subject == "filters":

@@ -156,7 +156,7 @@ Interpretation.model_rebuild()
 
 class ScopedInterpretation(Interpretation):
     kind: FacilityKind
-    request_quote: str = Field(max_length=1000)
+    request_quote: str = Field(default="", max_length=1000)
 
     @model_validator(mode="after")
     def bounded_authority(self) -> Self:
@@ -188,8 +188,6 @@ class ScopedInterpretation(Interpretation):
                 or self.state_subject != "place"
             ):
                 raise ValueError("out-of-scope input has no facility proposal authority")
-        elif not self.request_quote.strip():
-            raise ValueError("a facility request needs literal evidence")
         elif self.kind == "facility_state":
             if (
                 self.goal != "explain"

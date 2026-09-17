@@ -10,7 +10,7 @@ PRESERVE_CODES = frozenset(
     {"facility_out_of_scope", "invalid_plan", "facility_scope_unclear", "facility_filters"}
 )
 
-# These are evidence for supported capabilities, not a general topic/ban-word classifier.
+# Used only to reject a second facility command alongside a persistent bookmark write.
 KIND_WORDS = {
     "hospital": r"병원|진료",
     "pharmacy": r"약국|의약품",
@@ -37,67 +37,17 @@ FACILITY_WORDS = (
 )
 
 
-class OutsideFacilityScope(ValueError):
-    """A definition request has no current-facility state to read."""
-
-
 def validate_scope(intent, query, previous=None):
-    """Validate quoted authority and operation bounds, not natural-language vocabulary."""
-    if intent.kind is None:  # Existing deterministic planners/research have no provider authority.
-        return
+    """Read/search intent belongs to the model; validate contracts, not vocabulary."""
+    if intent.kind is None:
+        return  # Internal deterministic callers; the provider requires ScopedInterpretation.
     ScopedInterpretation.model_validate(intent.model_dump())
-    if intent.kind == "out_of_scope":
+    if intent.bookmark is None:
         return
-    quote = intent.request_quote
-    if quote not in query:
-        raise ValueError("facility evidence is absent from the current utterance")
-    if intent.kind == "facility_state" and re.search(
-        r"(?:이?란|의\s*뜻|의\s*정의)\s*(?:게|것은|뭐|무엇|알려|설명)", quote
-    ):
-        raise OutsideFacilityScope("facility definitions are not state queries")
-    undo_kinds = set()
-    relative_undo = re.fullmatch(r"(?:방금|아까)\s*추가한\s*(?:것|거)만?\s*취소해줘[.!~ ]*", quote)
-    if (
-        previous
-        and previous.history
-        and intent.changes.kinds
-        and intent.changes.kinds.operation == "remove"
-        and relative_undo
-    ):
-        last = previous.history[-1]
-        if last.goal in {"show", "edit_only"} and re.search(r"도|추가", last.query):
-            undo_kinds = {
-                kind
-                for kind in previous.filters.candidate_kinds
-                if re.search(KIND_WORDS[kind], last.query)
-            }
-    if intent.kind != "facility_action":
-        return
+    # Persistent writes retain their explicit command boundary.
+    if not intent.request_quote or intent.request_quote not in query:
+        raise ValueError("bookmark evidence absent from current request")
     changes = intent.changes
-    if intent.goal == "pick_one" and not re.search(r"골라|선택|하나|한\s*곳|아무\s*데나", quote):
-        raise ValueError("selection lacks a current request")
-    # The model resolves paraphrases and nominal requests ("먹을 수 있는 곳").
-    # Literal category words are only a contradiction check when actually present;
-    # absence of a word from this finite list is not evidence against a request.
-    named_kinds = {kind for kind, pattern in KIND_WORDS.items() if re.search(pattern, quote)}
-    for kind in changes.kinds.values if changes.kinds else ():
-        if relative_undo and kind not in undo_kinds:
-            raise ValueError("relative category undo lacks a committed addition")
-        if named_kinds and kind not in named_kinds and kind not in undo_kinds:
-            raise ValueError("category change lacks evidence")
-    for changed, pattern in [
-        (changes.parking != "keep", r"주차"),
-        (changes.exclusive != "keep", r"전용"),
-        (changes.radius_m is not None, r"반경|거리|[0-9]\s*(?:km|m|킬로|미터)"),
-        (changes.alternatives is not None, r"주차|전용|조건|거나|또는"),
-    ]:
-        if changed and not re.search(pattern, quote, re.IGNORECASE):
-            raise ValueError("filter change lacks current-request evidence")
-    if changes.name_query and changes.name_query not in quote:
-        raise ValueError("place name was invented")
-    named = re.search(r"(\S+?)(?:이?라는)\s*(?:카페|식당|음식점|호텔|펜션|시설|곳)", quote)
-    if named and changes.name_query != named[1].strip("'\"‘’“”"):
-        raise ValueError("an explicit place name must not be dropped")
     # Reject reported/quoted/hypothetical commands. Literal quoted place names are data.
     text = query
     names = [changes.name_query] if changes.name_query else []
@@ -106,19 +56,13 @@ def validate_scope(intent, query, previous=None):
     for name in names:
         for left, right in [("'", "'"), ('"', '"'), ("‘", "’"), ("“", "”")]:
             text = text.replace(left + name + right, "상호")
-        if named and name == named[1].strip("'\"‘’“”"):
-            text = text.replace(name + "라는", "상호라는").replace(name + "이라는", "상호이라는")
     if re.search(
         r"""["'“”‘’]|라고\s*(?:했|하|말)|라면|다면|면\s*(?:어떻게|뭐)|말라는|하지\s*마""", text
     ):
         raise ValueError("quoted or hypothetical commands have no authority")
-    # A save prohibition may accompany a separate search, but cannot authorize a save.
-    checked = text
-    if intent.forbid_save and not intent.bookmark:
-        checked = re.sub(r"(?:찜|저장)\s*하지\s*말고", "", checked)
     if re.search(
         r"(?:찾|보여|추천|골라|선택|적용|변경|찜|저장|제외)[가-힣 ]*(?:하지\s*말|하지\s*마|지\s*말|지\s*마)",
-        checked,
+        text,
     ):
         raise ValueError("negated command has no authority")
 

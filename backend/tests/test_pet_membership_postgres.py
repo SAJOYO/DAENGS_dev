@@ -384,6 +384,86 @@ async def test_care_event_delete_is_recorder_or_owner():
         await engine.dispose()
 
 
+async def test_care_event_delete_needs_current_membership():
+    """적은 사람의 삭제 자격은 **지금도 그 행의 구성원일 때만**이다 (#574).
+
+    나가기·내보내기(`remove_member`)는 `pet_members` 행을 지우고 기록은 그대로 둔다. 그 뒤에
+    `actor_app_user_id` 만 보는 조건이면 읽지도 못하는 줄을 id 로 지운다 — 가짜 대역은 조건을
+    흉내 낸 것이라 여기서 **진짜 SQL**(`member_condition` 의 서브쿼리)이 도는지 본다.
+
+    세 갈래: 적은 사람 + 구성원 ✅ · 같은 사람 멤버십 행을 지운 뒤 ❌ · 그 행의 대표 ✅.
+    """
+    dsn = _sqlalchemy_dsn_or_skip()
+
+    from sqlalchemy import text
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    from daengs_backend.repositories import care_event as care_repo
+
+    engine = create_async_engine(dsn)
+    session = async_sessionmaker(engine, expire_on_commit=False)()
+    try:
+        owner, carer = (str(uuid.uuid4()) for _ in range(2))
+        pet, event = str(uuid.uuid4()), str(uuid.uuid4())
+
+        for uid in (owner, carer):
+            await session.execute(
+                text(
+                    "INSERT INTO app_users (id, kakao_id, status)"
+                    " VALUES (CAST(:i AS uuid), :k, 'active')"
+                ),
+                {"i": uid, "k": uuid.uuid4().int % 10**12},
+            )
+        await session.execute(
+            text(
+                "INSERT INTO pets (id, app_user_id, name, breed)"
+                " VALUES (CAST(:p AS uuid), CAST(:o AS uuid), '맥스', '믹스')"
+            ),
+            {"p": pet, "o": owner},
+        )
+        await session.execute(
+            text(
+                "INSERT INTO pet_members (pet_id, app_user_id)"
+                " VALUES (CAST(:p AS uuid), CAST(:u AS uuid))"
+            ),
+            {"p": pet, "u": carer},
+        )
+        await session.execute(
+            text(
+                "INSERT INTO care_events"
+                " (id, pet_id, actor_app_user_id, kind, occurred_at, client_event_id)"
+                " VALUES (CAST(:e AS uuid), CAST(:p AS uuid), CAST(:a AS uuid),"
+                "         'meal', NOW(), CAST(:k AS uuid))"
+            ),
+            {"e": event, "p": pet, "a": carer, "k": str(uuid.uuid4())},
+        )
+
+        async def deletable_by(who: str):
+            return await care_repo.get_deletable(
+                session, uuid.UUID(who), uuid.UUID(event)
+            )
+
+        assert await deletable_by(carer) is not None, "구성원인 적은 사람이 자기 기록을 못 지운다"
+
+        # 나가기가 하는 일과 같다 — 멤버십 행만 지우고 기록은 둔다.
+        await session.execute(
+            text(
+                "DELETE FROM pet_members"
+                " WHERE pet_id = CAST(:p AS uuid) AND app_user_id = CAST(:u AS uuid)"
+            ),
+            {"p": pet, "u": carer},
+        )
+
+        assert await deletable_by(carer) is None, "나간 사람이 그 행의 기록을 지울 수 있다"
+        found = await deletable_by(owner)
+        assert found is not None, "적은 사람이 나간 뒤 대표가 그 기록을 못 지운다"
+        assert str(found.actor_app_user_id) == carer, "기록의 actor 가 바뀌었다"
+    finally:
+        await session.rollback()
+        await session.close()
+        await engine.dispose()
+
+
 async def test_transfer_owner_survives_the_trigger():
     """**진짜 `transfer_owner` 를 진짜 DB 에서** 부른다 — 이것 하나가 두 구멍을 덮는다.
 

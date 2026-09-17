@@ -3,6 +3,156 @@
 세션이 끝날 때마다 한 절씩 위에 추가한다 (최신이 위). 무엇을 했고, 무엇을 정했고, 무엇을
 다음 세션에 넘기는지. 조사 내용 자체는 `research-*.md` 에, 요약·현재 상태는 `README.md` 에.
 
+## 2026-09-18 — #592 콘솔 카드 시험 + 과일·채소 카드 (Task 1~7, 브랜치 `fix/ai-card-title-condense`)
+
+`docs/superpowers/plans/2026-09-18-ai-card-console-and-fruit-cards.md` 를 subagent-driven-development
+로 실행한 밤의 기록이다. 설계는 `docs/superpowers/specs/2026-09-18-ai-card-console-and-fruit-cards-design.md`.
+
+### 아침에 볼 것
+
+**한 줄 요약 — 딸기·상추 카드는 실제 모델에서 잘 나왔다(잠정 「됨」, 결함 하나).** 다만 스모크 도중
+Nano Banana 2 가 **한 프로세스의 두 번째 이미지 호출을 두 번 다** `API_KEY_INVALID` 로 거절했다 —
+키는 멀쩡하다. 아침에 볼 것은 그 거절(③)과 상추 카드에 없던 아이콘 두 개가 생긴 것(⑤)이다.
+
+**① 밤에 한 일 (커밋 12개, 전부 `fix/ai-card-title-condense`, push 는 안 했다)**
+
+| 커밋 | 무엇 |
+| --- | --- |
+| `1227b250` | 긴 이름 제목이 배지를 덮지 않게 장평으로 줄인다 (계획 전) |
+| `4aab9373` | 10월 유령 천 카드는 본문에 얼굴을 안 그리게 프롬프트 앞부분(`face_hidden`)을 바꾼다 |
+| `09c931b8` | 10월 seed 목록을 새 프롬프트 결과로 다시 확인했다고 적는다 |
+| `0284c41f` | 딸기·상추 틀 webp 두 장과 만든 도구 `backend/tools/cardimage_fruit_templates.py` |
+| `75647f38` · `df45d1fd` | #592 설계 · 구현 계획 |
+| `81485dae` | Task 3 — 콘솔 카드 저장 표 `admin_ai_cards` 스키마(`db/init/41_…` · `db/migrations/2026-09-18_…` · `verify_…`)와 모델 |
+| `fc4ae407` | Task 1 — 카드 키를 달 정수에서 종류까지(`catalog.CardSelector`·`KINDS`·`resolve`·`card_key`), 딸기·상추와 `face_only` 프롬프트 갈래 |
+| `3e346d27` | Task 4 — `services/admin_card_store`(저장·조회·삭제)와 `core/storage.build_admin_ai_card_key` |
+| `bd69db00` | Task 2 — 제목 축소 판정·장평·1·3·5월 앞말(`SEBAE`·`SCHOOL`·`HOME`) |
+| `e7f5c770` | Task 5 — 콘솔 API 다섯(`/admin/cardimage/options\|generate\|cards\|cards/{id}/image\|cards/{id}`) |
+| `3f508600` | Task 6 — 콘솔 화면(카드 14종·엔진 둘·seed·저장 목록·미리보기·삭제) |
+
+(Task 7 의 문서 커밋은 이 절 자체다.)
+
+**② 검사** — 전체 `uv run pytest` 는 **컨트롤러가 따로 돌렸다**(이 태스크에서는 건너뜀).
+마이그레이션 변조 하네스(`docs/ci/README.md` ②)는 `2026-09-18_admin_ai_cards` 한 장만 좁혀 다시 돌려
+**18건 전부 통과**했다(정상 1 + `DROP TABLE` 1 + 변조 16). 버리는 `pgvector/pgvector:pg17` 를
+55432 에 띄우고 `PYTHONUTF8=1 PGCLIENTENCODING=UTF8` 로 돌렸고, 끝나고 컨테이너는 지웠다.
+Task 3 의 에이전트가 같은 값을 보고했고 이 밤에 한 번 더 확인한 것이다.
+
+**③ 유료 스모크 — 카드 3장을 얻었고, 이미지 호출 2회가 거절됐다.**
+
+계획은 `cardimage/test/치와와_test1.jpg` 로 딸기 2장 · 상추 2장(Nano Banana 2, 최대 4회)이었다.
+실제로는 **이미지 호출 5회 중 3회 성공**했다:
+
+| 실행 | 부른 것 | 결과 |
+| --- | --- | --- |
+| 1 | `--cards strawberry --seeds 1,2` | seed 1 **성공**(29.5초) → seed 2 거절 |
+| 2 | 같은 명령(재시도) | seed 1 **성공**(32.1초, 같은 파일 이름이라 1 을 덮었다) → seed 2 거절 |
+| 3 | `--cards lettuce --seeds 1` | seed 1 **성공**(28.6초) |
+
+**한 프로세스 안의 두 번째 이미지 호출만, 두 번 다** 이렇게 죽었다 (첫 호출은 같은 프로세스에서 이미
+성공한 뒤다):
+
+```
+daengs_cardimage.engine.EngineError: 이미지 모델 호출 실패: 400 INVALID_ARGUMENT.
+{'error': {'code': 400, 'message': 'API key not valid. Please pass a valid API key.',
+           'status': 'INVALID_ARGUMENT',
+           'details': [{'reason': 'API_KEY_INVALID', 'domain': 'googleapis.com',
+                        'metadata': {'service': 'generativelanguage.googleapis.com'}}]}}
+```
+
+**확인한 것** (전부 `backend/.env` 의 같은 `DAENGS_CARDIMAGE_GEMINI_API_KEY` 로):
+
+- **그 키로 카드가 실제로 세 장 나왔다.** 키가 죽은 것이 아니다 — 메시지가 원인을 잘못 가리킨다.
+- `GET /v1beta/models` 200 — 쿼리 `?key=` 와 헤더 `x-goog-api-key` **둘 다**.
+- `GET /v1beta/models/gemini-3.1-flash-image` 200(`displayName: Nano Banana 2`).
+- `google-genai` 2.20.0 SDK 로 `client.models.get('gemini-3.1-flash-image')` OK.
+- 같은 SDK·같은 키로 `generate_content(gemini-3.1-flash-lite, ['ok?'])` OK.
+- 같은 SDK·같은 키·**같은 3개 파트**(프롬프트 + 딸기 틀 PNG 2.7MB + 사진 490KB)로
+  `count_tokens('gemini-3.1-flash-image')` OK(518 토큰), `response_modalities=['TEXT']` 로도 OK.
+- `.env` 의 그 줄에 `\r` 이나 공백 오염 없음, 셸에도 `GOOGLE_API_KEY`·`GEMINI_API_KEY`·
+  `GOOGLE_GENAI_USE_VERTEXAI` 가 비어 있음.
+- 거절은 **이미지 출력 요청의 두 번째 호출**에서만, 2회 중 2회. `GeminiCardImageEngine.generate` 는
+  호출마다 `genai.Client` 를 새로 만들므로 클라이언트를 재사용해서 생긴 것은 아니다.
+- 단발 호출(실행 3, `--seeds 1`)은 통과했다 — **그래서 상추는 프로세스를 나눠 한 장만 불렀다.**
+
+**추정(확인 못 한 것)** — 갈라 적는다:
+
+- ㉮ 이미지 생성에 **짧은 간격 제한**(분당 요청 수 등)이 걸려 있는데 서버가 그것을 `API_KEY_INVALID`
+  로 뭉뚱그려 답한다. 두 호출 사이 간격이 30초 남짓이었던 것과 맞는다.
+- ㉯ 두 번째 요청만 다른 백엔드로 가고 그쪽이 이 키를 모른다.
+- 어느 쪽이든 **재시도·간격 두기로 넘길 수 있는 모양**이지, 키를 바꿀 일로는 안 보인다.
+- 거절된 요청(400)이 과금되지 않는다는 것도 **추정**이다. 아침에 청구를 보면 확실해진다
+  (`daengs-gcp-billing-export` 메모의 BigQuery `billing_export`).
+- ⚠ 앱 경로에도 같은 모양이 있을 수 있다 — Nano Banana 2 경로는 닮음이 `cardimage_judge_min` 미만이면
+  **같은 요청 안에서 한 번 더** 부른다(D-084). 그 두 번째 호출이 이 거절을 맞으면 카드가 통째로
+  실패한다. 이번 밤에 재현한 것은 비교 도구에서지 앱 경로에서가 아니다 — **확인된 사실이 아니라
+  같은 모양이라는 관찰**이다.
+
+**④ 비용**
+
+| 무엇 | 잰 것 | 산출·추정 |
+| --- | --- | --- |
+| Nano Banana 2 카드 | 이미지 호출 **5회 = 성공 3 + 거절 2**. 성공한 3장에 붙은 판정(`gemini-3.1-flash-lite`) 3회 | 단가 장당 약 ₩140(= 도구 docstring 의 약 $0.10) → **약 ₩420**. 상한은 4장(약 ₩560)이었으니 그 안이다. 거절분 과금 없음은 **추정** |
+| 진단용 호출 | 모델 조회 5(무료) · `count_tokens` 3(무료) · 텍스트 생성 2(판정 모델 1 · 이미지 모델 TEXT 1) | 토큰 몇백 개 수준, 실비 몇 원 (추정) |
+| 같은 밤 앞선 GPU 실행 (`4aab9373` 확인용) | `FLUX.2-klein-4B` 로 10월 카드 6장(seed 1~6, 장당 23~25초) + 판정 6회. 산출물 `cardimage/out/_cardgen/oct-face-hidden/` | Cloud Run 청구는 **무료 크레딧 상쇄**, 한 번 깨우는 고정비 약 ₩700(E4 실측 시간당 약 ₩2,359 에서 산출 — `compare-2026-09-17-klein-e4-cost.md`). 판정은 크레딧이 아니라 실비, 6회 약 ₩6 (추정) |
+
+**⑤ 잠정 판정과 눈으로 볼 격자**
+
+- **제목 축소 (Task 2) — 잠정 「됨」.** 14장(12달 + 딸기·상추) × 이름 3종의 상단 띠를 눈으로 봤다.
+  격자: `cardimage/out/_title_check/titles_momo.png` · `titles_korean.png` · `titles_princess.png`
+  (각 1400×896, 미추적). 칸마다 대문자 높이와 장평이 적혀 있다.
+- **10월 `face_hidden` (`4aab9373`) — 잠정 「됨」.** 격자 `cardimage/out/_cardgen/oct-face-hidden/grid.png` ·
+  `crop_grid.png` · `legs_grid.png` · `panel_grid.png` (미추적, `FLUX.2-klein-4B` 6장).
+- **딸기·상추 카드 (Task 7) — 잠정 「됨」, 상추에 결함 하나.** 산출물·격자는
+  `cardimage/out/_cardgen/fruit-smoke/`(미추적) — `grid.png`(틀 4칸 대조, 1320×547) ·
+  `top.png`(배지·제목판 띠, 1360×318) · `bottom.png`(아래 패널 띠, 1360×526) · `results.jsonl` ·
+  만든 스크립트 `make_grid.py`. 이름은 영문 기본값 `MOMO`(판정이 한글을 깨진 글자로 오판한다).
+
+  | 볼 것 | 딸기 | 상추 |
+  | --- | --- | --- |
+  | 얼굴이 사진 강아지인가 | ✅ 본문·배지 초상화 둘 다 사진의 검은·흰 치와와 | ✅ 둘 다 |
+  | 몸통·구멍·소품이 그대로인가 | ✅ 딸기 몸통·씨·구멍·잎 낙하산·리깅 줄 그대로 | ✅ 잎·물방울·줄기 그대로 |
+  | 몸·다리가 새로 그려졌나 | ✅ 안 그려졌다 | ✅ 안 그려졌다 |
+  | 배지 `NEO-…`·부제 | ✅ `NEO-S0824` · `FRUIT DOG` | ✅ `NEO-0824` · `VEGGIE DOG` |
+  | 아래 패널 글씨 | ✅ `CALYX GLIDE` · `AIRTIME 855` · `Tiny seeds. Grand entrance.` 글자까지 그대로 | ⚠ 글씨는 그대로(`LEAF PARADE` · `FRESH FLUTTER 800` · `Loose leaves. Loud smile.`)인데 **맨 아래 띠 오른쪽에 틀에 없던 아이콘 둘(잎·불꽃)이 생겼다** |
+  | 제목이 판 안인가 | ✅ `BERRY MOMO` 가 판 안, 배지를 안 덮는다 | ✅ `LETTUCE MOMO` 도 |
+
+  판정기도 둘 다 닮음 5 · `text_ok` · `avatar_ok` 참을 줬다(`results.jsonl`) — **판정기는 위 아이콘
+  둘을 못 잡는다**(글자만 본다). 틀 밀림은 `dy` −4(딸기) · +6(상추), 제목판 어긋남 −5 · −4 로 달 카드와
+  같은 범위다.
+  ⚠ **표본이 카드마다 한 장씩이다.** 아이콘이 이 한 장의 사고인지 상추 틀에서 늘 나는지는 모른다.
+
+**⑥ 사람이 정할 것**
+
+1. **두 번째 이미지 호출이 거절되는 것(③)을 그냥 둘지, 엔진에 재시도·간격을 넣을지** — 키를 바꿀
+   일로는 안 보인다. 설정은 **일부러 안 건드렸다.** 앱 경로의 「닮음 미달이면 한 번 더」가 같은 모양이라
+   먼저 볼 자리다.
+2. **상추 카드의 없던 아이콘 둘(⑤)** — 표본 한 장이라 먼저 몇 장 더 뽑아 재현되는지 본다(장당 약 ₩140).
+   재현되면 `scene` 문장에 아래 띠를 못 박는 쪽으로 손본다.
+3. **배포 전에 `db/migrations/2026-09-18_admin_ai_cards.sql` 을 적용할 것** — 새 표라 코드가 먼저 뜨면
+   콘솔 목록·저장이 `UndefinedTable` 로 죽는다(앱 경로는 영향 없다). 개발서버는 `dev` 머지 직전에
+   `.github/workflows/db-migrate.yml`(self-hosted, GCP 엔 안 닿는다), GCP 는 dev→main 때
+   `docs/deploy/runbook.md` §6 의 ③을 ④보다 먼저. `verify_2026-09-18_admin_ai_cards.sql` 도 같이.
+4. **과일·채소 카드를 앱에 열지** — 지금은 콘솔 전용이고 앱 경로는 달 정수만 받는다. 열려면 한도
+   규칙(D-084)에 어떻게 얹을지부터 정해야 한다. 남은 21종을 더 열지도 같은 자리의 질문이다.
+5. **`db/init/` 번호 40 이 비었다** — 38(`ai_cards`) · 39(`ai_card_usage`) 다음이 **41**
+   (`41_admin_ai_cards.sql`)이다. 40 을 비워 둔 채로 갈지, 41 을 40 으로 내릴지. 볼륨이 빌 때만 도는
+   파일이라 지금 고치는 값은 싸다.
+6. **콘솔 목록의 「만든 사람」 칸** — 지금은 `admin_user_id` 의 **앞 8자리 UUID**를 보여 준다
+   (`frontend/app/components/cardimage-inspect.tsx`). 관리자 이름으로 바꾸려면 응답에 이름을 실어야
+   하고, 그러면 표에 없는 `admin_users` 조인이 하나 는다. 지금 그대로 둘지 정할 것.
+
+### 2026-09-18 — Task 7: 하네스 · 유료 스모크 · 문서
+
+위 「아침에 볼 것」 이 이 태스크의 결과 전부다. 여기에는 도구 변경 하나만 덧붙인다.
+
+**`backend/tools/cardgen_compare.py` 를 카드 키로 넓혔다.** `--months` 가 `--cards` 가 되어 달 정수와
+`catalog.KINDS` 문자열을 섞어 받는다(`parse_card`). 잠금(`open_months`)은 목록에서 정수만 골라 넘기므로
+종류 카드는 잠금을 타지 않고, 파일 이름·`results.jsonl` 은 `catalog.card_key()` 값을 쓴다 —
+`results.jsonl` 에 `card` 열이 생겼고 `month` 는 `GeneratedCard.month`(달이 아니면 0)를 그대로 싣는다.
+`plate_shift` 도 `catalog.get(month)` 대신 `catalog.resolve(selector)` 를 본다. docstring 의 비용 경고는
+그대로 두고 #592 예시 한 줄을 더했다.
+
 ## 2026-09-16~17 — #572 12달 열기 + 뽑기 (Task 1~9 · 최종 리뷰 수정 파동, 머지됨)
 
 `docs/superpowers/plans/2026-09-16-ai-card-12months-and-two-picks.md` 를 subagent-driven-development 로

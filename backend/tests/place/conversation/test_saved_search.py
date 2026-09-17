@@ -98,7 +98,12 @@ def test_unresolved_unsupported_and_compound_requests_cannot_partially_apply(ext
 def test_feedback_does_not_apply_overeager_filter_or_scope_edits(feedback):
     result = plan_saved(
         BookmarkFilters(),
-        intent(feedback=feedback, search_scope="all_places", changes={"parking": "required_true"}),
+        Interpretation(
+            goal="explain",
+            feedback=feedback,
+            search_scope="all_places",
+            changes={"parking": "required_true"},
+        ),
     )
     assert result.action == "explain" and result.filters is None
 

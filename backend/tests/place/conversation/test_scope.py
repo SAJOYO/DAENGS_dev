@@ -1,4 +1,4 @@
-"""Scope, consent and fixed puppy wording: model mistakes must not become operations."""
+"""Model-owned search meaning, server-owned execution bounds and persistent writes."""
 
 from datetime import timedelta
 
@@ -119,21 +119,19 @@ async def test_outside_does_not_revive_expired_confirmation():
 @pytest.mark.parametrize(
     "query,quote,changes",
     [
-        ("시설 말고 시 써줘", "시설 말고 시 써줘", {"parking": "required_false"}),
-        ("시 써줘", "주차되는 카페 찾아줘", {"parking": "required_true"}),
-        ("카페 찾아줘", "카페 찾아줘", {"kinds": {"operation": "set", "values": ["hospital"]}}),
-        ("'주차되는 카페 찾아줘'라고 말했어", "주차되는 카페 찾아줘", {"parking": "required_true"}),
-        ("주차되는 곳 찾아주지 마", "주차되는 곳 찾아주지 마", {"parking": "required_true"}),
+        ("차 가져갈 건데", "", {"parking": "required_true"}),
+        ("차 댈 데 있어야 해", "주차 가능한 곳", {"parking": "required_true"}),
+        ("애가 아파서 갈 데", "", {"kinds": {"operation": "set", "values": ["hospital"]}}),
+        ("재밌는데", "재미있는 장소", {"kinds": {"operation": "set", "values": ["leisure"]}}),
+        ("주차 없어도 돼", "", {"parking": "clear", "radius_m": 5000}),
     ],
 )
-async def test_bad_action_evidence_preserves_history_filters_and_cards(query, quote, changes):
+async def test_semantic_search_needs_no_keyword_or_literal_evidence(query, quote, changes):
     service, searcher, before = await initial(Planner(scoped(quote, changes=changes)))
     after = await chat(service, before.state, query)
-    assert after.receipt.code == "invalid_plan"
-    assert after.state.model_dump(exclude={"revision"}) == before.state.model_dump(
-        exclude={"revision"}
-    )
-    assert len(searcher.calls) == 1
+    assert after.receipt.execution == "searched"
+    assert after.state.filters != before.state.filters
+    assert len(searcher.calls) == 2
 
 
 async def test_current_filters_is_a_read_even_without_selection():
@@ -193,9 +191,8 @@ async def test_nominal_search_in_current_category_needs_no_search_verb():
     assert len(searcher.calls) == 3
 
 
-async def test_definition_misclassified_as_state_still_returns_puppy_without_history():
-    plan = ScopedInterpretation(kind="facility_state", request_quote="주차란 뭐야?", goal="explain")
-    service, searcher, before = await initial(Planner(plan))
+async def test_model_classified_definition_returns_puppy_without_history():
+    service, searcher, before = await initial(Planner(outside()))
     after = await chat(service, before.state, "주차란 뭐야?")
     assert after.receipt.code == "facility_out_of_scope"
     assert after.state.history == before.state.history
@@ -203,15 +200,18 @@ async def test_definition_misclassified_as_state_still_returns_puppy_without_his
     assert len(searcher.calls) == 1
 
 
-async def test_explicit_name_cannot_be_dropped_by_otherwise_valid_search():
-    query = "API라는 카페 찾아줘"
-    service, searcher, before = await initial(Planner(scoped(query)))
+@pytest.mark.parametrize("query", ["어디가 좋을까", "추천해줘", "괜찮은 데 추천 좀"])
+async def test_natural_recommendation_selects_only_from_current_candidates(query):
+    plan = ScopedInterpretation(kind="facility_action", goal="pick_one")
+    service, searcher, before = await initial(Planner(plan))
     after = await chat(service, before.state, query)
-    assert after.receipt.code == "invalid_plan"
+    assert after.receipt.code != "invalid_plan"
+    assert after.state.selected in before.state.snapshot.display_order
+    assert after.state.filters == before.state.filters
     assert len(searcher.calls) == 1
 
 
-async def test_relative_undo_requires_a_committed_addition_of_that_kind():
+async def test_category_removal_is_idempotent_without_lexical_history_matching():
     planner = Planner(
         scoped(
             "음식점도 추가해줘", changes={"kinds": {"operation": "add", "values": ["restaurant"]}}
@@ -225,8 +225,9 @@ async def test_relative_undo_requires_a_committed_addition_of_that_kind():
     )
     after = await chat(service, added.state, query)
     assert after.state.filters.candidate_kinds == before.state.filters.candidate_kinds
-    blocked = await chat(service, before.state, query)
-    assert blocked.receipt.code == "invalid_plan"
+    repeated = await chat(service, before.state, query)
+    assert repeated.receipt.code != "invalid_plan"
+    assert repeated.state.filters == before.state.filters
 
 
 @pytest.mark.parametrize(

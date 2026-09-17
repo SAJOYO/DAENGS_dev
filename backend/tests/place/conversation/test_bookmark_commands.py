@@ -113,7 +113,7 @@ async def test_old_client_gets_guidance_and_ambiguous_target_never_executes():
     assert (await service.prepare(None, request)).receipt.bookmark_command is None
 
 
-async def test_feedback_cannot_smuggle_filter_exclusion_or_bookmark_mutations():
+async def test_ungrounded_exclusion_preserves_state_even_with_a_semantic_filter_edit():
     service, planner, search, before = await setup()
     planner.next = Interpretation(
         goal="show",
@@ -136,13 +136,12 @@ async def test_feedback_cannot_smuggle_filter_exclusion_or_bookmark_mutations():
             visible_selected=selected,
         ),
     )
-    assert result.receipt.code == "feedback_no_mutation"
-    assert result.state.selected == selected
+    assert result.receipt.code == "invalid_exploration_target"
+    assert result.receipt.bookmark_command is None
     assert result.state.snapshot == before.snapshot
     assert result.state.filters == before.filters
     assert result.state.exploration == before.exploration
     assert len(search.calls) == 1
-    assert "확인할 수 없어요" in render_answer(result.receipt)
 
 
 async def test_negated_bookmark_with_explicit_next_advances_only_search():

@@ -18,17 +18,11 @@ POOL_LABELS = {
 
 
 def explicit_search(intent, query=None):
-    if intent.feedback != "none":
-        quote = intent.search_request_quote
-        if (
-            query is None
-            or not quote
-            or quote not in query
-            or not re.search(r"찾|보여|볼래|보자|추천|필수|넓혀|바꿔|빼줘|해제", quote)
-        ):
-            return False
+    if intent.feedback != "none" and intent.goal not in {"show", "pick_one", "edit_only"}:
+        return False
     return (
-        intent.changes != SemanticChanges()
+        intent.goal == "pick_one"
+        or intent.changes != SemanticChanges()
         or intent.search_scope != "keep"
         or intent.browse != "current"
         or intent.place_edit is not None

@@ -49,6 +49,9 @@ from daengs_evals import EVALS_DIR
 
 ASSETS_DIR = EVALS_DIR / "gait_change"
 QUESTIONS_V1_PATH = ASSETS_DIR / "questions_v1.jsonl"
+#: v2 (D-082): v1 그대로 + **앞 대화가 있는 32문항**. 앞 대화 케이스가 v1 에 없었다.
+#: ⚠️ 문항이 늘었으므로 `gc_v1`~`gc_v5` 와 **직접 비교되지 않는다** — 공통 문항만 대조한다.
+QUESTIONS_V2_PATH = ASSETS_DIR / "questions_v2.jsonl"
 
 CHANGE_KINDS = ("no_change", "one_side", "both_sides", "not_enough")
 CATEGORIES = (
@@ -83,6 +86,16 @@ class Question:
     category: str
     query: str
     scenario: str = "base"
+    #: 앞 턴에서 보호자가 한 말 (D-082). **이번 질문에는 없는 말이 여기 들어간다** —
+    #: 규칙 8·9 의 적용 범위가 넓어지는 자리가 정확히 거기다.
+    prior_user: str | None = None
+    #: 앞 턴에서 비서가 답한 말. 둘을 섞으면 안 된다 — `ConversationContext` 가 이름 자체에
+    #: 그 구분을 박아 두는 것과 같은 이유다.
+    prior_assistant: str | None = None
+
+    @property
+    def has_conversation(self) -> bool:
+        return self.prior_user is not None
 
     @property
     def expects_advisory(self) -> bool:
@@ -144,6 +157,10 @@ def load_questions(path: Path = QUESTIONS_V1_PATH) -> list[Question]:
         scenario = row.get("scenario", "base")
         if scenario not in SCENARIOS:
             raise ValueError(f"{path}:{number} 모르는 시나리오: {scenario}")
+        prior_user = row.get("prior_user")
+        prior_assistant = row.get("prior_assistant")
+        if prior_assistant is not None and prior_user is None:
+            raise ValueError(f"{path}:{number} 비서 답만 있고 사용자 말이 없다")
         seen.add(qid)
         questions.append(
             Question(
@@ -152,9 +169,27 @@ def load_questions(path: Path = QUESTIONS_V1_PATH) -> list[Question]:
                 category=row["category"],
                 query=row["query"],
                 scenario=scenario,
+                prior_user=prior_user,
+                prior_assistant=prior_assistant,
             )
         )
     return questions
+
+
+def conversation_context(question: Question) -> dict[str, Any] | None:
+    """이 문항이 실을 앞 대화. 없으면 None 이고 그때는 payload 에 칸이 안 들어간다.
+
+    ⚠️ **`relation` 은 늘 이어 묻기다.** D-082 가 여는 길이 HANDOFF 전환 하나이고, 그 경로는
+    Turn Resolver 가 확신을 갖고 앞 턴에 이어붙인 턴에서만 값을 만든다.
+    """
+    if not question.has_conversation:
+        return None
+    return {
+        # 계약의 열거값 그대로다 — 소문자로 적으면 `CapabilityRequest` 가 거부한다.
+        "relation": "FOLLOW_UP",
+        "referenced_original_request": question.prior_user,
+        "referenced_assistant_answer": question.prior_assistant,
+    }
 
 
 def file_sha256(path: Path) -> str:
@@ -168,9 +203,11 @@ __all__ = [
     "EXPECTED_REFUSAL",
     "MUST_ANSWER",
     "QUESTIONS_V1_PATH",
+    "QUESTIONS_V2_PATH",
     "SCENARIOS",
     "Question",
     "compare_context",
+    "conversation_context",
     "file_sha256",
     "load_questions",
 ]

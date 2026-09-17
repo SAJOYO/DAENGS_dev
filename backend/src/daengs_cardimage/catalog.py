@@ -131,7 +131,7 @@ class MonthCard:
 #   나가는 값은 이 상수다. `measure()` 자체는 고치지 않는다.
 _CARDS: dict[int, MonthCard] = {
     1: MonthCard(
-        1, "1_new_year", "NEW YEAR", "26JAN",
+        1, "1_new_year", "SEBAE", "26JAN",   # 원본 제목은 NEW YEAR — 앞말이 판을 거의 채워 사용자가 SEBAE 로 (09-18)
         "the pose (kneeling upright with both front paws stacked together on the tasseled cushion in a bowing "
         "posture), the hanging red-and-blue lantern by the hanok pillar (keep this exact color), the "
         "snow-covered hanok roof tiles and stone wall, the bare persimmon branch with snow and red persimmons, "
@@ -153,7 +153,7 @@ _CARDS: dict[int, MonthCard] = {
         seeds=(1, 6),  # 09-16 12달×seed 실험, 눈으로 확인 — 나머지는 부제 배너 자체가 통째로 안 나온다
     ),
     3: MonthCard(
-        3, "3_first_day", "FIRST DAY", "26MAR",
+        3, "3_first_day", "SCHOOL", "26MAR",   # 원본 제목은 FIRST DAY — 같은 이유로 SCHOOL (09-18)
         "the pose (running mid-stride toward the camera with the red pencil held in its mouth), the forsythia "
         "blossoms and loose lined notebook pages flying past, the wrought-iron school gate with the carved "
         'stone pillar reading "학교" (keep this text), the round clock tower, the fallen yellow petals on the '
@@ -179,7 +179,7 @@ _CARDS: dict[int, MonthCard] = {
         seeds=(2, 3),
     ),
     5: MonthCard(
-        5, "5_home_team", "HOME TEAM", "26MAY",
+        5, "5_home_team", "HOME", "26MAY",   # 원본 제목은 HOME TEAM — 앞말만으로 판을 넘겨 HOME (09-18)
         "the pose (sitting upright with one front paw resting on the open page of the photo album), the vase of "
         "red-and-pink carnations with the gold paw-charm pendant on a pink ribbon (keep this exact color), the "
         "plaid-cushioned sofa with the heart-stitched pillow and framed paw-print art, the scattered polaroid "

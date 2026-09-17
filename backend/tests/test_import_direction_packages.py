@@ -76,7 +76,11 @@ ALLOWED: dict[str, set[str]] = {
     # `tasks` 와 달리 파싱~적재까지 이어 붙이므로 `rag` 도 부르지만, `rag` 는 crawler 가 아니라
     # 이 검사의 대상이 아니다. `store`·`fetch` 는 여전히 밖이다 — `run` 을 우회하는 두 번째
     # 수집 경로를 만들지 않는다.
-    "jobs": {"crawler.core.config", "crawler.core.cadence", "crawler.core.registry", "crawler.run"},
+    #
+    # **RAG-087 에서 하나 더** — `crawler.core.revision`. `tasks` 와 같은 근거다: `discover()` 만
+    # 부르므로 원본을 받는 두 번째 수집 경로가 아니다 (RAG-054).
+    "jobs": {"crawler.core.config", "crawler.core.cadence", "crawler.core.registry",
+             "crawler.core.revision", "crawler.run"},
     # 서빙 (RAG-027). `app` 은 도메인 패키지를 통해 설정에 닿으므로 직접 쓸 일이 거의 없다.
     # 그래도 목록에 두는 이유는 **새로 들어오는 날 잡히게** 하기 위해서다.
     "app": {"crawler.core.config"},

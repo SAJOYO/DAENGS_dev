@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -19,6 +20,8 @@ from typing import Any, Iterator
 from pydantic import BaseModel
 
 from . import config
+
+_LATEST_DATE_SUFFIX = re.compile(r"__\d{8}$")   # stem 끝의 수집 날짜만 (RAG-087, chunk_files 참고)
 
 
 @dataclass
@@ -160,8 +163,34 @@ def write_chunks(header: BaseModel, chunks: list[BaseModel]) -> Path:
 
 
 def chunk_files() -> list[Path]:
+    """CHUNK_DIR 의 jsonl 중 **문서별 최신 날짜 파일 하나씩만** 돌려준다 (RAG-087).
+
+    **왜** — 수집(`crawler/core/store.py`)은 옛 원본을 지우지 않고 `{slug}__{YYYYMMDD}` 로
+    새로 쓴다. parse·chunk 가 날짜별로 따로 산출물을 만들다 보니, 여기서 전부 돌려주면
+    embed(`embed.load_chunks` · `chunks_fingerprint`) · load · `goldenset.corpus_index` 가
+    옛 판까지 읽는다. load 는 같은 내용이면 **먼저 본(=가장 옛) 청크**를 대표로 삼아서
+    (`load.py:104-111`), 조가 바뀐 문서는 옛·새 두 행으로 남는다. prune 은 적재 대상에 없는
+    해시만 지우므로 옛 판이 그렇게는 안 빠진다.
+
+    문서 키는 stem 의 **마지막** `__YYYYMMDD` 접미사를 뗀 부분이다. 접미사가 없으면 stem
+    전체가 자기 키라 묶이지 않고 그대로 남는다. 같은 키 안에서는 stem 문자열이 가장 큰
+    (=날짜가 가장 늦은) 파일 하나만 남기고, 최종 결과는 지금까지처럼 **경로 정렬 순서**로
+    돌려준다 — embed 의 parquet 행 순서와 load 의 id 순서 검사가 이 순서에 기대고 있다.
+
+    **알고 남기는 한계 둘.**
+    ① 판이 slug 자체에 박힌 약관은 새 판이 새 slug 라 다른 키로 보여 못 거른다.
+    ② 새 판의 청크 파일이 비어 있으면(파싱 실패 등) 그 문서가 코퍼스에서 통째로 빠진다 —
+       급감 가드(`daengs_life/jobs/guard.py`)가 큰 경우를 잡는다.
+    """
     config.require_data_dir()
-    return sorted(config.CHUNK_DIR.glob("*.jsonl"))
+    latest: dict[str, Path] = {}
+    for path in sorted(config.CHUNK_DIR.glob("*.jsonl")):
+        m = _LATEST_DATE_SUFFIX.search(path.stem)
+        key = path.stem[:m.start()] if m else path.stem
+        current = latest.get(key)
+        if current is None or path.stem > current.stem:
+            latest[key] = path
+    return sorted(latest.values())
 
 
 # ---------------------------------------------------------------- 6단계: eval/ (RAG-024 ④)

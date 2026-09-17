@@ -32,7 +32,7 @@
 Cloud Scheduler  corpus-refresh-daily   (0 4 * * *  Asia/Seoul)
    └─▶ Cloud Run Job  corpus-refresh    [asia-northeast3, 4vCPU/16GB, CPU]
           │  /data  ← GCS 버킷 daengs-corpus 볼륨 마운트
-          │  crawl(due) → parse → chunk → embed(CPU 증분) → guard → load
+          │  crawl(due + 법령 개정) → parse → chunk → embed(CPU 증분) → guard → load
           └─▶ VM 내부 IP :5432 (pgvector, VPC 내부 이그레스만)
 
 사람 실행 ─▶ Cloud Run Job  corpus-embed-full  [asia-southeast1, L4 1장]
@@ -68,9 +68,9 @@ VM 에 남는 Celery 는 gait-worker(요청 구동)뿐이다. 집 서버는 Beat
 | 순서 | 하는 일 | 재사용 | 실패하면 |
 | --- | --- | --- | --- |
 | 0 | Cloud Run API 로 같은 잡의 다른 실행이 있으면 "건너뜀" 찍고 종료 코드 0 | 새로 | — |
-| 1 | `cadence.due_sources` → `crawler.run`. `--sources` 인자가 있으면 그것만 | 있음 | 소스 하나 실패는 `crawl_runs` 에 남기고 계속. 전부 실패면 중단 |
+| 1 | `cadence.due_sources` + `revision.probe_sources`(manual 법령의 시행일자, 바뀐 것만 `trigger='revision'`) → `crawler.run`. `--sources` 인자가 있으면 그것만(개정 조회 안 함, RAG-087) | 있음 | 소스 하나 실패는 `crawl_runs` 에 남기고 계속. 전부 실패면 중단 |
 | 2 | `rag parse` 증분 | 있음 | 파서 예외 상한 초과 시 중단 |
-| 3 | `rag chunk` 증분 | 있음 | 예외 시 중단 |
+| 3 | `rag chunk` 증분 — 문서별 최신 판만(RAG-087) | 있음 | 예외 시 중단 |
 | 4 | `rag embed --model <EMBEDDING_MODEL_KEY>` 청크 해시 증분, CPU | 있음 | 예외 시 중단 |
 | 5 | **가드** — 적재 계획을 만들고 검사 | 새로 | 걸리면 DB 안 건드리고 종료 코드 1 |
 | 6 | `rag load` upsert + stale prune, 한 트랜잭션 | 있음 | 롤백 |

@@ -537,7 +537,8 @@ class GaitCompareContext(ContractModel):
     reliability: Literal["ok", "recent_short", "past_short", "both_short"]
     #: 분석 버전이 다르면 같은 영상도 이동범위가 달라 보인다. 있으면 문장에 **조건 없이** 실린다.
     version_mismatch: bool
-    #: **여섯 판정 지점이 전부 달라졌고, 그렇게 볼 근거도 충분할 때만** True (D-080).
+    #: **잰 판정 지점이 전부 달라졌고, 그렇게 볼 근거도 충분할 때만** True
+    #: (D-080, 조건은 #582 로 완화 — 못 잰 지점은 분모에서 뺀다).
     #:
     #: 서버가 계산한다 — 조건은 `services/gait_context._expert_advisory` 하나에 있다.
     #: 켜지면 "영상만으로 원인은 알 수 없지만 이런 변화가 반복되면 전문가 의견을 받아 보는

@@ -63,6 +63,13 @@ _GOOD_TIER = "good"
 #: `tests/test_orchestration_gait_agent.py` 가 그 수를 못 박는다.
 _JOINTS_PER_SIDE = 3
 
+#: 전문가 의견 한 줄이 붙으려면 **잰 지점이 이만큼은 있어야** 한다 (#582).
+#:
+#: 두 개만 재고 둘 다 달라졌을 때 "전부 달라졌다" 라고 부르면 근거가 너무 얇다. 넷은 여섯 중
+#: 셋을 넘는 첫 수이고, **한쪽 다리(3)만으로는 못 켜진다**는 뜻이기도 하다 — 한쪽 이야기는
+#: `change_kind == "one_side"` 가 이미 한다.
+_ADVISORY_MIN_MEASURED = 4
+
 _MAX_DAYS = 3_650
 
 
@@ -177,29 +184,44 @@ def _expert_advisory(
     reliability: str,
     version_mismatch: bool,
 ) -> bool:
-    """**여섯 판정 지점이 전부 달라졌고, 그렇게 볼 근거도 충분한가** (D-080).
+    """**잰 지점이 전부 달라졌고, 그렇게 볼 근거도 충분한가** (D-080, 조건은 #582 로 완화).
 
     셋을 다 요구한다:
 
-    1. 양쪽 다리에서 **세 관절씩 전부** 비교됐고 **전부** 달라졌다 (여섯 중 여섯).
-       한두 개가 빠진 비교는 여기 안 든다 — "전부" 가 이 신호의 전부다.
+    1. **잰 지점이 `_ADVISORY_MIN_MEASURED` 개 이상이고, 그 전부가 달라졌다.**
     2. 두 영상 다 보행 장면이 충분했다 (`reliability == "ok"`).
     3. 분석 버전이 같다. 버전이 다르면 같은 영상도 이동범위가 달라 보이므로
        (`compare` 의 경고와 같은 사실), 그 비교로는 "전부 달라졌다" 를 근거로 못 삼는다.
 
+    ## 왜 "여섯 중 여섯" 에서 "잰 것 중 전부" 로 바꿨나 (#582)
+
+    실기기에서 **잰 다섯 지점이 전부 달라졌는데 이 줄이 안 붙었다.** 여섯 번째를 못 쟀기
+    때문이다. 옛 조건이 못 잰 지점을 **변화 없음과 똑같이** 취급한 탓인데, 못 잰 것은
+    "안 달라졌다" 가 아니라 **"모른다"** 다. 그 구분은 D-063 7단계에서 `n_unmeasured` 를
+    만들며 이미 세웠는데 이 조건만 그것을 안 쓰고 있었다.
+
+    ⚠️ **하한이 왜 있나.** 두 개만 재고 둘 다 달라졌을 때 "전부" 라고 부르면 근거가 너무
+    얇다. 넷은 여섯 중 셋을 넘는 첫 수이고, **한쪽 다리(3)만으로는 못 켜진다**는 뜻이기도
+    하다 — 한쪽 이야기는 `change_kind == "one_side"` 가 이미 하고 있다.
+
+    ⚠️ **색이나 "빨강 몇 개" 로 세지 않는다.** 앱의 3색은 심각도가 아니라 **달라진 축의
+    수**다(주황=한 축, 빨강=두 축, `GaitJointChange` 주석: "나쁘다는 뜻이 아니라 두 방향
+    모두 달라졌다는 표시"). 빨강을 개수로 세면 그것이 사실상 심각도 점수가 되고 사용자는
+    빨강이 많을수록 나쁘다고 읽는다. **"잰 것이 전부 달라졌다" 는 정도가 아니라 범위**라서
+    그 선을 넘지 않고, 서버는 이미 잰 수와 달라진 수를 갖고 있어 계약을 넓힐 필요도 없다.
+
     **켜져도 정도(severity)를 말하는 것이 아니다.** 이 서비스는 진단이 아니고(D-058),
     켜진다고 행동이 바뀌지도 않는다 — 고정 문장 한 줄이 덧붙을 뿐이고 `vet_visit` 는
-    v1 에 없다. 조건을 느슨하게 하면 그 한 줄이 흔해지고, 흔해지면 사용자가 그것을
-    "나빠졌다는 신호" 로 읽기 시작한다 — 좁게 두는 이유가 그것이다.
+    v1 에 없다. 느슨하게 할수록 그 한 줄이 흔해지고, 흔해지면 사용자가 그것을
+    "나빠졌다는 신호" 로 읽기 시작한다 — 하한을 두는 이유가 그것이다.
     """
     if reliability != "ok" or version_mismatch:
         return False
-    if left[1] != _JOINTS_PER_SIDE or right[1] != _JOINTS_PER_SIDE:
+    measured = left[0] + right[0]
+    if measured < _ADVISORY_MIN_MEASURED:
         return False
-    return all(
-        _as_int((sides.get(side) or {}).get("n_diff")) == _JOINTS_PER_SIDE
-        for side in ("left", "right")
-    )
+    changed = sum(_as_int((sides.get(side) or {}).get("n_diff")) for side in ("left", "right"))
+    return changed == measured
 
 
 def _counts(side: dict[str, Any] | None) -> tuple[int, int]:
@@ -220,9 +242,7 @@ def _as_int(value: Any) -> int:
     return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else 0
 
 
-def _change_kind(
-    flagged: list[str], left: tuple[int, int], right: tuple[int, int]
-) -> str:
+def _change_kind(flagged: list[str], left: tuple[int, int], right: tuple[int, int]) -> str:
     """앱 `verdictOf` 와 **같은 규칙**입니다 (D-063 7단계).
 
     변화가 기준을 채운 다리 수로 먼저 가르고, 아니면 "비슷하다고 말할 근거가 있나" 를
@@ -251,9 +271,7 @@ def _reliability(*, past: GaitRecord, recent: GaitRecord) -> str:
     return "ok"
 
 
-def _days_between(
-    past: GaitRecord, recent: GaitRecord, *, now: datetime.datetime | None
-) -> int:
+def _days_between(past: GaitRecord, recent: GaitRecord, *, now: datetime.datetime | None) -> int:
     """두 기록의 간격(일). 촬영일이 없으면 만든 날로 떨어집니다 — 순서를 정할 때
     `services/gait._order_by_age` 가 쓰는 것과 같은 규칙입니다.
 

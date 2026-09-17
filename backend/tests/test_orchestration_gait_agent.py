@@ -562,7 +562,7 @@ async def test_the_version_warning_rides_along_whenever_versions_differ() -> Non
     assert GAIT_VERSION_WARNING in result.data["answer"]
 
 
-# ── 5-2. 전문가 의견 한 줄 (D-080) ───────────────────────────────────────────
+# ── 5-2. 전문가 의견 한 줄 (D-080 · 조건은 #582 로 완화) ─────────────────────
 def _sides(left_diff: int, right_diff: int, joints: int = 3) -> dict[str, dict[str, Any]]:
     return {
         "left": {"n_joints": joints, "n_diff": left_diff, "n_unmeasured": 0, "flagged": True},
@@ -570,8 +570,27 @@ def _sides(left_diff: int, right_diff: int, joints: int = 3) -> dict[str, dict[s
     }
 
 
-def test_expert_advisory_needs_all_six_points_and_a_sound_comparison() -> None:
-    """여섯 중 여섯이 달라졌고, 두 영상 다 충분했고, 버전도 같을 때만이다."""
+def test_expert_advisory_counts_only_the_points_that_were_measured() -> None:
+    """⚠️ **이 PR 의 목적.** 실기기에서 나온 그 비교다 (#582).
+
+    왼쪽 셋이 다 달라졌고, 오른쪽은 고관절을 못 재서 둘만 쟀는데 그 둘도 다 달라졌다.
+    **잰 다섯이 전부 달라졌는데** 옛 조건("여섯 중 여섯")은 못 잰 하나를 **변화 없음과
+    똑같이** 취급해 이 줄을 안 붙였다. 못 잰 것은 "안 달라졌다" 가 아니라 "모른다" 다.
+    """
+    sides = {
+        "left": {"n_joints": 3, "n_diff": 3, "n_unmeasured": 0, "flagged": True},
+        "right": {"n_joints": 3, "n_diff": 2, "n_unmeasured": 1, "flagged": True},
+    }
+    assert (
+        gait_context._expert_advisory(
+            sides, (3, 3), (2, 3), reliability="ok", version_mismatch=False
+        )
+        is True
+    )
+
+
+def test_expert_advisory_still_holds_when_every_point_was_measured() -> None:
+    """여섯 중 여섯은 그대로 켜진다 (회귀)."""
     assert (
         gait_context._expert_advisory(
             _sides(3, 3), (3, 3), (3, 3), reliability="ok", version_mismatch=False
@@ -580,15 +599,46 @@ def test_expert_advisory_needs_all_six_points_and_a_sound_comparison() -> None:
     )
 
 
+def test_four_measured_and_all_changed_is_the_lower_bound() -> None:
+    """하한 경계. 넷이면 켜지고 셋이면 안 켜진다 — 아래 parametrize 가 반대쪽을 잡는다."""
+    assert (
+        gait_context._expert_advisory(
+            _sides(2, 2, joints=2), (2, 2), (2, 2), reliability="ok", version_mismatch=False
+        )
+        is True
+    )
+
+
 @pytest.mark.parametrize(
     ("sides", "left", "right", "reliability", "version_mismatch", "why"),
     [
-        (_sides(3, 2), (3, 3), (3, 3), "ok", False, "한쪽이 셋 중 둘만 달라졌다"),
-        (_sides(2, 2), (3, 3), (3, 3), "ok", False, "양쪽 다 셋 중 둘"),
+        (_sides(3, 2), (3, 3), (3, 3), "ok", False, "잰 여섯 중 다섯만 달라졌다"),
+        (_sides(2, 2), (3, 3), (3, 3), "ok", False, "잰 여섯 중 넷만 달라졌다"),
+        (
+            {
+                "left": {"n_joints": 3, "n_diff": 2, "n_unmeasured": 0, "flagged": True},
+                "right": {"n_joints": 3, "n_diff": 2, "n_unmeasured": 1, "flagged": True},
+            },
+            (3, 3),
+            (2, 3),
+            "ok",
+            False,
+            "잰 다섯 중 넷만 달라졌다 — 못 잰 것을 빼도 '전부' 가 아니다",
+        ),
+        (
+            {
+                "left": {"n_joints": 3, "n_diff": 3, "n_unmeasured": 0, "flagged": True},
+                "right": {"n_joints": 3, "n_diff": 0, "n_unmeasured": 3, "flagged": False},
+            },
+            (3, 3),
+            (0, 3),
+            "ok",
+            False,
+            "한쪽 다리만 쟀다 — 셋은 하한 미만이고, 한쪽 이야기는 one_side 가 이미 한다",
+        ),
         (_sides(3, 3), (3, 3), (3, 3), "recent_short", False, "최근 영상이 짧았다"),
         (_sides(3, 3), (3, 3), (3, 3), "both_short", False, "둘 다 짧았다"),
         (_sides(3, 3), (3, 3), (3, 3), "ok", True, "분석 버전이 다르다"),
-        (_sides(2, 2, joints=2), (2, 2), (2, 2), "ok", False, "여섯 지점이 다 비교되지 않았다"),
     ],
 )
 def test_expert_advisory_stays_off_unless_every_condition_holds(
@@ -599,7 +649,7 @@ def test_expert_advisory_stays_off_unless_every_condition_holds(
     version_mismatch: bool,
     why: str,
 ) -> None:
-    """좁게 두는 것이 설계다 — 흔해지면 사용자가 그 줄을 "나빠졌다는 신호" 로 읽는다."""
+    """느슨하게 할수록 그 줄이 흔해지고, 흔해지면 사용자가 "나빠졌다는 신호" 로 읽는다."""
     assert (
         gait_context._expert_advisory(
             sides, left, right, reliability=reliability, version_mismatch=version_mismatch
@@ -734,7 +784,7 @@ def test_the_prompt_separates_a_diagnosis_the_owner_already_received() -> None:
 
 def test_the_prompt_version_moved_with_the_rule_change() -> None:
     """평가 메타가 이 값을 고정한다 — 안 올리면 새 결과가 옛 셀에 섞인다."""
-    assert GAIT_PROMPT_VERSION == "gait-change-ko-v2"
+    assert GAIT_PROMPT_VERSION == "gait-change-ko-v3"
 
 
 # ── 8. 프로바이더 실패는 격리된다 ────────────────────────────────────────────

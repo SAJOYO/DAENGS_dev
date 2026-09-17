@@ -209,8 +209,11 @@ async def test_clear_filter_edits_compile_scoped_or_without_model_ids_or_duplica
     cleared = compile_changes(result, SemanticChanges(parking="clear"))
     assert evaluate(cleared, "cafe", None, None) is True
     assert evaluate(cleared, "restaurant", True, False) is False
-    with pytest.raises(ValueError, match="explicit OR"):
-        compile_changes(result, SemanticChanges(kinds={"operation": "set", "values": ["hotel"]}))
+    replaced = compile_changes(
+        result, SemanticChanges(kinds={"operation": "set", "values": ["hotel"]})
+    )
+    assert replaced.candidate_kinds == ("hotel",) and replaced.hard.any == ()
+    assert evaluate(replaced, "hotel", None, None) is True
     with pytest.raises(ValidationError):
         SemanticChanges.model_validate({"upsert_all": [{"id": "model-owned"}]})
 

@@ -36,6 +36,31 @@ def compile_changes(current: FilterState, changes: SemanticChanges) -> FilterSta
     return current if fingerprint(current) == fingerprint(candidate) else candidate
 
 
+def project_branches(branches, previous_kinds, kinds):
+    """Keep branch-local facts attached to their categories, never move them to new ones."""
+    projected = []
+    has_unscoped = False
+    for branch in branches:
+        scope = [a for a in branch["all"] if a["capability"] == "purpose.kind"]
+        facts = [a for a in branch["all"] if a["capability"] != "purpose.kind"]
+        if not scope:
+            projected.append({"all": facts})
+            has_unscoped = True
+            continue
+        allowed = [
+            kind
+            for kind in kinds
+            if kind in previous_kinds
+            and all((kind in a["value"]) == (a["op"] == "in") for a in scope)
+        ]
+        if allowed:
+            projected.append({"all": [atom("purpose.kind", allowed), *facts]})
+    added = [kind for kind in kinds if kind not in previous_kinds]
+    if added and projected and not has_unscoped:
+        projected.append({"all": [atom("purpose.kind", added)]})
+    return projected
+
+
 def compile_filter_data(current: dict, changes: SemanticChanges, *, max_kinds=6) -> dict:
     """Shared facet algebra; each search capability validates its own final envelope."""
     if (
@@ -64,9 +89,8 @@ def compile_filter_data(current: dict, changes: SemanticChanges, *, max_kinds=6)
     hard = data["hard"]
     if set(kinds) != set(current["candidate_kinds"]):
         hard["all"] = [a for a in hard["all"] if a["capability"] != "purpose.kind"]
-        # A replacement category has no unambiguous mapping onto old branch-local facts.
         if hard["any"] and changes.alternatives is None:
-            raise ValueError("category change needs an explicit OR replacement")
+            hard["any"] = project_branches(hard["any"], current["candidate_kinds"], kinds)
         preferences = []
         for preference in data["preferences"]:
             scope = preference["scope_kinds"]

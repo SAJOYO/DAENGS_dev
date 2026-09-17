@@ -94,12 +94,11 @@ def test_navigation_cannot_drop_simultaneous_filter_changes(pool):
 
 
 @pytest.mark.parametrize("pool", ["all_places", "bookmarks"])
-def test_s07_overeager_scope_is_not_authorized_by_save_negation(pool):
+def test_save_negation_is_independent_of_model_search_scope(pool):
     intent = Interpretation(
         goal="show",
         forbid_save=True,
-        search_scope="all_places",
-        search_scope_quote="찜하지 말고",
+        search_scope="keep",
         changes={"parking": "required_true"},
     )
     directive = resolve_search(intent, pool, "찜하지 말고 주차 되는 카페만 찾아줘")
@@ -110,7 +109,7 @@ def test_s07_overeager_scope_is_not_authorized_by_save_negation(pool):
     assert result.action == "search" and result.filters.hard.all[0].value is True
 
 
-def test_forbidden_save_does_not_block_explicit_scope_change_or_accept_invented_quote():
+def test_forbidden_save_does_not_block_semantic_scope_change_without_literal_quote():
     intent = Interpretation(
         goal="show",
         forbid_save=True,
@@ -121,7 +120,9 @@ def test_forbidden_save_does_not_block_explicit_scope_change_or_accept_invented_
         resolve_search(intent, "bookmarks", "찜하지 말고 찜 여부 상관없이 찾아줘").pool
         == "all_places"
     )
-    assert resolve_search(intent, "bookmarks", "찜한 곳 중 찾아줘").code == "scope_needs_reference"
+    assert resolve_search(intent, "bookmarks", "저장 목록 밖에서도 보고 싶어").pool == "all_places"
+    intent = intent.model_copy(update={"search_scope_quote": ""})
+    assert resolve_search(intent, "bookmarks", "더 넓게 찾아봐").pool == "all_places"
 
 
 def test_short_saved_lookup_request_and_restatement_of_current_scope_do_not_need_clarification():

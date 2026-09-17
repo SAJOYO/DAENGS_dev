@@ -40,7 +40,7 @@ def response(arguments):
     )
 
 
-async def test_paired_input_only_adds_context_but_cannot_authorize_ungrounded_undo():
+async def test_paired_input_changes_only_context_and_applies_model_resolved_category_edit():
     targets, fixtures = await samples()
     target = next(t for t in targets if t["id"] == "PC-X03")
     wires = []
@@ -68,11 +68,10 @@ async def test_paired_input_only_adds_context_but_cannot_authorize_ungrounded_un
     assert a["anchor_sha256"] == b["anchor_sha256"] == a2["anchor_sha256"]
     assert a["before"] == b["before"] == a2["before"]
     assert a["prepared"]["state"]["filters"]["candidate_kinds"] == ["cafe", "restaurant"]
-    # This historical anchor has no committed intent history. Extra model clues alone
-    # cannot authorize "undo what I just added" under the facility scope contract.
+    # Category meaning is resolved by the provider; no second lexical/history classifier.
     assert b["plans"][0]["changes"]["kinds"]["values"] == ["restaurant"]
-    assert b["prepared"]["receipt"]["code"] == "invalid_plan"
-    assert b["prepared"]["state"]["filters"]["candidate_kinds"] == ["cafe", "restaurant"]
+    assert b["prepared"]["receipt"]["code"] != "invalid_plan"
+    assert b["prepared"]["state"]["filters"]["candidate_kinds"] == ["cafe"]
     assert a2["prepared"]["state"]["filters"]["candidate_kinds"] == ["cafe", "restaurant"]
     enriched = json.loads(wires[1]["input"])
     enriched.pop("context")

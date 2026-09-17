@@ -1,11 +1,15 @@
 """Bounded interpretation and consent classification. No answer-generation authority."""
 
+import asyncio
 import json
+import logging
 
 import httpx
+from pydantic import ValidationError
 
 from daengs_place.place.conversation.compiler import canonical
 from daengs_place.place.conversation.context import screen_context
+from daengs_place.place.conversation.diagnostics import validation_issues
 from daengs_place.place.conversation.intent import PendingDecision, ScopedInterpretation
 from daengs_place.place.conversation.static_tools import (
     PENDING_TOOL,
@@ -17,6 +21,8 @@ from daengs_place.place.providers.gemini import (
     GeminiIntentProposerResponseError,
     GeminiIntentProposerTimeoutError,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class GeminiConversation:
@@ -74,7 +80,7 @@ class GeminiConversation:
         )
 
     async def _plan(self, context):
-        result = await self._call(
+        return await self._validated_call(
             {
                 "system_instruction": STATIC_INSTRUCTIONS,
                 "tools": [TURN_TOOL],
@@ -84,16 +90,13 @@ class GeminiConversation:
                     "max_output_tokens": 2500,
                     "tool_choice": "any",
                 },
-            }
+            },
+            ScopedInterpretation,
         )
-        calls = [step for step in result.get("steps", []) if step.get("type") == "function_call"]
-        if len(calls) != 1 or calls[0].get("name") != TURN_TOOL["name"]:
-            raise ValueError("expected exactly one turn proposal")
-        return ScopedInterpretation.model_validate(calls[0].get("arguments"))
 
     async def decide_pending(self, request):
         pending = request.previous.pending_proposal
-        result = await self._call(
+        return await self._validated_call(
             {
                 "system_instruction": (
                     "저장된 제안에 대한 현재 발화만 분류한다. 조건 생성 권한은 없다. "
@@ -119,9 +122,78 @@ class GeminiConversation:
                     "max_output_tokens": 300,
                     "tool_choice": "any",
                 },
-            }
+            },
+            PendingDecision,
         )
-        calls = [step for step in result.get("steps", []) if step.get("type") == "function_call"]
-        if len(calls) != 1 or calls[0].get("name") != PENDING_TOOL["name"]:
-            raise ValueError("expected one pending decision")
-        return PendingDecision.model_validate(calls[0].get("arguments"))
+
+    async def _validated_call(self, payload, model):
+        """Give malformed tool output one correction, within the original turn deadline."""
+        name = payload["tools"][0]["name"]
+        original = [{"type": "user_input", "content": [{"type": "text", "text": payload["input"]}]}]
+        try:
+            async with asyncio.timeout(self.timeout):
+                for attempt in range(2):
+                    result = await self._call(payload)
+                    steps = result.get("steps")
+                    calls = (
+                        [
+                            step
+                            for step in steps
+                            if isinstance(step, dict) and step.get("type") == "function_call"
+                        ]
+                        if isinstance(steps, list)
+                        else []
+                    )
+                    valid_call = len(calls) == 1 and calls[0].get("name") == name
+                    try:
+                        if not valid_call:
+                            raise ValueError("expected exactly one named function call")
+                        return model.model_validate(calls[0].get("arguments"))
+                    except (ValidationError, ValueError) as error:
+                        issues = validation_issues(error)
+                        logger.warning(
+                            "facility_tool_validation_failed tool=%s attempt=%s issues=%s",
+                            name,
+                            attempt + 1,
+                            issues,
+                        )
+                        if attempt:
+                            raise
+                        feedback = {
+                            "code": "invalid_arguments",
+                            "issues": issues,
+                            "instruction": (
+                                "아직 실행하지 않았다. 기존 사용자 요청과 현재 상태를 유지하고 "
+                                "스키마와 검증 오류에 맞춰 같은 도구를 한 번 다시 호출한다."
+                            ),
+                        }
+                        if isinstance(error, ValidationError):
+                            # Returned only to the same model; excluded from server logs.
+                            feedback["details"] = error.errors(
+                                include_input=False, include_context=False, include_url=False
+                            )[:8]
+                        message = json.dumps(feedback, ensure_ascii=False)
+                        if valid_call and calls[0].get("id"):
+                            # Preserve provider thought signatures for native continuation.
+                            history = [
+                                *original,
+                                *steps,
+                                {
+                                    "type": "function_result",
+                                    "call_id": calls[0]["id"],
+                                    "name": name,
+                                    "result": [{"type": "text", "text": message}],
+                                    "is_error": True,
+                                },
+                            ]
+                        else:
+                            history = [
+                                *original,
+                                {
+                                    "type": "user_input",
+                                    "content": [{"type": "text", "text": message}],
+                                },
+                            ]
+                        payload = {**payload, "input": history}
+        except TimeoutError as error:
+            raise GeminiIntentProposerTimeoutError("conversation timed out") from error

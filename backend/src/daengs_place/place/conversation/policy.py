@@ -14,7 +14,7 @@ from daengs_place.place.conversation.contract import PendingChange, TurnPlan
 from daengs_place.place.conversation.intent import Interpretation
 from daengs_place.place.conversation.presentation import user_text_allowed
 from daengs_place.place.conversation.render import ATTRIBUTES, confirmation, describe_filters
-from daengs_place.place.conversation.scope import OUT_OF_SCOPE, OutsideFacilityScope, validate_scope
+from daengs_place.place.conversation.scope import OUT_OF_SCOPE, validate_scope
 from daengs_place.place.conversation.search_compilation import compile_search
 from daengs_place.place.conversation.search_policy import resolve_search
 from daengs_place.place.filters.contract import FilterState, guard_filter_state
@@ -154,10 +154,7 @@ async def decide(planner, request, now):
     intent = await planner.plan(context)
     if not isinstance(intent, Interpretation):
         raise TypeError("expected semantic interpretation")
-    try:
-        validate_scope(intent, request.query, request.previous)
-    except OutsideFacilityScope:
-        return Decision("clarify", code="facility_out_of_scope", question=OUT_OF_SCOPE)
+    validate_scope(intent, request.query, request.previous)
     if intent.kind == "out_of_scope":
         return Decision("clarify", code="facility_out_of_scope", question=OUT_OF_SCOPE)
     if intent.kind == "facility_state" and intent.state_subject == "filters":
@@ -228,9 +225,7 @@ async def decide(planner, request, now):
             intent=intent,
         )
     goal = intent.goal
-    if intent.feedback != "none" and explicit_search(intent, request.query):
-        goal = "show"
-    elif intent.feedback == "familiarity" and intent.familiarity:
+    if intent.feedback == "familiarity" and intent.familiarity and not explicit_search(intent):
         goal = "show" if directive.pool == "new_candidates" else "edit_only"
     plan = TurnPlan(goal=goal, refresh=intent.refresh, reference_index=intent.reference_index)
     if goal == "explain":

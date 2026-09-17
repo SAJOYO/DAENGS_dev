@@ -84,8 +84,8 @@ def main(argv: list[str] | None = None) -> int:
         log.info("[refresh] ▶ %s", stage)
         if stage == "crawl":
             s = stages.run_crawl(sources, dry_run=args.dry_run)
-            log.info("[refresh] crawl 끝 — 대상 %d · ok %d · failed %d · unavailable %d",
-                     len(s.selected), s.ok, s.failed, s.unavailable)
+            log.info("[refresh] crawl 끝 — 대상 %d (개정 %d) · ok %d · failed %d · unavailable %d",
+                     len(s.selected), len(s.revised), s.ok, s.failed, s.unavailable)
             if s.selected and s.ok == 0 and s.failed > 0:
                 log.error("[refresh] crawl 전부 실패 — 멈춘다")
                 return 1

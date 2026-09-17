@@ -32,7 +32,7 @@
 Cloud Scheduler  corpus-refresh-daily   (0 4 * * *  Asia/Seoul)
    └─▶ Cloud Run Job  corpus-refresh    [asia-northeast3, 4vCPU/16GB, CPU]
           │  /data  ← GCS 버킷 daengs-corpus 볼륨 마운트
-          │  crawl(due) → parse → chunk → embed(CPU 증분) → guard → load
+          │  crawl(due + 법령 개정) → parse → chunk → embed(CPU 증분) → guard → load
           └─▶ VM 내부 IP :5432 (pgvector, VPC 내부 이그레스만)
 
 사람 실행 ─▶ Cloud Run Job  corpus-embed-full  [asia-southeast1, L4 1장]
@@ -62,18 +62,18 @@ VM 에 남는 Celery 는 gait-worker(요청 구동)뿐이다. 집 서버는 Beat
 **진입점** `daengs_life/jobs/corpus_refresh.py` → `[project.scripts] corpus-refresh`.
 `crawler`(브로커 없는 순수 CLI)와 `rag`(단계 CLI)를 순서대로 부르는 얇은 조립층.
 `tasks/`(Celery 래퍼)의 형제이고 Celery 를 안 쓴다. `test_import_direction_packages.py` 의
-`ALLOWED["jobs"]` 에 `crawler.{core.config, core.cadence, core.registry, run}` 을 더한다.
+`ALLOWED["jobs"]` 에 `crawler.{core.config, core.cadence, core.registry, core.revision, run}` 을 더한다.
 `jobs → rag` 는 그 검사의 대상이 아니다(검사는 crawler import 만 본다).
 
 | 순서 | 하는 일 | 재사용 | 실패하면 |
 | --- | --- | --- | --- |
 | 0 | Cloud Run API 로 같은 잡의 다른 실행이 있으면 "건너뜀" 찍고 종료 코드 0 | 새로 | — |
-| 1 | `cadence.due_sources` → `crawler.run`. `--sources` 인자가 있으면 그것만 | 있음 | 소스 하나 실패는 `crawl_runs` 에 남기고 계속. 전부 실패면 중단 |
+| 1 | `cadence.due_sources` + `revision.probe_sources`(manual 법령의 시행일자, 바뀐 것만 `trigger='revision'`) → `crawler.run`. `--sources` 인자가 있으면 그것만(개정 조회 안 함, RAG-087) | 있음 | 소스 하나 실패는 `crawl_runs` 에 남기고 계속. 전부 실패면 중단 |
 | 2 | `rag parse` 증분 | 있음 | 파서 예외 상한 초과 시 중단 |
 | 3 | `rag chunk` 증분 | 있음 | 예외 시 중단 |
-| 4 | `rag embed --model <EMBEDDING_MODEL_KEY>` 청크 해시 증분, CPU | 있음 | 예외 시 중단 |
+| 4 | `rag embed --model <EMBEDDING_MODEL_KEY>` 청크 해시 증분, CPU — embed·load 가 읽는 청크는 문서별 최신 판만(RAG-087) | 있음 | 예외 시 중단 |
 | 5 | **가드** — 적재 계획을 만들고 검사 | 새로 | 걸리면 DB 안 건드리고 종료 코드 1 |
-| 6 | `rag load` upsert + stale prune, 한 트랜잭션 | 있음 | 롤백 |
+| 6 | `rag load` upsert + stale prune, 한 트랜잭션 — embed·load 가 읽는 청크는 문서별 최신 판만(RAG-087) | 있음 | 롤백 |
 
 **가드 세 가지** (행 수 한계는 `--max-drop` 인자, 기본 0.2 — 환경 변수가 아니다):
 ① 적재 뒤 행 수가 적재 전 대비 비율 이상 줄어드는 계획이면 중단 (20%).

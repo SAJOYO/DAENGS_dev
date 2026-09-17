@@ -5,6 +5,9 @@
 
 크롤은 `tasks/crawl.py` 의 `crawl_source` 와 같은 흐름이되 Celery 재시도가 없다. 소스 하나가
 죽어도 다음 소스로 가고, 시도마다 `crawl_runs` 에 한 행을 남기는 것은 그쪽과 같다 (RAG-047).
+due 뒤의 법령 개정 조회도 `tasks/crawl.py` 의 `crawl_due` / `_revised_sources` 를 그대로 옮긴
+것이다 (RAG-087) — D-062 로 이 파일을 새로 짤 때 그 조회가 빠져 GCP 에서는 법령이 다시
+수집되지 않았다.
 """
 from __future__ import annotations
 
@@ -14,7 +17,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 
 from daengs_life.crawler import run as crawler_run
-from daengs_life.crawler.core import cadence, registry
+from daengs_life.crawler.core import cadence, registry, revision
 from daengs_life.crawler.core.config import KST
 from daengs_life.rag import __main__ as rag_cli
 from daengs_life.rag.core import config as rag_config
@@ -40,25 +43,44 @@ def parse_stages(text: str | None) -> list[str]:
 @dataclass
 class CrawlSummary:
     selected: list[str] = field(default_factory=list)
+    revised: list[str] = field(default_factory=list)
     ok: int = 0
     failed: int = 0
     unavailable: int = 0
 
 
 def run_crawl(source_ids: list[str] | None, *, dry_run: bool) -> CrawlSummary:
-    """due 소스(또는 지정 소스)를 순서대로 받는다. 예외는 소스 단위로 삼킨다."""
+    """due 소스(또는 지정 소스)를 순서대로 받는다. 예외는 소스 단위로 삼킨다.
+
+    `source_ids` 가 없을 때(due 모드)만 법령 개정 조회(`_revised_sources`)를 덧붙인다 —
+    수동 지정은 사람이 이름을 댄 것이라 판정을 또 걸 이유가 없다 (`tasks/crawl.py` 의
+    `crawl_due` 와 같은 판정, RAG-087). **`dry_run` 이어도 조회는 한다** — `probe_sources` 는
+    `discover()` 만 부르는 읽기 요청이고, dry-run 은 "무엇을 할지 미리 보기"이지 조회까지
+    건너뛰는 모드가 아니다.
+    """
     seeds = registry.load_seeds()
+    revised: list[str] = []
     if source_ids:
         selected, trigger = list(source_ids), "manual"
+        pairs = [(sid, trigger) for sid in selected]
     else:
         implemented = {sid for sid, seed in seeds.items() if registry.resolve(seed) is not None}
         selected = cadence.due_sources(seeds, implemented=implemented, now=datetime.now(KST))
         trigger = "due"
-    log.info("[refresh] crawl 대상 %d개 (%s): %s", len(selected), trigger, ", ".join(selected) or "없음")
+        revised = _revised_sources(seeds)
+        due_set = set(selected)
+        # due 에 이미 있는 소스가 개정으로도 잡히면 한 번만, trigger 는 due 로 (중복 수집 방지).
+        pairs = [(sid, "due") for sid in selected] + [
+            (sid, "revision") for sid in revised if sid not in due_set
+        ]
+    run_ids = [sid for sid, _ in pairs]
+    revision_count = sum(1 for _, trig in pairs if trig == "revision")
+    log.info("[refresh] crawl 대상 %d개 (%s, 개정 %d): %s",
+             len(run_ids), trigger, revision_count, ", ".join(run_ids) or "없음")
 
-    summary = CrawlSummary(selected=selected)
-    for source_id in selected:
-        row_id = None if dry_run else crawl_runs.start(source_id, trigger)
+    summary = CrawlSummary(selected=run_ids, revised=revised)
+    for source_id, trig in pairs:
+        row_id = None if dry_run else crawl_runs.start(source_id, trig)
         try:
             result = crawler_run.run(source_id, dry_run=dry_run)
         except Exception as e:
@@ -81,6 +103,28 @@ def run_crawl(source_ids: list[str] | None, *, dry_run: bool) -> CrawlSummary:
             crawl_runs.finish(row_id, "ok", run_id=result.run_id, counts=counts,
                               changed_slugs=result.changed_slugs)
     return summary
+
+
+def _revised_sources(seeds) -> list[str]:
+    """`tasks/crawl.py` 의 `_revised_sources` 와 같은 판정 — 로그에 `[refresh]` 접두만 붙였다.
+
+    조회 전체가 죽어도 due 발사는 막지 않는다 (RAG-087)."""
+    try:
+        verdicts = revision.probe_sources(seeds)
+    except Exception as e:                      # noqa: BLE001 — 조회 실패가 due 를 막으면 안 된다
+        log.warning("[refresh] 개정 조회 전체 실패 — 오늘은 due 만 받는다: %s", e)
+        return []
+    out: list[str] = []
+    for sid, vs in verdicts.items():
+        hits = [v for v in vs if v.kind in ("new", "revised")]
+        if hits:
+            out.append(sid)
+            for v in hits:
+                log.warning("[refresh] 개정 판정: %s / %s — %s (%s → %s)",
+                            sid, v.slug, v.kind, v.previous, v.current)
+        else:
+            log.info("[refresh] 개정 조회: %s — 변화 없음 (%d건)", sid, len(vs))
+    return out
 
 
 def run_parse(*, dry_run: bool) -> int:

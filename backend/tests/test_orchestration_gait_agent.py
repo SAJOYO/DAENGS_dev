@@ -465,6 +465,47 @@ def test_not_enough_puts_retake_first_and_drops_keep_observing() -> None:
     assert "keep_observing" not in actions
 
 
+def test_no_change_drops_the_same_condition_retake() -> None:
+    """차이가 없다면서 "같은 조건으로 다시 찍어 **비교**하라" 는 앞뒤가 안 맞는다.
+
+    실기기에서 이 둘이 나란히 나왔다 — 두 줄이 같은 말을 한다:
+
+        · 다음에 한 번 더 찍어 흐름을 보면 변화인지 더 분명해져요.   (keep_observing)
+        · 같은 거리·같은 각도·비슷한 밝기에서 한 번 더 찍어 비교해 보세요.  (retake)
+
+    비교할 차이가 없으므로 남는 뜻은 `keep_observing` 의 중복뿐이다. `gc_v6` 실측에서
+    `no_change` 18셀 중 2셀이 이 모양이었고, **모델이 고른 것**이다 — 코드가 행동을 강제하는
+    자리는 `not_enough` 하나뿐이라 여기서 걸러야 한다.
+    """
+    compare = _compare(change_kind="no_change", flagged_sides=[])
+    actions = plan_gait_actions(compare, ["keep_observing", "same_condition_retake"])
+    assert actions == ["keep_observing"]
+
+
+def test_no_change_still_answers_with_an_action_when_retake_was_the_only_pick() -> None:
+    """유일하게 고른 행동을 빼도 빈 목록은 나가지 않는다 — 마지막 줄의 `or` 가 받는다."""
+    compare = _compare(change_kind="no_change", flagged_sides=[])
+    assert plan_gait_actions(compare, ["same_condition_retake"]) == ["keep_observing"]
+
+
+@pytest.mark.parametrize(
+    "compare",
+    [
+        _compare(change_kind="one_side", flagged_sides=["left"]),
+        _compare(change_kind="both_sides", flagged_sides=["left", "right"]),
+        _compare(change_kind="not_enough", flagged_sides=[]),
+    ],
+)
+def test_the_retake_survives_everywhere_except_no_change(compare) -> None:
+    """⚠️ 빼는 것은 `no_change` 에서만이다.
+
+    `one_side` · `both_sides` 는 **찍은 조건이 달랐을 가능성**을 먼저 보라는 갈래라, 조건을
+    통제하라는 지시가 중복이 아니라 실제 내용이다 (`gc_v6` 에서 둘이 같이 나온 32셀이 그것).
+    `not_enough` 는 그 행동을 코드가 맨 앞에 세운다.
+    """
+    assert "same_condition_retake" in plan_gait_actions(compare, ["same_condition_retake"])
+
+
 @pytest.mark.parametrize(
     "compare",
     [

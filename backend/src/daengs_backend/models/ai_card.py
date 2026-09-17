@@ -13,6 +13,7 @@ import datetime
 import uuid
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -51,11 +52,17 @@ class AiCard(Base):
             "idx_ai_cards_storage_key", "storage_key", unique=True,
             postgresql_where=text("storage_key IS NOT NULL"),
         ),
-        #: 사용자별 동시 1장. 서비스가 add+commit 을 같은 try 로 감싸 IntegrityError → 409 로 바꿉니다.
+        #: 사용자별 동시 **요청** 1개(행 1개가 아닙니다 — #572 Task 4 fix round 1 Critical).
+        #: 한 요청의 행은 전부 `pick_group` 을 공유하고, 그 대표 행(`id = pick_group`)만 이
+        #: 인덱스가 봅니다 — 그래야 같은 요청의 형제 행 여럿이 동시에 `generating` 이어도
+        #: 걸리지 않으면서, 다른(진짜 동시) 요청은 여전히 막습니다. 서비스가 add+commit 을
+        #: 같은 try 로 감싸 IntegrityError → 409 로 바꿉니다.
         Index(
             "idx_ai_cards_one_generating", "app_user_id", unique=True,
-            postgresql_where=text("status = 'generating'"),
+            postgresql_where=text("status = 'generating' AND id = pick_group"),
         ),
+        #: 「고른 카드만 남기고 형제를 지운다」 가 pick_group 으로 형제를 찾을 때 쓴다.
+        Index("ix_ai_cards_pick_group", "pick_group"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
@@ -86,6 +93,18 @@ class AiCard(Base):
     likeness: Mapped[int | None] = mapped_column(SmallInteger)
     attempts: Mapped[int | None] = mapped_column(SmallInteger)
 
+    #: 이 카드를 만든 seed. 같은 seed 가 같은 자리를 깨뜨리므로(#557 E1) 기록해 둔다.
+    #: 09-15 에 `PETL PPAUSE` 3건이 전부 같은 seed 였는데 기록이 없어 나중에야 알았다.
+    #: SmallInteger 가 아니다 — seed 는 32767 을 넘을 수 있다.
+    seed: Mapped[int | None] = mapped_column(Integer)
+
+    #: 같은 요청에서 나온 장들을 묶는다. 사용자가 하나를 고르면 나머지 형제 행은 지운다 (#572 Task 4).
+    #: **요청의 대표(첫) 행은 자기 `id` 를 그대로 쓴다** (`pick_group == id`) — `idx_ai_cards_one_
+    #: generating` 이 그 한 행만 보고 「사용자별 동시 1장」을 지키게 하기 위해서다(fix round 1
+    #: Critical). 그래서 카드가 한 장뿐이어도 `pick_group` 은 항상 채워진다 — `NULL` 은 이
+    #: 기능이 생기기 전(마이그레이션 이전)의 옛 행에만 남는다.
+    pick_group: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), server_default=text("NOW()"))
     updated_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), server_default=text("NOW()"))
 
@@ -94,9 +113,13 @@ class AiCard(Base):
 
 
 class AiCardUsage(Base):
-    """AI 카드 하루 한도를 세는 사용 기록 (#543, D-077). 스키마 원본은 `db/init/39_ai_card_usage.sql`.
+    """AI 카드 한도를 세는 기록 (#543 · #572, D-077 · D-084). 스키마 원본은 `db/init/39_ai_card_usage.sql`.
 
-    카드가 `ready` 가 되는 순간 한 줄. **카드를 지워도 남습니다** — 그래서 `card_id` 에 FK 가 없습니다.
+    **요청(`pick_group`) 하나에 한 줄.** 요청의 첫 슬롯을 잡을 때(유료 호출 전) 시도 표시
+    (`unfulfilled_attempt=True`, 돈 나간 시도 상한이 셈)를 남기고, 닮음이 기준(`cardimage_judge_min`)
+    이상인 카드가 처음 `ready` 가 되면 그것을 사용 기록(`unfulfilled_attempt=False`, 하루 한도가 셈)으로
+    바꿉니다 — 규칙은 `services/ai_card_quota.py`. **카드를 지워도 남습니다** — 그래서 `card_id` 에
+    FK 가 없습니다.
     """
 
     __tablename__ = "ai_card_usage"
@@ -110,5 +133,11 @@ class AiCardUsage(Base):
 
     used_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), server_default=text("NOW()"))
 
+    #: `True` 면 사용 기록이 아니라 **유료 호출까지 갔는데 아직 좋은 카드가 안 나온 요청**의 표시다
+    #: (#572, D-084) — 생성 중·닮음 미달·호출 실패·생성 중 삭제 모두. 그때 `card_id` 는 그 요청의
+    #: `pick_group`(대표 행 id)이다 — 같은 요청에서 기준 이상 카드가 나오면 `_finish_ready` 가 그 값으로
+    #: 이 줄을 찾아 지운다.
+    unfulfilled_attempt: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
+
     def __repr__(self) -> str:
-        return f"<AiCardUsage {self.card_id} {self.used_at}>"
+        return f"<AiCardUsage {self.card_id} {self.used_at} unfulfilled_attempt={self.unfulfilled_attempt}>"

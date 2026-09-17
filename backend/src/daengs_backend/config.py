@@ -182,6 +182,14 @@ class Settings(BaseSettings):
     # HANDOFF 로 돌아간다. 장애 대응·비용 급증 때 한 줄로 끄는 자리다.
     skin_agent: bool = Field(default=True, validation_alias=AliasChoices("DAENGS_SKIN_AGENT"))
 
+    # ── 보행 변화 관찰 해설 킬 스위치 (D-080) ───────────────────────────
+    # `skin_agent` 와 같은 자리, 같은 기본값(**켜짐**)이다. 켜 둬도 운영이 달라지지 않는
+    # 이유도 같다 — 이 능력은 앱이 `requested_capability="gait"` 와 비교 참조
+    # (`gait_compare`)를 **함께** 보내고 서버가 두 기록의 소유를 확인했을 때만 돈다
+    # (`planner.resolve_gait_route`). 그 조합을 보내는 클라이언트가 생기기 전까지는 오늘과
+    # 같은 HANDOFF 이고, 끄면 그 뒤에도 HANDOFF 로 돌아간다.
+    gait_agent: bool = Field(default=True, validation_alias=AliasChoices("DAENGS_GAIT_AGENT"))
+
     # ── Turn Resolver 킬 스위치 (#416, R16) ────────────────────────────
     # `general_fallback` 과 정반대 기본값: 이건 **기본이 켜짐**입니다. 리졸버는 이미
     # 승인된 기능(Task 1~5)이라 배포 즉시 도는 것이 맞고, 끄는 쪽이 예외 상황(장애
@@ -247,28 +255,37 @@ class Settings(BaseSettings):
         default=Path(__file__).resolve().parents[3] / "cardimage",
         validation_alias=AliasChoices("DAENGS_CARDIMAGE_DIR"),
     )
-    # 허용된 달. 틀은 12장 다 있지만 이 카드(#496)는 4월만 엽니다. "4,9" 처럼 CSV.
+    # 허용된 달. 틀은 12장 다 있고 12달 전부 엽니다 — task-2(2026-09-16)에서 무대·의상·
+    # 제목판을 다 채웠습니다. "4,9" 처럼 CSV 로 좁힐 수도 있습니다.
     #
     # ⚠ pydantic-settings 는 env 값을 우리 before-validator 가 보기 전에 먼저 JSON 으로
     #   디코드하려 합니다 — frozenset[int] 는 "복합 타입"이라 CSV 문자열("4, 9,12")을
     #   JSON 으로 못 읽어 여기까지 오기 전에 실패합니다. `NoDecode` 로 그 선(先)디코드를
     #   끄고, 아래 before-validator 가 원문 문자열을 그대로 받아 직접 나눕니다.
     cardimage_months: Annotated[frozenset[int], NoDecode] = Field(
-        default=frozenset({4, 9}), validation_alias=AliasChoices("DAENGS_CARDIMAGE_MONTHS")
+        default=frozenset(range(1, 13)), validation_alias=AliasChoices("DAENGS_CARDIMAGE_MONTHS")
     )
     # 유사도 검수. 텍스트 모델이라 채팅과 같은 계열이어도 됩니다 — 여기서는 "같은 개인가"만 묻습니다.
     cardimage_judge_model: str = Field(default="gemini-3.1-flash-lite", validation_alias=AliasChoices("DAENGS_CARDIMAGE_JUDGE_MODEL"))
     # 1~5 중 이 값 미만이면 한 번 다시 만듭니다. 실험에서 정면 사진은 6장 중 1장이 어긋났습니다.
     cardimage_judge_min: int = Field(default=3, ge=1, le=5, validation_alias=AliasChoices("DAENGS_CARDIMAGE_JUDGE_MIN"))
-    # 앱 사용자 하루 생성 한도 (KST 하루, `ready` 만 셈). 0 이면 한도 없음. 테스트 단계라 1 이고,
+    # 앱 사용자 하루 생성 한도 (KST 하루, 요청 단위 — 닮음이 `cardimage_judge_min` 이상인 카드가 나온
+    # 요청만 셈, D-084). 0 이면 한도 없음. 테스트 단계라 1 이고,
     # 제품 규칙이 정해지면 `services/ai_card_quota.py` 의 함수를 통째로 바꿉니다 (D-076).
     cardimage_daily_limit: int = Field(default=1, ge=0, validation_alias=AliasChoices("DAENGS_CARDIMAGE_DAILY_LIMIT"))
     # 서버 전체 동시 생성 수. backend 프로세스 안 백그라운드 작업이라 스레드를 씁니다 (D-076).
     cardimage_concurrency: int = Field(default=2, ge=1, validation_alias=AliasChoices("DAENGS_CARDIMAGE_CONCURRENCY"))
+    #: 한 요청에 만들 장수. 사용자가 2장으로 정했다(#557 E2, 사용자 09-16) — 그 이상을 설정으로
+    #: 열어 주면 돈을 두 번 내는 것(#572 Task 4 fix round 1 Important 2)까지 함께 열게 된다.
+    #: **`FLUX.2-klein-4B` GPU 경로(`cardgen_url` 있음)에서만 쓴다** — Nano Banana 2 경로(지금 운영)는
+    #: 이 값과 상관없이 한 장 + 재시도다(#572 Task 8, `ai_card_engine.plan_request_seeds`).
+    cardimage_pick_count: int = Field(default=2, ge=1, le=2,
+                                      validation_alias=AliasChoices("DAENGS_CARDIMAGE_PICK_COUNT"))
 
     # GPU 카드 생성 서비스(D-078, Cloud Run asia-southeast1 L4). **비어 있으면 Nano Banana 2(D-074)
-    # 그대로** — 되돌리기가 이 한 줄이다. ⚠ 앱 경로(`/app/ai-cards`)의 정리 기준은 아직
-    # `cardimage_timeout_ms` 만 보므로 콜드 스타트(가중치 로드 수 분)를 모른다 — #544 에서는 VM 에 넣지 않는다.
+    # 그대로** — 되돌리기가 이 한 줄이다. 값이 있으면 앱 경로(`/app/ai-cards`)의 정리 기준
+    # (`ai_card_quota.stale_after`)에 `cardgen_timeout_s` 를 더해 콜드 스타트를 넘긴다(#572, D-084) —
+    # #544 에서는 그것이 없어 VM 에 넣지 않았다.
     cardgen_url: str = Field(default="", validation_alias=AliasChoices("DAENGS_CARDGEN_URL"))
     # 콜드 스타트 + 생성. `infra/gcp/cardgen.sh` 의 `--timeout=900` 과 맞춘다.
     cardgen_timeout_s: float = Field(default=900.0, gt=0, validation_alias=AliasChoices("DAENGS_CARDGEN_TIMEOUT_S"))

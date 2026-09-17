@@ -1,0 +1,376 @@
+{
+  "date": "2026-09-17T01:00:23.999230+00:00",
+  "model": "gemini-3.1-flash-lite",
+  "method": "Changed local ConversationService, real Gemini, recorded public cards and live read-only /v2/places/search. Public candidates filtered locally; this does not verify the SQL resolver or deployment.",
+  "records": [
+    {
+      "query": "어디가 좋을까",
+      "context": "actual_saved_cards",
+      "model_calls": [
+        [
+          {
+            "name": "propose_facility_turn",
+            "arguments": {
+              "changes": {},
+              "goal": "pick_one",
+              "feedback": "none",
+              "kind": "facility_action"
+            }
+          }
+        ]
+      ],
+      "code": "",
+      "action": "execute",
+      "goal": "pick_one",
+      "execution": "reused",
+      "kinds": [
+        "cafe",
+        "restaurant"
+      ],
+      "hard": {
+        "all": [],
+        "any": []
+      },
+      "count": 11,
+      "selected_in_original_cards": true,
+      "answer": "Im 골라뒀어요!",
+      "pending_unsupported": [],
+      "execution_check": "passed",
+      "processing_check": "passed"
+    },
+    {
+      "query": "추천해줘",
+      "context": "actual_saved_cards",
+      "model_calls": [
+        [
+          {
+            "name": "propose_facility_turn",
+            "arguments": {
+              "goal": "show",
+              "kind": "facility_action",
+              "feedback": "none",
+              "changes": {}
+            }
+          }
+        ]
+      ],
+      "code": "",
+      "action": "execute",
+      "goal": "show",
+      "execution": "reused",
+      "kinds": [
+        "cafe",
+        "restaurant"
+      ],
+      "hard": {
+        "all": [],
+        "any": []
+      },
+      "count": 11,
+      "selected_in_original_cards": false,
+      "answer": "조건에 맞는 장소 11곳 보여드릴게요.",
+      "pending_unsupported": [],
+      "execution_check": "failed",
+      "error_type": "AssertionError",
+      "processing_check": "passed"
+    },
+    {
+      "query": "괜찮은 데 추천 좀",
+      "context": "actual_saved_cards",
+      "model_calls": [
+        [
+          {
+            "name": "propose_facility_turn",
+            "arguments": {
+              "kind": "facility_action",
+              "feedback": "none",
+              "changes": {},
+              "goal": "pick_one"
+            }
+          }
+        ]
+      ],
+      "code": "",
+      "action": "execute",
+      "goal": "pick_one",
+      "execution": "reused",
+      "kinds": [
+        "cafe",
+        "restaurant"
+      ],
+      "hard": {
+        "all": [],
+        "any": []
+      },
+      "count": 11,
+      "selected_in_original_cards": true,
+      "answer": "Im 골라뒀어요!",
+      "pending_unsupported": [],
+      "execution_check": "passed",
+      "processing_check": "passed"
+    },
+    {
+      "query": "재밌는데",
+      "context": "actual_previous_or",
+      "model_calls": [
+        [
+          {
+            "name": "propose_facility_turn",
+            "arguments": {
+              "goal": "show",
+              "request_quote": "재밌는데",
+              "changes": {
+                "kinds": {
+                  "values": [
+                    "leisure"
+                  ],
+                  "operation": "set"
+                }
+              },
+              "feedback": "none",
+              "kind": "facility_action"
+            }
+          }
+        ]
+      ],
+      "public_searches": [
+        {
+          "kinds": [
+            "leisure"
+          ],
+          "returned": 0,
+          "truncated": false
+        }
+      ],
+      "code": "",
+      "action": "execute",
+      "goal": "show",
+      "execution": "searched",
+      "kinds": [
+        "leisure"
+      ],
+      "hard": {
+        "all": [],
+        "any": []
+      },
+      "count": 0,
+      "selected_in_original_cards": null,
+      "answer": "지금 조건에 맞는 곳은 더 찾지 못했어요.",
+      "pending_unsupported": [],
+      "execution_check": "passed",
+      "processing_check": "passed"
+    },
+    {
+      "query": "강아지랑 놀 수 있는 곳",
+      "context": "actual_previous_or",
+      "model_calls": [
+        [
+          {
+            "name": "propose_facility_turn",
+            "arguments": {
+              "goal": "show",
+              "changes": {
+                "kinds": {
+                  "operation": "set",
+                  "values": [
+                    "leisure"
+                  ]
+                }
+              },
+              "feedback": "none",
+              "kind": "facility_action",
+              "request_quote": "강아지랑 놀 수 있는 곳"
+            }
+          }
+        ]
+      ],
+      "public_searches": [
+        {
+          "kinds": [
+            "leisure"
+          ],
+          "returned": 0,
+          "truncated": false
+        }
+      ],
+      "code": "",
+      "action": "execute",
+      "goal": "show",
+      "execution": "searched",
+      "kinds": [
+        "leisure"
+      ],
+      "hard": {
+        "all": [],
+        "any": []
+      },
+      "count": 0,
+      "selected_in_original_cards": null,
+      "answer": "지금 조건에 맞는 곳은 더 찾지 못했어요.",
+      "pending_unsupported": [],
+      "execution_check": "passed",
+      "processing_check": "passed"
+    },
+    {
+      "query": "강아지랑 먹을 수 있는 곳",
+      "context": "actual_previous_or",
+      "model_calls": [
+        [
+          {
+            "name": "propose_facility_turn",
+            "arguments": {
+              "feedback": "none",
+              "kind": "facility_action",
+              "search_scope": "keep",
+              "request_quote": "강아지랑 먹을 수 있는 곳",
+              "goal": "show",
+              "changes": {
+                "kinds": {
+                  "values": [
+                    "cafe",
+                    "restaurant"
+                  ],
+                  "operation": "set"
+                }
+              },
+              "unsupported": [
+                "pet_allowed"
+              ]
+            }
+          }
+        ]
+      ],
+      "code": "confirmation_required",
+      "action": "await_confirmation",
+      "goal": "clarify",
+      "execution": "not_run",
+      "kinds": [
+        "cafe",
+        "restaurant"
+      ],
+      "hard": {
+        "all": [],
+        "any": [
+          {
+            "id": "or-42dc4de1d4a70407",
+            "all": [
+              {
+                "id": "or-0-3f82040eb381f151",
+                "capability": "operations.parking",
+                "op": "eq",
+                "value": true
+              },
+              {
+                "id": "or-0-7b5dbb69522ffb2e",
+                "capability": "purpose.kind",
+                "op": "in",
+                "value": [
+                  "cafe"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "or-dddf7d20558309d3",
+            "all": [
+              {
+                "id": "or-1-54272ed1bf4b3e2e",
+                "capability": "pet_access.exclusive",
+                "op": "eq",
+                "value": true
+              },
+              {
+                "id": "or-1-7615944b64273a1f",
+                "capability": "purpose.kind",
+                "op": "in",
+                "value": [
+                  "restaurant"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "count": 0,
+      "selected_in_original_cards": null,
+      "answer": "반려동물 동반 가능 여부 조건은 검색에 적용할 수 없어요. 카페/음식점, (주차 가능 · 카페) 또는 (반려동물 전용 · 음식점), 현재 검색 중심에서 3000m 이내 조건으로 찾아볼까요?",
+      "pending_unsupported": [
+        "pet_allowed"
+      ],
+      "execution_check": "passed",
+      "processing_check": "passed"
+    }
+  ],
+  "interpretation_notes": [
+    "6/6 requests avoided processing failures. The stricter expectation that all three recommendation phrases select one card passed 2/3; 추천해줘 returned show and reused 11 cards. Its original failed assertion is retained below.",
+    "강아지랑 놀 수 있는 곳 omitted unsupported pet_allowed, whereas 강아지랑 먹을 수 있는 곳 asked for confirmation. Successful execution is not proof of complete semantic interpretation.",
+    "Leisure search returned zero real public results at the chosen location/radius. Zero matches is not a processing error.",
+    "No deployment, SQL resolver equivalence, member write or Android UI verification is claimed."
+  ],
+  "native_repair_fault_injection": [
+    {
+      "query": "반경 5km로 찾아줘",
+      "context": "injected_malformed_radius",
+      "fault_injection": "First real model call radius replaced with 0 before validation; original thought signature preserved. Second call uses real native function feedback.",
+      "model_calls": [
+        [
+          {
+            "name": "propose_facility_turn",
+            "arguments": {
+              "changes": {
+                "radius_m": 0
+              },
+              "goal": "show",
+              "feedback": "none",
+              "search_scope": "keep",
+              "kind": "facility_action",
+              "spatial_scope": "keep"
+            }
+          }
+        ],
+        [
+          {
+            "name": "propose_facility_turn",
+            "arguments": {
+              "changes": {
+                "radius_m": 5000
+              },
+              "kind": "facility_action",
+              "search_scope": "keep",
+              "feedback": "none",
+              "spatial_scope": "keep",
+              "goal": "show"
+            }
+          }
+        ]
+      ],
+      "public_searches": [
+        {
+          "kinds": [
+            "cafe",
+            "restaurant"
+          ],
+          "returned": 44,
+          "truncated": false
+        }
+      ],
+      "code": "",
+      "action": "execute",
+      "goal": "show",
+      "execution": "searched",
+      "kinds": [
+        "cafe",
+        "restaurant"
+      ],
+      "hard": {
+        "all": [],
+        "any": []
+      },
+      "count": 22,
+      "selected_in_original_cards": false,
+      "answer": "조건에 맞는 장소 22곳 찾아뒀어요!",
+      "pending_unsupported": [],
+      "execution_check": "passed"
+    }
+  ]
+}

@@ -22,14 +22,22 @@ from daengs_backend.config import settings
 from daengs_backend.core import storage as storage_module
 from daengs_backend.core.deps import AppPrincipal, current_app_member_token_only, current_app_user
 from daengs_backend.core.storage import LocalBridgeStorage
+from daengs_backend.models import AiCard
 from daengs_backend.repositories import app_user as app_user_repo
 from daengs_backend.routers import ai_card as ai_card_router
 from daengs_backend.services import ai_card as service
 from daengs_backend.services import ai_card_engine
+from daengs_cardimage.engine import EngineError
 from daengs_cardimage.photo import MAX_PHOTO_BYTES
 
 OWNER = uuid.uuid4()
 JPEG = {"Content-Type": "image/jpeg"}
+
+
+def _two_card_gpu_path(monkeypatch: pytest.MonkeyPatch) -> None:
+    """한 요청에 두 장은 `FLUX.2-klein-4B` GPU 경로(`cardgen_url` 있음)에서만 나온다(#572 Task 8)."""
+    monkeypatch.setattr(settings, "cardimage_pick_count", 2)
+    monkeypatch.setattr(settings, "cardgen_url", "http://cardgen.example")
 
 
 class _SessionFactory:
@@ -66,6 +74,11 @@ def jobs(monkeypatch: pytest.MonkeyPatch) -> Iterator[list]:
     monkeypatch.setattr(settings, "cardimage_gemini_api_key", SecretStr("test-key"))
     monkeypatch.setattr(settings, "cardimage_months", frozenset({4, 9}))
     monkeypatch.setattr(settings, "cardimage_daily_limit", 1)
+    # 이 파일의 기존 테스트는 모두 "카드 한 장" 세상(#537·#543)을 본다 — 여러 장(#572 Task 4)은
+    # 아래 전용 테스트에서만 pick_count 를 따로 올린다.
+    monkeypatch.setattr(settings, "cardimage_pick_count", 1)
+    # 기본은 지금 운영과 같은 Nano Banana 2 경로(`cardgen_url` 빈 값, #572 Task 8).
+    monkeypatch.setattr(settings, "cardgen_url", "")
     monkeypatch.setattr(ai_card_engine, "default_engine", lambda: FakeEngine())
     monkeypatch.setattr(ai_card_engine, "default_judge", lambda: FakeJudge([4]))
     yield collected
@@ -212,7 +225,12 @@ def test_post_uses_token_only_auth() -> None:
     assert "current_app_member_token_only" in names
     assert "current_app_user" not in names
     # 본문이 없는 짧은 요청은 그대로 요청 경계에서 active 를 본다.
-    for path, method in [("/app/ai-cards", "GET"), ("/app/ai-cards/{card_id}", "GET"), ("/app/ai-cards/{card_id}", "DELETE")]:
+    for path, method in [
+        ("/app/ai-cards", "GET"),
+        ("/app/ai-cards/{card_id}", "GET"),
+        ("/app/ai-cards/{card_id}", "DELETE"),
+        ("/app/ai-cards/{card_id}/choose", "POST"),
+    ]:
         assert "current_app_user" in _dependency_names(_route(path, method)), (path, method)
 
 
@@ -281,9 +299,163 @@ def test_list_unlimited_is_null(client: TestClient, monkeypatch: pytest.MonkeyPa
     assert body["daily_limit"] is None and body["daily_remaining"] is None
 
 
+def test_list_carries_photo_guidance(client: TestClient) -> None:
+    """엎드린 옆모습 사진은 몇 장을 뽑아도 쓸 게 없다(#557 E2) — 앞에서 막는 유일한 수단이 안내다."""
+    body = client.get("/app/ai-cards").json()
+    assert body["photo_guidance"] and "정면" in body["photo_guidance"]
+
+
 @pytest.mark.parametrize(
     ("name", "expected"),
     [("네오", "네오는"), ("콩", "콩은"), ("KONG", "KONG은(는)"), ("보리 2", "보리 2은(는)")],
 )
 def test_with_topic(name: str, expected: str) -> None:
     assert ai_card_router._with_topic(name) == expected
+
+
+# ── #572 Task 4 — 한 요청에 2장, 고른 한 장만 저장 ──────────────────────
+
+
+def test_post_response_has_pick_group_and_progress(client: TestClient, jobs: list, monkeypatch) -> None:
+    _two_card_gpu_path(monkeypatch)
+    body = _post(client).json()
+    assert body["pick_group"] is not None
+    assert (body["done"], body["total"], body["finished"]) == (0, 2, False)
+
+
+def test_get_reports_done_and_total_after_generation(client: TestClient, jobs: list, monkeypatch) -> None:
+    _two_card_gpu_path(monkeypatch)
+    card_id = _post(client).json()["id"]
+    _run_all(jobs)
+    detail = client.get(f"/app/ai-cards/{card_id}").json()
+    assert detail["status"] == "ready"
+    assert (detail["done"], detail["total"], detail["finished"]) == (2, 2, True)
+
+
+def test_nano_banana_path_reports_one_card_even_if_pick_count_is_two(
+    client: TestClient, jobs: list, monkeypatch
+) -> None:
+    """운영(Nano Banana 2, `cardgen_url` 빈 값)은 앱에 고르기 화면이 없으므로 한 요청에 한 장이다(#572 Task 8)."""
+    monkeypatch.setattr(settings, "cardimage_pick_count", 2)
+    body = _post(client).json()
+    assert (body["done"], body["total"], body["finished"]) == (0, 1, False)
+    _run_all(jobs)
+    detail = client.get(f"/app/ai-cards/{body['id']}").json()
+    assert detail["status"] == "ready"
+    assert (detail["done"], detail["total"], detail["finished"]) == (1, 1, True)
+    assert len(client.get("/app/ai-cards").json()["cards"]) == 1
+
+
+def test_get_reports_finished_true_after_second_card_fails(
+    client: TestClient, jobs: list, monkeypatch
+) -> None:
+    """`finished` 는 `done == total` 이 아니라 "더 만들 카드가 없다" 를 본다(fix round 1 Important 1)."""
+    _two_card_gpu_path(monkeypatch)
+
+    class _FailSecondCallEngine(FakeEngine):
+        def generate(self, *, template_png, photo_jpeg, prompt, seed=None):
+            self.calls.append({"template": template_png, "photo": photo_jpeg, "prompt": prompt, "seed": seed})
+            if len(self.calls) == 2:
+                raise EngineError("upstream", "두 번째 호출 실패")
+            return self.outputs[0]
+
+    monkeypatch.setattr(ai_card_engine, "default_engine", lambda: _FailSecondCallEngine())
+    card_id = _post(client).json()["id"]
+    interim = client.get(f"/app/ai-cards/{card_id}").json()
+    assert interim["finished"] is False
+
+    _run_all(jobs)
+
+    detail = client.get(f"/app/ai-cards/{card_id}").json()
+    assert (detail["done"], detail["total"], detail["finished"]) == (1, 2, True)
+
+
+def test_list_shows_both_cards_from_one_request(client: TestClient, jobs: list, monkeypatch) -> None:
+    _two_card_gpu_path(monkeypatch)
+    body = _post(client).json()
+    _run_all(jobs)
+    cards = client.get("/app/ai-cards").json()["cards"]
+    assert len(cards) == 2
+    assert {c["pick_group"] for c in cards} == {body["pick_group"]}
+
+
+def test_choose_keeps_the_picked_card_and_deletes_its_siblings(client: TestClient, jobs: list, monkeypatch) -> None:
+    _two_card_gpu_path(monkeypatch)
+    posted = _post(client).json()
+    _run_all(jobs)
+    assert len(client.get("/app/ai-cards").json()["cards"]) == 2
+    picked_id = posted["id"]
+
+    resp = client.post(f"/app/ai-cards/{picked_id}/choose")
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["id"] == picked_id
+
+    remaining = client.get("/app/ai-cards").json()["cards"]
+    assert [c["id"] for c in remaining] == [picked_id]
+
+
+def test_choose_without_siblings_keeps_the_single_card(client: TestClient, jobs: list) -> None:
+    """`pick_count=1`(기존 기본 경로)이면 형제가 없다 — 고른 카드를 그대로 돌려준다."""
+    card_id = _post(client).json()["id"]
+    _run_all(jobs)
+    resp = client.post(f"/app/ai-cards/{card_id}/choose")
+    assert resp.status_code == 200
+    assert [c["id"] for c in client.get("/app/ai-cards").json()["cards"]] == [card_id]
+
+
+def test_choose_a_failed_card_is_409_and_deletes_nothing(
+    client: TestClient, store: Store, jobs: list, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#572 Task 4 fix round 2 R2-3 — `failed` 카드를 고르면 `ready` 형제를 지워 버릴 수 있다."""
+    _two_card_gpu_path(monkeypatch)
+
+    class _FailSecondCallEngine(FakeEngine):
+        def generate(self, *, template_png, photo_jpeg, prompt, seed=None):
+            self.calls.append({"template": template_png, "photo": photo_jpeg, "prompt": prompt, "seed": seed})
+            if len(self.calls) == 2:
+                raise EngineError("upstream", "두 번째 호출 실패")
+            return self.outputs[0]
+
+    monkeypatch.setattr(ai_card_engine, "default_engine", lambda: _FailSecondCallEngine())
+    _post(client)
+    _run_all(jobs)
+    cards = client.get("/app/ai-cards").json()["cards"]
+    assert len(cards) == 2
+    failed = next(c for c in cards if c["status"] == "failed")
+
+    resp = client.post(f"/app/ai-cards/{failed['id']}/choose")
+
+    assert resp.status_code == 409 and resp.json()["detail"]["code"] == "not_ready"
+    assert len(client.get("/app/ai-cards").json()["cards"]) == 2  # 아무것도 안 지워졌다
+
+
+def test_choose_a_generating_card_is_409_and_deletes_nothing(
+    client: TestClient, store: Store, jobs: list, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """#572 Task 4 fix round 2 R2-3 — 아직 `generating` 인 카드를 고르면 이미 `ready` 인
+    형제를 지워 버릴 수 있다."""
+    _two_card_gpu_path(monkeypatch)
+    posted = _post(client)
+    primary_id = uuid.UUID(posted.json()["id"])
+    sibling = next(c for c in store.ai_cards if c.id != primary_id)
+    assert sibling.status == "generating"
+
+    resp = client.post(f"/app/ai-cards/{sibling.id}/choose")
+
+    assert resp.status_code == 409 and resp.json()["detail"]["code"] == "not_ready"
+    assert len(store.ai_cards) == 2  # 아무것도 안 지워졌다
+
+
+def test_choose_rejects_a_card_that_belongs_to_another_user(client: TestClient, store: Store) -> None:
+    """없는 것과 남의 것은 같은 404 다 (`_not_found`)."""
+    other_card = AiCard(
+        id=uuid.uuid4(), app_user_id=uuid.uuid4(), month=4, dog_name="남", title="BLOSSOM 남",
+        status="ready", storage_key="ai-cards/other/x.png", generation="g", size_bytes=1, width=994, height=1582,
+    )
+    store.ai_cards.append(other_card)
+    resp = client.post(f"/app/ai-cards/{other_card.id}/choose")
+    assert resp.status_code == 404
+
+
+def test_choose_unknown_card_is_404(client: TestClient) -> None:
+    assert client.post(f"/app/ai-cards/{uuid.uuid4()}/choose").status_code == 404

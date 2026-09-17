@@ -45,6 +45,14 @@ const MONTHS: Array<{ month: number; label: string }> = [
   { month: 9, label: "9월 · CHUSEOK" },
 ];
 
+/**
+ * 백엔드 `daengs_cardimage.catalog.PHOTO_GUIDANCE` 와 글자까지 맞춘다 (#572 Task 6).
+ * 콘솔은 `/admin/cardimage/generate` 를 쓰지 `/app/ai-cards` 를 쓰지 않아 응답에서 읽어올 수 없으므로,
+ * 앱과 같은 문구를 여기 상수로 둔다 — 문구를 바꿀 때는 두 곳을 같이 고친다.
+ */
+const PHOTO_GUIDANCE =
+  "얼굴이 정면으로 보이고 앉아 있는 사진이 가장 잘 나와요. 엎드려 있거나 옆을 보는 사진은 닮지 않게 나올 수 있어요.";
+
 export default function CardImageInspect() {
   const [file, setFile] = useState<File | null>(null);
   const [name, setName] = useState("");
@@ -93,15 +101,19 @@ export default function CardImageInspect() {
             <code className="text-base font-normal text-zinc-500">POST /admin/cardimage/generate</code>
           </h2>
           <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
-            강아지 사진 한 장과 이름을 넣으면 고른 달의 카드를 만듭니다. 정면·귀가 보이는 사진이 잘 됩니다.
-            한 번에 <strong className="font-medium">약 $0.10~0.20</strong> 이 나갑니다 (유사도가 모자라면 한 번
-            더 만듭니다).
+            강아지 사진 한 장과 이름을 넣으면 고른 달의 카드를 만듭니다. 한 번에{" "}
+            <strong className="font-medium">약 $0.10~0.20</strong> 이 나갑니다 (유사도가 모자라면 한 번 더
+            만듭니다).
           </p>
         </div>
         <span className="text-xs text-zinc-500 dark:text-zinc-400">사진은 저장하지 않습니다</span>
       </div>
 
-      <div className="mt-6 flex flex-wrap items-end gap-3">
+      <p className="mt-4 rounded-lg bg-violet-50 px-4 py-2.5 text-sm leading-6 text-violet-900 dark:bg-violet-950 dark:text-violet-100">
+        {PHOTO_GUIDANCE}
+      </p>
+
+      <div className="mt-4 flex flex-wrap items-end gap-3">
         <label className="flex flex-col gap-1 text-sm" htmlFor="cardimage-photo">
           사진
           <input

@@ -22,5 +22,7 @@ def test_parking_or_branch_and_global_condition_have_the_same_evaluation():
     assert not parking_matches(initial, True)
 
 
-def test_model_must_emit_feedback_and_scope_evidence_even_when_they_are_empty():
-    assert {"goal", "search_scope_quote", "feedback"} <= set(TURN_TOOL["parameters"]["required"])
+def test_tool_requires_semantic_fields_but_not_verbatim_read_search_evidence():
+    required = set(TURN_TOOL["parameters"]["required"])
+    assert {"kind", "goal", "feedback", "changes"} <= required
+    assert not {"request_quote", "search_scope_quote"} & required

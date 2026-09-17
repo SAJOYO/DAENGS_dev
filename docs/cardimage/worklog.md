@@ -3,6 +3,295 @@
 세션이 끝날 때마다 한 절씩 위에 추가한다 (최신이 위). 무엇을 했고, 무엇을 정했고, 무엇을
 다음 세션에 넘기는지. 조사 내용 자체는 `research-*.md` 에, 요약·현재 상태는 `README.md` 에.
 
+## 2026-09-16~17 — #572 12달 열기 + 뽑기 (Task 1~9 · 최종 리뷰 수정 파동, 머지됨)
+
+`docs/superpowers/plans/2026-09-16-ai-card-12months-and-two-picks.md` 를 subagent-driven-development 로
+실행한 카드 하나의 기록이다(원장은 SDD 폴더 `progress.md`). 한때 「최종 리뷰 수정 파동」과 「Task 1~7」
+두 절로 나뉘어 있던 것을 Task 8 에서 한 절로 합쳤다(최신이 위).
+
+### 2026-09-17 — 머지 직전: 개발서버 DB 마이그레이션 적용
+
+🔴 **어느 DB 에 무엇이 들어갔는지 여기 적는다 — 버전 테이블이 없어 DB 가 기억하지 않는다.**
+
+- **개발서버 DB — 적용 완료 (2026-09-17 10:31~10:35 KST).** `.github/workflows/db-migrate.yml` 을 `ref=999de31d`(dev 를 합치고
+  전체 `uv run pytest` 0 failed · 7870 passed 를 확인한 커밋), `verify=true`, `backup=true` 로 파일 이름 순서대로 한 장씩:
+
+  | # | 파일 | 결과 | 적용 전 백업(`C:\deploy\daengs\db-backups`) |
+  | --- | --- | --- | --- |
+  | 1 | `2026-09-15_ai_card_usage.sql` | 표가 이미 있어 가드가 생성·백필을 건너뜀 — **no-op**. verify 통과, 사용 행 1 | `vectordb-20260917-103146.dump` |
+  | 2 | `2026-09-16_ai_card_pick_group.sql` | `BEGIN` → 컬럼 → 인덱스 → 옛 방어 인덱스 `DROP` → 새 방어 인덱스 `CREATE` → `COMMIT`. verify 가 실제 정의 `UNIQUE … (app_user_id) WHERE status = 'generating' AND id = pick_group` 확인 | `vectordb-20260917-103322.dump` |
+  | 3 | `2026-09-16_ai_card_seed.sql` | 컬럼 추가, verify 통과 | `vectordb-20260917-103427.dump` |
+  | 4 | `2026-09-16_ai_card_usage_unfulfilled_attempt.sql` | 컬럼 추가, verify 통과(기존 사용 행 1 은 `false`) | `vectordb-20260917-103515.dump` |
+
+- **GCP DB — 아직 안 했다.** dev→main 때 `docs/deploy/runbook.md` §6: ① `git push gcp main` → ② VM `git fetch` → ③ 위 네 파일을
+  같은 순서로 `-v ON_ERROR_STOP=1` 과 `verify_*.sql` 까지 → ④ `git merge --ff-only origin/main`. **③ 을 빠뜨리면 GCP 에서 회원
+  탈퇴와 `/app/ai-cards` 가 500.** 콘솔 화면이 바뀌어 프론트 재빌드(`pm2 reload daengs-web`)도 필요.
+- 러너가 백업 32개(1.67 GB)가 쌓였다고 경고한다 — 이 카드와 무관, 오래된 것은 손으로 지운다.
+
+### 2026-09-17 — Task 9: E4 비용 실측 문서화
+
+**#557 이 보류해 둔 E4 를 컨트롤러가 실측했다.** BigQuery `billing_export`(standard 내보내기, 프로젝트
+`daengs`)를 `usage_start_time` 2026-09-16 08:00~10:00 UTC 로 조회 — 이 구간이 바로 위 「GPU 실험」의
+seed 스윕(스모크 1장 + 72장 = 73장, 17:15~17:59 KST) 이다. Cloud Run 청구 ₩1,767.35(NVIDIA L4 GPU
+₩821.51 · Services CPU ₩633.62 · Services Memory ₩281.61 · egress ₩30.61) 는 **전액 무료 크레딧으로
+상쇄됐다.** standard 내보내기엔 리소스 이름이 없어 서비스 귀속은 추정이지만, CPU/GPU 8.0·메모리/GPU
+32.0GiB 가 L4(8vCPU/32GiB)와 정확히 맞고 egress 0.18GiB 가 73장×2.5MB PNG 와 맞아 `daengs-cardgen-klein`
+하나로 좁혔다.
+
+**산출:** 인스턴스가 떠 있는 동안 단가 시간당 약 ₩2,359(옛 추정 ₩1,400/시간은 가중치 잡 단가를 옮겨
+쓴 것이었다). 장당 비용은 73장 스윕 실측 ₩24.2 · 12장 몰기 산출 약 ₩72 · 한 장만(자기 몫 깨움 포함)
+산출 약 ₩720. `Nano Banana 2`(약 ₩140/장, 실비)와의 손익분기는 **한 번 깨울 때 약 6장 이상**(옛 추정
+"약 3장"보다 크다).
+
+🔴 **부수 발견 — Gemini API 는 크레딧 대상이 아니라 실비다.** 같은 시간대 판정 키 프로젝트
+(`gen-lang-client-0764270421`)에서 `gemini 3.1 flash lite preview` 판정 호출로 약 ₩70 이 실제로
+나갔다(대부분 이 스윕의 판정 호출). 같은 프로젝트에 `Nano Banana 2` 2K 이미지 약 2장분(₩278.87)도
+같은 시간대에 찍혀 있었으나 이 스윕(엔진은 `FLUX.2-klein-4B`)이 낸 것은 아니다 — 출처는 이 데이터로
+알 수 없어 추측하지 않았다.
+
+상세 `compare-2026-09-17-klein-e4-cost.md`, 반영 `roadmap.md` E4·5번, `docs/decisions.md` D-078 정정 줄.
+과거 기록(D-078 표, `compare-2026-09-15-cardgen.md`, `compare-2026-09-16-months-seeds.md`, 이 절 아래
+Task 3b 「GPU 실험」·「남은 것」)은 옛 수치를 지우지 않고 이 날짜의 정정 줄만 붙였다.
+
+### 2026-09-17 — Task 8: 한 요청의 장수는 엔진이 정한다 (사람 결정)
+
+**왜.** 최종 리뷰 Important 2 가 「머지 즉시 운영 앱 동작이 바뀐다」를 사람 결정으로 올렸다. 운영은
+`DAENGS_CARDGEN_URL` 이 비어 `ai_card_engine.default_engine()` 이 Nano Banana 2 를 쓰는데,
+`cardimage_pick_count` 기본값 2 라 요청마다 Nano Banana 2 2회 + 검수 2회를 부르게 된다. 앱에는 두 장 중
+고르는 화면이 없어 같은 달 카드 두 장이 보이고, 하나를 지워도 나머지 때문에 `month_taken` 이며, 대표가
+`ready` 인데 둘째가 도는 중 다시 누르면 409 다. `PICK_COUNT=1` 로 좁혀도 안 됐다 — 서비스가 항상
+`generate(seed=...)` 로 불러 명시 seed 는 재시도가 없으므로(`generate.py` 의 `seed is not None` 분기),
+이 브랜치는 앱 경로의 닮음 미달 재시도를 없앤 상태였다.
+
+**사람 결정 (2026-09-17).** 2장은 `FLUX.2-klein-4B` GPU 경로에서만, 운영 Nano Banana 2 는 「1장 + 닮음
+미달이면 재시도」 유지. 사용자: 「어차피 2장으로 바꾸면 앱도 같이 손 봐야」 — 두 장은 앱의 고르기 화면과
+`DAENGS_CARDGEN_URL` 켜기와 한 묶음으로 나간다. 함께 정한 것: 10달 Nano Banana 2 스모크는 안 한다,
+개발서버 DB 는 `dev` 머지 직전에, GCP DB 는 dev→main 때 마이그레이션을 적용한다.
+
+**바꾼 것.**
+
+- **판정 한 곳** — `services/ai_card_engine.py::gpu_path_active()`(`settings.cardgen_url.strip()` 이
+  비어 있지 않으면 참). `default_engine()` · 새 `plan_request_seeds()`(장수) ·
+  `services/ai_card.py::_finish_ready`(seed 기록) · `ai_card_quota.stale_after()`(예산) ·
+  `ready_check()`(키 확인)가 전부 이것을 부른다. 수정 파동이 `_finish_ready` 에 넣었던 인라인
+  `strip()` 판정은 지웠다
+- **`plan_request_seeds(month, rng)`** — 길이가 곧 행 수다. Nano Banana 2 경로는 `[None]`(한 장, seed
+  미지정), GPU 경로는 `plan_seeds(month, cardimage_pick_count, rng)`(서로 다른 seed 만큼, 최대 2)
+- **`start`** 는 그 목록으로 행을 만든다 — Nano Banana 2 경로는 행 하나, `seed` 칸은 처음부터 `None`
+- **`_run`** 은 목록의 seed 를 그대로 넘긴다. `None` 이면 `generate_card` 가 seed 없는 `count == 1`
+  경로로 가서 첫 장의 닮음이 `cardimage_judge_min` 미만이면 **같은 행 안에서** 한 번 더 만들고 나은
+  쪽을 남긴다(`attempts` 2). 슬롯은 행마다 한 번만 잡으므로 시도 표시는 첫 유료 호출 전에 한 번만
+  남는다. `stale_after()` 의 `4 × cardimage_timeout_ms + 60초` 가 원래 이 두 시도(엔진·검수 × 2)를
+  덮도록 잡힌 값이라 예산은 그대로다
+- `cardimage_pick_count` 의 기본값·범위, 관리자 콘솔 `/admin/cardimage/generate`, DB 스키마·마이그레이션은
+  안 바꿨다
+- **테스트** — Nano Banana 2 경로(행 1개·seed `None`·기준 이상이면 엔진 1회·미달이면 2회 + `attempts`
+  2·표시는 첫 호출 전 한 번·`total == 1`·`finished`), GPU 경로 명시 seed·재시도 없음, 그리고 URL 이
+  있음/앞뒤 공백/빈 값/공백뿐일 때 판정·엔진 선택·장수·seed 기록이 함께 가는지. 두 장을 보던 기존
+  테스트는 `cardgen_url` 을 명시로 켜서(`_two_card_gpu_path`) 계속 두 장 경로를 본다
+- **문서** — README 「지금 상태」·「정해진 것」, roadmap 3번 행, D-084, PR 본문 초안의 「요청마다 2장」
+  서술을 엔진별로 고쳤다. PR 본문 「배포 영향」은 위 결정대로 다시 썼다: 개발서버 DB 는 `dev` 머지 직전
+  (`.github/workflows/deploy.yml` 이 `dev` push 로 배포), GCP DB 는 dev→main 때
+  `docs/deploy/runbook.md` §6 절차를 따르되 ③(마이그레이션)을 ④(배포) 전에 한다 — ① 개발 PC 에서
+  `git push gcp main`(객체만 보낸다, 배포 아님) → ② VM `git fetch` · `git diff --stat HEAD origin/main` →
+  ③ VM 에서 새 마이그레이션을 파일 이름 순서로 `-v ON_ERROR_STOP=1` 을 붙여 적용하고 `verify_*.sql` 도 →
+  ④ VM `git merge --ff-only origin/main` = 배포. 수정 파동이 적은 「`db-migrate.yml` 로 개발서버·GCP DB
+  양쪽에」는 틀렸다 — 그 워크플로는 `runs-on: [self-hosted, Windows, X64]`(개발서버)라 GCP VM 의 DB 에는
+  닿지 않는다(수정 라운드 1 에서 그 항목에도 정정을 붙였다)
+
+### 2026-09-16 — 최종 리뷰 수정 파동 (Critical 0, 머지 전 마지막 손질)
+
+전체 브랜치 리뷰(opus, `review-d0c707ac..ea7e921c.diff`)가 READY AFTER FIXES 로 승인하며 남긴
+Important 1건(배포 영향 서술)·minor 5건을 한 번에 처리했다.
+
+- **PR 본문 「배포 영향」** — 실제 사고는 409 가 아니라, 09-16 마이그레이션 전에 새 코드가 뜨면
+  `select(AiCard)` 가 없는 컬럼을 읽어 `/app/ai-cards` 전체와 **모든 사용자의 회원 탈퇴**가 500 이
+  되는 것이다(`services/app_auth.py:370` · `repositories/ai_card.py:211` 확인). 마이그레이션 목록을
+  참 파일 이름 순서로 바로잡고, `.github/workflows/db-migrate.yml`(self-hosted, `ref`·`verify`
+  입력 확인)로 머지 전에 개발서버·GCP DB 양쪽에 적용하는 절차를 적었다 **(Task 8 에서 정정 — 그
+  워크플로는 `runs-on: [self-hosted, Windows, X64]` 라 개발서버 DB 만 닿는다. GCP 는 runbook §6)**. 옛 코드로 롤백하면 옛
+  `count_usage_since` 가 오늘 미달·실패·삭제 시도까지 세어 429 를 낼 수 있다는 것도 남겼다
+  (초과해서 세는 것뿐, 데이터 손실은 없다)
+- **`ai_cards.seed` 거짓 기록** — Nano Banana 2 는 seed 인자를 받고도 무시하는데 뽑은 값을 그대로
+  저장하고 있었다. `services/ai_card.py::_finish_ready` 에서 `cardgen_url` 이 비어 있으면(엔진
+  팩토리와 같은 `strip()` 판정) `card.seed = None` 으로 저장하도록 고쳤다 — 엔진에 넘기는 seed
+  자체는 그대로다. 두 경우(GPU 엔진 있음/Nano Banana 2) 테스트를 추가했다
+- **콜드 스타트 수치 출처** — `ai_card_quota.py::stale_after` docstring 과 D-084 가 340.7·374.9·
+  403.1초를 전부 #557 E3 탓으로 돌리고 있었다. `worklog`·`roadmap.md`·
+  `compare-2026-09-16-klein-e2-e3.md` 를 다시 찾아 403.1초는 E1(옛 이미지로 재기동), 374.9초는
+  이미지 교체 뒤 첫 기동, 340.7초는 E3(기준 리비전으로 되돌려 재측정)로 바로잡고 끊긴 문장에
+  마침표를 붙였다
+- **`plate_probe.py` 주석 둘** — 탐침 열 범위 `230~296` → 실제 `range(230, 300, 4)` 끝값인 `298`
+  로, 「과반수가 어둡다」→ 코드(`>= len(PROBE_XS) // 2`, 정확히 절반도 통과)에 맞게
+  「절반 이상이 어둡다」로. **코드는 그대로 뒀다** — 사람이 이미 승인한 12개 plate 가 다시 재질 수
+  있어서다
+- **`test_every_month_has_its_own_measured_plate`** — `!= APRIL_PLATE` 만 보던 것을
+  `len({...}) == 12`(전부 서로 다름)로 강화. 돌려 보니 12달 plate 가 이미 전부 달라 그대로 통과했다
+- **7·10·12월 `scene` 육안 대조** — 아무도 이미지와 비교한 적이 없었다(예산 부족, 11월 turkey/rooster
+  전례). `7_beach`·`10_ghost`·`12_santa` 의 틀·완성 이미지를 열어 소품·의상 문장을 하나씩 대조 —
+  세 달 모두 `scene`·`outfit` 이 이미지와 정확히 일치해 고칠 것이 없었다
+- **4월 강아지 교체 실패 주석** — 모델 이름 없이 적혀 있어 운영 엔진(Nano Banana 2)의 결함으로 읽힐
+  수 있었다. `FLUX.2-klein-4B` 를 명시하고 운영(Nano Banana 2)은 영향받지 않는다고 적었다
+
+#### 최종 리뷰가 남기기로 한 것 (LEAVE)
+
+머지를 막지 않는 minor. 위 FIX 항목과 겹치지 않는다.
+
+- **T2 — 손측정 edge 여유** — `APRIL_PLATE`·`SEPTEMBER_PLATE` 의 손측정 edge 가 실제보다
+  8~17px(4월)·6~8px(9월) 넉넉하다. 도구로 재측정하면 제목이 판 밖으로 번지는 것을 더 막지만,
+  사람이 눈으로 승인한 상수라 재측정 여부는 별도 판단이 필요하다
+- **T2 — settings 테스트 중복 단언** — `test_cardimage_settings.py` 의 12달 기본값 단언이 계획이
+  시킨 중복이다
+- **T3a — CHECKS 항목 순서** — 새 `CHECKS` 항목이 날짜 순서에서 벗어나 있다(기능과는 무관)
+- **T4 — verify 스크립트의 컬럼·조건 확인 두 건** — `verify_..._pick_group.sql` 이 인덱스 정의는
+  읽지만 그것이 `(pick_group)` 컬럼 위인지는 보지 않고, 인덱스 대상 컬럼과 AND/OR 조건도 보지 않는다
+- **T4 — `choose_card` 가 커밋 전에 저장소 객체를 지운다** — `delete_card` 와 같은 기존 패턴이라
+  이 카드가 새로 만든 문제는 아니다
+- **T5 — 세마포어 대기 중 첫 카드 만료** — 빈 생성 슬롯을 기다리는 첫 카드가 정리 기준을 넘겨
+  만료될 수 있다(돈은 안 나간다). 요청 하나가 이제 카드 최대 2장 동안 생성 슬롯(세마포어)을 쥐므로
+  대기열이 그만큼 길어진다는 점도 함께 남긴다
+- **T5 — `to_regclass` 의 `search_path`** — `search_path` 의 모든 스키마를 본다(옛
+  `CREATE TABLE IF NOT EXISTS` 는 첫 스키마만 봤다). 운영은 스키마가 `public` 하나뿐이라 무관하다
+- **T6 — 안내 문구가 `aria-describedby` 로 안 묶임** — `#cardimage-photo` 입력에 안내 `<p>` 가
+  연결돼 있지 않아 스크린리더가 입력만 읽을 때는 안 들린다. 옛 문구도 같았으니 회귀는 아니다
+- **T6 — 안내 문구 두 상수의 손 동기화** — 서버(`PHOTO_GUIDANCE`)와 콘솔 문구를 손으로 맞춰야
+  한다. 새 엔드포인트 없이, 백엔드 테스트가 프런트 파일을 텍스트로 읽어 `PHOTO_GUIDANCE` 를
+  그대로 포함하는지 단언하는 정도면 싸게 방어할 수 있다
+- **T7 — `5feaeab7` 커밋의 트레일러** — "Claude Sonnet 5" 그대로 둔다. `HEAD` 가 아니라 고치려면
+  리베이스가 필요하고, 실제로 Sonnet 에이전트가 쓴 커밋이라 트레일러가 사실과 맞다
+
+### 2026-09-16 — Task 1~7 (12달 열기 + 2장 뽑기, 구현·리뷰 완료)
+
+> Task 8(위)이 「한 요청에 2장」을 `FLUX.2-klein-4B` GPU 경로로 좁혔다 — 아래 「2장」·「요청당 엔진
+> 호출 최대 `cardimage_pick_count`」 서술은 그 경로의 이야기다. Nano Banana 2 경로는 한 장 + 재시도다.
+
+`docs/superpowers/plans/2026-09-16-ai-card-12months-and-two-picks.md` 를 subagent-driven-development 로
+Task 1~7 을 순서대로 실행했다(구현자 → 리뷰어 → 수정 라운드, 원장은 SDD 폴더 `progress.md`). 목적은
+#557 실험이 찾은 것을 제품에 박고 달을 12개로 넓히는 것 — GCP 크레딧 만료(11-17) 전에.
+
+**Task 별 요약 (커밋은 `dev` 기준 병합 전, 브랜치 `feat/ai-card-multi-generate`):**
+
+- Task 1 — 착수(roadmap 3번 행 · D-084 예약 줄) (`77aeeadf`, fix `08021477` — D-084 를 33줄 확정
+  결정문으로 먼저 썼다가 예약 한 줄로 되돌림. 리뷰가 그 결정문에서 지어낸 식별자 6개도 잡음)
+- Task 2 — 12달 무대·의상·제목판 (`62cb4c7b`, fix `50956efb`) — 10달의 `scene`·`outfit`·`Plate`
+  를 채웠다. 11월 소품을 turkey 에서 rooster 로 잘못 쓴 것과, 4월 탐침 테스트가 다른 기준값과
+  우연히 맞아떨어진 것을 fix 라운드가 잡았다. 새 10달의 `center_y` 는 계산값 98 이 아니라 사용자가
+  두 번 눈으로 고른 99 로(4월과 같은 판 span). plate_probe 탐침 열을 4→18 로 늘린 것을 리뷰어가
+  12달 전부 픽셀로 재현해 확인
+- Task 3a — seed 구조(코드만, GPU 불필요) (`f46f1ba5`, fix `2b0a906a`) — `MonthCard.seeds` ·
+  `pick_seeds` · `GeneratedCard.seed` · `AiCard.seed`(`Integer`, `SmallInteger` 아님 — seed 가
+  32767 을 넘을 수 있다) · `db/migrations/2026-09-16_ai_card_seed.sql`. fix 라운드가 `generate_card`
+  가 호출자의 명시 seed 를 조용히 버리던 것을 잡음 — 그대로 뒀으면 3b 의 유료 실험 데이터가 실제와
+  다른 seed 로 기록될 뻔했다. 규칙: **명시 seed 는 그대로 쓰고 재시도 없음(1회) · 미지정이면
+  `pick_seeds(month, 2, rng)` 로 서로 다른 두 seed 로 재시도**
+- Task 3b — GPU 실험으로 seed 값 채우기 (`7c3f1774`, 시작 전 육안 재검증 포함) — 아래 「GPU 실험」 절
+- Task 4 — 한 요청에 2장 순차 생성 + `/choose` (`5b1bce6a`, fix 1 `71fe5fc8`, fix 2 `222c835d`) —
+  `pick_group` · `AiCard.pick_group` · `generate_cards`/`plan_seeds`. 초안은 둘째 카드 행을 첫째가
+  끝난 뒤에야 만들어 취소·경쟁 구멍이 여럿 났다 → **요청 시점에 `count`개 행을 전부 `generating`
+  으로 미리 만들고 한 장씩 채우는 방식**으로 재구성(fix 1). 그 과정에서 동시 생성 방어 인덱스
+  (`idx_ai_cards_one_generating`)를 `(app_user_id)` 에서 `(app_user_id) WHERE id = pick_group`
+  으로 좁혀야 했는데, 그 전환을 별도 마이그레이션 파일로 냈다가 **파일 이름 순서상 컬럼이 생기기
+  전에 인덱스 마이그레이션이 먼저 돌아 배포가 깨지는 문제**를 재리뷰가 잡아 `2026-09-16_ai_card_
+  pick_group.sql` 안 `BEGIN/COMMIT` 한 트랜잭션으로 합쳤다(fix 2). 실제 pgvector:pg17 하네스
+  594건 통과
+- Task 5 — 한도 재설계·정리 기준·GPU 예산 (`7c87a319`, fix `ba051c6c`) — D-084 확정. 아래
+  「한도 변경」 절
+- Task 6 — 사진 안내 문구 (`1198f793`) — `PHOTO_GUIDANCE` 상수, `/app/ai-cards` 응답과 콘솔에.
+  브리프 초안 그대로 채택("얼굴이 정면으로 보이고 앉아 있는 사진이 가장 잘 나와요. 엎드려 있거나
+  옆을 보는 사진은 닮지 않게 나올 수 있어요") — 근거 수치(정면 사진 72장 판정기 닮음 평균 4.11,
+  `_08` 엎드린 옆모습 4·9월 4장 중 0장)가 이미 이 문장과 정확히 맞아 고칠 곳이 없었다
+- Task 7 — 이 절 + roadmap · README · PR 본문 초안(`pr-body-final.md`) + 머지 전 게이트 전체
+  (fix `5feaeab7` — 전체 `uv run pytest` 가 `test_closed_month_is_404` 를 잡았다. Task 2 가
+  `DAENGS_CARDIMAGE_MONTHS` 기본값을 1~12월 전부로 넓히면서 "12월은 아직 안 열림"을 가정한 그
+  테스트가 깨져 있었다 — 다른 테스트 파일과 같은 방식으로 `cardimage_months` 를 `{4,9}` 로
+  좁혀 고쳤다)
+
+#### GPU 실험 (Task 3b, `compare-2026-09-16-months-seeds.md`)
+
+**조건:** 사진 `KakaoTalk_20260827_120826215_03.jpg`(정면) × 12달 × seed 1~6 = 72장, 크기 1024×1632.
+
+**측정값(실측):** 장당 14.4~14.6초(평균 14.4초) · 콜드 스타트 460초 · 판정기 닮음 평균 4.11(5점
+51장·1점 11장) · 판정기 임계값(3) 이상 72장 중 60장. **비용은 재지 않았다** — 장당 ₩43(추정,
+E4 미실측·가중치 잡 단가를 옮겨 쓴 값)으로 72장이면 약 ₩3,100 **추정**이다. (09-17 E4 실측 — 위 항목)
+
+**눈으로 검증한 최종 seed 목록** (`catalog.MonthCard.seeds`, 사람이 72칸을 직접 열어 본 결과가 근거 —
+`compare-2026-09-16-months-seeds.md` 의 「검증된 seed 목록」과 같다):
+
+| 월 | seed | 월 | seed |
+| --- | --- | --- | --- |
+| 1 새해 | (1,2,3,4,6) | 7 해변 | (1,2,3,4,6) |
+| 2 사랑 | (1,6) | 8 장마 | (1,2,3,4,5,6) |
+| 3 입학 | (1,3) | 9 한가위 | (1,2,3,4,5) |
+| 4 벚꽃 | (2,3) | 10 유령 | (2,4,5,6) |
+| 5 홈팀 | (1,3,4) | 11 추수감사 | (1,2,3,6) |
+| 6 수영장 | (1,2,3,5,6) | 12 산타 | (1,3,5,6) |
+
+**다음 세션이 다시 겪지 않아도 되도록 — 네 가지 발견:**
+
+1. **자동 판정기(`text_ok`)는 사람 눈과 어긋난다 — 72칸 중 11칸, 양방향으로.** 판정기가 너무
+   관대한 쪽 7칸(2월 seed 2·3·4·5 는 부제 `FEBRUARY SPECIAL` 배너 자체가 통째로 안 나오는데
+   판정기는 통과시켰다 · 4월 seed 5 `petal`→`peial` · 6월 seed 4 `initializing`→`initial'zing` ·
+   9월 seed 6 `surprise`→`surprie`), 너무 엄격한 쪽 4칸(5월 seed 1·4 · 7월 seed 2 · 12월 seed 1 —
+   전부 실제로는 깨끗했다). **판정기만 믿었으면 깨진 seed 7개를 "검증됨"으로 잘못 커밋했을
+   것이다** — 그래서 최종 seed 목록은 자동 판정이 아니라 사람이 격자를 직접 열어 본 결과를 썼다.
+   앞으로 seed 목록을 다시 만들 일이 있으면 **격자를 눈으로 본다**를 건너뛰지 말 것.
+2. **`FLUX.2-klein-4B` 에서 4월은 강아지가 안 바뀐다.** seed 와 무관하게 6개 전부에서 사용자
+   사진의 강아지가 아니라 참조 카드 원본 주인공 「네오」(크림/살구색 곱슬 푸들)로 나온다. 텍스트가
+   깨끗한 seed 2·3 도 마찬가지라, 4월은 텍스트 기준으로는 "검증 seed 2개"를 채우지만 강아지
+   정체성 기준으로는 **쓸 수 있는 장이 0장**이다. `DAENGS_CARDGEN_URL` 을 켜기 전에 반드시 이
+   결함부터 풀어야 한다 — 지금 운영은 여전히 Nano Banana 2 라 이 결함이 사용자에게 나가지 않는다.
+3. **seed 목록은 글씨 깨짐을 줄이지만 보증하지 않는다** — 사진도 결과에 영향을 준다. #557 은 같은
+   (틀, seed, 크기) 면 사진이 달라도 같은 자리가 깨진다고 결론냈는데, 이번 실험(다른 사진)에서는
+   #557 의 4월 `{3,4}`·9월 `{1,4}` 가 재현되지 않았다 — 4월 seed 4 는 #557 사진에서는 깨끗했지만
+   이번 사진에서는 부제 `APRIIAL`(SPECIAL 소실)로 깨졌다. 원인은 판정기 신뢰도 문제(위 1번)와
+   사진 영향이 겹친 것으로 본다. 새 사진으로 seed 목록을 다시 쓸 일이 있으면 "예전에 검증됐다"를
+   그대로 믿지 말 것.
+4. **동시 생성 방어 인덱스 변경과 그것이 강제하는 배포 순서.** Task 4 가 `idx_ai_cards_one_
+   generating` 의 조건을 `(app_user_id)` 에서 `(app_user_id) WHERE status='generating' AND
+   id=pick_group` 으로 좁혔다 — 요청 하나가 `pick_group` 이 같은 행 여러 개를 동시에
+   `generating` 으로 만들어야 하기 때문이다. 이 전환은 `pick_group` 컬럼을 추가하는 것과 **같은
+   트랜잭션**(`2026-09-16_ai_card_pick_group.sql`)에 있어야 한다 — 한때 별도 파일로 냈다가 파일
+   이름 순서(`g` < `p`)로 인덱스 마이그레이션이 컬럼 마이그레이션보다 먼저 돌아, DROP INDEX 는
+   커밋되고 CREATE 는 없는 컬럼을 참조해 실패해서 **운영 DB 가 동시 생성 방어 인덱스 없이 남는**
+   사고를 재리뷰가 잡았다. **배포는 반드시 DB 마이그레이션 전체 먼저, 코드는 그 다음** — 새 코드가
+   옛 인덱스(컬럼 없음) 앞에서 돌면 모든 요청의 둘째 행이 걸려 POST 가 전부 `409
+   already_generating` 이 된다.
+
+#### 한도 변경 (Task 5, D-084)
+
+D-077(하루 1회, 카드 장수 기준)이 "요청 하나에 카드 여러 장" 을 전제하지 않아 세 군데가 깨졌었다
+— 닮음 미달 카드가 `ready` 라 한도에 안 걸려 나쁜 사진이 하루치를 공짜로 반복 소모하고, 유료 실패
+상한이 카드 행을 세서 카드를 지우면 초기화되고(시작→삭제 반복이 무제한 유료 호출이 됨), 정리
+기준이 둘째 카드의 대기 시간을 자기 예산에 넣어 멀쩡한 요청을 `interrupted` 로 죽였다.
+
+정리한 규칙(전문은 `docs/decisions.md` D-084): 세는 단위는 카드 장수가 아니라 **요청(`pick_group`)
+하나**. 요청의 첫 카드가 슬롯을 잡는 순간(`_claim_slot`, 유료 호출보다 먼저) `ai_card_usage.
+unfulfilled_attempt = true` 한 줄을 지울 수 없게 남기고, 닮음 기준(`cardimage_judge_min`, 기본 3)
+이상 카드가 나오면 그 표시를 지우고 사용 기록으로 바꾼다. 검수 점수가 없으면(장애) 기준 이상으로
+본다. 하루 한도는 사용 기록만 세고, 돈 나간 시도 상한(`MAX_PAID_FAILURES_PER_DAY`=5)은 지워지지
+않는 표시 수만 센다 — 그래서 KST 하루 = 좋은 뽑기 `DAENGS_CARDIMAGE_DAILY_LIMIT` 번 + 좋은 카드를
+못 얻은 요청 최대 5번, 요청당 엔진 호출은 최대 `cardimage_pick_count`(2)번. 정리 기준(`stale_
+after`)은 행이 아니라 요청의 가장 최근 `updated_at` 부터 재고, `cardgen_url` 이 켜져 있으면
+`cardgen_timeout_s`(기본 900초, 콜드 스타트 포함)를 통째로 더한다. 새 컬럼(`ai_card_usage.
+unfulfilled_attempt`)이라 `db/migrations/2026-09-15_ai_card_usage.sql` 의 옛 백필("ready 카드마다
+자기 id 로 사용 기록 한 줄")이 거짓이 됐고, **그 파일을 재실행 안전하게 고쳤다** — `to_regclass`
+가드로 표를 그 실행에서 처음 만들 때만 백필하고, 이미 적용된 DB(표가 있음)에서는 재실행이 아무것도
+안 바꾼다.
+
+**고치지 않고 남긴 것 (D-084 명시):** 요청의 첫 카드가 생성 슬롯(`cardimage_concurrency`)을 기다리는
+동안 정리되면 돈은 안 나가지만 사용자는 요청을 잃는다.
+
+### 남은 것 (다음 세션)
+
+- **4월 강아지 정체성 결함** — `DAENGS_CARDGEN_URL` 을 켜기 전에 반드시 해결. 아직 원인 미분석
+- **여러 사진으로 seed 목록 재검증** — 사진이 결과에 영향을 준다는 것이 확인됐다(발견 3). 지금
+  목록은 사진 1장 스윕으로만 확정
+- **앱 고르기 화면** — `SAJOYO/DAENGS_APP` 과 계약 조율, 2장을 보여 주고 고르는 UI. **`DAENGS_CARDGEN_URL`
+  을 넣는 것과 함께 나가야 한다**(Task 8) — 그 값이 들어가는 순간 한 요청이 두 장이 된다
+- **E4 비용 실측** — 여전히 미측정. 장당 ₩43 은 가중치 잡 단가를 옮겨 쓴 추정 (09-17 E4 실측 — 위 항목)
+- **과일·채소 카드** (로드맵 4번) — 아래 참고
+- `DAENGS_CARDGEN_URL` 운영 반영 여부 — 4월 결함이 풀린 뒤 별도 판단
+
 ## 2026-09-16 밤 — #557 FLUX.2-klein-4B 실험: E1 · E2 · 이미지 하나로 · E3 (무인 진행)
 
 > **아침에 볼 것 (사람)**

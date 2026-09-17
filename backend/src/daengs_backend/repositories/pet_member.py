@@ -38,6 +38,7 @@ __all__ = [
     "list_members",
     "members_in",
     "remove",
+    "remove_from_pets",
 ]
 
 
@@ -103,6 +104,29 @@ async def remove(
     result = await session.execute(
         sql_delete(PetMember).where(
             PetMember.pet_id == pet_id, PetMember.app_user_id == app_user_id
+        )
+    )
+    return int(result.rowcount or 0)
+
+
+async def remove_from_pets(
+    session: AsyncSession, pet_ids: Sequence[uuid.UUID], app_user_id: uuid.UUID
+) -> int:
+    """그 사람의 돌보미 행을 **주어진 pet 행 전부**에서 지웁니다. 지운 행 수.
+
+    멤버십은 `pets` **행**마다라, 논리로 연결된 한 마리라도 한 사람이 행 여러 개의
+    돌보미일 수 있습니다 — 연결 수락이 앵커 행 멤버십과 연결을 같이 만들기 때문입니다.
+    나가기·내보내기가 요청받은 행 하나만 지우면 **남은 행의 멤버십으로 그룹을 계속
+    읽습니다.** 그래서 나가는 자리는 `remove` 가 아니라 이것을 씁니다.
+
+    빈 목록이면 쿼리도 안 날립니다 — `IN ()` 은 DB 마다 다르게 굽니다.
+    """
+    if not pet_ids:
+        return 0
+    result = await session.execute(
+        sql_delete(PetMember).where(
+            PetMember.pet_id.in_(set(pet_ids)),
+            PetMember.app_user_id == app_user_id,
         )
     )
     return int(result.rowcount or 0)

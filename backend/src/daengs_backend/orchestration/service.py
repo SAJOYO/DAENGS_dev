@@ -40,6 +40,7 @@ from daengs_backend.orchestration.planner import (
     resolve_care_log_write,
     resolve_deterministic_route,
     resolve_emergency_route,
+    resolve_gait_route,
     resolve_skin_route,
 )
 from daengs_backend.orchestration.resolver import (
@@ -202,6 +203,18 @@ class AssistantOrchestrationService:
                 requested_capability=requested_capability,
                 enabled=settings.skin_agent,
             )
+        # ── 보행 변화 관찰 해설 (D-080). 피부와 같은 자리, 같은 이유.
+        # `gait` 신호도 `resolve_deterministic_route` 가 HANDOFF 로 읽는다 — 서버가 소유를
+        # 확인하고 계산한 비교(또는 못 한 이유)가 붙은 요청만 여기서 먼저 가로챈다.
+        # 응급이 앞인 이유도 같다: "다리를 아예 못 디뎌요" 는 변화 관찰이 아니라 병원이다.
+        # skin 과 서로 순서가 무관한 것은 신호 이름이 달라 둘이 겹칠 수 없어서다.
+        if route_plan is None:
+            route_plan = resolve_gait_route(
+                query=query,
+                context=structured_context,
+                requested_capability=requested_capability,
+                enabled=settings.gait_agent,
+            )
         if route_plan is None:
             route_plan = resolve_deterministic_route(
                 requested_capability=requested_capability,
@@ -221,9 +234,7 @@ class AssistantOrchestrationService:
             pending_proposal = (
                 pending_clarification.care_log if pending_clarification is not None else None
             )
-            route_plan = resolve_care_log_write(
-                query=query, pending=pending_proposal, now=now_kst
-            )
+            route_plan = resolve_care_log_write(query=query, pending=pending_proposal, now=now_kst)
             # 승낙이 아니었다. 거절은 고정 문구로 끝내고, 그 밖의 발화는 제안을 흘려
             # 평소대로 라우팅한다 — 대기 되묻기를 안 이어받는 기존 동작과 같다.
             if (
@@ -352,6 +363,12 @@ class AssistantOrchestrationService:
                 # 읽는 자리가 여기(요청 시점)인 것은 의도다 — 모듈 최상단에서 읽으면 테스트가
                 # 플래그를 켜고 끌 수 없고, 서버는 `.env` 한 줄로 켜고 재시작한다 (#279).
                 general_fallback=settings.general_fallback,
+                # 라우터가 낸 skin HANDOFF 를 해설로 바꿀지 (#569). 같은 킬 스위치를 읽는다 —
+                # 끄면 명시 신호 경로와 함께 예전 HANDOFF 로 돌아간다.
+                skin_agent=settings.skin_agent,
+                # 같은 일을 보행에도 (D-081). **플래그가 둘인 것은 의도다** — 하나로 묶으면
+                # 한쪽을 끄려다 다른 쪽까지 꺼진다.
+                gait_agent=settings.gait_agent,
                 resolved=conversation,
             )
         response = await self._engine.run(

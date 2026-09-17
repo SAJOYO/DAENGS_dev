@@ -383,8 +383,10 @@ curl -s https://daengapi.weareithero.cloud/screen/healthz
 ### App Links 운영 설정 (공동 돌봄 초대 링크)
 
 공동 돌봄 초대 링크(`https://daengapi.weareithero.cloud/invite#…`)를 앱이 바로 열게 하는
-설정입니다. 코드는 DEV #535 로 `dev` 에 들어갔고, **앱이 만드는 링크 호스트가 이 VM
-(`daengapi`)이라 운영 반영 전에는 `/invite` 도 `assetlinks.json` 도 404 입니다.**
+설정입니다. 앱이 만드는 링크 호스트가 이 VM(`daengapi`)입니다. 코드(DEV #535)는
+`main` 을 거쳐 이 VM 에 반영돼 있어 `/invite` 는 200 이고, **지문 설정이 비어 있으면
+`assetlinks.json` 은 빈 배열 `[]`** 입니다 — 코드가 없는 VM 이면 둘 다 404 입니다.
+2026-09-17 에 운영 VM 에 앱 서명 키·업로드 키 지문 둘을 넣었습니다(#583).
 설정 규칙의 원본은 `backend/src/daengs_backend/app_links.py` 와 `backend/.env.example` 의
 같은 이름 항목이고, 여기서는 운영 인계에 필요한 것만 적습니다. §2 `backend/.env` 수정표에도
 같은 행이 있습니다.

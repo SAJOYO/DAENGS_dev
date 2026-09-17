@@ -1,5 +1,6 @@
 """Deterministic workflow: plan → validate → acquire results → prepare commit."""
 
+import logging
 from datetime import UTC, datetime
 from uuid import uuid4
 
@@ -31,6 +32,7 @@ from daengs_place.place.conversation.contract import (
     SelectionBasis,
     TurnPlan,
 )
+from daengs_place.place.conversation.diagnostics import error_origin, validation_issues
 from daengs_place.place.conversation.grounding import browse_scope
 from daengs_place.place.conversation.policy import Decision, base_revision, decide
 from daengs_place.place.conversation.render import selected_facts
@@ -48,6 +50,7 @@ from daengs_place.place.tools.changes import apply_changes
 from daengs_place.place.tools.contract import FilterChanges
 
 CACHE_SECONDS = 300
+logger = logging.getLogger(__name__)
 
 
 def snapshot_matches(state, bookmark_keys):
@@ -176,7 +179,13 @@ class ConversationService:
             assert old is not None
             try:
                 decision = await decide(self.planner, request, now)
-            except (ValidationError, ValueError, TypeError):
+            except (ValidationError, ValueError, TypeError) as error:
+                logger.warning(
+                    "facility_decision_failed type=%s origin=%s issues=%s",
+                    type(error).__name__,
+                    error_origin(error),
+                    validation_issues(error),
+                )
                 return self._unchanged(
                     request,
                     "clarify",

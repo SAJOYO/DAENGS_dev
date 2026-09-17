@@ -67,6 +67,48 @@ def test_random_seed_when_not_fixed() -> None:
     assert engine.last_meta["seed"] == seeds[0]
 
 
+def test_call_site_seed_overrides_constructor_seed() -> None:
+    """#572 fix round 1 F3 — 생성자 seed=11 이어도 호출 인자가 있으면 그것을 쓴다."""
+    seen: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["seed"] = json.loads(request.content)["seed"]
+        return httpx.Response(200, content=png(*GEN_SIZE))
+
+    engine = _engine(handler)  # 생성자 seed=11
+    engine.generate(template_png=png(), photo_jpeg=b"j", prompt="P", seed=77)
+    assert seen["seed"] == 77
+    assert engine.last_meta["seed"] == 77
+
+
+def test_call_site_seed_none_falls_back_to_constructor_seed() -> None:
+    """호출 인자를 안 주면(기본값 `None`) 생성자 값을 그대로 쓴다 — 지금까지의 동작과 같다."""
+    seen: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["seed"] = json.loads(request.content)["seed"]
+        return httpx.Response(200, content=png(*GEN_SIZE))
+
+    engine = _engine(handler)  # 생성자 seed=11
+    engine.generate(template_png=png(), photo_jpeg=b"j", prompt="P")
+    assert seen["seed"] == 11
+
+
+def test_generate_batch_still_uses_constructor_seed_only() -> None:
+    """`generate_batch` 에는 프로토콜의 호출별 `seed` 인자가 없다 — 늘 생성자 값을 쓴다."""
+    seen: dict = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["seed"] = json.loads(request.content)["seed"]
+        images = [base64.b64encode(png(1024, 1632)).decode() for _ in range(2)]
+        return httpx.Response(200, json={"model": "fake", "size": "1024x1632", "seconds": 1.0,
+                                         "seeds": [1, 2], "images_png_b64": images})
+
+    engine = _engine(handler, seed=33)
+    engine.generate_batch(template_png=png(), photo_jpeg=b"j", prompt="P", count=2)
+    assert seen["seed"] == 33
+
+
 def test_non_200_is_upstream_error() -> None:
     engine = _engine(lambda request: httpx.Response(503, json={"code": "not_ready"}))
     with pytest.raises(EngineError) as info:

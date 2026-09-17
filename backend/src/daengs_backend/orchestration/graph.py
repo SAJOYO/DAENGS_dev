@@ -11,6 +11,7 @@ from langgraph.graph import END, START, StateGraph
 from daengs_backend.core.tracing import trace_config
 from daengs_backend.orchestration import planner
 from daengs_backend.orchestration.adapters import (
+    GaitCapabilityAdapter,
     GeneralCapabilityAdapter,
     LifeCapabilityAdapter,
     PlaceCapabilityAdapter,
@@ -70,6 +71,9 @@ class OrchestrationEngine:
                 # 라우터가 고를 수 없다 — 판정 기록이 붙은 `skin` 신호만 `resolve_skin_route`
                 # 가 계획에 넣는다 (D-079).
                 CapabilityName.SKIN: SkinCapabilityAdapter(),
+                # 같은 이유로 라우터가 고를 수 없다 — 비교 결과가 붙은 `gait` 신호만
+                # `resolve_gait_route` 가 계획에 넣는다 (D-080).
+                CapabilityName.GAIT: GaitCapabilityAdapter(),
             }
         self._adapters = dict(adapters)
         if place_adapter is not None:

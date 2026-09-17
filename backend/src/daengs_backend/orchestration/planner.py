@@ -32,6 +32,13 @@ strips `general` from the decision, so production builds the plans it built befo
 `general` orders last, never needs coordinates, and the explicit
 `requested_capability` signal is untouched — `general` is not a resolvable signal.
 
+**그 `general` 하나짜리 계획에는 예외가 하나 있다** (#573, D-083). 판정 기록이 붙어 있고 Turn
+Resolver 가 이 턴을 앞 턴에 이어붙였으면, 그 계획은 일반 답변이 아니라 **피부 해설**이 받는다.
+라우터 정책이 `execute.general` 에 "이상이 없는지 걱정하는 질문" 을 맡기고 있어서, 판정을 보고
+이어 묻는 말이 자연스럽게 그쪽으로 가는데 — 그쪽에는 D-082 의 규칙 8 도 병명 어휘 가드도 없다.
+실기기에서 `아토피래 어떡해` 가 병명을 그대로 따라 쓴 경로가 이것이다. 경계는 `resolved` 이고,
+그래서 판정 직후 **새로 꺼낸** 밥·산책 이야기는 걸리지 않는다.
+
 **`vet_contact` skips this module's semantic path entirely.** `resolve_emergency_route`
 runs before any LLM call (deterministic lexicon gate or explicit signal), builds an
 exclusive single-request plan itself, and never lets `vet_contact` reach the shared
@@ -45,6 +52,13 @@ docstring and D-051 ②.
 둘 다 모델을 안 태우고, 기록될 값은 전부 신뢰된 context 와 서버 시계에서 온다 — 쓰기가
 붙어도 D-051 의 "모델은 payload 를 한 글자도 쓰지 않는다" 가 그대로인 이유다.
 
+**`gait` 도 같은 모양이다** (D-080). `resolve_gait_route` 가 명시 신호
+`requested_capability="gait"` 에 **서버가 소유를 확인하고 계산한 비교 결과**
+(`context["gait_compare"]`)가 붙었을 때 배타 단일 요청을 만든다. 비교를 **못 했을 때도**
+계획을 만드는 것이 피부와 다른 점이다 — 사용자가 비교 화면에서 눌러 들어온 요청이라,
+이유 범주(`context["gait_compare_unavailable"]`)를 실어 어댑터가 고정 문구로 닫게 한다.
+참조 자체가 없으면 같은 신호가 예전처럼 gait HANDOFF 다.
+
 **`skin` 도 공유 조립기를 안 지난다** (D-079). `resolve_skin_route` 가 명시 신호
 `requested_capability="skin"` 에 **서버가 해소한 판정 기록**(`context["screening"]`)이 붙었을 때만
 배타 단일 요청을 직접 만든다. 새 신호를 발명한 것이 아니다 — 같은 신호가 기록 없이 오면
@@ -55,7 +69,7 @@ from __future__ import annotations
 
 import re
 import uuid
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from datetime import datetime
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -86,6 +100,7 @@ _GENERAL = "general"
 _VET_CONTACT = "vet_contact"
 _CARE_LOG = "care_log"
 _SKIN = "skin"
+_GAIT = "gait"
 _EXECUTION_ORDER = (
     "training",
     "life",
@@ -95,6 +110,7 @@ _EXECUTION_ORDER = (
     _VET_CONTACT,
     _CARE_LOG,
     _SKIN,
+    _GAIT,
 )
 # The names the router (and the explicit signal) may select. `general` is executable but
 # never selectable — it only ever enters a plan through the fallback rule below, so it is
@@ -110,8 +126,37 @@ _EXECUTION_ORDER = (
 # `_HANDOFF_REASONS` 의 명시 신호이고, `resolve_deterministic_route` 는 이 집합을 먼저 본다 —
 # 넣는 순간 기록 없는 `skin` 신호가 HANDOFF 대신 payload 규칙 없는 EXECUTE 가 되어 500 이 난다.
 # 판정 기록이 붙은 `skin` 은 `resolve_skin_route` 가 그보다 앞에서 소비한다.
+# `gait` 가 빠지는 이유는 `skin` 과 한 글자도 다르지 않다 — 이미 `_HANDOFF_REASONS` 의
+# 명시 신호라, 여기 넣으면 참조 없는 `gait` 신호가 HANDOFF 대신 payload 규칙 없는 EXECUTE 가
+# 되어 500 이 난다. 비교 참조가 붙은 `gait` 는 `resolve_gait_route` 가 그보다 앞에서 소비한다.
 _EXECUTE_NAMES = frozenset(
-    name for name in _EXECUTION_ORDER if name not in {_GENERAL, _VET_CONTACT, _CARE_LOG, _SKIN}
+    name
+    for name in _EXECUTION_ORDER
+    if name not in {_GENERAL, _VET_CONTACT, _CARE_LOG, _SKIN, _GAIT}
+)
+#: `GaitComparePayload.question` 의 한도. `_SKIN_QUESTION_LIMIT` 과 같은 값·같은 이유다.
+_GAIT_QUESTION_LIMIT = 1_000
+#: `services/gait_context.py` 가 쓰는 두 키와 같아야 한다. 이 모듈이 계약 쪽 이름을 그대로
+#: 들고 있는 이유는 `_SCREENING_VERDICTS` 와 같다 — 계약이 넓어져도 planner 가 복사하는
+#: 범위는 여기서만 넓어진다 (#283).
+_GAIT_CONTEXT_KEY = "gait_compare"
+_GAIT_UNAVAILABLE_KEY = "gait_compare_unavailable"
+_GAIT_CONTEXT_KEYS = frozenset(
+    {
+        "change_kind",
+        "flagged_sides",
+        "left_measured",
+        "left_joints",
+        "right_measured",
+        "right_joints",
+        "days_between",
+        "reliability",
+        "version_mismatch",
+        "expert_advisory",
+    }
+)
+_GAIT_UNAVAILABLE_REASONS = frozenset(
+    {"not_found", "same_record", "different_pet", "model_mismatch", "quality", "legacy_pair"}
 )
 #: `SkinPayload.question` 의 한도. 넘으면 계획을 안 열고 HANDOFF 로 떨어진다 — 계약 검증이
 #: 500 을 내는 것보다 예전 동작이 낫다. `AssistantQueryRequest.query` 에는 공통 상한이 없다.
@@ -194,6 +239,7 @@ def resolve_skin_route(
     context: dict[str, Any],
     requested_capability: str | None,
     enabled: bool,
+    resolved: ConversationContext | None = None,
 ) -> RoutePlan | None:
     """판정 기록이 붙은 `skin` 신호면 피부 해설 하나짜리 계획을, 아니면 None 을 낸다 (D-079).
 
@@ -219,10 +265,94 @@ def resolve_skin_route(
     history = screening_history(context)
     if history is not None:
         payload["history"] = history
+    # 앞 대화 (#570). 명시 신호(칩)로 들어온 요청에는 `None` 이다 — 그 게이트는 Turn Resolver
+    # 보다 앞이라 해소된 대화가 아직 없고, 판정 직후 첫 질문이라 있을 것도 없다.
+    if resolved is not None:
+        payload["conversation"] = resolved.model_dump(mode="json")
 
     return RoutePlan.model_validate(
         {
             "requests": [{"capability": _SKIN, "payload": payload, "timeout_ms": None}],
+            "handoffs": [],
+            "clarify": None,
+            "router": RouterKind.DETERMINISTIC,
+            "model": None,
+            "prompt_version": None,
+        }
+    )
+
+
+def _gait_compare(context: Mapping[str, Any]) -> dict[str, Any] | None:
+    """서버가 해소한 비교 결과. **화이트리스트다** — 여기 적힌 칸만 payload 로 간다.
+
+    `_screening_context` 와 같은 장치다. 본문에서 온 값을 그대로 흘리지 않기 위해 계약이
+    허용하는 키만 옮기고, 하나라도 모양이 틀리면 통째로 버린다(그때는 비교가 없는 것과
+    같은 답이 된다).
+    """
+    value = context.get(_GAIT_CONTEXT_KEY)
+    if not isinstance(value, Mapping):
+        return None
+    narrowed = {key: value.get(key) for key in _GAIT_CONTEXT_KEYS if key in value}
+    if set(narrowed) != _GAIT_CONTEXT_KEYS:
+        return None
+    return narrowed
+
+
+def _gait_unavailable(context: Mapping[str, Any]) -> str | None:
+    """비교를 못 한 이유. 계약이 아는 범주만 통과시킨다 — 모르는 이름이 오면 없는 것으로 본다."""
+    value = context.get(_GAIT_UNAVAILABLE_KEY)
+    if not isinstance(value, Mapping):
+        return None
+    reason = value.get("reason")
+    return reason if isinstance(reason, str) and reason in _GAIT_UNAVAILABLE_REASONS else None
+
+
+def resolve_gait_route(
+    *,
+    query: str,
+    context: dict[str, Any],
+    requested_capability: str | None,
+    enabled: bool,
+    #: 앞 대화 (D-082). **칩 경로에서는 늘 None 이다** — 칩은 비교 직후 첫 질문이고 그
+    #: 게이트는 Turn Resolver 보다 앞에 선다. 값이 오는 길은 HANDOFF 전환(D-081)뿐이다.
+    resolved: ConversationContext | None = None,
+) -> RoutePlan | None:
+    """비교 참조가 붙은 `gait` 신호면 보행 변화 관찰 해설 하나짜리 계획을, 아니면 None (D-080).
+
+    **셋이 다 맞아야 연다** — 명시 신호가 `gait` 이고, 킬 스위치(`settings.gait_agent`)가
+    켜져 있고, `routers/assistant._with_gait_context` 가 소유를 확인해 해소한 값이
+    `context` 에 있을 것. 하나라도 아니면 None 이고, 같은 신호는 뒤의
+    `resolve_deterministic_route` 에서 오늘과 같은 gait HANDOFF 가 된다. 그래서 이 함수는
+    그것보다 **앞**에 선다 (`service._plan_and_execute`). 응급은 이것보다 앞이다.
+
+    **비교를 못 했어도 계획을 만든다.** 피부(D-079)와 갈리는 유일한 지점이다 — 거기서는
+    기록이 없으면 조용히 지나가는 것이 맞았지만, 여기서는 사용자가 **비교 결과 화면에서
+    눌러** 들어왔다. 그 요청을 general 로 넘기면 방금 본 비교와 무관한 답이 나오고,
+    HANDOFF 로 넘기면 "영상을 올려 주세요" 가 다시 나온다. 둘 다 사용자가 한 행동을
+    부정한다. 그래서 이유를 실어 보내고 어댑터가 고정 문구로 닫는다(모델 호출 0).
+
+    **배타다.** 변화 해설에 산책 조건이나 제도 정보가 섞이면 비교 화면에서 이어 물은
+    질문의 답이 흐려진다. 좌표도 안 싣는다.
+    """
+    if not enabled or requested_capability != _GAIT:
+        return None
+    if len(query) > _GAIT_QUESTION_LIMIT:
+        return None
+    payload: dict[str, Any] = {"question": query}
+    if resolved is not None:
+        payload["conversation"] = resolved.model_dump(mode="json")
+    compare = _gait_compare(context)
+    if compare is not None:
+        payload["compare"] = compare
+    else:
+        unavailable = _gait_unavailable(context)
+        if unavailable is None:
+            return None
+        payload["unavailable"] = unavailable
+
+    return RoutePlan.model_validate(
+        {
+            "requests": [{"capability": _GAIT, "payload": payload, "timeout_ms": None}],
             "handoffs": [],
             "clarify": None,
             "router": RouterKind.DETERMINISTIC,
@@ -283,7 +413,7 @@ def resolve_care_log_route(
     now: datetime,
     care_log_write: bool,
 ) -> RoutePlan | None:
-    """"방금 밥 먹였어" 를 받는 자리 — 확인 되묻기, 아니면 기록 화면 HANDOFF (#331 후속).
+    """ "방금 밥 먹였어" 를 받는 자리 — 확인 되묻기, 아니면 기록 화면 HANDOFF (#331 후속).
 
     **아무것도 안 쓴다.** 이 함수가 내는 가장 센 것은 "이렇게 기록할까요?" 라는 질문이다.
     쓰기는 다음 턴의 `resolve_care_log_write` 가 하고, 그 사이에 사용자의 승낙이 있다.
@@ -323,9 +453,7 @@ def resolve_care_log_route(
             }
         )
 
-    proposal = CareLogProposal(
-        kind=kind, pet_id=pet_id, occurred_at=now, proposal_id=uuid.uuid4()
-    )
+    proposal = CareLogProposal(kind=kind, pet_id=pet_id, occurred_at=now, proposal_id=uuid.uuid4())
     return RoutePlan.model_validate(
         {
             "requests": [],
@@ -404,6 +532,103 @@ def resolve_deterministic_route(
     )
 
 
+# 라우터가 낸 HANDOFF 를 해설 실행으로 바꾸는 능력별 어댑터 (#569 · D-081).
+#
+# **payload 를 만드는 함수는 `resolve_*_route` 와 같은 것을 쓴다** — 진입이 둘이어도 계획은
+# 한 곳에서 만들어져야 두 길이 다른 답을 낼 수 없다 (D-051 ② 와 같은 이유).
+#: (프롬프트 · 컨텍스트) → 해설 하나짜리 계획. 조건이 안 맞으면 None 이고 HANDOFF 가 그대로 나간다.
+_HandoffExplainer = Callable[..., "RoutePlan | None"]
+
+
+def _skin_handoff_explainer(
+    *,
+    query: str,
+    context: dict[str, Any],
+    enabled: bool,
+    resolved: ConversationContext | None,
+) -> RoutePlan | None:
+    return resolve_skin_route(
+        query=query,
+        context=context,
+        requested_capability=_SKIN,
+        enabled=enabled,
+        resolved=resolved,
+    )
+
+
+def _gait_handoff_explainer(
+    *,
+    query: str,
+    context: dict[str, Any],
+    enabled: bool,
+    resolved: ConversationContext | None,
+) -> RoutePlan | None:
+    """보행은 **비교 해소가 성공했을 때만** HANDOFF 를 바꾼다 (D-081).
+
+    ⚠️ 여기가 피부와 갈리는 자리다. `resolve_gait_route` 는 **비교를 못 했을 때도 계획을
+    만든다** — 칩에서는 그게 맞다(사용자가 비교 화면에서 눌러 들어왔으니 이유를 말하고 닫는
+    것이 그 행동에 대한 답이다, D-080). 그런데 **타이핑 경로에서 낡은 참조가 실리면 그 대화의
+    모든 질문이 고정 실패 문구로 닫힌다** — 산책 질문까지 "비교 정보를 불러올 수 없어요" 가
+    된다. 라우터가 gait 로 보낸 질문은 전부 이 길을 지나기 때문이다.
+
+    그래서 비교 불가면 **열지 않고 None** 을 내서 오늘과 같은 gait HANDOFF 로 되돌린다.
+    칩 경로(`requested_capability="gait"`)는 이 함수를 지나지 않으므로 **한 글자도 안 바뀐다**.
+    """
+    if _gait_compare(context) is None:
+        return None
+    return resolve_gait_route(
+        query=query,
+        context=context,
+        requested_capability=_GAIT,
+        enabled=enabled,
+        # D-082 부터 앞 대화를 함께 넘긴다. 이 경로가 그 값이 오는 **유일한** 길이다.
+        resolved=resolved,
+    )
+
+
+#: 라우터 HANDOFF 를 해설 실행으로 바꿀 수 있는 능력과 **그 바꾸는 방법**.
+#:
+#: 능력마다 해석기의 모양이 달라서 함수 이름만으로는 표를 만들 수 없다 — `resolve_skin_route`
+#: 는 앞 대화(`resolved`)를 받고 `resolve_gait_route` 는 안 받으며, 보행에는 위의 "비교 불가면
+#: 열지 않는다" 규칙이 하나 더 붙는다. 그래서 **능력별 어댑터 함수**를 값으로 둔다.
+_HANDOFF_EXPLAINERS: dict[str, _HandoffExplainer] = {
+    _SKIN: _skin_handoff_explainer,
+    _GAIT: _gait_handoff_explainer,
+}
+
+
+def _explainer_plan_for(
+    target: str,
+    *,
+    query: str,
+    context: dict[str, Any],
+    enabled: Mapping[str, bool],
+    resolved: ConversationContext | None = None,
+) -> dict[str, Any] | None:
+    """라우터 HANDOFF 를 대신할 해설 요청. 조건이 안 맞으면 None 이고 HANDOFF 가 그대로 나간다.
+
+    `enabled` 는 **능력별 킬 스위치**다. 하나의 불리언으로 두면 보행을 열 때 피부까지 같이
+    켜지거나 꺼진다 — 둘은 따로 끌 수 있어야 한다 (`settings.skin_agent` · `settings.gait_agent`).
+    """
+    explainer = _HANDOFF_EXPLAINERS.get(target)
+    if explainer is None:
+        return None
+    plan = explainer(
+        query=query,
+        context=context,
+        enabled=enabled.get(target, False),
+        resolved=resolved,
+    )
+    if plan is None:
+        return None
+    request = plan.requests[0]
+    return {
+        "capability": request.capability.value,
+        "payload": request.payload.model_dump(mode="json"),
+        "timeout_ms": None,
+    }
+
+
 def assemble_route_plan(
     decision: SemanticRoutingDecision,
     *,
@@ -413,6 +638,11 @@ def assemble_route_plan(
     model: str | None = ROUTER_MODEL_ID,
     prompt_version: str | None = PROMPT_VERSION,
     general_fallback: bool = False,
+    skin_agent: bool = False,
+    #: 보행 해설의 킬 스위치 (D-081). **피부와 따로 끈다** — 하나의 불리언으로 두면 한쪽을
+    #: 열 때 다른 쪽까지 같이 켜지거나 꺼진다. 기본 False 는 `skin_agent` 와 같은 이유다:
+    #: 동결된 라우터 벤치마크 러너가 오늘과 똑같은 계획을 계속 만들어야 한다 (#279).
+    gait_agent: bool = False,
     resolved: ConversationContext | None = None,
 ) -> RoutePlan:
     """Build the real Card 1 RoutePlan using only trusted query/context values.
@@ -431,8 +661,10 @@ def assemble_route_plan(
     caller (`service._plan_and_execute`) is the only layer that holds both the Turn
     Resolver's `ResolvedTurn` and the `PendingClarification` it may anchor to, so it builds
     this value once (`resolver.conversation_context_of`) and passes the same object here and
-    to the semantic router. This function does no conversion; it only threads the value to
-    `_payload_for`, which puts it on `GeneralPayload.conversation` and nowhere else.
+    to the semantic router. This function does no conversion; it only threads the value on.
+    목적지는 셋이다 — `_payload_for` 가 `GeneralPayload.conversation` 에 넣고, #570 부터
+    `_explainer_plan_for` 가 `SkinPayload.conversation` 에도 넣으며, #573(D-083)부터는 `resolved`
+    자체가 **`general` 하나짜리 계획을 해설로 바꿀지**를 가르는 조건이기도 하다.
     """
     needs_coordinates = _NEEDS_COORDINATES.intersection(decision.execute)
     if "place" in needs_coordinates and (
@@ -473,6 +705,71 @@ def assemble_route_plan(
         # chose nothing: a specialized selection is never padded with `general` by rule —
         # the router adds it explicitly when a care intent is mixed in (D-057 ①).
         selected = [_GENERAL]
+
+    # ── 라우터 HANDOFF → 해설 실행 (#569) ─────────────────────────────
+    # 라우터가 "이건 피부 이야기" 라고 판단했고 서버가 소유를 확인한 판정 기록이 컨텍스트에
+    # 있으면, "사진을 등록해 주세요" 대신 그 판정을 **해설**한다. 사용자는 방금 판정을 봤고
+    # 이어서 물은 것이라, 같은 화면으로 다시 보내는 것이 답이 아니다.
+    #
+    # **배타다.** 해설이 열리면 다른 선택은 버린다 — `resolve_skin_route` 가 명시 신호로 열릴
+    # 때와 같은 규칙이고, 판정 이야기에 산책 조건이 섞이면 이어 물은 답이 흐려진다.
+    #
+    # **라우터가 고르지 않은 것은 열리지 않는다.** 이 규칙은 라우터의 판단을 바꾸지 않고, 그
+    # 판단이 HANDOFF 일 때 목적지만 바꾼다 — 그래서 산책 질문은 그대로 산책이 답한다.
+    agents = {_SKIN: skin_agent, _GAIT: gait_agent}
+    for target in decision.handoffs:
+        if target not in _HANDOFF_EXPLAINERS:
+            continue
+        explainer = _explainer_plan_for(
+            target, query=query, context=context, enabled=agents, resolved=resolved
+        )
+        if explainer is None:
+            continue
+        return RoutePlan.model_validate(
+            {
+                "requests": [explainer],
+                "handoffs": [],
+                "clarify": None,
+                "router": router,
+                "model": model,
+                "prompt_version": prompt_version,
+            }
+        )
+
+    # ── general 하나뿐인 계획 → 해설 실행 (#573, D-083) ────────────────
+    # 판정을 보고 이어 물었는데 "피부" 라는 말을 다시 안 쓰면 라우터는 그 질문을 일반 돌봄
+    # 질문으로 읽는다 — 정책의 `execute.general` 이 "반려견에게 이상이 없는지 걱정하는
+    # 질문" 을 명시적으로 담당하기 때문이다. 그러면 방금 본 판정도 바로 앞 답도 모르는 답이
+    # 나가고, 더 나쁘게는 #570 의 규칙 8 과 넓힌 출력 가드가 **해설 안에만** 있어서 보호자가
+    # 말한 병명이 그대로 따라 나간다. 실기기에서 `며칠 지켜보면 돼?` 와 `아토피래 어떡해` 가
+    # 둘 다 이 길로 샜다 (#573 본문).
+    #
+    # **라우터가 general 을 대놓고 골랐는지, 아무것도 못 골라 폴백됐는지는 구분하지 않는다.**
+    # 두 경우 모두 조립된 계획은 `general` 하나로 같고, 어느 쪽이었는지는 이 판단을 바꾸지
+    # 않는다 — 그래서 둘을 가르려고 라우터 트레이스를 읽지 않는다.
+    #
+    # **경계는 `resolved` 다.** `service._plan_and_execute` 가 `NEW` 와 저확신 턴을 이미
+    # `resolved = None` 으로 버리고, `conversation_context_of` 는 그때 `None` 을 낸다. 그래서
+    # 여기 걸리는 것은 리졸버가 확신을 갖고 앞 턴에 이어붙인 **이어 묻기**뿐이고, 판정 직후
+    # 새로 꺼낸 밥·산책 이야기는 안 걸린다.
+    #
+    # **핸드오프가 하나라도 있으면 열지 않는다** — 그것은 라우터가 목적지를 고른 것이고, 위
+    # HANDOFF 규칙이 이미 자기 몫을 처리했다.
+    if selected == [_GENERAL] and not decision.handoffs and resolved is not None:
+        explainer = _explainer_plan_for(
+            _SKIN, query=query, context=context, enabled=agents, resolved=resolved
+        )
+        if explainer is not None:
+            return RoutePlan.model_validate(
+                {
+                    "requests": [explainer],
+                    "handoffs": [],
+                    "clarify": None,
+                    "router": router,
+                    "model": model,
+                    "prompt_version": prompt_version,
+                }
+            )
 
     requests: list[dict[str, Any]] = []
     # An unrecognized name sorts last rather than raising here, so the precise

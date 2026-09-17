@@ -42,6 +42,17 @@ class CapabilityName(StrEnum):
     #: `requested_capability="skin"` 에 **서버가 소유를 확인한 판정 기록이 붙었을 때** 하나뿐이고
     #: (`planner.resolve_skin_route`), 기록이 없으면 같은 신호가 예전처럼 HANDOFF 다.
     SKIN = "skin"
+    #: 보행 **변화 관찰** 해설 (D-080). 영상을 새로 분석하지 않는다 — 이미 끝난 두 기록의
+    #: 비교 결과를 받아 "지난번과 무엇이 달라 보이는지" 를 사용자 말로 푼다.
+    #:
+    #: `skin` 과 배선은 같지만 **목적이 다르다.** 피부는 판정 한 건의 해설이고, 이쪽은
+    #: 같은 아이의 **시간 변화 관찰**이다 (D-058 — 이 서비스는 진단이 아니다). 그래서
+    #: 행동 집합에 진료 권유가 없고, "좋아졌다·나빠졌다" 는 어느 경로로도 말하지 않는다.
+    #:
+    #: 들어오는 길은 명시 신호 `requested_capability="gait"` 에 **서버가 소유를 확인하고
+    #: 계산한 비교 결과**가 붙었을 때 하나뿐이다 (`planner.resolve_gait_route`). 참조가
+    #: 없으면 같은 신호가 예전처럼 HANDOFF(`video_upload_required`) 다.
+    GAIT = "gait"
 
 
 class CapabilityStatus(StrEnum):
@@ -165,7 +176,7 @@ class CareLogKind(StrEnum):
 
 
 class CareLogProposal(ContractModel):
-    """"이대로 기록할까요?" 의 **이대로** — 그리고 승낙 뒤 실제로 쓰이는 값 (#331 후속, D-075).
+    """ "이대로 기록할까요?" 의 **이대로** — 그리고 승낙 뒤 실제로 쓰이는 값 (#331 후속, D-075).
 
     한 타입이 제안과 payload 를 겸하는 것이 의도다. 확인 단계의 약속은 "보여 준 것만
     들어간다" 이고, 제안과 payload 가 다른 타입이면 그 약속을 **코드가 아니라 사람이** 지켜야
@@ -459,6 +470,127 @@ class SkinPayload(ContractModel):
     question: str = Field(min_length=1, max_length=1_000)
     screening: ScreeningContext
     history: ScreeningHistory | None = None
+    #: 앞 대화 (#570). **이력 원문이 아니다** — Turn Resolver 가 만든 제한된 구조화 컨텍스트이고,
+    #: `GeneralPayload.conversation` 과 같은 값이다.
+    #:
+    #: **채워지는 길은 하나뿐이다.** 라우터가 낸 `skin` HANDOFF 를 해설로 바꾼 경로(D-081)에서만
+    #: 온다. 명시 신호(칩)는 판정 직후 첫 질문이고 그 게이트는 Turn Resolver 보다 앞에 서므로
+    #: 애초에 앞 대화가 없다.
+    #:
+    #: ⚠️ **불변식 15 는 이 칸에도 그대로다.** 여기 실려 오는 것은 사용자와 비서가 한 말이라,
+    #: 보호자가 수의사에게 들은 병명이 들어 있을 수 있다 — 그것은 모델의 추측이 아니라 진료
+    #: 결과다. 프롬프트가 그 구분을 시키고(보호자의 것으로 인정하되 따라 쓰지 않는다), 답에
+    #: 섞여 나오면 `speaks_beyond_screening` 가드가 문장을 통째로 바꾼다.
+    conversation: ConversationContext | None = None
+
+
+#: 비교를 해설할 수 없는 이유. **사용자가 비교 화면에서 명시적으로 눌러 들어온 요청**이라
+#: 조용히 다른 능력으로 넘기지 않고 이유 범주별 고정 문구로 닫는다 (D-080). 문구는
+#: `redirects.GAIT_UNAVAILABLE_MESSAGES` 에 있고, 모델은 이 경로에서 아예 안 돈다.
+GaitUnavailableReason = Literal[
+    "not_found",
+    "same_record",
+    "different_pet",
+    "model_mismatch",
+    "quality",
+    "legacy_pair",
+]
+
+#: 다리 이름. 계약에는 영어로 두고 사용자 문장은 `redirects` 가 만든다 — 프롬프트에 한국어
+#: 고유명을 넣으면 모델이 그 표기를 따라 쓰면서 제품 문구와 갈린다.
+GaitSide = Literal["left", "right"]
+
+
+class GaitCompareContext(ContractModel):
+    """두 보행 기록의 비교에서 **해설이 받아도 되는 사실만** (D-080).
+
+    빠진 것이 이 타입의 전부다 — `ScreeningContext` 와 같은 성질이다 (불변식 15 의 형제).
+
+    **관절 이동범위 수치가 없다.** 비교의 원자료는 관절별 픽셀 이동범위인데, 그것은 화면에
+    내지 않기로 한 값이다 (D-058 — 수백 개의 숫자가 나가면 사용자가 그것을 건강 점수로 읽는다).
+    여기 칸을 두면 프롬프트 금지로 내려앉는다.
+
+    **관절 이름이 없다.** 어느 관절이 달라졌는지는 앱의 표가 이미 그린다. 해설이 그것을
+    다시 말하면 두 곳이 갈릴 수 있고, 모델이 관절 이름을 근거로 병명을 짐작할 길이 열린다.
+
+    **방향이 없다.** 늘었다·줄었다를 계약에 두지 않는 것은 `compare.direction_note` 가
+    방향을 말하지 않는 것과 같은 이유다 — 표본이 작을 때 관절별 비율이 크게 흩어진다.
+
+    `left_*` · `right_*` 는 **잰 수와 대상 수**다. `measured` 를 앞에 두는 이유가 있다:
+    서버는 두 기록 중 어느 쪽에든 있는 관절만 세고(양쪽 다 없으면 아예 안 센다), 앱은 고정
+    6관절을 그린다 — 그래서 `joints` 를 "화면에 보이는 줄 수" 로 읽으면 틀린다.
+    """
+
+    #: 앱 `verdictOf` 의 네 갈래와 같은 규칙으로 서버가 파생한다 (D-063 7단계 `side_summary`).
+    #: `not_enough` 는 서버 `message_kind` 에 없는 갈래라 여기서 만든다 — 못 잰 것이
+    #: "뚜렷한 차이 없음" 으로 흘러들면 **없는 안심**을 준다.
+    change_kind: Literal["no_change", "one_side", "both_sides", "not_enough"]
+    flagged_sides: list[GaitSide] = Field(default_factory=list, max_length=2)
+    left_measured: int = Field(ge=0, le=20)
+    left_joints: int = Field(ge=0, le=20)
+    right_measured: int = Field(ge=0, le=20)
+    right_joints: int = Field(ge=0, le=20)
+    #: 두 기록의 촬영일 간격. 음수는 없다 — 순서는 서버가 날짜로 정한다.
+    days_between: int = Field(ge=0, le=3_650)
+    #: 어느 쪽 영상이 짧았나. 기준은 저쪽과 같은 `quality_tier != "good"` 이다 — 여기서
+    #: 느슨하게 잡으면 참고용이라고 본 비교에 해설이 "충분" 이라고 도장을 찍는다.
+    reliability: Literal["ok", "recent_short", "past_short", "both_short"]
+    #: 분석 버전이 다르면 같은 영상도 이동범위가 달라 보인다. 있으면 문장에 **조건 없이** 실린다.
+    version_mismatch: bool
+    #: **잰 판정 지점이 전부 달라졌고, 그렇게 볼 근거도 충분할 때만** True
+    #: (D-080, 조건은 #582 로 완화 — 못 잰 지점은 분모에서 뺀다).
+    #:
+    #: 서버가 계산한다 — 조건은 `services/gait_context._expert_advisory` 하나에 있다.
+    #: 켜지면 "영상만으로 원인은 알 수 없지만 이런 변화가 반복되면 전문가 의견을 받아 보는
+    #: 것도 좋다" 는 **고정 문장**이 답에 붙는다.
+    #:
+    #: ⚠️ **심하다 · 악화 · 질환 의심이라는 뜻이 아니다.** 이 서비스는 진단이 아니고(D-058),
+    #:    이 칸이 켜져도 행동 집합은 그대로다 — `vet_visit` 는 v1 에 없다. 여기에 정도(severity)
+    #:    를 실으려는 시도가 나오면 그것은 이 결정을 되돌리는 것이다.
+    expert_advisory: bool = False
+
+
+class GaitComparePayload(ContractModel):
+    """보행 변화 관찰 해설의 입력: 사용자 원문 + (비교 결과 **또는** 못 한 이유).
+
+    두 칸 중 **정확히 하나만** 찬다. 비교를 못 했어도 요청이 사라지지 않는 이유는 D-080 에
+    있다 — 사용자가 비교 결과 화면에서 눌러 들어왔으므로, 이유를 짧게 말하고 닫는 것이
+    그 행동에 대한 답이다. 그 경로에서는 모델을 안 태운다.
+
+    `dog` 가 없는 것도 의도다 — 견종·나이로 걸음 이야기를 시작하면 비교가 말하지 않은 것을
+    모델이 채운다 (`SkinPayload` 와 같은 판단).
+    """
+
+    question: str = Field(min_length=1, max_length=1_000)
+    compare: GaitCompareContext | None = None
+    unavailable: GaitUnavailableReason | None = None
+    #: 앞 대화 (D-082). **이력 원문이 아니다** — Turn Resolver 가 만든 제한된 구조화
+    #: 컨텍스트이고 `SkinPayload.conversation` 과 같은 값이다.
+    #:
+    #: **왜 필요했나.** 해설이 쥔 재료가 비교 갈래 하나와 다리 정보뿐이라, 같은 갈래면
+    #: 무엇을 물어도 같은 말이 나왔다 — `gc_v1` 에서 80문항 전부 3회 반복이 **글자까지
+    #: 같았고**, `gc_v3` 에서는 차이 없음 12셀 중 10셀이 행동 조합 하나였다. 온도로는 못
+    #: 고친다(흔들리기만 하고 내용은 그대로다). 재료를 늘려야 답이 갈린다.
+    #:
+    #: **채워지는 길은 하나뿐이다.** 라우터가 낸 `gait` HANDOFF 를 해설로 바꾼 경로(D-081)
+    #: 에서만 온다. 칩은 비교 직후 첫 질문이고 그 게이트는 Turn Resolver 보다 앞에 서므로
+    #: 애초에 앞 대화가 없다.
+    #:
+    #: ⚠️ **이 칸이 병명을 들여온다.** 여기 실려 오는 것은 사용자와 비서가 한 말이라,
+    #: 보호자가 수의사에게 들은 병명이 들어 있을 수 있다 — 모델의 추측이 아니라 진료
+    #: 결과다. 프롬프트가 그 구분을 시키고(보호자의 것으로 인정하되 따라 쓰지 않는다),
+    #: 답에 섞여 나오면 `speaks_beyond_change` 가 문장을 통째로 바꾼다. 그 가드를 **이 칸을
+    #: 열기 전에 먼저 넓혔다** (#586) — 피부에서 `농피증` 이 같은 모양의 가드를 그대로
+    #: 통과한 전례가 있다.
+    conversation: ConversationContext | None = None
+
+    @model_validator(mode="after")
+    def exactly_one_outcome(self) -> GaitComparePayload:
+        if (self.compare is None) == (self.unavailable is None):
+            raise ValueError(
+                "a gait explanation carries either a comparison or a reason it has none"
+            )
+        return self
 
 
 class FacilitySessionPayload(ContractModel):
@@ -486,6 +618,7 @@ CapabilityPayload = (
     | VetContactPayload
     | CareLogProposal
     | SkinPayload
+    | GaitComparePayload
 )
 _PAYLOAD_TYPES = {
     CapabilityName.TRAINING: TrainingPayload,
@@ -498,6 +631,7 @@ _PAYLOAD_TYPES = {
     # 사람이 아니라 타입이 지키게 하려는 것이고, 이유는 `CareLogProposal` 독스트링에 있다.
     CapabilityName.CARE_LOG: CareLogProposal,
     CapabilityName.SKIN: SkinPayload,
+    CapabilityName.GAIT: GaitComparePayload,
 }
 
 

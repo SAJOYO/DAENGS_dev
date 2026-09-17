@@ -60,11 +60,15 @@ from daengs_backend.orchestration.semantic import (
     ROUTER_MODEL_ID,
     ROUTER_TEMPERATURE,
     _gemini_client,
+    render_conversation_context,
 )
 
 # v1 (D-079): 첫 판본. 규칙 문장이나 `SkinGuidance` 스키마가 한 글자라도 바뀌면 올린다 —
 # 스키마가 프롬프트 본문에 그대로 들어가므로 칸 하나가 늘어도 본문이 달라진다.
-SKIN_PROMPT_VERSION = "skin-guide-ko-v1"
+# v2 (#570): 앞 대화 블록과 규칙 8 이 붙었다. **규칙 8 이 이 판본의 이유다** — 보호자가 수의사에게
+# 들은 병명은 모델의 추측(D-023, 홀드아웃 오답 56.6%)과 출처가 다르다. 그것을 못 알아듣는 것이
+# 손해였고, 그렇다고 따라 쓰면 근거 없는 병명별 조언이 된다. 알아듣되 따라 쓰지 않는다.
+SKIN_PROMPT_VERSION = "skin-guide-ko-v2"
 SKIN_MODEL_ID = ROUTER_MODEL_ID
 SKIN_MAX_OUTPUT_TOKENS = 512
 
@@ -92,6 +96,19 @@ _LESION_TERMS = (
     "곰팡이",
     "모낭충",
     "종양",
+    # 앞 대화(#570)가 들어오면서 넓혔다. 보호자가 수의사에게 들은 병명을 쓰면 그 단어가 모델에
+    # 닿고, 모델이 그대로 따라 쓸 수 있다 — 실제로 "농피증" 이 답에 그대로 나가는 것을 테스트가
+    # 잡았다. 알아듣는 것과 따라 말하는 것을 가르는 자리가 여기다.
+    "농피증",
+    "알레르기",
+    "감염",
+    "진드기",
+    "세균",
+    "악성",
+    "말라세지아",
+    "지루",
+    "탈모증",
+    "피부병",
 )
 #: 확률 · 수치 판단. 이 능력은 확률을 받지 않으므로 숫자가 붙은 퍼센트는 전부 지어낸 것이다.
 _PROBABILITY = re.compile(r"\d+(?:\.\d+)?\s*(?:%|퍼센트|프로)|확률")
@@ -120,7 +137,13 @@ _POLICY = (
     "6. HISTORY lists earlier screenings of the same dog, newest first. You may say that earlier "
     "records exist and what each concluded. Never say the skin improved, got worse or progressed, "
     "and never compare records: every photo is different.\n"
-    "7. Do not reassure the owner that the dog is fine, and do not alarm them.\n\n"
+    "7. Do not reassure the owner that the dog is fine, and do not alarm them.\n"
+    "8. CONVERSATION, when present, is what the owner and you said earlier in this chat. Use it "
+    "to understand what the owner refers to. If the owner says a vet told them a diagnosis, "
+    "treat it as their vet's finding: do not confirm it, do not deny it, do not repeat the "
+    "name, and do not give advice specific to that condition. Say their vet's instructions "
+    "come first and stay within the actions below. The same holds for any disease name the "
+    "owner writes: you may understand it, you may never write it.\n\n"
     "Output:\n"
     '- kind "guide": text is 2-3 short Korean sentences that answer the owner '
     "within these rules.\n"
@@ -163,8 +186,15 @@ class SkinGuidance(BaseModel):
 
 
 def build_skin_prompt(payload: SkinPayload) -> str:
-    """규칙 · 스키마 · 판정 · 이력 · 원문 순서. 이력이 없으면 `HISTORY: []` 한 줄이 남는다 —
-    "이력 없음" 과 "이력 줄이 빠진 프롬프트" 를 모델이 헷갈리지 않게."""
+    """규칙 · 스키마 · 판정 · 이력 · (앞 대화) · 원문 순서. 이력이 없으면 `HISTORY: []` 한 줄이
+    남는다 — "이력 없음" 과 "이력 줄이 빠진 프롬프트" 를 모델이 헷갈리지 않게.
+
+    **앞 대화는 없으면 줄 자체가 없다** (#570). 이력과 반대인 이유는 뜻이 달라서다 — 빈 이력은
+    "이전 판정이 없다" 는 사실이지만, 앞 대화가 없는 것은 "이 대화가 방금 시작됐다" 이지 사실이
+    아니다. `general.build_general_prompt` 가 `conversation` 을 다루는 방식과 같다.
+
+    **자리는 `USER_QUERY:` 바로 앞이다** — 맥락을 질의 뒤에 두면 모델이 최신 요청 대신 이전
+    요청에 답하는 퇴행이 실측됐다 (`render_conversation_context` 독스트링)."""
     schema = json.dumps(SkinGuidance.model_json_schema(), ensure_ascii=False, sort_keys=True)
     screening = json.dumps(
         payload.screening.model_dump(mode="json"), ensure_ascii=False, sort_keys=True
@@ -175,6 +205,11 @@ def build_skin_prompt(payload: SkinPayload) -> str:
         else []
     )
     history = json.dumps(entries, ensure_ascii=False, sort_keys=True)
+    conversation = (
+        render_conversation_context(payload.conversation) + "\n"
+        if payload.conversation is not None
+        else ""
+    )
     # 인접 리터럴의 암묵적 연결에 기대지 않는다 — `general.build_general_prompt` 와 같은 이유.
     return (
         f"PROMPT_VERSION: {SKIN_PROMPT_VERSION}\n\n"
@@ -183,6 +218,7 @@ def build_skin_prompt(payload: SkinPayload) -> str:
         + f"SKIN_GUIDANCE_JSON_SCHEMA:\n{schema}\n\n"
         + f"SCREENING: {screening}\n"
         + f"HISTORY: {history}\n"
+        + conversation
         + f"USER_QUERY: {payload.question}\n"
     )
 

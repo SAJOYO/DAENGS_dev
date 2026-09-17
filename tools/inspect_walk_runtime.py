@@ -81,6 +81,7 @@ async def inventory():
                     written = receipt.get("writing", {}).get("results", [])
                     cards = receipt.get("cards", [])
                     execution = receipt.get("execution", {})
+                    snapshot = payload.get("prepared", {}).get("snapshot", {})
                     result["recent_generations"].append({
                         "updated_at": row["updated_at"].isoformat(),
                         "status": row["status"],
@@ -108,6 +109,18 @@ async def inventory():
                             for c in execution.get("calls", [])
                         )),
                         "title_status": receipt.get("title", {}).get("status"),
+                        "plan_reasons": dict(Counter(str(p.get("state_transition"))
+                            for p in snapshot.get("plans", []))),
+                        "frame_facts": [len(f.get("scene_snapshot", {}).get("facts", []))
+                            for f in snapshot.get("frames", [])],
+                        "background_states": dict(Counter(
+                            ":".join(str(b.get(k, "")) for k in ("provider", "status", "reason"))
+                            for b in snapshot.get("scene_backgrounds", {}).values()
+                        )),
+                        "road_states": dict(Counter(
+                            ":".join(str(b.get(k, "")) for k in ("status", "reason"))
+                            for b in snapshot.get("road_snapshots", [])
+                        )),
                     })
             if result["tables"]["walk_entry_context_jobs"]:
                 result["context_tag_constraint"] = await connection.scalar(

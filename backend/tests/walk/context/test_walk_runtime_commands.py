@@ -54,10 +54,9 @@ def test_server_commands_and_preflight_gate(tmp_path, action, reject, shell):
     shutil.copyfile(
         REPO / "tools/walk-diary-runtime.ps1", tmp_path / "tools/walk-diary-runtime.ps1"
     )
-    public = tmp_path / "walk-public.env"
+    public = tmp_path / ".env"
     original = "DAENGS_WALK_PUBLIC_CONTEXT_ENABLED=false\nUNCHANGED=value\n"
     public.write_text(original, encoding="utf-8")
-    (tmp_path / ".env").write_text(f"WALK_PUBLIC_ENV_FILE={public.as_posix()}\n", encoding="utf-8")
     harness = tmp_path / "harness.ps1"
     harness.write_text(
         r"""param([string]$Action, [string]$Reject)
@@ -142,21 +141,25 @@ catch { $failed = $true }
         assert "--allow-disabled" in runs[-1]
 
 
-def test_rendered_compose_isolates_workers_and_shares_public_context(tmp_path):
+@pytest.mark.parametrize("gcp", [False, True])
+def test_rendered_compose_isolates_workers_and_shares_public_context(tmp_path, gcp):
     docker = shutil.which("docker")
     if not docker:
         pytest.skip("Docker Compose CLI is not installed; no engine is needed")
     shutil.copyfile(REPO / "docker-compose.yml", tmp_path / "docker-compose.yml")
     (tmp_path / "backend").mkdir()
     # Render a copied project: never read the operator's real .env or echo resolved secrets.
-    public = tmp_path / "backend/.env.walk-public.local"
-    public.write_text("DAENGS_WALK_PUBLIC_CONTEXT_ENABLED=true\nDAENGS_WALK_SGIS_KEY=dummy\n")
+    public = tmp_path / ".env"
+    public.write_text("DAENGS_WALK_PUBLIC_CONTEXT_ENABLED=true\nDAENGS_WALK_SGIS_KEY=dummy\nDAENGS_WALK_DIARY_ENABLED=true\nROOT_ONLY_SECRET=never-in-containers\n")
+    (tmp_path / "backend/.env").write_text("DAENGS_WALK_DIARY_ENABLED=false\nDAENGS_WALK_SGIS_KEY=old\n")
+    (tmp_path / "backend/.env.walk-public.local").write_text("DAENGS_WALK_DIARY_ENABLED=false\n")
+    if gcp:
+        shutil.copyfile(REPO / "docker-compose.gcp.yml", tmp_path / "docker-compose.gcp.yml")
     env = {
         **os.environ,
         "COMPOSE_PROJECT_NAME": "walk-config-test",
         "COMPOSE_PROFILES": "",
         "COMPOSE_FILE": str(tmp_path / "docker-compose.yml"),
-        "WALK_PUBLIC_ENV_FILE": str(public),
         "REDIS_PASSWORD": "test-only",
         "DAENGS_CORPUS_DIR": str(tmp_path / "corpus"),
         "GEMINI_API_KEY": "test-gemini",
@@ -164,7 +167,9 @@ def test_rendered_compose_isolates_workers_and_shares_public_context(tmp_path):
 
     def render(profiles):
         run = subprocess.run(
-            [docker, "compose", *profiles, "config", "--format=json"],
+            [docker, "compose", "-f", str(tmp_path / "docker-compose.yml"),
+             *(["-f", str(tmp_path / "docker-compose.gcp.yml")] if gcp else []),
+             *profiles, "config", "--format=json"],
             cwd=tmp_path,
             env=env,
             text=True,
@@ -211,6 +216,15 @@ def test_rendered_compose_isolates_workers_and_shares_public_context(tmp_path):
         )
         venvs.append(next(v["source"] for v in service["volumes"] if v["target"] == "/opt/venv"))
     assert all(value == environments[0] for value in environments)
+    assert environments[0]["DAENGS_WALK_SGIS_KEY"] == "dummy"
+    for name in ("backend", "walk-context-worker", "walk-context-beat", "walk-context-tools", "walk-catalog-worker"):
+        assert services[name]["environment"]["DAENGS_WALK_DIARY_ENABLED"] == "true"
+        assert "ROOT_ONLY_SECRET" not in services[name]["environment"]
+    # Removing root settings cannot resurrect stale values from backend/.env.
+    public.write_text("DAENGS_WALK_DIARY_ENABLED=false\n")
+    disabled = render(["--profile", "*"])
+    assert disabled["backend"]["environment"]["DAENGS_WALK_DIARY_ENABLED"] == "false"
+    assert disabled["backend"]["environment"]["DAENGS_WALK_SGIS_KEY"] == ""
     assert len(set(venvs)) == 5
     # Compose config escapes dollars so the rendered configuration can be reused.
     assert '"$$@"' in services["walk-context-tools"]["entrypoint"][2]
@@ -218,46 +232,16 @@ def test_rendered_compose_isolates_workers_and_shares_public_context(tmp_path):
     assert "--queues=walk-public-catalog" in " ".join(services["walk-catalog-worker"]["command"])
 
 
-@pytest.mark.parametrize("valid", [True, False])
 @pytest.mark.parametrize("shell", ["pwsh", "powershell"])
-def test_configure_is_create_only_and_refuses_incomplete_secrets(tmp_path, valid, shell):
-    pwsh = shutil.which(shell)
-    if not pwsh:
+def test_removed_configure_cannot_overwrite_root_env(tmp_path, shell):
+    executable = shutil.which(shell)
+    if not executable:
         pytest.skip("PowerShell runtime is not installed")
-    (tmp_path / "tools").mkdir()
-    (tmp_path / "backend").mkdir()
-    script = tmp_path / "tools/walk-diary-runtime.ps1"
-    shutil.copyfile(REPO / "tools/walk-diary-runtime.ps1", script)
-    shutil.copyfile(
-        REPO / "backend/.env.walk-public.example", tmp_path / "backend/.env.walk-public.example"
-    )
     root_env = tmp_path / ".env"
     root_env.write_text("EXISTING=keep\n")
-    target = tmp_path / "outside-checkout/public.env"
-    env = {
-        **os.environ,
-        "WALK_SGIS_KEY": "dummykey",
-        "WALK_SGIS_SECRET": "dummysecret",
-        "WALK_PUBLIC_DATA_KEY": "dummy%3D" if valid else "",
-    }
-    command = powershell_command(
-        pwsh,
-        script,
-        "-Action",
-        "Configure",
-        "-SettingsFile",
-        str(target),
+    result = run_powershell(
+        powershell_command(executable, REPO / "tools/walk-diary-runtime.ps1", "-Action", "Configure"),
+        cwd=tmp_path, timeout=20,
     )
-    first = run_powershell(command, env=env, timeout=20, check=False)
-    assert (first.returncode == 0) is valid
-    assert "dummysecret" not in first.stdout + first.stderr
-    assert target.exists() is valid
-    assert "EXISTING=keep" in root_env.read_text()
-    if valid:
-        value = target.read_bytes()
-        second = run_powershell(command, env=env, timeout=20, check=False)
-        assert second.returncode != 0
-        assert target.read_bytes() == value
-        assert "DAENGS_WALK_PUBLIC_CONTEXT_ENABLED=false" in value.decode()
-    else:
-        assert root_env.read_text() == "EXISTING=keep\n"
+    assert result.returncode != 0
+    assert root_env.read_text() == "EXISTING=keep\n"

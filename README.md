@@ -439,3 +439,11 @@ docs/decisions.md         의사결정 기록
 docs/collaboration.md     협업 규칙
 .github/workflows/        배포 워크플로우
 ```
+
+### 산책 일기 서버 설정
+
+산책 공공데이터 키와 활성화 값은 **서버 프로젝트 최상단 `.env`**에서 관리합니다.
+최상단 `.env.example`의 Walk 항목을 참고하세요. Compose가 백엔드·산책 워커·관리 CLI에
+같은 값을 전달합니다. GitHub Secrets와 `WALK_PUBLIC_ENV_FILE`은 사용하지 않습니다.
+기존 별도 파일의 값은 배포 전에 루트 `.env`로 옮겨야 합니다.
+Windows와 GCP 적용·재생성 절차는 [산책 운영 안내](docs/walk/runtime.md)를 따릅니다.

@@ -44,7 +44,7 @@ export default function InspectTabs() {
     { id: "skin", label: "피부 스크리닝", hint: "사진 한 장 · 2단계 모델" },
     { id: "assistant", label: "어시스턴트", hint: "앱과 같은 경로 · 라우팅 결과" },
     ...(canInspectTraining
-      ? [{ id: "cardimage" as const, label: "도감 카드 생성", hint: "사진 한 장 · Nano Banana 2" }]
+      ? [{ id: "cardimage" as const, label: "도감 카드 생성", hint: "사진 한 장 · 카드 14종 · 엔진 선택" }]
       : []),
   ];
 

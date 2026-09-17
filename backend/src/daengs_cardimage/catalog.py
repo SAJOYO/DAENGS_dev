@@ -109,6 +109,8 @@ class MonthCard:
     #: 글씨 깨짐은 사진이 아니라 (틀, seed, 크기) 로 정해지므로 여기서 뽑으면 깨진 장이 안 나온다.
     #: 비어 있으면(`()`) 아직 실험으로 확인되지 않았다는 뜻이다 — `pick_seeds` 가 DEFAULT_SEEDS 로 대신한다.
     seeds: tuple[int, ...] = ()
+    #: 옷이 본문 강아지의 얼굴까지 덮는 틀(10월 유령 천). 프롬프트가 사진 강아지를 배지와 발로만 옮긴다(`engine.build_prompt`).
+    face_hidden: bool = False
 
 
 # scene 은 실험(worklog 09-13~14)에서 검증된 달만 채워져 있다. 다른 달을 열 때는 그 달의
@@ -240,6 +242,9 @@ _CARDS: dict[int, MonthCard] = {
         OCTOBER_OUTFIT,
         Plate(center_y=99, edge=((55, 784), (142, 713)), top_y=52),
         seeds=(2, 4, 5, 6),  # 09-16 12달×seed 실험, 눈으로 확인 (task-3b-visual-report.md)
+        # 09-16 격자에서 seed 2·3·4 는 천 위에 실제 얼굴이 합성됐다 — 공통 앞부분의 얼굴 요구 탓이라 앞부분을 바꾼다.
+        # 위 seed 목록은 글씨만 보고 고른 것이라, 이 프롬프트로 천 유지까지 다시 봐야 한다(#592 남은 것).
+        face_hidden=True,
     ),
     11: MonthCard(
         11, "11_thanks", "THANKS", "26NOV",

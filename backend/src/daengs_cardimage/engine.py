@@ -33,15 +33,33 @@ class CardImageEngine(Protocol):
         ...
 
 
-def build_prompt(*, scene: str, badge: str, subtitle: str, outfit: str) -> str:
+def build_prompt(*, scene: str, badge: str, subtitle: str, outfit: str, face_hidden: bool = False) -> str:
     """달마다 다른 것은 무대(scene)·배지·부제·의상(outfit)뿐이다. 의상 문장은 catalog 가 준다 —
-    4월은 "아무것도 안 입는다", 9월은 "이미지 1 의 한복·쟁반 그대로"."""
+    4월은 "아무것도 안 입는다", 9월은 "이미지 1 의 한복·쟁반 그대로".
+
+    `face_hidden` 은 옷이 본문 강아지의 얼굴까지 덮는 틀(10월 유령 천)이다. 공통 앞부분의 「귀·주둥이·눈 색까지
+    사진 강아지로」 요구가 그 틀에서는 천 위에 실제 얼굴을 합성했다(09-16 FLUX.2-klein-4B seed 2·3·4) —
+    그래서 사진 강아지는 배지 초상화와 옷 밖으로 나온 발로만 옮긴다."""
+    if face_hidden:
+        lead = (
+            "Edit image 1 so that the dog hidden under the costume in the main illustration becomes the dog from "
+            "image 2. In the main illustration the dog's face and head stay completely covered by the costume — "
+            "do not draw the dog's face, eyes, ears or muzzle there, and keep the costume's own black cut-out eyes "
+            "and mouth exactly as they are. Show the dog from image 2 in the main illustration only through the "
+            "paws peeking out, with the same fur color and texture as image 2. Replace the small circular portrait "
+            "in the top-left badge with the face of the same dog from image 2 — same breed, same fur color, same "
+            "ear shape, same muzzle and facial markings; the badge is the only place the dog's face appears."
+        )
+    else:
+        lead = (
+            "Edit image 1 so that the dog in the main illustration is replaced by the dog from image 2 — same "
+            "breed, same fur color, fur length and texture, same ear shape and color, same muzzle length, same eye "
+            "color and facial markings. Also replace the small circular portrait in the top-left badge with the "
+            "face of the same dog from image 2."
+        )
     return (
         "Image 1 is a collectible trading card. Image 2 is a photo of a real dog.\n\n"
-        "Edit image 1 so that the dog in the main illustration is replaced by the dog from image 2 — same breed, "
-        "same fur color, fur length and texture, same ear shape and color, same muzzle length, same eye color and "
-        "facial markings. Also replace the small circular portrait in the top-left badge with the face of the same dog "
-        f"from image 2. {outfit}\n\n"
+        f"{lead} {outfit}\n\n"
         f"Everything else must stay pixel-identical: {scene}, the background, the holographic border, the empty dark "
         f'title plate at the top (leave it empty — do not write anything on it), the badge "{badge}", the text '
         f'"{subtitle}", the bottom panel with all its text, stars and icons. Do not add, remove or alter any text. '

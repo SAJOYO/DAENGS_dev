@@ -52,6 +52,19 @@ def test_september_uses_its_own_template_outfit_and_title():
     assert sent_template.size == ref.size and sent_template.getpixel((500, 800)) == ref.getpixel((500, 800))
 
 
+def test_october_sends_face_hidden_prompt():
+    """10월 유령 천 틀은 본문에 얼굴이 없다 — 공통 앞부분이 가면 천 위에 얼굴이 합성된다(09-16)."""
+    eng, jd = FakeEngine(), FakeJudge([5])
+    generate.generate_card(
+        photo=_photo(), content_type="image/jpeg", month=10, dog_name="네오",
+        engine=eng, judge=jd, base_dir=CARDIMAGE, open_months=frozenset({10}), judge_min=3,
+    )
+    prompt = eng.calls[0]["prompt"]
+    assert "26OCT" in prompt and "ghost-sheet" in prompt
+    assert "do not draw the dog's face" in prompt
+    assert "in the main illustration is replaced by the dog from image 2" not in prompt
+
+
 def test_low_likeness_retries_once_and_keeps_better():
     eng, jd = FakeEngine([png(color=(1, 1, 1)), png(color=(2, 2, 2))]), FakeJudge([2, 4])
     out = _run(eng, jd)

@@ -90,7 +90,7 @@ def _setup(*, month: int, dog_name: str, photo: bytes, content_type: str, base_d
         # require_open 이 scene 없는 달을 먼저 막지만, 부제만 빠진 채 열리면 여기서 소리 내어 실패한다.
         raise CardImageUnavailable(f"부제가 없는 달: {month}")
     prompt = build_prompt(scene=card_meta.scene, badge=card_meta.badge, subtitle=card_meta.subtitle,
-                          outfit=card_meta.outfit)
+                          outfit=card_meta.outfit, face_hidden=card_meta.face_hidden)
     text = title_mod.title_text(card_meta.card_name, dog_name)
     return template, photo_jpeg, font, prompt, text, card_meta.plate
 

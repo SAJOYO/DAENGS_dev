@@ -68,6 +68,11 @@ def test_every_month_is_openable():
         assert c.subtitle.strip(), m
 
 
+def test_only_october_hides_the_face():
+    """본문에 얼굴이 안 보이는 틀은 10월(유령 천) 하나다. 7월 선글라스는 사용자 확인 결과 공통 앞부분으로 문제없다(09-18)."""
+    assert [m for m in range(1, 13) if catalog.get(m).face_hidden] == [10]
+
+
 def test_every_month_has_its_own_measured_plate():
     """제목판은 달마다 다르다. `!= APRIL_PLATE` 만 보면 두 달이 같은 틀린 plate 를 공유해도 못
     잡는다(최종 리뷰 minor) — 12달 plate 가 전부 서로 달라야 한다."""

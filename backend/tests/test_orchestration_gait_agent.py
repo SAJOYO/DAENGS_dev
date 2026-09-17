@@ -38,9 +38,11 @@ from daengs_backend.orchestration.contracts import (
     CapabilityName,
     CapabilityRequest,
     CapabilityStatus,
+    ConversationContext,
     GaitCompareContext,
     GaitComparePayload,
     RouterKind,
+    TurnRelation,
 )
 from daengs_backend.orchestration.planner import assemble_route_plan, resolve_gait_route
 from daengs_backend.orchestration.redirects import (
@@ -198,6 +200,7 @@ def _routed(
     context: dict[str, Any] | None = None,
     gait_agent: bool = True,
     skin_agent: bool = False,
+    resolved: ConversationContext | None = None,
 ):
     """라우터가 그 HANDOFF 를 냈을 때 조립되는 계획. **모델 호출 0.**"""
     return assemble_route_plan(
@@ -207,6 +210,7 @@ def _routed(
         router=RouterKind.LLM,
         gait_agent=gait_agent,
         skin_agent=skin_agent,
+        resolved=resolved,
     )
 
 
@@ -281,6 +285,73 @@ def test_a_handoff_the_router_did_not_choose_is_not_opened() -> None:
     """라우터의 판단은 바꾸지 않는다 — 목적지만 바꾼다. 산책 질문은 그대로 산책이 답한다."""
     plan = _routed([], execute=["walk"], context={"gait_compare": _compare().model_dump()})
     assert CapabilityName.GAIT not in [r.capability for r in plan.requests]
+
+
+# ── 1-C. 앞 대화 (D-082) ─────────────────────────────────────────────────
+
+
+def _conversation() -> ConversationContext:
+    return ConversationContext(
+        relation=TurnRelation.FOLLOW_UP,
+        referenced_original_request="수의사 선생님이 퇴행성 관절염 초기라고 하셨어요",
+        referenced_assistant_answer="두 영상 사이의 움직임 차이만 보여 드릴 수 있어요.",
+    )
+
+
+def test_the_handoff_path_carries_the_earlier_conversation() -> None:
+    """**이 값이 오는 유일한 길이다** (D-081 전환 경로). 칩은 비교 직후라 앞 대화가 없다."""
+    plan = _routed(["gait"], resolved=_conversation())
+    [only] = plan.requests
+    assert only.payload.conversation is not None
+    assert only.payload.conversation.relation is TurnRelation.FOLLOW_UP
+
+
+def test_the_chip_path_has_no_conversation() -> None:
+    """칩 게이트는 Turn Resolver 보다 앞에 선다 — 애초에 앞 대화가 없다."""
+    plan = resolve_gait_route(
+        query="이 변화가 무슨 뜻이에요?",
+        context={"gait_compare": _compare().model_dump()},
+        requested_capability="gait",
+        enabled=True,
+    )
+    assert plan is not None
+    assert plan.requests[0].payload.conversation is None
+
+
+def test_the_prompt_carries_the_conversation_block_only_when_there_is_one() -> None:
+    """빈 값을 넣으면 모델이 "앞 대화가 비어 있다" 를 사실로 읽고 문장에 반영한다."""
+    without = build_gait_prompt(
+        GaitComparePayload.model_validate(
+            {"question": "뭐가 달라?", "compare": _compare().model_dump()}
+        )
+    )
+    with_ = build_gait_prompt(
+        GaitComparePayload.model_validate(
+            {
+                "question": "뭐가 달라?",
+                "compare": _compare().model_dump(),
+                "conversation": _conversation().model_dump(mode="json"),
+            }
+        )
+    )
+    # ⚠️ 규칙 9 자체에 "CONVERSATION" 이라는 낱말이 들어 있어 단순 포함 검사는 늘 참이다.
+    #    렌더 블록의 머리말로 잡는다.
+    assert "CONVERSATION_INSTRUCTION:" not in without
+    assert "CONVERSATION_INSTRUCTION:" in with_
+    # ⚠️ 앞 대화는 **`USER_QUERY:` 앞**에 와야 한다. 맥락을 질의 뒤에 두면 모델이 최신
+    #    요청 대신 이전 요청에 답하는 퇴행이 실측됐다 (`render_conversation_context` 독스트링).
+    #    `COMPARISON:` 으로 잡으면 정책 본문의 같은 낱말이 먼저 걸려 엉뚱한 것을 잰다.
+    assert with_.index("CONVERSATION_INSTRUCTION:") < with_.index("USER_QUERY:")
+
+
+def test_the_prompt_tells_the_model_rule_eight_covers_the_whole_conversation() -> None:
+    """⚠️ **이 칸이 병명을 들여온다.** 병명이 이번 질문이 아니라 몇 턴 앞에서 올 수 있다."""
+    prompt = build_gait_prompt(
+        GaitComparePayload.model_validate({"question": "왜?", "compare": _compare().model_dump()})
+    )
+    rule = prompt.split("9. ", 1)[1].split(chr(10) * 2, 1)[0]
+    assert "whole conversation" in rule
+    assert "never write it" in rule
 
 
 def test_the_payload_has_no_room_for_joint_numbers_or_names() -> None:
@@ -784,7 +855,7 @@ def test_the_prompt_separates_a_diagnosis_the_owner_already_received() -> None:
 
 def test_the_prompt_version_moved_with_the_rule_change() -> None:
     """평가 메타가 이 값을 고정한다 — 안 올리면 새 결과가 옛 셀에 섞인다."""
-    assert GAIT_PROMPT_VERSION == "gait-change-ko-v3"
+    assert GAIT_PROMPT_VERSION == "gait-change-ko-v4"
 
 
 # ── 8. 프로바이더 실패는 격리된다 ────────────────────────────────────────────

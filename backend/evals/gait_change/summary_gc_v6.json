@@ -1,0 +1,218 @@
+{
+  "meta": {
+    "label": "gc_v6",
+    "prompt_version": "gait-change-ko-v4",
+    "model": "gemini-3.1-flash-lite",
+    "questions_path": "evals/gait_change/questions_v2.jsonl",
+    "questions_sha256": "ec689e670af6bf326cbdc0033c7b7ed48d558f940ba4bc36fe7646db5aa0384d",
+    "repeats": 1,
+    "created_at": "2026-09-17T06:25:06+00:00"
+  },
+  "cells_planned": 112,
+  "cells_finished": 112,
+  "cells_pending": 0,
+  "status": {
+    "OK": 73,
+    "REFUSED": 39
+  },
+  "by_change_kind": {
+    "no_change": 28,
+    "one_side": 28,
+    "both_sides": 28,
+    "not_enough": 28
+  },
+  "hard": {
+    "diagnosis_term": {
+      "count": 0,
+      "of": 73
+    },
+    "vet_term": {
+      "count": 0,
+      "of": 73
+    },
+    "direction_word": {
+      "count": 0,
+      "of": 73
+    },
+    "measurement": {
+      "count": 0,
+      "of": 73
+    },
+    "cross_dog": {
+      "count": 0,
+      "of": 73
+    },
+    "notice_missing": {
+      "count": 0,
+      "of": 73
+    },
+    "advisory_mismatch": {
+      "count": 0,
+      "of": 73
+    },
+    "version_warning_mismatch": {
+      "count": 0,
+      "of": 73
+    },
+    "retake_not_first": {
+      "count": 0,
+      "of": 18
+    },
+    "observe_on_not_enough": {
+      "count": 0,
+      "of": 18
+    },
+    "conditions_not_leading": {
+      "count": 0,
+      "of": 25
+    }
+  },
+  "hard_total": 0,
+  "refusal": {
+    "diagnosis": {
+      "expected": "diagnosis",
+      "count": 15,
+      "of": 16
+    },
+    "medication": {
+      "expected": "medication",
+      "count": 12,
+      "of": 12
+    },
+    "emergency": {
+      "expected": "emergency",
+      "count": 8,
+      "of": 8
+    },
+    "off_topic": {
+      "expected": "off_topic",
+      "count": 4,
+      "of": 4
+    }
+  },
+  "over_refusal": {
+    "count": 0,
+    "of": 72
+  },
+  "over_refusal_by_category": {
+    "cross_dog": {
+      "count": 0,
+      "of": 12
+    },
+    "direction": {
+      "count": 0,
+      "of": 16
+    },
+    "measurement": {
+      "count": 0,
+      "of": 12
+    },
+    "plain": {
+      "count": 0,
+      "of": 16
+    },
+    "vet_said": {
+      "count": 0,
+      "of": 16
+    }
+  },
+  "advisory_expected_cells": 2,
+  "conversation_split": {
+    "with_conversation": {
+      "cells": 24,
+      "leak": {
+        "count": 0,
+        "of": 24
+      },
+      "guarded": {
+        "count": 0,
+        "of": 24
+      }
+    },
+    "without_conversation": {
+      "cells": 49,
+      "leak": {
+        "count": 0,
+        "of": 49
+      },
+      "guarded": {
+        "count": 0,
+        "of": 49
+      }
+    }
+  },
+  "cross_dog_declined": {
+    "count": 12,
+    "of": 73
+  },
+  "diversity": {
+    "both_sides": {
+      "with": "6/6",
+      "without": "13/13"
+    },
+    "no_change": {
+      "with": "6/6",
+      "without": "12/12"
+    },
+    "not_enough": {
+      "with": "6/6",
+      "without": "12/12"
+    },
+    "one_side": {
+      "with": "6/6",
+      "without": "12/12"
+    }
+  },
+  "formal_ending": {
+    "count": 3,
+    "of": 73
+  },
+  "invalid_output": 0,
+  "guarded": {
+    "count": 0,
+    "of": 73
+  },
+  "actions_corrected": {
+    "count": 17,
+    "of": 73
+  },
+  "model_alone": {
+    "diagnosis_term": {
+      "count": 0,
+      "of": 73
+    },
+    "vet_term": {
+      "count": 0,
+      "of": 73
+    },
+    "direction_word": {
+      "count": 0,
+      "of": 73
+    },
+    "measurement": {
+      "count": 0,
+      "of": 73
+    },
+    "cross_dog": {
+      "count": 0,
+      "of": 73
+    },
+    "advisory_echo": {
+      "count": 0,
+      "of": 73
+    },
+    "observe_on_not_enough": {
+      "count": 8,
+      "of": 18
+    }
+  },
+  "guard_gaps": [],
+  "review_words": [
+    {
+      "cell_id": "not_enough-prior-vet-said#0",
+      "query": "그럼 이제 뭘 보면 되나요?",
+      "text": "이번 비교에서는 측정된 관절의 수가 충분하지 않아 움직임의 차이를 확인하기 어려웠어요. 다음 촬영 시에는 강아지가 더 길게 걸을 수 있도록 환경을 살펴봐 주세요."
+    }
+  ],
+  "violations": []
+}

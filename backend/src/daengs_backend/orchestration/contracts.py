@@ -176,7 +176,7 @@ class CareLogKind(StrEnum):
 
 
 class CareLogProposal(ContractModel):
-    """"이대로 기록할까요?" 의 **이대로** — 그리고 승낙 뒤 실제로 쓰이는 값 (#331 후속, D-075).
+    """ "이대로 기록할까요?" 의 **이대로** — 그리고 승낙 뒤 실제로 쓰이는 값 (#331 후속, D-075).
 
     한 타입이 제안과 payload 를 겸하는 것이 의도다. 확인 단계의 약속은 "보여 준 것만
     들어간다" 이고, 제안과 payload 가 다른 타입이면 그 약속을 **코드가 아니라 사람이** 지켜야
@@ -564,11 +564,32 @@ class GaitComparePayload(ContractModel):
     question: str = Field(min_length=1, max_length=1_000)
     compare: GaitCompareContext | None = None
     unavailable: GaitUnavailableReason | None = None
+    #: 앞 대화 (D-082). **이력 원문이 아니다** — Turn Resolver 가 만든 제한된 구조화
+    #: 컨텍스트이고 `SkinPayload.conversation` 과 같은 값이다.
+    #:
+    #: **왜 필요했나.** 해설이 쥔 재료가 비교 갈래 하나와 다리 정보뿐이라, 같은 갈래면
+    #: 무엇을 물어도 같은 말이 나왔다 — `gc_v1` 에서 80문항 전부 3회 반복이 **글자까지
+    #: 같았고**, `gc_v3` 에서는 차이 없음 12셀 중 10셀이 행동 조합 하나였다. 온도로는 못
+    #: 고친다(흔들리기만 하고 내용은 그대로다). 재료를 늘려야 답이 갈린다.
+    #:
+    #: **채워지는 길은 하나뿐이다.** 라우터가 낸 `gait` HANDOFF 를 해설로 바꾼 경로(D-081)
+    #: 에서만 온다. 칩은 비교 직후 첫 질문이고 그 게이트는 Turn Resolver 보다 앞에 서므로
+    #: 애초에 앞 대화가 없다.
+    #:
+    #: ⚠️ **이 칸이 병명을 들여온다.** 여기 실려 오는 것은 사용자와 비서가 한 말이라,
+    #: 보호자가 수의사에게 들은 병명이 들어 있을 수 있다 — 모델의 추측이 아니라 진료
+    #: 결과다. 프롬프트가 그 구분을 시키고(보호자의 것으로 인정하되 따라 쓰지 않는다),
+    #: 답에 섞여 나오면 `speaks_beyond_change` 가 문장을 통째로 바꾼다. 그 가드를 **이 칸을
+    #: 열기 전에 먼저 넓혔다** (#586) — 피부에서 `농피증` 이 같은 모양의 가드를 그대로
+    #: 통과한 전례가 있다.
+    conversation: ConversationContext | None = None
 
     @model_validator(mode="after")
     def exactly_one_outcome(self) -> GaitComparePayload:
         if (self.compare is None) == (self.unavailable is None):
-            raise ValueError("a gait explanation carries either a comparison or a reason it has none")
+            raise ValueError(
+                "a gait explanation carries either a comparison or a reason it has none"
+            )
         return self
 
 

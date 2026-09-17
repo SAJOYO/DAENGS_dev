@@ -40,8 +40,9 @@ from daengs_backend.orchestration.contracts import (
     CapabilityStatus,
     GaitCompareContext,
     GaitComparePayload,
+    RouterKind,
 )
-from daengs_backend.orchestration.planner import resolve_gait_route
+from daengs_backend.orchestration.planner import assemble_route_plan, resolve_gait_route
 from daengs_backend.orchestration.redirects import (
     GAIT_ACTION_MESSAGES,
     GAIT_CHANGE_SUMMARY,
@@ -51,6 +52,7 @@ from daengs_backend.orchestration.redirects import (
     GAIT_VERSION_WARNING,
     SCOPED_REDIRECT_MESSAGES,
 )
+from daengs_backend.orchestration.semantic import SemanticRoutingDecision
 from daengs_backend.services import gait_context
 
 pytestmark = pytest.mark.anyio
@@ -186,6 +188,101 @@ def test_a_question_longer_than_the_limit_falls_back_to_handoff() -> None:
 
 
 # ── 2. payload 좁힘 ──────────────────────────────────────────────────────────
+# ── 1-B. 진입: 라우터가 낸 HANDOFF 를 해설로 바꾸기 (D-081) ──────────────
+
+
+def _routed(
+    handoffs: list[str],
+    *,
+    execute: list[str] | None = None,
+    context: dict[str, Any] | None = None,
+    gait_agent: bool = True,
+    skin_agent: bool = False,
+):
+    """라우터가 그 HANDOFF 를 냈을 때 조립되는 계획. **모델 호출 0.**"""
+    return assemble_route_plan(
+        SemanticRoutingDecision(execute=execute or [], handoffs=handoffs),
+        query="지난번이랑 뭐가 달라?",
+        context={"gait_compare": _compare().model_dump()} if context is None else context,
+        router=RouterKind.LLM,
+        gait_agent=gait_agent,
+        skin_agent=skin_agent,
+    )
+
+
+def test_router_gait_handoff_becomes_the_explainer_when_a_comparison_is_attached() -> None:
+    """사용자는 방금 비교를 봤고 이어서 물었다. 등록 카드를 다시 띄우는 것은 답이 아니다."""
+    plan = _routed(["gait"])
+    [only] = plan.requests
+    assert only.capability == CapabilityName.GAIT
+    assert only.payload.compare is not None
+    assert only.payload.question == "지난번이랑 뭐가 달라?"
+    assert plan.handoffs == [] and plan.clarify is None
+
+
+def test_the_converted_plan_is_the_same_one_the_explicit_signal_builds() -> None:
+    """진입이 둘이어도 계획은 한 곳에서 만들어져야 두 길이 다른 답을 내지 않는다."""
+    by_signal = resolve_gait_route(
+        query="지난번이랑 뭐가 달라?",
+        context={"gait_compare": _compare().model_dump()},
+        requested_capability="gait",
+        enabled=True,
+    )
+    assert by_signal is not None
+    assert _routed(["gait"]).requests == by_signal.requests
+
+
+def test_a_comparison_that_could_not_be_resolved_returns_to_the_ordinary_planner() -> None:
+    """⚠️ **이 PR 의 핵심 경계다** (D-081).
+
+    `resolve_gait_route` 는 칩 경로에서 **비교를 못 했을 때도** 계획을 만든다 — 사용자가 비교
+    화면에서 눌러 들어왔으니 이유를 말하고 닫는 것이 맞다(D-080). 그런데 타이핑 경로에서 낡은
+    참조가 실리면 **그 대화의 모든 질문이 고정 실패 문구로 닫힌다.** 라우터가 gait 로 보낸
+    질문은 전부 이 길을 지나기 때문이다.
+
+    그래서 전환 경로에서는 비교 해소가 성공했을 때만 연다. 못 했으면 **오늘과 같은 HANDOFF**.
+    """
+    plan = _routed(["gait"], context={"gait_compare_unavailable": {"reason": "not_found"}})
+    assert plan.requests == []
+    assert [h.target for h in plan.handoffs] == ["gait"]
+
+
+def test_no_gait_context_at_all_also_stays_a_handoff() -> None:
+    plan = _routed(["gait"], context={})
+    assert plan.requests == []
+    assert [h.target for h in plan.handoffs] == ["gait"]
+
+
+def test_the_kill_switch_off_returns_the_whole_entry_to_the_old_handoff() -> None:
+    """⚠️ **회귀 스위치다.** 끄면 오늘과 한 글자도 다르지 않아야 한다."""
+    plan = _routed(["gait"], gait_agent=False)
+    assert plan.requests == []
+    assert [h.target for h in plan.handoffs] == ["gait"]
+
+
+def test_the_two_kill_switches_are_independent() -> None:
+    """하나의 불리언으로 묶으면 한쪽을 끄려다 다른 쪽까지 꺼진다."""
+    plan = _routed(["gait"], gait_agent=True, skin_agent=False)
+    assert [r.capability for r in plan.requests] == [CapabilityName.GAIT]
+
+
+def test_conversion_is_exclusive_and_drops_other_selections() -> None:
+    """비교 이야기에 산책 조건이 섞이면 이어 물은 답이 흐려진다 — 명시 신호 때와 같은 규칙."""
+    context = {
+        "gait_compare": _compare().model_dump(),
+        "location": {"lat": 37.5, "lon": 127.0},
+    }
+    plan = _routed(["gait"], execute=["walk", "life"], context=context)
+    assert [r.capability for r in plan.requests] == [CapabilityName.GAIT]
+    assert plan.handoffs == []
+
+
+def test_a_handoff_the_router_did_not_choose_is_not_opened() -> None:
+    """라우터의 판단은 바꾸지 않는다 — 목적지만 바꾼다. 산책 질문은 그대로 산책이 답한다."""
+    plan = _routed([], execute=["walk"], context={"gait_compare": _compare().model_dump()})
+    assert CapabilityName.GAIT not in [r.capability for r in plan.requests]
+
+
 def test_the_payload_has_no_room_for_joint_numbers_or_names() -> None:
     """수치 · 관절 이름 · 방향은 **칸 자체가 없다** (불변식 15 의 형제).
 

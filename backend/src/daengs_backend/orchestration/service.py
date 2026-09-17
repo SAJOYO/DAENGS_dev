@@ -366,6 +366,9 @@ class AssistantOrchestrationService:
                 # 라우터가 낸 skin HANDOFF 를 해설로 바꿀지 (#569). 같은 킬 스위치를 읽는다 —
                 # 끄면 명시 신호 경로와 함께 예전 HANDOFF 로 돌아간다.
                 skin_agent=settings.skin_agent,
+                # 같은 일을 보행에도 (D-081). **플래그가 둘인 것은 의도다** — 하나로 묶으면
+                # 한쪽을 끄려다 다른 쪽까지 꺼진다.
+                gait_agent=settings.gait_agent,
                 resolved=conversation,
             )
         response = await self._engine.run(

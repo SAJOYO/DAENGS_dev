@@ -432,6 +432,7 @@ Place 는 PR #196 에서 실행 registry 에 들어왔고 `requested_capability=
 | Skin 판정 EXECUTE (`/screen/*`) | NO | NO |
 | Skin 판정 해설 EXECUTE — 기록이 붙은 `skin` 신호, 기록이 붙은 라우터 `skin` HANDOFF, 또는 기록이 붙은 **이어 묻기**의 `general` 하나짜리 계획 (D-079 · D-081 · D-083) | YES | NO (기록이 없어 HANDOFF) |
 | Gait 변화 관찰 해설 EXECUTE — 비교 참조가 붙은 `gait` 신호 (D-080) | **YES** | NO (참조를 해소할 주체가 없어 HANDOFF) |
+| Gait 변화 관찰 해설 EXECUTE — 라우터가 낸 `gait` HANDOFF + 해소된 비교 (D-081) | **YES** | NO (같은 이유) |
 | Gait 분석 EXECUTE (영상 업로드) | NO | NO |
 
 - **앱 회원의 assistant 경유 Training 실행은 의도된 제품 접근 확대입니다** — 우발적

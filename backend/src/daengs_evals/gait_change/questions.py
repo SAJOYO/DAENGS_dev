@@ -97,6 +97,20 @@ class Question:
     def has_conversation(self) -> bool:
         return self.prior_user is not None
 
+    def owner_wrote(self, phrase: str) -> bool:
+        """`phrase` 가 **보호자가 이 대화에서 실제로 친 말**에 있나.
+
+        되돌려 말하기(#590)가 지어낸 병명을 내보내지 않았는지 재는 자리다. 어댑터의
+        `_owner_said` 와 **같은 규칙이 아니다** — 어댑터는 `standalone_query`(리졸버 모델이
+        쓴 문장)까지 보지만, 여기서는 **보호자 원문 둘만** 본다. 평가가 더 엄격해야 어댑터의
+        빈틈이 보인다 (`test_eval_vocabulary_is_strictly_wider_than_the_guard` 와 같은 판단).
+        """
+        needle = "".join(phrase.split())
+        if not needle:
+            return False
+        sources = [self.query, self.prior_user or ""]
+        return any(needle in "".join(source.split()) for source in sources)
+
     @property
     def expects_advisory(self) -> bool:
         """이 셀의 최종 답에 전문가 의견 한 줄이 **붙어야** 하는가."""

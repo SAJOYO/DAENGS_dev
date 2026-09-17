@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+from collections import Counter
 from pathlib import Path
 
 FLAGS = (
@@ -12,6 +13,8 @@ FLAGS = (
     "walk_entry_v2_write_enabled",
     "walk_photo_metadata_enabled",
     "walk_diary_enabled",
+    "walk_diary_space_enabled",
+    "walk_diary_route_patterns_enabled",
 )
 KEYS = ("walk_sgis_key", "walk_sgis_secret", "walk_public_data_key", "gemini_api_key")
 TABLES = (
@@ -65,6 +68,47 @@ async def inventory():
                 )
                 for table in TABLES
             }
+            if result["tables"]["walk_storyboards"]:
+                rows = (await connection.execute(text(
+                    "SELECT status, generation, updated_at, error_code, bundle "
+                    "FROM walk_storyboards ORDER BY updated_at DESC LIMIT 12"
+                ))).mappings()
+                result["recent_generations"] = []
+                for row in rows:
+                    raw = row["bundle"] or {}
+                    payload = raw.get("payload", {})
+                    receipt = payload.get("receipt", {})
+                    written = receipt.get("writing", {}).get("results", [])
+                    cards = receipt.get("cards", [])
+                    execution = receipt.get("execution", {})
+                    result["recent_generations"].append({
+                        "updated_at": row["updated_at"].isoformat(),
+                        "status": row["status"],
+                        "generation": row["generation"],
+                        "error_code": row["error_code"],
+                        "format": raw.get("format"),
+                        "receipt_version": receipt.get("version"),
+                        "card_count": len(cards),
+                        "nonempty_bodies": sum(bool(c.get("body", "").strip()) for c in cards),
+                        "parts": dict(Counter(
+                            stage + ":" + str(part.get("status"))
+                            for c in cards for stage, part in c.get("parts", {}).items()
+                            if isinstance(part, dict)
+                        )),
+                        "writing_states": dict(Counter(str(r.get("status")) for r in written)),
+                        "failures": dict(Counter(
+                            ":".join(str(r.get(k, "")) for k in
+                                     ("stage", "failure_phase", "error_type", "http_status"))
+                            for r in written if r.get("status") != "returned"
+                        )),
+                        "model_call_attempts": execution.get("model_call_attempts"),
+                        "call_states": dict(Counter(
+                            ":".join(str(c.get(k, "")) for k in
+                                     ("stage", "status", "http_status", "error_type"))
+                            for c in execution.get("calls", [])
+                        )),
+                        "title_status": receipt.get("title", {}).get("status"),
+                    })
             if result["tables"]["walk_entry_context_jobs"]:
                 result["context_tag_constraint"] = await connection.scalar(
                     text(

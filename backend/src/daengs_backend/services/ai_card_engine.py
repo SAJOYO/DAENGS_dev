@@ -37,19 +37,52 @@ def gpu_path_active() -> bool:
     return bool(settings.cardgen_url.strip())
 
 
-def default_engine() -> CardImageEngine:
-    """설정에서 실제 엔진을 만든다. `gpu_path_active()` 면 GPU 서비스(D-078), 아니면
-    Nano Banana 2 — D-070 의 `DAENGS_REALTIME_URL` 갈림길과 같은 모양이다.
-    전역 `settings.gemini_api_key` 로 대체하지 않는다 — 카드 생성 키는 `DAENGS_CARDIMAGE_GEMINI_API_KEY` 하나뿐이다."""
-    if gpu_path_active():
-        return HttpCardImageEngine(base_url=settings.cardgen_url.strip(), timeout_s=settings.cardgen_timeout_s,
-                                   auth=realtime_client.id_token)
+#: 고를 수 있는 엔진 이름. `models/admin_ai_card.ADMIN_AI_CARD_ENGINES`(표의 CHECK)와 **같은 값이어야**
+#: 한다 — 콘솔이 고른 이름이 그대로 `admin_ai_cards.engine` 에 들어간다 (#592).
+ENGINE_NAMES: tuple[str, ...] = ("gemini", "cardgen")
+
+
+def _gemini_engine() -> CardImageEngine:
+    """Nano Banana 2 (지금 운영). 전역 `settings.gemini_api_key` 로 대체하지 않는다 —
+    카드 생성 키는 `DAENGS_CARDIMAGE_GEMINI_API_KEY` 하나뿐이다."""
     return GeminiCardImageEngine(
         api_key=settings.cardimage_gemini_api_key.get_secret_value(),
         model=settings.cardimage_model,
         size=settings.cardimage_size,
         timeout_ms=settings.cardimage_timeout_ms,
     )
+
+
+def _cardgen_engine() -> CardImageEngine:
+    """FLUX.2-klein-4B GPU 서비스(D-078). `gpu_path_active()` 가 참일 때만 부른다 —
+    `DAENGS_CARDGEN_URL` 이 비면 주소 없는 클라이언트가 만들어진다."""
+    return HttpCardImageEngine(base_url=settings.cardgen_url.strip(), timeout_s=settings.cardgen_timeout_s,
+                               auth=realtime_client.id_token)
+
+
+def default_engine() -> CardImageEngine:
+    """설정에서 실제 엔진을 만든다. `gpu_path_active()` 면 GPU 서비스(D-078), 아니면
+    Nano Banana 2 — D-070 의 `DAENGS_REALTIME_URL` 갈림길과 같은 모양이다."""
+    return _cardgen_engine() if gpu_path_active() else _gemini_engine()
+
+
+def engine_by_name(name: str) -> CardImageEngine:
+    """이름으로 엔진을 만든다 — **콘솔 전용**이다 (#592).
+
+    앱 경로는 계속 `default_engine()` 을 쓴다(설정이 고른다). 콘솔만 둘을 나란히 견주므로
+    사람이 고른 이름으로 만든다. 그래서 `gpu_path_active()` 가 참이어도 `gemini` 를 고르면
+    Nano Banana 2 가 나온다 — `default_engine()` 으로는 표현할 수 없는 조합이다.
+
+    `cardgen` 인데 `DAENGS_CARDGEN_URL` 이 비어 있으면 `CardImageUnavailable` 이다. 라우터가
+    먼저 `gpu_path_active()` 를 보고 503 `cardgen_disabled` 로 막지만, 여기서도 막아야 주소
+    없는 클라이언트가 만들어지지 않는다."""
+    if name == "cardgen":
+        if not gpu_path_active():
+            raise CardImageUnavailable("DAENGS_CARDGEN_URL 이 비어 있습니다")
+        return _cardgen_engine()
+    if name == "gemini":
+        return _gemini_engine()
+    raise ValueError(f"모르는 엔진 이름입니다: {name!r}")
 
 
 def default_judge() -> CardJudge:

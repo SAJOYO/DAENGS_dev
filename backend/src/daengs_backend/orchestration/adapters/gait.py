@@ -350,11 +350,18 @@ def plan_gait_actions(compare: GaitCompareContext, chosen: list[GaitAction]) -> 
 
     - `not_enough`: `same_condition_retake` 가 맨 앞, `keep_observing` 은 뺀다. 못 잰 비교를
       "다음에 또 찍어 흐름을 보자" 로 닫으면, 잴 수 없었다는 사실이 관찰 계획으로 덮인다.
+    - `no_change`: `same_condition_retake` 를 뺀다. 차이가 없다고 해 놓고 "같은 조건으로 다시
+      찍어 **비교**하라" 는 것은 앞뒤가 안 맞고 — 비교할 차이가 없다 — 남는 뜻이
+      `keep_observing` ("다음에 한 번 더 찍어 흐름을 보면") 과 겹친다. 두 줄이 같은 말을 한다.
+      ⚠️ `one_side` · `both_sides` 에서는 **빼지 않는다.** 그 둘은 찍은 조건이 달랐을 가능성을
+      먼저 보라는 갈래라, 조건을 통제하라는 지시가 중복이 아니라 실제 내용이다.
     - `version_mismatch` 또는 `both_sides`: `check_conditions` 가 앞. 둘 다 "걸음이 달라진 것"
       보다 **찍은 조건이 달랐을 가능성**을 먼저 보라는 자리다 (`compare_v4` 의 both_sides
       문구와 같은 판단).
 
     나머지는 모델이 고른 순서를 지킨다. 같은 행동이 두 번 나오면 첫 자리만 남긴다.
+    행동이 전부 빠져도 마지막 줄의 `or [...]` 가 `keep_observing` 을 채운다 — 빈 목록은 나가지
+    않는다.
     """
     unique: list[GaitAction] = []
     for action in chosen:
@@ -366,6 +373,8 @@ def plan_gait_actions(compare: GaitCompareContext, chosen: list[GaitAction]) -> 
     if compare.change_kind == "not_enough":
         leading.append("same_condition_retake")
         dropped.add("keep_observing")
+    if compare.change_kind == "no_change":
+        dropped.add("same_condition_retake")
     if compare.version_mismatch or compare.change_kind == "both_sides":
         leading.append("check_conditions")
 

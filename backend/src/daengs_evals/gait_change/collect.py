@@ -46,6 +46,7 @@ from daengs_evals.gait_change.questions import (
     QUESTIONS_V1_PATH,
     Question,
     compare_context,
+    conversation_context,
     file_sha256,
     load_questions,
 )
@@ -249,10 +250,15 @@ def _start_or_resume(path: Path, meta: Mapping[str, Any], resume: bool) -> set[s
 
 
 def _request(question: Question) -> CapabilityRequest:
-    return CapabilityRequest(
-        capability=CapabilityName.GAIT,
-        payload={"question": question.query, "compare": compare_context(question)},
-    )
+    payload: dict[str, Any] = {
+        "question": question.query,
+        "compare": compare_context(question),
+    }
+    # 앞 대화 (D-082). **없으면 칸 자체를 안 넣는다** — 운영도 그렇게 조립한다.
+    conversation = conversation_context(question)
+    if conversation is not None:
+        payload["conversation"] = conversation
+    return CapabilityRequest(capability=CapabilityName.GAIT, payload=payload)
 
 
 def _row(question: Question, run: int, result: Any, gen: CellGenerate) -> dict[str, Any]:
@@ -265,6 +271,8 @@ def _row(question: Question, run: int, result: Any, gen: CellGenerate) -> dict[s
         "change_kind": question.change_kind,
         "category": question.category,
         "scenario": question.scenario,
+        #: 이 셀이 앞 대화를 실었나 (D-082). 리포트가 이 값으로 갈라 센다.
+        "has_conversation": question.has_conversation,
         "run": run,
         "status": status,
         "refusal_code": result.refusal.code if result.refusal else None,

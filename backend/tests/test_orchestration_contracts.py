@@ -153,7 +153,14 @@ def test_gait_executes_only_as_an_explainer_of_an_already_computed_comparison() 
     나빠졌다)도 계약에 없다. 분석을 새로 내는 실행은 여전히 HANDOFF 다."""
     from daengs_backend.orchestration.contracts import GaitCompareContext, GaitComparePayload
 
-    assert set(GaitComparePayload.model_fields) == {"question", "compare", "unavailable"}
+    # `conversation` 은 D-082 에서 늘었다 (#586). **늘어난 칸을 적는 것이 이 단언의 일이다** —
+    # 무엇이 들어왔는지가 여기에 남아야, 수치나 관절 이름이 슬그머니 끼어드는 것을 잡는다.
+    assert set(GaitComparePayload.model_fields) == {
+        "question",
+        "compare",
+        "unavailable",
+        "conversation",
+    }
     assert GaitComparePayload.model_fields["compare"].annotation == GaitCompareContext | None
     with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
         GaitCompareContext.model_validate(

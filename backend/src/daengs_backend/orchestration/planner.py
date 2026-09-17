@@ -313,6 +313,9 @@ def resolve_gait_route(
     context: dict[str, Any],
     requested_capability: str | None,
     enabled: bool,
+    #: 앞 대화 (D-082). **칩 경로에서는 늘 None 이다** — 칩은 비교 직후 첫 질문이고 그
+    #: 게이트는 Turn Resolver 보다 앞에 선다. 값이 오는 길은 HANDOFF 전환(D-081)뿐이다.
+    resolved: ConversationContext | None = None,
 ) -> RoutePlan | None:
     """비교 참조가 붙은 `gait` 신호면 보행 변화 관찰 해설 하나짜리 계획을, 아니면 None (D-080).
 
@@ -336,6 +339,8 @@ def resolve_gait_route(
     if len(query) > _GAIT_QUESTION_LIMIT:
         return None
     payload: dict[str, Any] = {"question": query}
+    if resolved is not None:
+        payload["conversation"] = resolved.model_dump(mode="json")
     compare = _gait_compare(context)
     if compare is not None:
         payload["compare"] = compare
@@ -569,8 +574,6 @@ def _gait_handoff_explainer(
     그래서 비교 불가면 **열지 않고 None** 을 내서 오늘과 같은 gait HANDOFF 로 되돌린다.
     칩 경로(`requested_capability="gait"`)는 이 함수를 지나지 않으므로 **한 글자도 안 바뀐다**.
     """
-    # 보행 해설은 아직 앞 대화를 받지 않는다 — `GaitComparePayload` 에 칸이 없다 (D-082).
-    del resolved
     if _gait_compare(context) is None:
         return None
     return resolve_gait_route(
@@ -578,6 +581,8 @@ def _gait_handoff_explainer(
         context=context,
         requested_capability=_GAIT,
         enabled=enabled,
+        # D-082 부터 앞 대화를 함께 넘긴다. 이 경로가 그 값이 오는 **유일한** 길이다.
+        resolved=resolved,
     )
 
 

@@ -65,6 +65,7 @@ from daengs_backend.orchestration.semantic import (
     ROUTER_MODEL_ID,
     ROUTER_TEMPERATURE,
     _gemini_client,
+    render_conversation_context,
 )
 
 # v1 (D-080): 첫 판본. 규칙 문장이나 `GaitGuidance` 스키마가 한 글자라도 바뀌면 올린다 —
@@ -75,8 +76,10 @@ from daengs_backend.orchestration.semantic import (
 #: v3 (#582): `expert_advisory` 설명 한 줄이 "여섯 지점 전부" 에서 "잰 지점 전부" 로 바뀌었다.
 #: 조건 자체는 서버(`services/gait_context._expert_advisory`)가 계산하고 모델은 결과만 받지만,
 #: **본문이 바뀌면 버전을 올린다** — 그러지 않으면 새 결과가 옛 셀에 섞인다.
+#: v4 (#586 · D-082): 앞 대화(`CONVERSATION`)가 프롬프트에 들어오고 규칙 9 가 늘었다.
+#: 출력 가드 어휘도 같이 넓혔다 — **이 칸이 병명을 들여오기 때문이다.**
 #: **평가 메타가 이 값을 고정한다.**
-GAIT_PROMPT_VERSION = "gait-change-ko-v3"
+GAIT_PROMPT_VERSION = "gait-change-ko-v4"
 GAIT_MODEL_ID = ROUTER_MODEL_ID
 GAIT_MAX_OUTPUT_TOKENS = 512
 
@@ -89,6 +92,9 @@ GAIT_MAX_OUTPUT_TOKENS = 512
 _DIRECTION = re.compile(
     r"좋아[지져졌진질]|나빠[지져졌진질]|나아[지져졌진질]|심해[지져졌진질]"
     r"|진행[되돼됐된될]|호전|악화|개선|회복|완화"
+    # ── 아래는 D-082 에서 넓힌 것 (#586). 같은 이유로 **어간 + 활용**이다.
+    r"|약해[지져졌진질]|느려[지져졌진질]|둔해[지져졌진질]|무뎌[지져졌진질]"
+    r"|퇴행|저하"
 )
 #: 진단 · 병명 어휘. **관절 이름(고관절 · 무릎 · 뒷발)은 여기 없다** — 앱 표가 이미 그 말로
 #: 줄을 그리므로 해설이 같은 말을 쓰는 것은 문제가 아니다. 막는 것은 병명과 증상 판단이다.
@@ -109,13 +115,55 @@ _DIAGNOSIS_TERMS = (
     "진단",
     "질환",
     "병명",
+    # ── 아래는 D-082 에서 넓힌 것 (#586) ────────────────────────────────
+    # 앞 대화가 열리면 **보호자가 쓴 병명이 모델에 닿는다.** 피부에서 `농피증` 이 같은 모양의
+    # 가드를 그대로 통과한 전례가 있다 — 어휘 목록에 없는 낱말이었다. 아래는 평가가
+    # 「가드의 빈틈」으로 따로 세고 있던 말들이다.
+    "관절통",  # ⚠️ `통증` 의 부분문자열이 아니다 — 농피증과 같은 합성어 구멍
+    "관절증",
+    "퇴행성",
+    "연골",
+    "반월판",
+    "인대",  # `십자인대` 만 있었다
+    "파열",
+    "척추",
+    "척수",
+    "추간판",
+    "신경",
+    "위축",
+    "종양",
 )
 #: 진료 권유. **행동 집합에서 뺀 것을 문장으로 우회하지 못하게 막는다** — 병원이 필요한
 #: 질문은 거절(`diagnosis`)로 가고, 그 고정 문구가 진료를 안내한다.
-_VET_TERMS = ("수의사", "동물병원", "병원", "진료", "내원")
+#:
+#: ⚠️ **진료 우회가 제일 무거운 자리다.** 행동 집합에서 뺀 진료를 문장으로 돌아가는 길인데,
+#:    `엑스레이 한번 찍어 보세요` 는 다섯 낱말짜리 옛 목록을 **그냥 통과했다**. D-082 로
+#:    앞 대화가 열리면 그런 말이 나올 자리가 늘어난다 (#586).
+_VET_TERMS = (
+    "수의사",
+    "동물병원",
+    "병원",
+    "진료",
+    "내원",
+    # ── 아래는 D-082 에서 넓힌 것 (#586) ────────────────────────────────
+    "엑스레이",
+    "방사선",
+    "정형외과",
+    "재활",
+    "물리치료",
+    "검사",
+    "처방",
+    "치료",
+    "초음파",
+    "수술",
+)
 #: 수치. 이 능력은 관절 이동범위를 받지 않으므로 단위가 붙은 숫자는 전부 지어낸 것이다.
 #: 잰 관절 수(`3개 중 2개`)까지 막지 않으려고 **단위가 붙은 것만** 잡는다.
-_MEASUREMENT = re.compile(r"\d+(?:\.\d+)?\s*(?:px|픽셀|%|퍼센트|프로|mm|cm|도)|이동범위")
+#: ⚠️ `이동범위` 는 우리 말이고 임상에서 쓰는 말은 `가동범위` 다 — 옛 목록이 그것을 놓쳤다 (#586).
+_MEASUREMENT = re.compile(
+    r"\d+(?:\.\d+)?\s*(?:px|픽셀|%|퍼센트|프로|mm|cm|도)"
+    r"|이동범위|가동\s*범위|보폭|관절\s*각도"
+)
 #: 방향을 **말하지 않는다고 밝히는** 표현 (#576). 이 말 **앞**에 있는 방향어는 주장이 아니다.
 #: 목록을 넓히면 진짜 방향 주장이 새므로, 방향을 부인하는 꼴로만 쓰이는 말만 넣는다.
 _DIRECTION_DISCLAIMER = re.compile(
@@ -177,7 +225,12 @@ _POLICY = (
     "videos; it says nothing about why. Say that positively — describe only what the "
     "comparison shows. Do NOT write words for illness, condition, disease or diagnosis at "
     'all, not even to deny a link: "이 비교는 움직임의 차이만 보여줘요" is the right shape, '
-    '"질환과는 관련이 없어요" is not.\n\n'
+    '"질환과는 관련이 없어요" is not.\n'
+    "9. CONVERSATION, when present, is what the owner and you said earlier in this chat. Use "
+    "it to understand what the owner is referring to, and answer THIS question rather than "
+    "repeating the previous answer. Rule 8 applies to the whole conversation, not only to "
+    "this message: if the owner named a diagnosis a few turns ago, treat it the same way — "
+    "you may understand it, you may never write it.\n\n"
     "Output:\n"
     '- kind "guide": text is 2-3 short Korean sentences that answer the owner within these '
     "rules.\n"
@@ -236,6 +289,13 @@ def build_gait_prompt(payload: GaitComparePayload) -> str:
         + _POLICY
         + "\n\n"
         + f"GAIT_GUIDANCE_JSON_SCHEMA:\n{schema}\n\n"
+        # 앞 대화 (D-082). 없으면 **칸 자체가 안 들어간다** — 빈 값을 넣으면 모델이 "앞 대화가
+        # 비어 있다" 를 사실로 읽고 그것을 문장에 반영한다 (`build_skin_prompt` 와 같은 처리).
+        + (
+            render_conversation_context(payload.conversation) + "\n"
+            if payload.conversation is not None
+            else ""
+        )
         + f"COMPARISON: {comparison}\n"
         + f"USER_QUERY: {payload.question}\n"
     )

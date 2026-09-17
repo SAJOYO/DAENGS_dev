@@ -150,8 +150,18 @@ def test_rendered_compose_isolates_workers_and_shares_public_context(tmp_path, g
     (tmp_path / "backend").mkdir()
     # Render a copied project: never read the operator's real .env or echo resolved secrets.
     public = tmp_path / ".env"
-    public.write_text("DAENGS_WALK_PUBLIC_CONTEXT_ENABLED=true\nDAENGS_WALK_SGIS_KEY=dummy\nDAENGS_WALK_DIARY_ENABLED=true\nROOT_ONLY_SECRET=never-in-containers\n")
-    (tmp_path / "backend/.env").write_text("DAENGS_WALK_DIARY_ENABLED=false\nDAENGS_WALK_SGIS_KEY=old\n")
+    public.write_text(
+        "DAENGS_WALK_PUBLIC_CONTEXT_ENABLED=true\nDAENGS_WALK_SGIS_KEY=dummy\nDAENGS_WALK_DIARY_ENABLED=true\nROOT_ONLY_SECRET=never-in-containers\n"
+    )
+    with public.open("a") as f:
+        f.write(
+            "DATA_GO_KR_KEY=root-data\nKAKAO_REST_KEY=root-kakao\nKMA_HUB_KEY=root-kma\n"
+            "DAENGS_DATA_GO_KR_SERVICE_KEY=root-place\nDAENGS_KTO_SERVICE_KEY=root-kto\n"
+            "PLACE_DATA_GO_KR_SERVICE_KEY=legacy-place\nPLACE_KTO_SERVICE_KEY=legacy-kto\n"
+        )
+    (tmp_path / "backend/.env").write_text(
+        "DAENGS_WALK_DIARY_ENABLED=false\nDAENGS_WALK_SGIS_KEY=old\nDATA_GO_KR_KEY=old-data\nKAKAO_REST_KEY=old-kakao\nKMA_HUB_KEY=old-kma\n"
+    )
     (tmp_path / "backend/.env.walk-public.local").write_text("DAENGS_WALK_DIARY_ENABLED=false\n")
     if gcp:
         shutil.copyfile(REPO / "docker-compose.gcp.yml", tmp_path / "docker-compose.gcp.yml")
@@ -167,9 +177,16 @@ def test_rendered_compose_isolates_workers_and_shares_public_context(tmp_path, g
 
     def render(profiles):
         run = subprocess.run(
-            [docker, "compose", "-f", str(tmp_path / "docker-compose.yml"),
-             *(["-f", str(tmp_path / "docker-compose.gcp.yml")] if gcp else []),
-             *profiles, "config", "--format=json"],
+            [
+                docker,
+                "compose",
+                "-f",
+                str(tmp_path / "docker-compose.yml"),
+                *(["-f", str(tmp_path / "docker-compose.gcp.yml")] if gcp else []),
+                *profiles,
+                "config",
+                "--format=json",
+            ],
             cwd=tmp_path,
             env=env,
             text=True,
@@ -217,14 +234,38 @@ def test_rendered_compose_isolates_workers_and_shares_public_context(tmp_path, g
         venvs.append(next(v["source"] for v in service["volumes"] if v["target"] == "/opt/venv"))
     assert all(value == environments[0] for value in environments)
     assert environments[0]["DAENGS_WALK_SGIS_KEY"] == "dummy"
-    for name in ("backend", "walk-context-worker", "walk-context-beat", "walk-context-tools", "walk-catalog-worker"):
+    for name in (
+        "backend",
+        "walk-context-worker",
+        "walk-context-beat",
+        "walk-context-tools",
+        "walk-catalog-worker",
+    ):
         assert services[name]["environment"]["DAENGS_WALK_DIARY_ENABLED"] == "true"
         assert "ROOT_ONLY_SECRET" not in services[name]["environment"]
+        for key, value in {
+            "DATA_GO_KR_KEY": "root-data",
+            "KAKAO_REST_KEY": "root-kakao",
+            "KMA_HUB_KEY": "root-kma",
+        }.items():
+            assert services[name]["environment"][key] == value
+    for name in ("crawler-worker", "crawler-beat"):
+        assert services[name]["environment"]["DATA_GO_KR_KEY"] == "root-data"
+    assert services["place-search"]["environment"]["DAENGS_DATA_GO_KR_SERVICE_KEY"] == "root-place"
+    assert services["place-search"]["environment"]["DAENGS_KTO_SERVICE_KEY"] == "root-kto"
     # Removing root settings cannot resurrect stale values from backend/.env.
-    public.write_text("DAENGS_WALK_DIARY_ENABLED=false\n")
+    public.write_text(
+        "DAENGS_WALK_DIARY_ENABLED=false\nPLACE_DATA_GO_KR_SERVICE_KEY=legacy-place\nPLACE_KTO_SERVICE_KEY=legacy-kto\n"
+    )
     disabled = render(["--profile", "*"])
     assert disabled["backend"]["environment"]["DAENGS_WALK_DIARY_ENABLED"] == "false"
     assert disabled["backend"]["environment"]["DAENGS_WALK_SGIS_KEY"] == ""
+    assert (
+        disabled["place-search"]["environment"]["DAENGS_DATA_GO_KR_SERVICE_KEY"] == "legacy-place"
+    )
+    assert disabled["place-search"]["environment"]["DAENGS_KTO_SERVICE_KEY"] == "legacy-kto"
+    for key in ("DATA_GO_KR_KEY", "KAKAO_REST_KEY", "KMA_HUB_KEY"):
+        assert disabled["backend"]["environment"][key] == ""
     assert len(set(venvs)) == 5
     # Compose config escapes dollars so the rendered configuration can be reused.
     assert '"$$@"' in services["walk-context-tools"]["entrypoint"][2]
@@ -240,8 +281,11 @@ def test_removed_configure_cannot_overwrite_root_env(tmp_path, shell):
     root_env = tmp_path / ".env"
     root_env.write_text("EXISTING=keep\n")
     result = run_powershell(
-        powershell_command(executable, REPO / "tools/walk-diary-runtime.ps1", "-Action", "Configure"),
-        cwd=tmp_path, timeout=20,
+        powershell_command(
+            executable, REPO / "tools/walk-diary-runtime.ps1", "-Action", "Configure"
+        ),
+        cwd=tmp_path,
+        timeout=20,
     )
     assert result.returncode != 0
     assert root_env.read_text() == "EXISTING=keep\n"

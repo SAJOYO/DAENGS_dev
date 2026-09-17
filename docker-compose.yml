@@ -1,3 +1,9 @@
+# Life API credentials managed in the project root .env.
+x-life-public-settings: &life-public-settings
+  DATA_GO_KR_KEY: ${DATA_GO_KR_KEY:-}
+  KAKAO_REST_KEY: ${KAKAO_REST_KEY:-}
+  KMA_HUB_KEY: ${KMA_HUB_KEY:-}
+
 # Walk settings come only from the project root .env (or explicit shell overrides).
 x-walk-settings: &walk-settings
   DAENGS_WALK_SGIS_KEY: ${DAENGS_WALK_SGIS_KEY:-}
@@ -55,7 +61,7 @@ services:
       - path: ./backend/.env
         required: false
     environment:
-      <<: *walk-settings
+      <<: [*walk-settings, *life-public-settings]
       # venv 를 마운트 경로 밖에 둡니다.
       # /app 안에 두면 호스트의 Windows 용 .venv 와 섞여 깨집니다.
       UV_PROJECT_ENVIRONMENT: /opt/venv
@@ -677,8 +683,8 @@ services:
       DAENGS_DB_PASSWORD: ${PLACE_POSTGRES_PASSWORD:-place}
       DAENGS_DB_NAME: ${PLACE_POSTGRES_DB:-place}
       # 공공데이터 키 — 배치(ingest) 전용. 서버 기동에는 필요 없습니다 (D-026).
-      DAENGS_DATA_GO_KR_SERVICE_KEY: ${PLACE_DATA_GO_KR_SERVICE_KEY:-}
-      DAENGS_KTO_SERVICE_KEY: ${PLACE_KTO_SERVICE_KEY:-}
+      DAENGS_DATA_GO_KR_SERVICE_KEY: ${DAENGS_DATA_GO_KR_SERVICE_KEY:-${PLACE_DATA_GO_KR_SERVICE_KEY:-}}
+      DAENGS_KTO_SERVICE_KEY: ${DAENGS_KTO_SERVICE_KEY:-${PLACE_KTO_SERVICE_KEY:-}}
       # 내부 discovery만 소비합니다. 비어 있어도 기존 Place 검색과 health는 정상입니다.
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.1-flash-lite}
@@ -774,6 +780,7 @@ services:
       - path: ./backend/.env
         required: false
     environment:
+      DATA_GO_KR_KEY: ${DATA_GO_KR_KEY:-}
       UV_PROJECT_ENVIRONMENT: /opt/venv
       # 레포 밖이 아니라 컨테이너 안이라 자동 탐색이 안 됩니다. 아래 볼륨과 짝입니다.
       DAENGS_DATA_DIR: /data
@@ -850,6 +857,7 @@ services:
       - path: ./backend/.env
         required: false
     environment:
+      DATA_GO_KR_KEY: ${DATA_GO_KR_KEY:-}
       UV_PROJECT_ENVIRONMENT: /opt/venv
       DAENGS_DATA_DIR: /data
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
@@ -893,7 +901,7 @@ services:
     networks: [daengs-network]
     env_file: *walk-context-env
     environment: &walk-context-settings
-      <<: *walk-settings
+      <<: [*walk-settings, *life-public-settings]
       UV_PROJECT_ENVIRONMENT: /opt/venv
       DAENGS_DB_HOST: pgvector
       DAENGS_DB_PORT: 5432

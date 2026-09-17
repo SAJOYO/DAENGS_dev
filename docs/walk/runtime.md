@@ -190,3 +190,25 @@ docker exec daengs-backend /opt/venv/bin/python -c "from daengs_backend.config i
 `restart`만으로 환경은 바뀌지 않는다. 루트 `.env`는 서버마다 별도이며 Git merge나
 Windows Actions 실행으로 GCP의 `.env`가 복사되지는 않는다. 설정 확인 후 앱에서
 기존 산책의 일기 생성을 다시 요청해 실제 결과를 확인한다.
+
+## Life·장소 API 키도 최상단에서 관리
+
+| 최상단 `.env` 항목 | 전달 대상 |
+| --- | --- |
+| `DATA_GO_KR_KEY` | backend·산책 worker/Beat/tools 및 crawler worker/Beat |
+| `KAKAO_REST_KEY` | backend·산책 worker/Beat/tools |
+| `KMA_HUB_KEY` | backend·산책 worker/Beat/tools (선택적인 기상청 API Hub 키) |
+| `DAENGS_DATA_GO_KR_SERVICE_KEY` | place-search의 공공데이터 적재 |
+| `DAENGS_KTO_SERVICE_KEY` | place-search의 관광공사 적재 |
+
+기존 `backend/.env`의 Life 키 세 개도 루트 `.env`로 옮긴 뒤 대상 컨테이너를 재생성한다.
+루트에 없는 Life 키는 빈 값이 전달된다. 기존 `PLACE_DATA_GO_KR_SERVICE_KEY`,
+`PLACE_KTO_SERVICE_KEY`는 새 이름이 비어 있을 때만 호환용으로 사용한다.
+각 API의 활용 권한과 키는 별개이므로 키 값을 코드에서 서로 복제하지 않는다.
+
+**GCP Cloud Run 경계:** `DAENGS_REALTIME_URL`을 사용하는 서버는 날씨 조회를 별도
+Cloud Run 서비스에 위임한다. 그 서비스는 `infra/gcp/realtime.sh`의 GCP Secret Manager
+설정을 사용하며 VM 루트 `.env` 수정이나 Compose 재생성으로 갱신되지 않는다.
+이번 PR은 GitHub Secrets 기반 산책 Configure를 제거한 것이며, Cloud Run의
+Secret Manager 배포 구조를 변경하지 않는다. 별도 서비스 키 갱신은
+[실시간 서비스 운영 안내](../../infra/gcp/README.md)를 따른다.

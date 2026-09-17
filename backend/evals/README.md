@@ -18,6 +18,7 @@
 | `training_quality/` | `daengs_evals.training_quality` | 훈련 RAG judge 의 질문·답변·판정 출력 |
 | `conversation_quality/` | `daengs_evals.conversation_quality` | 동결 멀티턴 케이스(`cases_v1.jsonl`)·랩·판정·전후 비교 리포트. `#277`과 달리 질문·답변 한 쌍이 아니라 대화 여러 턴을 본다. 상세는 `conversation_quality/README.md`, 축 정의와 후속 설계는 `docs/orchestration/conversation-quality.md` |
 | `skin_guidance/` | `daengs_evals.skin_guidance` | 피부 판정 해설 에이전트(D-079)를 실제 Gemini 로 잰 셀(jsonl) · 코드 검사 리포트(md · json). 판정기 없음 — 최종 답의 안전 위반과 모델 원출력을 따로 센다. 무료 키라 느리게 나눠 수집(`--resume`) |
+| `gait_change/` | `daengs_evals.gait_change` | 보행 변화 관찰 해설 에이전트(D-080)를 실제 Gemini 로 잰 셀(jsonl) · 코드 검사 리포트(md · json). `skin_guidance` 와 같은 모양이고, 축이 판정이 아니라 **비교 갈래** 4종이다. **평가 어휘를 운영 가드보다 일부러 넓게** 둬서 가드가 못 잡고 나간 말을 「가드의 빈틈」으로 따로 센다 — D-081(자유 질문 라우팅)을 열기 전에 현재 구멍을 재는 것이 목적이다. 4갈래 × 20문항 × 3회 = 240콜이라 무료 키로는 하루에 안 끝난다(같은 `--label` 로 `--resume`) |
 
 과거 결과 파일(`*.json`·`*.jsonl`) 안에는 `backend/tools/...` 같은 옛 경로가 그대로 남아
 있습니다. 그 파일은 **그때 실제로 쓰인 경로를 적은 기록**이라 일부러 고치지 않습니다 (md 리포트의

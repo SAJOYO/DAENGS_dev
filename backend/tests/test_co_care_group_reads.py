@@ -22,6 +22,7 @@ from fakes import (
     FakeAppUser,
     FakeIdentity,
     FakePet,
+    FakeSession,
     FakeWalk,
     FakeWalkPet,
     Store,
@@ -34,9 +35,12 @@ from daengs_backend.core.deps import AppPrincipal, CurrentAppUser
 from daengs_backend.repositories import care_event as care_repo
 from daengs_backend.routers import care_event as care_router
 from daengs_backend.services import care_event as care_service
+from daengs_backend.services import pet_member as member_service
 
 A = uuid.uuid4()  # 그룹 주보호자
 B = uuid.uuid4()  # 연결한 공동 보호자
+J = uuid.uuid4()  # 연결 **없이** A 의 행에만 참여한 돌보미 (삭제 권한 테스트)
+X = uuid.uuid4()  # 이 그룹과 상관없는 다른 집 대표 (IDOR)
 A_KAKAO = 5001
 B_KAKAO = 5002
 
@@ -120,8 +124,9 @@ def store(monkeypatch: pytest.MonkeyPatch) -> Store:
         )
 
     async def get_deletable(session, app_user_id, event_id):
-        # 진짜와 같게 **적은 사람 또는 그 행의 대표**만입니다 (docs/co-care.md §2).
-        # 그룹으로 안 넓힙니다 — 이 변경이 건드리지 않은 경계입니다.
+        # 진짜와 같게 **그 행의 대표, 또는 지금도 그 행의 구성원인 적은 사람**만입니다
+        # (docs/co-care.md §2, #574). 그룹으로 안 넓힙니다 — 구성원 판정은 **그 행**
+        # 기준이지 논리 그룹 기준이 아닙니다(`pet_repo.member_condition` 과 같습니다).
         owners = {pet.id: pet.app_user_id for pet in s.pets}
         return next(
             (
@@ -129,8 +134,11 @@ def store(monkeypatch: pytest.MonkeyPatch) -> Store:
                 for e in s.care_events
                 if e.id == event_id
                 and (
-                    e.actor_app_user_id == app_user_id
-                    or owners.get(e.pet_id) == app_user_id
+                    owners.get(e.pet_id) == app_user_id
+                    or (
+                        e.actor_app_user_id == app_user_id
+                        and (e.pet_id, app_user_id) in s.pet_members
+                    )
                 )
             ),
             None,
@@ -394,3 +402,185 @@ async def test_삭제_권한은_안_넓어진다(store: Store, linked):
     res = client_as(B).delete(f"/app/care-events/{event.id}")
     assert res.status_code == 404
     assert event in store.care_events
+
+
+# ── 나가기 뒤 — 끊기는 것은 "그때까지" 가 아니다 ───────────────────────────
+
+
+async def test_자기_카드_id_로_나가면_그룹_케어가_끊긴다(store: Store, linked):
+    """B 가 자기 카드 id 로 나간다(`display_pet_id`). 나간 **뒤에 생긴** 기록까지 안 보여야
+    한다 — 멤버십·연결이 함께 풀리므로 공동 조회의 `pet_id` 묶음이 자기 행 하나로 줄어든다.
+
+    반대로 **B 가 적은 자기 행의 기록은 그대로 남는다** — 나가기는 기록을 옮기거나 지우지
+    않는다 (docs/co-care.md 「퇴장·내보내기」).
+    """
+    a_pet, b_pet = linked
+    store.care_events += [
+        FakeCareEvent(pet_id=a_pet.id, kind="meal", occurred_at=SEOUL_MORNING, actor_app_user_id=A),
+        FakeCareEvent(pet_id=b_pet.id, kind="meal", occurred_at=SEOUL_MORNING, actor_app_user_id=B),
+    ]
+
+    await member_service.remove_member(FakeSession(store), B, b_pet.id, B)
+
+    # 나간 뒤에 A 가 새로 남긴 것.
+    store.care_events.append(
+        FakeCareEvent(pet_id=a_pet.id, kind="snack", occurred_at=SEOUL_EVENING, actor_app_user_id=A)
+    )
+
+    after = client_as(B).get(f"/app/care-events/today?pet_id={b_pet.id}").json()
+    assert (after["meal"], after["snack"]) == (1, 0), "나간 사람이 그룹 기록을 계속 본다"
+    assert len(after["events"]) == 1
+    # 앵커 행 id 로 직접 물어도 못 읽는다.
+    assert client_as(B).get(f"/app/care-events/today?pet_id={a_pet.id}").status_code == 404
+    # A 쪽에서도 나간 사람 행의 기록이 더는 안 섞인다.
+    mine = client_as(A).get(f"/app/care-events/today?pet_id={a_pet.id}").json()
+    assert (mine["meal"], mine["snack"]) == (1, 1)
+
+
+async def test_내보내진_보호자도_그룹_케어를_못_본다(store: Store, linked):
+    a_pet, b_pet = linked
+    store.care_events.append(
+        FakeCareEvent(pet_id=a_pet.id, kind="meal", occurred_at=SEOUL_MORNING, actor_app_user_id=A)
+    )
+
+    await member_service.remove_member(FakeSession(store), A, a_pet.id, B)
+
+    assert client_as(B).get(f"/app/care-events/today?pet_id={b_pet.id}").json()["meal"] == 0
+    assert client_as(B).get(f"/app/care-events/today?pet_id={a_pet.id}").status_code == 404
+
+
+# ── 나간 뒤의 삭제 권한 — 지울 자격은 지금의 멤버십을 따른다 (#574) ─────────────
+#
+# 읽기는 `member_condition` 으로 끊기는데 삭제가 "적은 사람" 만 보면, 나간 사람이 **읽지도
+# 못하는 줄을 id 로 지운다.** 기록은 여전히 남는다 — 나가기는 아무것도 옮기거나 지우지
+# 않고, 바뀐 것은 삭제 **자격**뿐이다. 나간 상태는 진짜 `remove_member` 로 만든다.
+
+
+@pytest.fixture
+def with_plain_carer(store: Store, linked) -> tuple[FakePet, FakePet]:
+    """`linked` 에 **연결 없이** A 의 행에만 참여한 돌보미 J 를 더한다 — J 에게는 자기 행이 없다."""
+    a_pet, b_pet = linked
+    store.add_app_user(FakeAppUser(kakao_id=5003, id=J, nickname="이모"))
+    store.pet_members.append((a_pet.id, J))
+    return a_pet, b_pet
+
+
+def _care(store: Store, pet: FakePet, actor: uuid.UUID, when: datetime = SEOUL_MORNING):
+    event = FakeCareEvent(pet_id=pet.id, kind="meal", occurred_at=when, actor_app_user_id=actor)
+    store.care_events.append(event)
+    return event
+
+
+def _delete(who: uuid.UUID, event_id: uuid.UUID) -> int:
+    return client_as(who).delete(f"/app/care-events/{event_id}").status_code
+
+
+async def test_연결_없이_참여한_돌보미가_나가면_대표_행의_자기_기록을_못_지운다(
+    store: Store, with_plain_carer
+):
+    a_pet, _b = with_plain_carer
+    mine = _care(store, a_pet, J)
+
+    await member_service.remove_member(FakeSession(store), J, a_pet.id, J)
+
+    assert _delete(J, mine.id) == 404, "나간 돌보미가 대표 행의 기록을 지웠다"
+    assert mine in store.care_events, "404 뒤에 기록이 사라졌다 — 나가기는 기록을 안 지운다"
+    # 읽기도 막혀 있다 — 삭제가 읽기와 같은 바닥이라는 것.
+    assert client_as(J).get(f"/app/care-events/today?pet_id={a_pet.id}").status_code == 404
+
+
+async def test_연결_없이_참여한_돌보미가_내보내지면_자기_기록을_못_지운다(
+    store: Store, with_plain_carer
+):
+    a_pet, _b = with_plain_carer
+    mine = _care(store, a_pet, J)
+
+    await member_service.remove_member(FakeSession(store), A, a_pet.id, J)
+
+    assert _delete(J, mine.id) == 404, "내보내진 돌보미가 대표 행의 기록을 지웠다"
+    assert mine in store.care_events
+
+
+async def test_연결한_보호자는_나가도_자기_행의_자기_기록은_지운다(store: Store, linked):
+    """자기 행의 대표는 그대로다 — 나가기가 끊는 것은 **남의 행**에 대한 자격뿐이다."""
+    a_pet, b_pet = linked
+    on_own_row = _care(store, b_pet, B)
+    on_anchor_row = _care(store, a_pet, B)
+
+    await member_service.remove_member(FakeSession(store), B, b_pet.id, B)
+
+    assert _delete(B, on_own_row.id) == 204
+    assert on_own_row not in store.care_events
+    # 같은 사람이 **앵커 행**에 적은 줄은 이제 못 지운다 — 그 행의 구성원이 아니다.
+    assert _delete(B, on_anchor_row.id) == 404
+    assert on_anchor_row in store.care_events
+
+
+async def test_그룹_대표는_나간_사람이_자기_행에_적은_기록도_지운다(
+    store: Store, with_plain_carer
+):
+    """대표 쪽은 멤버십과 무관하다 — 적은 사람이 떠나면 그 줄을 고칠 수 있는 사람은 대표뿐이다."""
+    a_pet, b_pet = with_plain_carer
+    by_j = _care(store, a_pet, J)
+    by_b = _care(store, a_pet, B)
+    by_a = _care(store, a_pet, A)
+
+    await member_service.remove_member(FakeSession(store), J, a_pet.id, J)
+    await member_service.remove_member(FakeSession(store), B, b_pet.id, B)
+
+    assert [_delete(A, e.id) for e in (by_j, by_b, by_a)] == [204, 204, 204]
+    assert store.care_events == []
+
+
+async def test_지금_구성원인_돌보미는_공유_행의_자기_기록을_지운다(
+    store: Store, with_plain_carer
+):
+    a_pet, _b = with_plain_carer
+    by_j = _care(store, a_pet, J)
+    by_b = _care(store, a_pet, B)
+
+    assert _delete(J, by_j.id) == 204, "연결 없이 참여한 돌보미가 자기 기록을 못 지운다"
+    assert _delete(B, by_b.id) == 204, "연결한 보호자가 앵커 행의 자기 기록을 못 지운다"
+    assert store.care_events == []
+
+
+async def test_돌보미끼리는_여전히_서로의_기록을_못_지운다(store: Store, with_plain_carer):
+    a_pet, _b = with_plain_carer
+    by_j = _care(store, a_pet, J)
+    by_b = _care(store, a_pet, B)
+
+    assert _delete(B, by_j.id) == 404
+    assert _delete(J, by_b.id) == 404
+    assert by_j in store.care_events and by_b in store.care_events
+
+
+async def test_삭제는_남의_그룹_남의_행_없는_id_를_구분하지_않는다(
+    store: Store, with_plain_carer
+):
+    """셋 다 404 — 기록이 있는지조차 알려 주지 않는다 (IDOR)."""
+    _a, b_pet = with_plain_carer
+    store.add_app_user(FakeAppUser(kakao_id=5009, id=X, nickname="남"))
+    other_pet = FakePet(app_user_id=X, name="초코", breed="믹스")
+    store.pets.append(other_pet)
+    other_group = _care(store, other_pet, X)
+    on_b_row = _care(store, b_pet, B)
+
+    # 다른 집 기록 — 그룹 보호자 누구도 못 지운다.
+    assert [_delete(u, other_group.id) for u in (A, B, J)] == [404, 404, 404]
+    # 같은 그룹이라도 **남의 행** — 그룹 대표 A 도, 같은 행 구성원이 아닌 J 도 못 지운다.
+    assert [_delete(u, on_b_row.id) for u in (A, J)] == [404, 404]
+    # 없는 id.
+    assert _delete(B, uuid.uuid4()) == 404
+    assert other_group in store.care_events and on_b_row in store.care_events
+
+
+async def test_나간_뒤에_그룹에_생긴_기록은_못_지운다(store: Store, with_plain_carer):
+    a_pet, b_pet = with_plain_carer
+
+    await member_service.remove_member(FakeSession(store), J, a_pet.id, J)
+    await member_service.remove_member(FakeSession(store), B, b_pet.id, B)
+    later = _care(store, a_pet, A, SEOUL_EVENING)
+
+    assert _delete(J, later.id) == 404
+    assert _delete(B, later.id) == 404
+    assert later in store.care_events

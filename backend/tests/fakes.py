@@ -971,6 +971,18 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
         ]
         return before - len(store.pet_members)
 
+    async def member_remove_from_pets(session, pet_ids, app_user_id):
+        # 진짜와 같게 **행 여러 개**에서 한 사람의 돌보미 행을 지웁니다 — 나가기가
+        # 요청한 행 하나만 지우면 앵커 행 멤버십이 남는 회귀를 이 대역이 재현합니다.
+        wanted = set(pet_ids)
+        before = len(store.pet_members)
+        store.pet_members = [
+            row
+            for row in store.pet_members
+            if not (row[0] in wanted and row[1] == app_user_id)
+        ]
+        return before - len(store.pet_members)
+
     async def member_get_invite_by_hash(session, token_hash):
         return next(
             (i for i in store.pet_invites if i.token_hash == token_hash), None
@@ -1116,6 +1128,7 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
     monkeypatch.setattr(pet_member_repo, "count_members", member_count_members)
     monkeypatch.setattr(pet_member_repo, "add", member_add)
     monkeypatch.setattr(pet_member_repo, "remove", member_remove)
+    monkeypatch.setattr(pet_member_repo, "remove_from_pets", member_remove_from_pets)
     monkeypatch.setattr(
         pet_member_repo, "get_invite_by_hash", member_get_invite_by_hash
     )

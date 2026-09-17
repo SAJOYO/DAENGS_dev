@@ -72,8 +72,11 @@ from daengs_backend.orchestration.semantic import (
 #: v2 (#576): 보호자가 **이미 받은** 진단을 말하는 경우를 규칙 8 로 갈라냈다. v1 실측
 #: (`evals/gait_change/report_gc_v1.md`)에서 그 질문이 **24/24 전부 거절**이었다 — 규칙 3 이
 #: "무슨 병인지 물으면 거절" 이라 질문 본문에 병명이 들어오는 순간 함께 밀렸다.
-#: **평가 메타가 이 값을 고정한다** — 올리지 않으면 새 결과가 옛 셀에 섞인다.
-GAIT_PROMPT_VERSION = "gait-change-ko-v2"
+#: v3 (#582): `expert_advisory` 설명 한 줄이 "여섯 지점 전부" 에서 "잰 지점 전부" 로 바뀌었다.
+#: 조건 자체는 서버(`services/gait_context._expert_advisory`)가 계산하고 모델은 결과만 받지만,
+#: **본문이 바뀌면 버전을 올린다** — 그러지 않으면 새 결과가 옛 셀에 섞인다.
+#: **평가 메타가 이 값을 고정한다.**
+GAIT_PROMPT_VERSION = "gait-change-ko-v3"
 GAIT_MODEL_ID = ROUTER_MODEL_ID
 GAIT_MAX_OUTPUT_TOKENS = 512
 
@@ -143,8 +146,9 @@ _POLICY = (
     "- days_between: days between the two recordings.\n"
     "- reliability: which video had too little usable walking (recent, past, both, or ok).\n"
     "- version_mismatch: the two records were analysed by different versions.\n"
-    "- expert_advisory: all six joint points differed and the comparison was reliable "
-    "enough to say so. It does NOT mean the change is severe, worsening, or a disease. "
+    "- expert_advisory: every joint point that could be measured differed, there were "
+    "enough of them, and the comparison was reliable enough to say so. It does NOT mean "
+    "the change is severe, worsening, or a disease. "
     "When it is true the app appends one fixed sentence saying the cause cannot be known "
     "from video and that an expert opinion is worth considering if this repeats — do not "
     "write that yourself and do not escalate it.\n\n"

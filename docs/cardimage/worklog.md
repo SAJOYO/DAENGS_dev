@@ -9,7 +9,7 @@
 실행한 카드 하나의 기록이다(원장은 SDD 폴더 `progress.md`). 한때 「최종 리뷰 수정 파동」과 「Task 1~7」
 두 절로 나뉘어 있던 것을 Task 8 에서 한 절로 합쳤다(최신이 위).
 
-### 2026-09-17 — 머지 직전: 개발서버 DB 마이그레이션 적용
+### 2026-09-17 — 마이그레이션 적용: 개발서버 DB(머지 직전) · GCP DB(#587 스냅샷)
 
 🔴 **어느 DB 에 무엇이 들어갔는지 여기 적는다 — 버전 테이블이 없어 DB 가 기억하지 않는다.**
 
@@ -23,9 +23,26 @@
   | 3 | `2026-09-16_ai_card_seed.sql` | 컬럼 추가, verify 통과 | `vectordb-20260917-103427.dump` |
   | 4 | `2026-09-16_ai_card_usage_unfulfilled_attempt.sql` | 컬럼 추가, verify 통과(기존 사용 행 1 은 `false`) | `vectordb-20260917-103515.dump` |
 
-- **GCP DB — 아직 안 했다.** dev→main 때 `docs/deploy/runbook.md` §6: ① `git push gcp main` → ② VM `git fetch` → ③ 위 네 파일을
-  같은 순서로 `-v ON_ERROR_STOP=1` 과 `verify_*.sql` 까지 → ④ `git merge --ff-only origin/main`. **③ 을 빠뜨리면 GCP 에서 회원
-  탈퇴와 `/app/ai-cards` 가 500.** 콘솔 화면이 바뀌어 프론트 재빌드(`pm2 reload daengs-web`)도 필요.
+- **GCP DB — 적용 완료 (2026-09-17 17:10~17:12 KST, #587 dev→main 스냅샷, `main` `49eca694`, 릴리즈 `v1.1.5`).**
+  `docs/deploy/runbook.md` §6 순서대로: `git push gcp main` → VM `git fetch` → 백업 → 아래 적용 → `git merge --ff-only origin/main`
+  → `restart backend` → 프론트 재빌드. 파일은 `git show origin/main:db/migrations/<f>.sql | docker compose exec -T pgvector
+  psql -X -U daengs -d vectordb -v ON_ERROR_STOP=1` 로 한 장씩 넣었다.
+
+  **적용 전에 `verify_` 를 현재 상태에 먼저 돌려** 이미 들어가 있는지 갈랐다 — #561 때처럼 누가 먼저 넣어 둔 것은 없었다.
+
+  | # | 파일 | 적용 전 verify | 결과 |
+  | --- | --- | --- | --- |
+  | 1 | `2026-09-15_ai_card_usage.sql` | 통과(#561 에서 적용됨, 사용 행 5) | **재적용하지 않음** — 백필을 좁힌 수정은 표가 있는 DB 에서 no-op 이다. verify 만 |
+  | 2 | `2026-09-16_ai_card_pick_group.sql` | `column mismatch: ai_cards.pick_group` | `BEGIN` → 컬럼 → 인덱스 → 옛 방어 인덱스 `DROP` → 새 방어 인덱스 `CREATE` → `COMMIT`. verify 가 `UNIQUE … (app_user_id) WHERE status = 'generating' AND id = pick_group` 확인 |
+  | 3 | `2026-09-16_ai_card_seed.sql` | `column mismatch: ai_cards.seed` | 컬럼 추가, verify 통과(카드 5 · seed 0) |
+  | 4 | `2026-09-16_ai_card_usage_unfulfilled_attempt.sql` | `column mismatch: ai_card_usage.unfulfilled_attempt` | 컬럼 추가, verify 통과(기존 사용 행 5 는 `false`) |
+
+  - 백업(적용 전 한 번): VM `~/db-backups/vectordb-before-main-49eca694-20260917-081030.dump` — 61MB, `PGDMP`, `pg_restore -l` TOC 에 TABLE DATA 64.
+  - 배포 뒤 verify 4장을 다시 돌려 전부 통과. backend 재시작 뒤 로그 `UndefinedTable`·`UndefinedColumn`·`ERROR` 0건.
+    openapi 147 → 148(`/app/ai-cards/{card_id}/choose` 추가), `/app/ai-cards` 401.
+  - 운영 `backend/.env` 에 `DAENGS_CARDIMAGE_MONTHS`·`DAENGS_CARDGEN_URL` 이 없어 코드 기본(12달 · GPU 경로 꺼짐)이 섰다.
+  - 콘솔 화면 변경 때문에 프론트 재빌드 — `/srv/daengs/web/releases/49eca694-manual1`(이전 `84da7f58-manual1`), `pm2 reload daengs-web`.
+- **이제 두 DB 가 이 카드의 마이그레이션 네 장에서 같은 상태다.**
 - 러너가 백업 32개(1.67 GB)가 쌓였다고 경고한다 — 이 카드와 무관, 오래된 것은 손으로 지운다.
 
 ### 2026-09-17 — Task 9: E4 비용 실측 문서화

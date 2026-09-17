@@ -3,11 +3,30 @@
 세션이 끝날 때마다 한 절씩 위에 추가한다 (최신이 위). 무엇을 했고, 무엇을 정했고, 무엇을
 다음 세션에 넘기는지. 조사 내용 자체는 `research-*.md` 에, 요약·현재 상태는 `README.md` 에.
 
-## 2026-09-16~17 — #572 12달 열기 + 뽑기 (Task 1~8 · 최종 리뷰 수정 파동, 머지 대기)
+## 2026-09-16~17 — #572 12달 열기 + 뽑기 (Task 1~9 · 최종 리뷰 수정 파동, 머지됨)
 
 `docs/superpowers/plans/2026-09-16-ai-card-12months-and-two-picks.md` 를 subagent-driven-development 로
 실행한 카드 하나의 기록이다(원장은 SDD 폴더 `progress.md`). 한때 「최종 리뷰 수정 파동」과 「Task 1~7」
 두 절로 나뉘어 있던 것을 Task 8 에서 한 절로 합쳤다(최신이 위).
+
+### 2026-09-17 — 머지 직전: 개발서버 DB 마이그레이션 적용
+
+🔴 **어느 DB 에 무엇이 들어갔는지 여기 적는다 — 버전 테이블이 없어 DB 가 기억하지 않는다.**
+
+- **개발서버 DB — 적용 완료 (2026-09-17 10:31~10:35 KST).** `.github/workflows/db-migrate.yml` 을 `ref=999de31d`(dev 를 합치고
+  전체 `uv run pytest` 0 failed · 7870 passed 를 확인한 커밋), `verify=true`, `backup=true` 로 파일 이름 순서대로 한 장씩:
+
+  | # | 파일 | 결과 | 적용 전 백업(`C:\deploy\daengs\db-backups`) |
+  | --- | --- | --- | --- |
+  | 1 | `2026-09-15_ai_card_usage.sql` | 표가 이미 있어 가드가 생성·백필을 건너뜀 — **no-op**. verify 통과, 사용 행 1 | `vectordb-20260917-103146.dump` |
+  | 2 | `2026-09-16_ai_card_pick_group.sql` | `BEGIN` → 컬럼 → 인덱스 → 옛 방어 인덱스 `DROP` → 새 방어 인덱스 `CREATE` → `COMMIT`. verify 가 실제 정의 `UNIQUE … (app_user_id) WHERE status = 'generating' AND id = pick_group` 확인 | `vectordb-20260917-103322.dump` |
+  | 3 | `2026-09-16_ai_card_seed.sql` | 컬럼 추가, verify 통과 | `vectordb-20260917-103427.dump` |
+  | 4 | `2026-09-16_ai_card_usage_unfulfilled_attempt.sql` | 컬럼 추가, verify 통과(기존 사용 행 1 은 `false`) | `vectordb-20260917-103515.dump` |
+
+- **GCP DB — 아직 안 했다.** dev→main 때 `docs/deploy/runbook.md` §6: ① `git push gcp main` → ② VM `git fetch` → ③ 위 네 파일을
+  같은 순서로 `-v ON_ERROR_STOP=1` 과 `verify_*.sql` 까지 → ④ `git merge --ff-only origin/main`. **③ 을 빠뜨리면 GCP 에서 회원
+  탈퇴와 `/app/ai-cards` 가 500.** 콘솔 화면이 바뀌어 프론트 재빌드(`pm2 reload daengs-web`)도 필요.
+- 러너가 백업 32개(1.67 GB)가 쌓였다고 경고한다 — 이 카드와 무관, 오래된 것은 손으로 지운다.
 
 ### 2026-09-17 — Task 9: E4 비용 실측 문서화
 

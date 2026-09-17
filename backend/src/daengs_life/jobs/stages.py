@@ -73,9 +73,12 @@ def run_crawl(source_ids: list[str] | None, *, dry_run: bool) -> CrawlSummary:
         pairs = [(sid, "due") for sid in selected] + [
             (sid, "revision") for sid in revised if sid not in due_set
         ]
-    log.info("[refresh] crawl 대상 %d개 (%s): %s", len(selected), trigger, ", ".join(selected) or "없음")
+    run_ids = [sid for sid, _ in pairs]
+    revision_count = sum(1 for _, trig in pairs if trig == "revision")
+    log.info("[refresh] crawl 대상 %d개 (%s, 개정 %d): %s",
+             len(run_ids), trigger, revision_count, ", ".join(run_ids) or "없음")
 
-    summary = CrawlSummary(selected=[sid for sid, _ in pairs], revised=revised)
+    summary = CrawlSummary(selected=run_ids, revised=revised)
     for source_id, trig in pairs:
         row_id = None if dry_run else crawl_runs.start(source_id, trig)
         try:

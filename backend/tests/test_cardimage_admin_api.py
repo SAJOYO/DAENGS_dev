@@ -13,6 +13,7 @@
 import base64
 import io
 import uuid
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from cardimage_fakes import FakeEngine, FakeJudge
@@ -45,6 +46,30 @@ class Rows:
     def __init__(self) -> None:
         self.cards: list[AdminAiCard] = []
 
+    def seed(self, at: datetime) -> AdminAiCard:
+        """생성을 거치지 않고 행 하나를 밀어 넣는다 — 쪽 나누기 테스트는 카드 12장을 실제로
+        뽑을 이유가 없다(한 장에 PNG 합성 한 번이다). 시각은 부르는 쪽이 정한다."""
+        card = AdminAiCard(
+            id=uuid.uuid4(),
+            admin_user_id=uuid.uuid4(),
+            card_key="4",
+            dog_name="네오",
+            title="BLOSSOM 네오",
+            engine="gemini",
+            seed=None,
+            attempts=1,
+            likeness=4,
+            judge_note=None,
+            storage_key=f"admin-ai-cards/seed/{at.isoformat()}.png",
+            size_bytes=1,
+            width=994,
+            height=1582,
+            elapsed_ms=1,
+            created_at=at,
+        )
+        self.cards.append(card)
+        return card
+
 
 @pytest.fixture
 def rows(monkeypatch: pytest.MonkeyPatch) -> Rows:
@@ -57,8 +82,12 @@ def rows(monkeypatch: pytest.MonkeyPatch) -> Rows:
     async def get(session, card_id, *, for_update=False):
         return next((c for c in store.cards if c.id == card_id), None)
 
-    async def list_recent(session, *, limit=50):
-        return sorted(store.cards, key=lambda c: c.created_at, reverse=True)[:limit]
+    async def list_recent(session, *, limit=10, before=None):
+        # 진짜 쿼리와 같게 `(created_at, id) DESC` 이고, `before` 도 같은 튜플 비교입니다.
+        ordered = sorted(store.cards, key=lambda c: (c.created_at, c.id), reverse=True)
+        if before is not None:
+            ordered = [c for c in ordered if (c.created_at, c.id) < before]
+        return ordered[:limit]
 
     async def delete(session, card):
         store.cards.remove(card)
@@ -341,6 +370,75 @@ def test_generate_then_list_image_and_delete(client: TestClient) -> None:
 
 def test_missing_card_image_is_404(client: TestClient) -> None:
     assert client.get(f"/admin/cardimage/cards/{uuid.uuid4()}/image").status_code == 404
+
+
+# ── 쪽 나누기 (기본 10장 + 「더 보기」, 사용자 09-18) ──────────────────────
+
+_T0 = datetime(2026, 9, 18, 14, 0, tzinfo=UTC)
+
+
+def _ids(body: dict) -> list[str]:
+    return [c["id"] for c in body["cards"]]
+
+
+def test_list_gives_ten_newest_first_and_a_cursor(client: TestClient, rows: Rows) -> None:
+    """기본이 10장이다 — 예전 50장은 지우기 전까지 계속 쌓이는 목록을 한 번에 다 그렸다."""
+    made = [rows.seed(_T0 + timedelta(minutes=n)) for n in range(12)]
+
+    body = client.get("/admin/cardimage/cards").json()
+
+    assert _ids(body) == [str(c.id) for c in reversed(made[2:])]
+    assert body["next_cursor"]
+
+
+def test_next_page_continues_without_overlap(client: TestClient, rows: Rows) -> None:
+    made = [rows.seed(_T0 + timedelta(minutes=n)) for n in range(12)]
+
+    first = client.get("/admin/cardimage/cards").json()
+    second = client.get("/admin/cardimage/cards", params={"cursor": first["next_cursor"]}).json()
+
+    assert _ids(second) == [str(made[1].id), str(made[0].id)]
+    assert not set(_ids(first)) & set(_ids(second))
+    # 마지막 쪽이다 — 화면은 이 `null` 로 「더 보기」를 지운다.
+    assert second["next_cursor"] is None
+
+
+def test_a_card_made_while_browsing_does_not_shift_the_next_page(
+    client: TestClient, rows: Rows
+) -> None:
+    """**OFFSET 이 아니라 키셋인 이유다.** 쪽을 넘기는 사이에 옆에서 카드를 뽑으면 새 행이
+    맨 앞에 끼어든다 — OFFSET 이면 다음 쪽이 한 줄을 건너뛰거나 이미 본 줄을 다시 준다."""
+    made = [rows.seed(_T0 + timedelta(minutes=n)) for n in range(12)]
+
+    first = client.get("/admin/cardimage/cards").json()
+    rows.seed(_T0 + timedelta(hours=1))  # 첫 쪽을 본 뒤 누군가 한 장 더 뽑았다
+    second = client.get("/admin/cardimage/cards", params={"cursor": first["next_cursor"]}).json()
+
+    assert _ids(second) == [str(made[1].id), str(made[0].id)]
+    assert not set(_ids(first)) & set(_ids(second))
+
+
+def test_same_instant_rows_are_not_skipped(client: TestClient, rows: Rows) -> None:
+    """`created_at` 만으로 자르면 같은 시각의 행이 조용히 사라진다 — `id` 로 한 번 더 가른다."""
+    same = [rows.seed(_T0) for _ in range(4)]
+
+    first = client.get("/admin/cardimage/cards", params={"limit": 2}).json()
+    second = client.get(
+        "/admin/cardimage/cards", params={"limit": 2, "cursor": first["next_cursor"]}
+    ).json()
+
+    assert len(first["cards"]) == 2 and len(second["cards"]) == 2
+    assert set(_ids(first)) | set(_ids(second)) == {str(c.id) for c in same}
+
+
+def test_a_hand_edited_cursor_is_422(client: TestClient) -> None:
+    r = client.get("/admin/cardimage/cards", params={"cursor": "손으로-고친-값"})
+    assert r.status_code == 422
+    assert r.json()["detail"]["code"] == "bad_cursor"
+
+
+def test_limit_over_the_cap_is_422(client: TestClient) -> None:
+    assert client.get("/admin/cardimage/cards", params={"limit": 201}).status_code == 422
 
 
 # ── 화면이 받아 가는 선택지 ───────────────────────────────────────────────

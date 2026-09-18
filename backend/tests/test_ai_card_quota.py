@@ -1,9 +1,12 @@
-"""`services/ai_card_quota.py` — 앱 사용자 AI 카드 생성 한도 (#537 · #543 · #572, D-076 · D-077 · D-084).
+"""`services/ai_card_quota.py` — 앱 사용자 AI 카드 생성 한도
+(#537 · #543 · #572 · #593, D-076 · D-077 · D-084 · D-085).
 
 제품 규칙(사용자 결정 2026-09-15): 동시 1장 · KST 하루 N회(**사용 기록**으로 셈 — 지워도 안 돌아옴,
-실패는 안 셈) · 강아지마다 달마다 한 장(보호자마다 따로).
+실패는 안 셈) · 강아지마다 **카드 종류당** 한 장(보호자마다 따로).
 #572(D-084): 좋은 카드를 못 얻은 유료 시도는 지울 수 없는 시도 표시로 하루 5요청까지 · 정리 기준은 요청
 단위 마지막 진척부터 · GPU 경로면 콜드 스타트를 예산에 더한다.
+#593(D-085): 종류 카드(딸기·상추)도 같은 규칙을 쓴다 — 세는 칸이 `month` 가 아니라 `card_key` 라
+4월 카드가 딸기를 막지 않는다. 하루 한도는 달·종류가 **하나의 계수기**를 나눠 쓴다.
 """
 
 import asyncio
@@ -42,12 +45,15 @@ def _card(
     updated_at: datetime | None = None,
     error_code: str = "upstream",
     dog_id: uuid.UUID | None = None,
-    month: int = 4,
+    card: int | str = 4,
     card_id: uuid.UUID | None = None,
     pick_group: uuid.UUID | None = None,
 ) -> AiCard:
+    # 달 카드는 `month=<정수>`·`card_key="<정수>"`, 종류 카드는 `month=None`·`card_key="strawberry"` —
+    # `db/init/38_ai_cards.sql` 의 CHECK `ai_cards_month` 가 요구하는 짝이다 (#593, D-085).
     return AiCard(
-        id=card_id or uuid.uuid4(), app_user_id=owner, dog_id=dog_id, month=month, dog_name="네오",
+        id=card_id or uuid.uuid4(), app_user_id=owner, dog_id=dog_id,
+        month=card if isinstance(card, int) else None, card_key=str(card), dog_name="네오",
         title="BLOSSOM 네오", status=status, error_code=error_code if status == "failed" else None,
         pick_group=pick_group,
         created_at=created_at, updated_at=updated_at if updated_at is not None else created_at,
@@ -60,8 +66,8 @@ def _usage(used_at: datetime, owner: uuid.UUID = OWNER, *, unfulfilled_attempt: 
     )
 
 
-def _check(limit: int = 1, *, dog_id: uuid.UUID | None = None, month: int = 4) -> None:
-    asyncio.run(quota.check_quota(None, OWNER, now=NOW, daily_limit=limit, dog_id=dog_id, month=month))
+def _check(limit: int = 1, *, dog_id: uuid.UUID | None = None, card: int | str = 4) -> None:
+    asyncio.run(quota.check_quota(None, OWNER, now=NOW, daily_limit=limit, dog_id=dog_id, card=card))
 
 
 def _remaining(limit: int = 1) -> int | None:
@@ -286,53 +292,87 @@ def test_failed_card_rows_are_not_the_ledger(store: Store) -> None:
     _check()
 
 
-# ── 강아지마다 달마다 한 장 ─────────────────────────────────────────────
+# ── 강아지마다 카드 종류당 한 장 ────────────────────────────────────────
 
 
 def test_same_dog_same_month_ready_is_taken(store: Store) -> None:
-    store.ai_cards.append(_card("ready", NOW - timedelta(days=3), dog_id=DOG, month=4))
-    with pytest.raises(quota.AiCardMonthTakenError):
-        _check(limit=0, dog_id=DOG, month=4)
+    store.ai_cards.append(_card("ready", NOW - timedelta(days=3), dog_id=DOG, card=4))
+    with pytest.raises(quota.AiCardTakenError):
+        _check(limit=0, dog_id=DOG, card=4)
 
 
 def test_month_taken_is_checked_before_daily_limit(store: Store) -> None:
-    """둘 다 걸리면 달별이 먼저다 — 내일 다시 해도 안 되는 이유를 알려 준다."""
-    store.ai_cards.append(_card("ready", NOW - timedelta(hours=1), dog_id=DOG, month=4))
+    """둘 다 걸리면 카드별이 먼저다 — 내일 다시 해도 안 되는 이유를 알려 준다."""
+    store.ai_cards.append(_card("ready", NOW - timedelta(hours=1), dog_id=DOG, card=4))
     store.ai_card_usage.append(_usage(NOW - timedelta(hours=1)))
-    with pytest.raises(quota.AiCardMonthTakenError):
-        _check(dog_id=DOG, month=4)
+    with pytest.raises(quota.AiCardTakenError):
+        _check(dog_id=DOG, card=4)
 
 
 def test_same_dog_same_month_failed_is_not_taken(store: Store) -> None:
-    store.ai_cards.append(_card("failed", NOW - timedelta(days=3), dog_id=DOG, month=4))
-    _check(limit=0, dog_id=DOG, month=4)
+    store.ai_cards.append(_card("failed", NOW - timedelta(days=3), dog_id=DOG, card=4))
+    _check(limit=0, dog_id=DOG, card=4)
 
 
 def test_same_dog_other_month_is_ok(store: Store) -> None:
-    store.ai_cards.append(_card("ready", NOW - timedelta(days=3), dog_id=DOG, month=4))
-    _check(limit=0, dog_id=DOG, month=9)
+    store.ai_cards.append(_card("ready", NOW - timedelta(days=3), dog_id=DOG, card=4))
+    _check(limit=0, dog_id=DOG, card=9)
 
 
 def test_other_dog_same_month_is_ok(store: Store) -> None:
-    store.ai_cards.append(_card("ready", NOW - timedelta(days=3), dog_id=OTHER_DOG, month=4))
-    _check(limit=0, dog_id=DOG, month=4)
+    store.ai_cards.append(_card("ready", NOW - timedelta(days=3), dog_id=OTHER_DOG, card=4))
+    _check(limit=0, dog_id=DOG, card=4)
 
 
 def test_other_owner_same_dog_same_month_is_ok(store: Store) -> None:
     """보호자마다 따로 센다(A안) — 공동 보호자가 같은 강아지로 만든 카드는 내 달을 막지 않는다."""
-    store.ai_cards.append(_card("ready", NOW - timedelta(days=3), owner=STRANGER, dog_id=DOG, month=4))
-    _check(limit=0, dog_id=DOG, month=4)
+    store.ai_cards.append(_card("ready", NOW - timedelta(days=3), owner=STRANGER, dog_id=DOG, card=4))
+    _check(limit=0, dog_id=DOG, card=4)
 
 
 def test_no_dog_id_skips_month_check(store: Store) -> None:
-    store.ai_cards.append(_card("ready", NOW - timedelta(days=3), dog_id=None, month=4))
-    _check(limit=0, dog_id=None, month=4)
+    store.ai_cards.append(_card("ready", NOW - timedelta(days=3), dog_id=None, card=4))
+    _check(limit=0, dog_id=None, card=4)
 
 
-def test_month_args_are_required() -> None:
-    """빠뜨려서 달별 검사가 조용히 꺼지면 안 된다."""
+def test_card_args_are_required() -> None:
+    """빠뜨려서 카드별 검사가 조용히 꺼지면 안 된다."""
     with pytest.raises(TypeError):
         asyncio.run(quota.check_quota(None, OWNER, now=NOW, daily_limit=1))  # type: ignore[call-arg]
+
+
+# ── 종류 카드도 같은 규칙 (#593, D-085) ─────────────────────────────────
+
+
+def test_same_dog_same_kind_ready_is_taken(store: Store) -> None:
+    store.ai_cards.append(_card("ready", NOW - timedelta(days=3), dog_id=DOG, card="strawberry"))
+    with pytest.raises(quota.AiCardTakenError):
+        _check(limit=0, dog_id=DOG, card="strawberry")
+
+
+def test_a_month_card_does_not_block_a_kind_card(store: Store) -> None:
+    """한 강아지가 4월과 딸기를 **동시에** 가질 수 있다 — 세는 칸이 `card_key` 이기 때문이다.
+    `month` 로 세던 옛 코드는 종류 카드의 `month` 가 NULL 이라 여기서 틀린 답을 냈다."""
+    store.ai_cards.append(_card("ready", NOW - timedelta(days=3), dog_id=DOG, card=4))
+    _check(limit=0, dog_id=DOG, card="strawberry")
+
+
+def test_one_kind_does_not_block_another_kind(store: Store) -> None:
+    """딸기가 상추를 막으면 안 된다 — 둘 다 `month` 가 NULL 이라 달로 세면 서로를 막는다."""
+    store.ai_cards.append(_card("ready", NOW - timedelta(days=3), dog_id=DOG, card="strawberry"))
+    _check(limit=0, dog_id=DOG, card="lettuce")
+
+
+def test_a_kind_card_does_not_block_a_month_card(store: Store) -> None:
+    store.ai_cards.append(_card("ready", NOW - timedelta(days=3), dog_id=DOG, card="strawberry"))
+    _check(limit=0, dog_id=DOG, card=4)
+
+
+def test_daily_limit_is_one_counter_for_months_and_kinds(store: Store) -> None:
+    """하루 한도는 카드 종류를 안 본다 — 오늘 4월 카드를 만들었으면 딸기도 못 만든다 (사용자 결정 09-18)."""
+    store.ai_card_usage.append(_usage(KST_TODAY_START))
+    with pytest.raises(quota.AiCardLimitError):
+        _check(limit=1, dog_id=DOG, card="strawberry")
 
 
 # ── 남은 횟수 ───────────────────────────────────────────────────────────

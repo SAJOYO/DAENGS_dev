@@ -18,7 +18,8 @@ BEGIN
         ('app_user_id', 'uuid', 'true'),
         -- 강아지를 지워도 카드는 남는다 (아래 FK 의 SET NULL 과 짝)
         ('dog_id', 'uuid', 'false'),
-        ('month', 'smallint', 'true'),
+        -- month 는 여기 없다 — 2026-09-18 이 이 칸을 nullable 로 넓힌다(종류 카드에는 달이
+        -- 없다). 아래에서 **타입은 늘, NOT NULL 은 그 장이 아직 안 온 DB 에서만** 본다.
         ('dog_name', 'character varying(40)', 'true'),
         ('title', 'character varying(80)', 'true'),
         ('status', 'character varying(16)', 'true'),
@@ -44,6 +45,29 @@ BEGIN
                 item.column_name, item.type_name, item.required;
         END IF;
     END LOOP;
+
+    -- month 는 **뒤 장이 넓힌 칸**이다 (2026-09-18_ai_cards_card_key, D-085). 버전 표가 없어
+    -- 이 verify 는 그 장까지 적용된 DB 위에서도 돌므로, 조건 없이 NOT NULL 을 단언하면 운영
+    -- DB 전부에서 실패한다. 타입은 늘 보고, NOT NULL 은 **card_key 칸이 아직 없을 때만** 본다.
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_attribute a
+        WHERE a.attrelid = relation AND a.attname = 'month'
+          AND a.attnum > 0 AND NOT a.attisdropped
+          AND format_type(a.atttypid, a.atttypmod) = 'smallint'
+    ) THEN
+        RAISE EXCEPTION 'column mismatch: ai_cards.month (type smallint)';
+    END IF;
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_attribute a
+        WHERE a.attrelid = relation AND a.attname = 'card_key'
+          AND a.attnum > 0 AND NOT a.attisdropped
+    ) AND NOT EXISTS (
+        SELECT 1 FROM pg_attribute a
+        WHERE a.attrelid = relation AND a.attname = 'month'
+          AND a.attnum > 0 AND NOT a.attisdropped AND a.attnotnull
+    ) THEN
+        RAISE EXCEPTION 'column mismatch: ai_cards.month (type smallint, not null true)';
+    END IF;
 
     -- FK 둘의 **삭제 동작이 서로 다르다**. 계정은 CASCADE, 강아지는 SET NULL.
     FOR item IN SELECT * FROM (VALUES

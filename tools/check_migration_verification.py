@@ -245,6 +245,56 @@ GAIT_RECORDS_POSE_MODEL_ROWS = (
 # **모듈 수준에 둔다** — `coverage_checks()` 가 "등록됐나"를 이 목록에서 읽는다. 함수 안에
 # 있으면 그 검사가 소스를 정규식으로 긁어야 하고, 그러면 목록을 고칠 때마다 정규식이 낡는다.
 CHECKS = (
+        # 앱 카드 표에 **카드 종류 칸**(#593, D-085). 달(1~12) 말고 딸기·상추도 들어온다.
+        # 픽스처에 달 카드 두 장을 넣어 **백필이 실제로 돈다** — 칸만 붙고 값이 안 채워진
+        # 상태를 마지막 두 변조가 잰다. 핵심은 세 가지다: ⓐ month 가 NOT NULL 로 되돌아가면
+        # 종류 카드를 아예 못 만든다 ⓑ `ai_cards_month` 는 **이름이 그대로인 채** 옛 정의로
+        # 되돌아갈 수 있다(옛 정의도 month=NULL 을 통과시키므로 이름만 보는 검사는 못 잡는다)
+        # ⓒ 이 장은 다른 인덱스·제약을 건드리지 않아야 한다 — 표를 다시 만들면 조용히 사라진다.
+        ('2026-09-18', 'ai_cards_card_key',
+         APP_USERS + PETS_ONLY + SET_UPDATED_AT + prerequisites('2026-09-14_ai_cards')
+         + "INSERT INTO ai_cards(id, app_user_id, month, dog_name, title, status,"
+           " storage_key, generation, size_bytes, width, height) VALUES"
+           " ('77777777-7777-7777-7777-777777777777', '11111111-1111-1111-1111-111111111111',"
+           "  4, 'x', 'BLOSSOM X', 'ready', 'k', 'g', 1, 994, 1582),"
+           " ('88888888-8888-8888-8888-888888888888', '22222222-2222-2222-2222-222222222222',"
+           "  12, 'y', 'SNOW Y', 'ready', 'k2', 'g', 1, 994, 1582);",
+         'ai_cards', [
+            'ALTER TABLE ai_cards DROP COLUMN card_key',
+            # 좁아지는 변조 — "strawberry"(10자)는 들어가지만 더 긴 종류 키가 조용히 막힌다.
+            'ALTER TABLE ai_cards ALTER COLUMN card_key TYPE varchar(8)',
+            'ALTER TABLE ai_cards ALTER COLUMN card_key DROP NOT NULL',
+            # **month 가 다시 NOT NULL 이 되는 변조** — 종류 카드는 달이 없으므로 INSERT 가 죽는다.
+            'ALTER TABLE ai_cards ALTER COLUMN month SET NOT NULL',
+            'ALTER TABLE ai_cards DROP CONSTRAINT ai_cards_card_key',
+            'ALTER TABLE ai_cards DROP CONSTRAINT ai_cards_month',
+            # **이름은 그대로 두고 옛 정의로 되돌리는 변조 — 이 항목의 이유다.** 옛 CHECK 도
+            # month=NULL 은 통과시키므로 종류 카드가 서긴 하는데, card_key 와 달의 짝이 풀려
+            # month=null 인 달 카드가 앱으로 나갈 수 있다. 이름만 보는 검사로는 아무 의미가 없다.
+            'ALTER TABLE ai_cards DROP CONSTRAINT ai_cards_month;'
+            ' ALTER TABLE ai_cards ADD CONSTRAINT ai_cards_month CHECK (month BETWEEN 1 AND 12)',
+            # 종류 카드 갈래만 잃는 변조 — 달 카드는 멀쩡하고 딸기·상추만 못 만든다.
+            'ALTER TABLE ai_cards DROP CONSTRAINT ai_cards_month;'
+            ' ALTER TABLE ai_cards ADD CONSTRAINT ai_cards_month'
+            ' CHECK (month IS NOT NULL AND month BETWEEN 1 AND 12 AND card_key = month::text)',
+            # 검증 안 된(NOT VALID) 제약 + 값이 어긋난 상태. 모양만 보면 멀쩡하다 —
+            # `documents_org_backfill` 에서 실제로 난 "칸은 있는데 값이 엉뚱한" 사고와 같은 모양이다.
+            'ALTER TABLE ai_cards DROP CONSTRAINT ai_cards_month;'
+            " UPDATE ai_cards SET card_key = 'strawberry';"
+            ' ALTER TABLE ai_cards ADD CONSTRAINT ai_cards_month CHECK ('
+            ' (month IS NOT NULL AND month BETWEEN 1 AND 12 AND card_key = month::text)'
+            " OR (month IS NULL AND card_key !~ '^[0-9]+$')) NOT VALID",
+            # **백필만 빠진 상태** — 칸은 붙었는데 옛 행의 값이 비어 있다.
+            'ALTER TABLE ai_cards DROP CONSTRAINT ai_cards_month;'
+            ' ALTER TABLE ai_cards ALTER COLUMN card_key DROP NOT NULL;'
+            ' UPDATE ai_cards SET card_key = NULL',
+            # 이 장이 건드리지 않아야 하는 셋. 표를 다시 만드는 식으로 고치면 이렇게 사라진다.
+            'DROP INDEX idx_ai_cards_one_generating',
+            'DROP INDEX idx_ai_cards_storage_key',
+            'DROP INDEX idx_ai_cards_storage_key;'
+            ' CREATE INDEX idx_ai_cards_storage_key ON ai_cards (storage_key)',
+            'ALTER TABLE ai_cards DROP CONSTRAINT ai_cards_ready_set',
+        ]),
         # 관리자 콘솔 전용 카드 표(#592). **status 가 없는 표**라 이미지 칸 넷이 전부 NOT NULL
         # 인 것이 이 항목의 핵심이고, 그다음이 created 인덱스의 `DESC` 다 — 그것이 빠져도
         # 인덱스는 멀쩡히 서고 에러도 안 나며, 목록만 조용히 오래된 것부터 나온다.

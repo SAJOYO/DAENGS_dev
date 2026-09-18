@@ -12,7 +12,7 @@ import uuid
 from collections.abc import Sequence
 from datetime import datetime
 
-from sqlalchemy import Row, func, select
+from sqlalchemy import Row, func, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from daengs_backend.models import AdminUser, AnswerReport, ChatSession, ChatTurn
@@ -119,7 +119,10 @@ async def turn_position(
             .where(
                 ChatTurn.session_id == turn.session_id,
                 completed,
-                (ChatTurn.created_at, ChatTurn.id) < (turn.created_at, turn.id),  # type: ignore[operator]
+                # tuple_() 로 감싸야 SQL 튜플 비교로 내려갑니다. 파이썬 튜플끼리
+                # `<` 를 쓰면 SQLAlchemy 가 원소별 비교로 풀어 첫 원소(created_at)
+                # 에서 멈추고, 같은 시각에 있는 turn 들이 순번 계산에서 빠집니다.
+                tuple_(ChatTurn.created_at, ChatTurn.id) < tuple_(turn.created_at, turn.id),
             )
         )
         or 0
@@ -151,8 +154,11 @@ async def list_reports(
     )
     if before is not None:
         at, last_id = before
+        # tuple_() 로 감싸지 않으면 파이썬 튜플 비교로 풀려 `created_at < at` 만
+        # 남고, 같은 시각에 쌓인 신고들이 페이지 사이에서 건너뛰어집니다
+        # (admin_audit_log.py 와 같은 함정).
         stmt = stmt.where(
-            (AnswerReport.created_at, AnswerReport.id) < (at, last_id)  # type: ignore[operator]
+            tuple_(AnswerReport.created_at, AnswerReport.id) < tuple_(at, last_id)
         )
     if status is not None:
         stmt = stmt.where(AnswerReport.status == status)

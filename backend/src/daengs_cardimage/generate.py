@@ -84,8 +84,8 @@ def _setup(*, card: catalog.CardSelector, dog_name: str, photo: bytes, content_t
     """카드마다 달라지지 않는 것들을 한 번만 준비한다 — 틀·사진·프롬프트·제목은 장을 몇 장을
     만들든 같으므로, 여러 장을 만들 때 이걸 장마다 다시 하지 않는다.
 
-    잠금(`open_months`)은 **달일 때만** 본다 — 달이 아닌 카드(딸기·상추)는 콘솔 전용이라 잠글
-    대상이 아니다(설계 ①)."""
+    잠금(`open_months`)은 **달일 때만** 본다 — 달이 아닌 카드(딸기·상추)에는 그런 설정이 없고,
+    **카탈로그에 있으면 열린 것**이다(설계 ①, #593 에서 앱 경로에도 그 규칙으로 열었다)."""
     card_meta = catalog.require_open(card, open_months) if isinstance(card, int) else catalog.resolve(card)
     photo_jpeg = photo_mod.prepare_photo(photo, content_type)
     template = _load_template(card, base_dir)

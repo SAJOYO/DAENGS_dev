@@ -1,6 +1,7 @@
 """카드(달 1~12 + 종류) → 틀 파일·카드명·장면 설명. `cardimage/headers.json` 의 제목에서 ` NEO` 를 뗀 것이 카드명이다.
 
-달은 정수, 달이 아닌 카드(딸기·상추, 콘솔 전용 #592)는 문자열로 가리킨다 — `CardSelector` 와 `resolve`.
+달은 정수, 달이 아닌 카드(딸기·상추)는 문자열로 가리킨다 — `CardSelector` 와 `resolve`.
+종류 카드는 #592 에서 콘솔에만 열렸다가 #593(D-085)부터 앱 경로(`/app/ai-cards`)도 쓴다.
 """
 
 from __future__ import annotations
@@ -288,7 +289,8 @@ STRAWBERRY_PLATE = Plate(center_y=105, edge=((62, 749), (149, 676)), top_y=62)
 #: 상추 틀의 제목판 — 09-18 실측(판 y 47~141). 달 카드보다 넓다.
 LETTUCE_PLATE = Plate(center_y=94, edge=((50, 790), (138, 717)), top_y=47)
 
-#: 달이 아닌 카드(콘솔 전용, #592). 앱 경로는 이것을 쓰지 않는다.
+#: 달이 아닌 카드(#592). **앱 경로도 이것을 쓴다** — #593(D-085)부터 `card=strawberry` 로 고른다.
+#: 여기 있으면 열린 것이다 — 달의 `DAENGS_CARDIMAGE_MONTHS` 에 해당하는 잠금이 종류에는 없다(#593).
 #: `outfit` 은 비워 둔다 — 몸이 없어서 입힐 곳이 없고, 소품 금지 문장은 `face_only` 앞부분이 직접 갖는다
 #: (설계 ②). 여기에 `NO_OUTFIT` 을 넣으면 같은 문장이 프롬프트에 두 번 들어간다.
 _KIND_CARDS: dict[str, MonthCard] = {
@@ -317,6 +319,11 @@ _KIND_CARDS: dict[str, MonthCard] = {
 
 KINDS: tuple[str, ...] = tuple(_KIND_CARDS)
 
+#: 달이 아닌 카드의 한국어 이름. `MonthCard` 의 `card_name` 은 카드에 찍히는 영어라 사람에게
+#: 보여 줄 이름이 따로 필요하다. **여기 한 곳에만 둔다** — 관리자 콘솔(`routers/admin_cardimage.py`
+#: 의 카드 목록)과 앱 경로의 409 문장(`routers/ai_card.py`)이 같은 글자를 써야 한다 (#593).
+KIND_LABELS: dict[str, str] = {"strawberry": "딸기", "lettuce": "상추"}
+
 #: 카드 하나를 가리키는 값 — 1~12 는 달, 문자열은 종류(`KINDS`)다.
 CardSelector = int | str
 
@@ -343,6 +350,17 @@ def resolve(selector: CardSelector) -> MonthCard:
 def card_key(selector: CardSelector) -> str:
     """저장·로그에 쓰는 문자열 키 — 달은 `"4"`, 종류는 `"strawberry"`."""
     return str(selector)
+
+
+def label(selector: CardSelector) -> str:
+    """사람에게 보여 주는 이름 — 달은 `"4월"`, 종류는 `"딸기"` (`KIND_LABELS`).
+
+    사용자에게 나가는 문장이 이것을 쓴다. 종류 카드에 달 문법을 쓰면 "0월 카드가 있어요" 가
+    된다 — `MonthCard.month` 가 종류 카드에서 0 이기 때문이다(#593).
+    """
+    if isinstance(selector, int) and not isinstance(selector, bool):
+        return f"{selector}월"
+    return KIND_LABELS.get(str(selector), str(selector))
 
 
 def pick_seeds(selector: CardSelector, count: int, rng: random.Random) -> list[int]:

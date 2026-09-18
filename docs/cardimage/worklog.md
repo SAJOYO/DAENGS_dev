@@ -3,6 +3,96 @@
 세션이 끝날 때마다 한 절씩 위에 추가한다 (최신이 위). 무엇을 했고, 무엇을 정했고, 무엇을
 다음 세션에 넘기는지. 조사 내용 자체는 `research-*.md` 에, 요약·현재 상태는 `README.md` 에.
 
+## 2026-09-18 — #593 앱 경로에도 딸기·상추 (D-085, 브랜치 `feat/app-ai-card-kinds`)
+
+#592 가 딸기·상추를 **콘솔에만** 열어 둔 것을 앱 경로까지 넓힌 세션이다. 결정은
+`docs/decisions.md` **D-085**(D-077 의 "`month` 는 1~12 테마 달" 정의를 개정).
+
+### 커밋 넷
+
+| 커밋 | 무엇 |
+| --- | --- |
+| `c57d6d1f` | 콘솔 저장 카드 목록을 **10장씩 이어 받고**(`next_cursor`, 키셋) 줄마다 PNG 로 내려받는다 |
+| `0767e2a4` | `ai_cards` 에 **`card_key`** 칸(NOT NULL) + `month` nullable + CHECK 교체 (DB + 모델) |
+| `0b20d1b1` | 키셋 페이지네이션이 같은 시각 행을 건너뛰던 버그 **4곳** 수정 |
+| `8e7345b0` | 앱 경로가 딸기·상추를 받는다 — **전환기 계약**(`month`·`card` 둘 다) |
+
+(위 `43ad2ffd` "앱에서도 딸기·상추 카드를 만들 수 있게 한다" 는 카드를 여는 빈 커밋이다.)
+
+### 앱 계약 (전환기, 사용자 결정 A)
+
+`POST /app/ai-cards` — `month` 와 `card` 가 **둘 다 선택**이다.
+
+| 보낸 것 | 결과 |
+| --- | --- |
+| `month=4` 만 (옛 앱) | 4월 카드. **지금과 글자 하나까지 같게 돈다** |
+| `card=4` | 4월 카드 (쿼리는 늘 문자열이라 숫자면 달로 읽는다) |
+| `card=strawberry` · `card=lettuce` | 종류 카드 |
+| `month=4` + `card=4` | 통과 (같은 카드) |
+| `month=4` + `card=strawberry` | **400 `card_conflict`** |
+| 둘 다 없음 | **400 `card_required`** |
+
+응답은 `month`(종류 카드는 `null`)와 `card`(`"4"`·`"strawberry"`)를 **함께** 싣는다.
+404·409 코드는 파라미터가 아니라 **고른 카드**를 따른다 — 달은 `month_closed`·`month_taken`,
+종류는 `card_closed`·`card_taken`. 409 문장의 이름은 `catalog.KIND_LABELS`(딸기·상추) 한 곳에서
+오고 콘솔 목록도 같은 상수를 쓴다 — 안 그러면 "0월 카드가 있어요" 가 나온다.
+
+### 한도
+
+- **강아지마다 카드 종류당 한 장**(`ready`·`generating`), 보호자마다 따로. 세는 칸이 `month` 가
+  아니라 `card_key` 라(`repositories/ai_card.py::has_card`) 4월 카드가 딸기를 막지 않는다.
+- **하루 한도는 달·종류가 계수기 하나**를 나눠 쓴다 — `DAENGS_CARDIMAGE_DAILY_LIMIT` 과
+  `ai_card_usage`, 세는 단위(요청 하나, D-084)는 그대로다.
+- 누끼 카드(`dog_cards`)와는 여전히 완전 독립.
+- 종류 카드의 열림/닫힘은 **설정 없이 카탈로그 등재 = 열림**이다. 달의
+  `DAENGS_CARDIMAGE_MONTHS` 는 틀 12장을 한꺼번에 넣고 검증된 것만 여는 장치였는데, 종류는
+  검증을 마친 것만 한 장씩 넣으므로 「넣는 행위」가 곧 「여는 행위」다.
+
+### 키셋 버그 4곳 (`0b20d1b1`)
+
+`(Model.created_at, Model.id) < (at, last_id)` 처럼 **파이썬 튜플끼리** 비교 연산자를 쓰면
+SQLAlchemy 컬럼 비교식이 늘 참이라 파이썬이 첫 원소에서 멈추고 `id` 가 SQL 에 안 나간다. 같은
+`created_at` 행이 여럿일 때 페이지 사이에서 조용히 건너뛰어졌다 — 에러도 로그도 없이.
+
+| 파일 | 함수 |
+| --- | --- |
+| `repositories/admin_audit_log.py` | 감사 로그 목록 |
+| `repositories/answer_report.py` | `list_reports` · `turn_position` |
+| `repositories/gait_record.py` | `list_for_pet` |
+
+`tuple_()` 로 고쳤다(`app_user.py`·`admin_ai_card.py` 가 이미 쓰던 방식). 회귀 테스트
+`backend/tests/test_keyset_tuple_comparison.py` 는 **DB 없이** 컴파일된 SQL 에 튜플 비교가
+나가는지 본다 — 고치기 전 코드에서 4개 전부 실패하는 것을 확인했다.
+
+### 콘솔 저장 목록 (`c57d6d1f`)
+
+`GET /admin/cardimage/cards` 가 기본 **10줄 + `next_cursor`**(키셋 `(created_at, id)`, base64 로
+구운 불투명 값)를 준다. `null` 이면 마지막 쪽이고, 손으로 고친 커서는 422 `bad_cursor` 다.
+OFFSET 이 아닌 이유는 이 표가 보는 사이에도 늘기 때문이다. 화면에 「더 보기」와 줄마다
+「PNG 저장」(`<카드>_<강아지>_<시각>.png`, Windows 가 막는 글자·제어 문자는 턴다)이 붙었다.
+일괄 삭제·자동 정리는 **안 한다**(사용자 09-18).
+
+### 머지 전 남은 절차
+
+1. **개발서버에 마이그레이션 적용** — `db/migrations/2026-09-18_ai_cards_card_key.sql`.
+   ⚠ **이 장만 평소의 「DB 먼저」가 안 맞는다.** `card_key` 가 NOT NULL 이라 먼저 적용하면 새
+   코드가 뜰 때까지 앱의 카드 만들기가 실패하고, 코드를 먼저 올리면 칸이 없어 역시 실패한다.
+   **사용자 결정 ⓐ — 머지 직전에 적용하고 곧바로 머지한다.** `dev` 머지가 곧 배포라 그 틈은
+   1~2분이고, 그 사이 `POST /app/ai-cards` 가 실패할 수 있는 것을 감수한다(조회·목록·삭제는
+   그 칸을 안 쓴다). GCP 반영은 `dev → main` 때 `docs/deploy/runbook.md` §6 대로.
+2. **전체 `uv run pytest`** (약 9분) — 아직 이 브랜치 전체로는 안 돌렸다.
+3. **머지.**
+
+### 사람이 정할 것
+
+- **앱 저장소(`SAJOYO/DAENGS_APP`) 작업** — 카드 고르는 화면이 `card` 를 보내야 딸기·상추가
+  사용자에게 보인다. 서버는 열렸지만 앱이 옛 버전이면 아무것도 달라지지 않는다.
+  **`month` 계약을 걷어내는 시점도 이것에 달렸다** — 날짜가 아니라 "앱이 충분히 퍼졌나" 다.
+- **앱용 카드 목록 경로를 만들지** — 지금 앱은 무엇을 만들 수 있는지를 `GET /app/ai-cards` 의
+  `photo_guidance`·남은 횟수로만 받고, 고를 수 있는 카드 목록은 안 받는다. 콘솔에는
+  `GET /admin/cardimage/options`(카드 14 · 엔진 2)가 있지만 관리자 경로다. 앱이 카드 목록을
+  하드코딩할지, 같은 모양의 앱용 경로를 열지 안 정했다.
+
 ## 2026-09-18 — #592 콘솔 카드 시험 + 과일·채소 카드 (Task 1~7, 브랜치 `fix/ai-card-title-condense`)
 
 `docs/superpowers/plans/2026-09-18-ai-card-console-and-fruit-cards.md` 를 subagent-driven-development

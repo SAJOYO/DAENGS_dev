@@ -8,7 +8,7 @@
 import asyncio
 import io
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from fakes import FakeSession
@@ -44,9 +44,13 @@ def rows(monkeypatch: pytest.MonkeyPatch) -> Rows:
     async def get(session, card_id, *, for_update=False):
         return next((c for c in store.cards if c.id == card_id), None)
 
-    async def list_recent(session, *, limit=50):
-        # 진짜 쿼리와 같게 `created_at DESC` 입니다 — 소유자로 거르지 않습니다.
-        return sorted(store.cards, key=lambda c: c.created_at, reverse=True)[:limit]
+    async def list_recent(session, *, limit=10, before=None):
+        # 진짜 쿼리와 같게 `(created_at, id) DESC` 이고 소유자로 거르지 않습니다.
+        # `before` 도 같은 튜플 비교라, 키셋 규칙을 대역이 흉내 냅니다.
+        ordered = sorted(store.cards, key=lambda c: (c.created_at, c.id), reverse=True)
+        if before is not None:
+            ordered = [c for c in ordered if (c.created_at, c.id) < before]
+        return ordered[:limit]
 
     async def delete(session, card):
         store.cards.remove(card)
@@ -134,9 +138,39 @@ def test_recent_gives_every_admins_cards_newest_first(rows: Rows, storage: Local
     mine.created_at = datetime(2026, 9, 18, 1, tzinfo=UTC)
     theirs.created_at = datetime(2026, 9, 18, 2, tzinfo=UTC)
 
-    got = asyncio.run(service.recent(FakeSession()))
+    page = asyncio.run(service.recent(FakeSession()))
 
-    assert [c.id for c in got] == [theirs.id, mine.id]
+    assert [c.id for c in page.cards] == [theirs.id, mine.id]
+    # 두 장뿐이라 다음 쪽이 없습니다 — 화면은 이 `None` 으로 「더 보기」를 지웁니다.
+    assert page.next_cursor is None
+
+
+def test_recent_pages_ten_at_a_time_and_the_cursor_continues(
+    rows: Rows, storage: LocalBridgeStorage
+) -> None:
+    """기본 10장 + 커서로 이어받기 (사용자 09-18). 쪽이 겹치지도, 빠지지도 않습니다."""
+    made = []
+    for n in range(12):
+        card = _save(FakeSession(), _png((10, 10)))
+        assert card is not None
+        card.created_at = datetime(2026, 9, 18, tzinfo=UTC) + timedelta(minutes=n)
+        made.append(card)
+
+    first = asyncio.run(service.recent(FakeSession()))
+    assert len(first.cards) == 10 and first.next_cursor is not None
+    assert [c.id for c in first.cards] == [c.id for c in reversed(made[2:])]
+
+    second = asyncio.run(service.recent(FakeSession(), cursor=first.next_cursor))
+
+    assert [c.id for c in second.cards] == [made[1].id, made[0].id]
+    # 마지막 쪽이라 커서가 없습니다.
+    assert second.next_cursor is None
+
+
+def test_recent_rejects_a_cursor_we_did_not_bake(rows: Rows, storage: LocalBridgeStorage) -> None:
+    """커서는 URL 에 실려 오므로 손으로 고친 값이 들어옵니다 — 500 이 아니라 여기서 잡습니다."""
+    with pytest.raises(service.InvalidCursorError):
+        asyncio.run(service.recent(FakeSession(), cursor="손으로-고친-값"))
 
 
 def test_load_png_gives_the_row_and_the_bytes(rows: Rows, storage: LocalBridgeStorage) -> None:

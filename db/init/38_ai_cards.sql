@@ -1,6 +1,8 @@
 -- ---------------------------------------------------------------------
--- ai_cards : 사진 한 장으로 서버가 만든 달 도감 카드 (#537, D-076, docs/cardimage/)
+-- ai_cards : 사진 한 장으로 서버가 만든 도감 카드 (#537, D-076 · D-085, docs/cardimage/)
 -- ---------------------------------------------------------------------
+-- **달(1~12)만이 아니다** — 종류 카드(딸기·상추)도 이 표에 들어온다 (#593, D-085).
+-- 무엇을 만들었는지는 `card_key` 가 갖고, `month` 는 달 카드에만 있다.
 -- dog_cards(앱이 누끼 얼굴을 끼워 만든 카드)와 **별개다.** 이건 서버가 만든 카드 한 장 통째
 -- PNG(994×1582) 이고, 그래서 id 도 서버가 만든다(POST).
 --
@@ -18,7 +20,12 @@ CREATE TABLE IF NOT EXISTS ai_cards (
     app_user_id UUID NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
     -- 어느 아이로 만들었나. **아이를 지워도 카드는 남는다** (SET NULL).
     dog_id UUID REFERENCES pets(id) ON DELETE SET NULL,
-    month SMALLINT NOT NULL,
+    -- 달 카드의 달(1~12). **종류 카드(딸기·상추)는 NULL 이다** — 그 카드에는 달이 없다 (D-085).
+    month SMALLINT,
+    -- 무엇을 만들었나. 달이면 "1".."12", 종류면 "strawberry" · "lettuce"
+    -- (`daengs_cardimage.catalog.card_key`, admin_ai_cards.card_key 와 같은 모양).
+    -- 정수가 아니다 — 달이 아닌 카드가 같은 칸에 들어온다. 한도(강아지당 카드 종류 1장)가 이 값을 센다.
+    card_key VARCHAR(20) NOT NULL,
     -- 카드에 **인쇄된** 이름. 개명해도 이미 만든 카드의 글자는 안 바뀐다.
     dog_name VARCHAR(40) NOT NULL,
     title VARCHAR(80) NOT NULL,
@@ -43,7 +50,15 @@ CREATE TABLE IF NOT EXISTS ai_cards (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
-    CONSTRAINT ai_cards_month CHECK (month BETWEEN 1 AND 12),
+    -- 달 카드와 종류 카드를 한 표에 담는 규칙 (D-085). 달이 있으면 1~12 이고 card_key 가 그
+    -- 달의 문자열이어야 하며, 달이 없으면(종류 카드) card_key 는 숫자가 아니어야 한다 —
+    -- 숫자를 막지 않으면 "month 는 비었는데 card_key 가 '4'" 인 행이 설 수 있고, 그건 앱에
+    -- month=null 로 나가는 달 카드다(전환기 계약이 month 를 함께 싣는다).
+    CONSTRAINT ai_cards_month CHECK (
+        (month IS NOT NULL AND month BETWEEN 1 AND 12 AND card_key = month::text)
+        OR (month IS NULL AND card_key !~ '^[0-9]+$')
+    ),
+    CONSTRAINT ai_cards_card_key CHECK (length(btrim(card_key)) > 0),
     CONSTRAINT ai_cards_dog_name CHECK (length(btrim(dog_name)) > 0),
     CONSTRAINT ai_cards_status CHECK (status IN ('generating', 'ready', 'failed')),
     -- 'ready' 인데 이미지가 없으면 앱이 빈 카드를 받는다.

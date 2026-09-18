@@ -1,16 +1,30 @@
 """`models/ai_card.py` 가 `db/init/38_ai_cards.sql` 을 따라가는지 (모델은 SQL 을 따라가는 쪽)."""
 
-from sqlalchemy import Boolean, Integer
+from sqlalchemy import Boolean, Integer, String
 
 from daengs_backend.models import AI_CARD_STATUSES, AiCard, AiCardUsage
 
 
 def test_columns_follow_sql() -> None:
     assert set(AiCard.__table__.c.keys()) == {
-        "id", "app_user_id", "dog_id", "month", "dog_name", "title", "status", "error_code",
-        "storage_key", "generation", "size_bytes", "width", "height", "likeness", "attempts", "seed",
-        "pick_group", "created_at", "updated_at",
+        "id", "app_user_id", "dog_id", "month", "card_key", "dog_name", "title", "status",
+        "error_code", "storage_key", "generation", "size_bytes", "width", "height", "likeness",
+        "attempts", "seed", "pick_group", "created_at", "updated_at",
     }
+
+
+def test_month_is_nullable_and_card_key_is_not() -> None:
+    """종류 카드(딸기·상추)는 달이 없다 — `month` 가 NOT NULL 로 되돌아가면 못 만든다 (#593, D-085)."""
+    assert AiCard.__table__.c.month.nullable
+    card_key = AiCard.__table__.c.card_key
+    assert not card_key.nullable
+    # 정수가 아니다 — 달이 아닌 카드가 같은 칸에 들어온다 (admin_ai_cards.card_key 와 같은 모양).
+    assert type(card_key.type) is String and card_key.type.length == 20
+
+
+def test_card_key_round_trips_for_a_kind_card() -> None:
+    card = AiCard(month=None, card_key="strawberry", dog_name="네오", title="BERRY 네오", status="generating")
+    assert card.month is None and card.card_key == "strawberry"
 
 
 def test_seed_column_is_integer_not_smallinteger() -> None:
@@ -19,15 +33,16 @@ def test_seed_column_is_integer_not_smallinteger() -> None:
 
 
 def test_seed_round_trips_on_the_model() -> None:
-    card = AiCard(month=4, dog_name="네오", title="BLOSSOM 네오", status="ready", seed=1234567890)
+    card = AiCard(month=4, card_key="4", dog_name="네오", title="BLOSSOM 네오", status="ready", seed=1234567890)
     assert card.seed == 1234567890
 
 
 def test_named_constraints_and_indexes() -> None:
     names = {c.name for c in AiCard.__table__.constraints if c.name}
     assert {
-        "ai_cards_month", "ai_cards_dog_name", "ai_cards_status", "ai_cards_ready_set",
-        "ai_cards_failed_code", "ai_cards_size", "ai_cards_likeness", "ai_cards_attempts",
+        "ai_cards_month", "ai_cards_card_key", "ai_cards_dog_name", "ai_cards_status",
+        "ai_cards_ready_set", "ai_cards_failed_code", "ai_cards_size", "ai_cards_likeness",
+        "ai_cards_attempts",
     } <= names
     indexes = {i.name: i for i in AiCard.__table__.indexes}
     assert indexes["idx_ai_cards_one_generating"].unique
@@ -37,6 +52,18 @@ def test_named_constraints_and_indexes() -> None:
     assert "id = pick_group" in one_generating_where
     assert indexes["idx_ai_cards_storage_key"].unique
     assert not indexes["ix_ai_cards_pick_group"].unique  # 형제 행이 같은 값을 공유하는 것이 정상이다
+
+
+def test_month_check_pairs_month_with_card_key() -> None:
+    """옛 정의(`month BETWEEN 1 AND 12`)로 되돌아가면 종류 카드·짝 규칙이 조용히 사라진다.
+
+    이름이 같아서 이름만 보는 검사로는 못 잡는다 — `verify_2026-09-18_ai_cards_card_key.sql`
+    이 DB 쪽에서 같은 것을 본다.
+    """
+    check = next(c for c in AiCard.__table__.constraints if c.name == "ai_cards_month")
+    sqltext = str(check.sqltext)
+    assert "card_key = month::text" in sqltext
+    assert "month IS NULL" in sqltext
 
 
 def test_statuses() -> None:

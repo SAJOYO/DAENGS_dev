@@ -15,9 +15,12 @@
 from __future__ import annotations
 
 import asyncio
+import base64
+import binascii
 import io
 import logging
 import uuid
+from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from PIL import Image
@@ -48,6 +51,46 @@ _MAX_PNG_BYTES = 16 * 1024 * 1024
 _DOG_NAME_MAX = 40
 _TITLE_MAX = 80
 _JUDGE_NOTE_MAX = 200
+
+#: 한 쪽의 기본·최대 건수. **기본이 10 입니다** (사용자 09-18) — 줄마다 미리보기를 한 장씩
+#: 따로 받는 화면이라(`GET /cards/{id}/image`) 한 쪽이 곧 그만큼의 요청입니다.
+DEFAULT_LIMIT = 10
+MAX_LIMIT = 200
+
+
+class InvalidCursorError(ValueError):
+    """커서가 우리가 구운 값이 아닙니다. 라우터가 422 로 바꿉니다 (`services/audit.py` 와 같습니다)."""
+
+
+@dataclass(frozen=True)
+class CardPage:
+    """한 쪽 + 다음 커서. **`next_cursor` 가 `None` 이면 마지막 쪽**입니다."""
+
+    cards: list[AdminAiCard]
+    next_cursor: str | None
+
+
+def _encode_cursor(at: datetime, card_id: uuid.UUID) -> str:
+    """`(created_at, id)` 를 불투명한 문자열로 (`services/audit.py::_encode_cursor` 와 같은 모양).
+
+    **불투명하게 두는 이유**는 다음 쪽을 부르는 방법이 우리 계약이지 화면이 조립할 것이
+    아니기 때문입니다. 콘솔은 받은 값을 그대로 돌려주기만 하면 됩니다.
+    """
+    return base64.urlsafe_b64encode(f"{at.isoformat()}|{card_id}".encode()).decode()
+
+
+def _decode_cursor(cursor: str) -> tuple[datetime, uuid.UUID]:
+    """커서를 되돌립니다. 우리가 만든 값이 아니면 `InvalidCursorError`.
+
+    **500 으로 새지 않게 여기서 잡습니다** — 커서는 URL 에 그대로 실려 오므로 사람이 손으로
+    고친 값이 들어올 수 있고, 그건 서버 잘못이 아니라 잘못된 요청입니다.
+    """
+    try:
+        raw = base64.urlsafe_b64decode(cursor.encode()).decode()
+        at_text, _, id_text = raw.partition("|")
+        return datetime.fromisoformat(at_text), uuid.UUID(id_text)
+    except (ValueError, binascii.Error, UnicodeDecodeError):
+        raise InvalidCursorError from None
 
 
 def _store_png(key: str, png: bytes) -> StoredObject | None:
@@ -164,10 +207,23 @@ async def save(
     return card
 
 
-async def recent(session: AsyncSession, limit: int = 50) -> list[AdminAiCard]:
-    """최근 카드 목록. **누가 뽑았든 전부** 줍니다 — 콘솔은 관리자끼리 서로 보는 화면입니다
-    (사용자 결정 09-18). 이미지 바이트는 안 싣습니다 — 목록 한 번에 N 장을 읽게 됩니다."""
-    return await admin_ai_card_repo.list_recent(session, limit=limit)
+async def recent(
+    session: AsyncSession, *, limit: int = DEFAULT_LIMIT, cursor: str | None = None
+) -> CardPage:
+    """최근 카드 한 쪽 + 다음 커서. **누가 뽑았든 전부** 줍니다 — 콘솔은 관리자끼리 서로 보는
+    화면입니다 (사용자 결정 09-18). 이미지 바이트는 안 싣습니다 — 목록 한 번에 N 장을 읽게 됩니다.
+
+    **`limit + 1` 개를 읽어 다음 쪽이 있는지 봅니다.** 정확히 `limit` 개만 읽으면 "이게 마지막
+    쪽인가"를 알 수 없어 화면이 빈 쪽을 한 번 더 부르게 됩니다 (`services/audit.py` 와 같습니다).
+    """
+    capped = max(1, min(limit, MAX_LIMIT))
+    before = _decode_cursor(cursor) if cursor else None
+    rows = await admin_ai_card_repo.list_recent(session, limit=capped + 1, before=before)
+
+    has_more = len(rows) > capped
+    kept = rows[:capped]
+    next_cursor = _encode_cursor(kept[-1].created_at, kept[-1].id) if has_more and kept else None
+    return CardPage(cards=kept, next_cursor=next_cursor)
 
 
 async def load_png(session: AsyncSession, card_id: uuid.UUID) -> tuple[AdminAiCard, bytes] | None:

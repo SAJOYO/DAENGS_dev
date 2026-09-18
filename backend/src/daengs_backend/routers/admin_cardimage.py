@@ -63,9 +63,8 @@ _ENGINE_LABELS: dict[str, str] = {"gemini": "Nano Banana 2", "cardgen": "FLUX.2-
 #: 달이 아닌 카드의 한국어 이름. `catalog` 는 프롬프트용 영어만 갖고 있어서 여기서 붙인다.
 _KIND_LABELS: dict[str, str] = {"strawberry": "딸기", "lettuce": "상추"}
 
-#: 목록 기본·최대 건수. 미리보기를 한 장씩 따로 받는 화면이라 넉넉히 줄 이유가 없다.
-_LIST_DEFAULT = 50
-_LIST_MAX = 200
+# 목록 기본·최대 건수(10·200)는 `services/admin_card_store.py` 가 정한다 — 커서를 굽는 곳과
+# 한 쪽의 크기를 정하는 곳이 같아야 `limit + 1` 규칙이 한 자리에 남는다.
 
 
 def _error(status_code: int, code: str, message: str) -> HTTPException:
@@ -239,11 +238,25 @@ async def generate(
 async def list_cards(
     _admin: Annotated[Principal, Depends(_INSPECT)],
     session: Session,
-    limit: Annotated[int, Query(ge=1, le=_LIST_MAX)] = _LIST_DEFAULT,
+    limit: Annotated[int, Query(ge=1, le=admin_card_store.MAX_LIMIT)] = admin_card_store.DEFAULT_LIMIT,
+    cursor: Annotated[str | None, Query(max_length=200)] = None,
 ) -> AdminCardListResponse:
-    """최근 것부터, **관리자 전원의 카드**를 준다 (사용자 결정 09-18)."""
-    cards = await admin_card_store.recent(session, limit=limit)
-    return AdminCardListResponse(cards=[_to_out(c) for c in cards])
+    """최근 것부터 **한 쪽**, **관리자 전원의 카드**를 준다 (사용자 결정 09-18).
+
+    기본 10줄이고, 응답의 `next_cursor` 를 그대로 `cursor` 에 넣으면 다음 10줄이다.
+    **`next_cursor` 가 `null` 이면 더 없다** — 화면의 「더 보기」가 그것으로 사라진다.
+    """
+    try:
+        page = await admin_card_store.recent(session, limit=limit, cursor=cursor)
+    except admin_card_store.InvalidCursorError:
+        # 커서는 URL 에 실려 오므로 손으로 고친 값이 들어올 수 있다. 서버 잘못이 아니다.
+        # `..._ENTITY` 는 starlette 이 예고(deprecation)한 이름이다 — `..._CONTENT` 와 같은 422 다.
+        raise _error(
+            status.HTTP_422_UNPROCESSABLE_CONTENT, "bad_cursor", "커서가 올바르지 않습니다"
+        ) from None
+    return AdminCardListResponse(
+        cards=[_to_out(c) for c in page.cards], next_cursor=page.next_cursor
+    )
 
 
 @router.get("/cards/{card_id}/image")

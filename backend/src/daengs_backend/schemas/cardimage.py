@@ -66,7 +66,15 @@ class AdminCardOut(BaseModel):
 
 
 class AdminCardListResponse(BaseModel):
+    """저장된 카드 한 쪽 (기본 10줄).
+
+    **총 개수를 주지 않습니다** — 키셋이라 세지 않고, 세더라도 읽는 사이에 카드가 늘어서 곧
+    틀린 숫자가 됩니다 (`schemas/admin_audit.py` 의 `AuditPageOut` 과 같은 규칙).
+    """
+
     cards: list[AdminCardOut]
+    #: 다음 쪽을 부를 때 `cursor` 로 그대로 돌려주는 값. **`None` 이면 더 없습니다.**
+    next_cursor: str | None = None
 
 
 class CardOption(BaseModel):

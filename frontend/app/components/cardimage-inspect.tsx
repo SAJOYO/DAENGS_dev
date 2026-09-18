@@ -51,6 +51,9 @@ type CardOption = { key: string; label: string };
 type EngineOption = { key: string; label: string; available: boolean; reason: string | null };
 type Options = { cards: CardOption[]; engines: EngineOption[]; photo_guidance: string };
 
+/** 한 쪽에 받는 줄 수. 기본값은 서버도 10 입니다 (`services/admin_card_store.py`). */
+const PAGE = 10;
+
 /** `GET /admin/cardimage/cards` 의 한 줄 (`AdminCardOut`). 이미지 바이트는 안 옵니다. */
 type StoredCard = {
   id: string;
@@ -68,6 +71,13 @@ type StoredCard = {
   size_bytes: number;
   elapsed_ms: number;
   created_at: string;
+};
+
+/** `GET /admin/cardimage/cards` 한 쪽 (`AdminCardListResponse`). */
+type StoredPage = {
+  cards: StoredCard[];
+  /** 그대로 `cursor` 에 넣으면 다음 10줄. **`null` 이면 더 없습니다.** */
+  next_cursor: string | null;
 };
 
 function messageOf(body: unknown, status: number): string {
@@ -103,6 +113,59 @@ function revokeAll(urls: Record<string, string>): void {
   for (const url of Object.values(urls)) URL.revokeObjectURL(url);
 }
 
+/**
+ * 한 쪽의 미리보기를 objectURL 로 받아 온다. **한 장이 실패해도 나머지는 그립니다** —
+ * 빠진 줄은 화면에 "미리보기 없음" 으로 남습니다.
+ *
+ * 목록 응답에 바이트가 안 실려 있어(`AdminCardOut`) 줄마다 한 번씩 부릅니다. 한 쪽이
+ * 10줄인 이유가 이것입니다.
+ */
+async function loadThumbs(rows: StoredCard[]): Promise<Record<string, string>> {
+  const pairs = await Promise.all(
+    rows.map(async (row): Promise<[string, string] | null> => {
+      const res = await apiFetch(`/api/admin/cardimage/cards/${row.id}/image`).catch(() => null);
+      if (!res || !res.ok) return null;
+      return [row.id, URL.createObjectURL(await res.blob())];
+    }),
+  );
+  const next: Record<string, string> = {};
+  for (const pair of pairs) if (pair) next[pair[0]] = pair[1];
+  return next;
+}
+
+/**
+ * 파일 이름에 넣을 수 있게 다듬는다. **Windows 에서 못 쓰는 글자**(`\ / : * ? " < > |`)와
+ * 제어 문자를 빼고, 빈칸은 `_` 로 바꾸고, 끝의 점·공백을 턴다(탐색기가 조용히 잘라 냅니다).
+ * 한글은 그대로 둡니다 — 강아지 이름이 거의 한글입니다.
+ */
+function safePart(text: string): string {
+  const cleaned = [...text]
+    // 제어 문자는 정규식이 아니라 코드로 거릅니다 — 문자 범위를 유니코드 이스케이프로
+    // 적다가 진짜 NUL 이 파일에 들어가면 git 이 이 파일을 이진으로 보고 diff 를 포기합니다.
+    .filter((ch) => ch >= " ")
+    .join("")
+    .replace(/[\\/:*?"<>|]/g, "")
+    // 턴 다음에 빈칸을 메웁니다 — 순서가 반대면 앞뒤 공백이 `_` 로 굳어 버립니다.
+    .replace(/^[.\s]+|[.\s]+$/g, "")
+    .replace(/\s+/g, "_");
+  return cleaned || "card";
+}
+
+/** `20260918-1432` — 파일 이름에 `:` 를 못 쓰므로 자리만 붙여 씁니다. */
+function stamp(iso: string): string {
+  const at = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return (
+    `${at.getFullYear()}${pad(at.getMonth() + 1)}${pad(at.getDate())}` +
+    `-${pad(at.getHours())}${pad(at.getMinutes())}`
+  );
+}
+
+/** 내려받을 파일 이름 — 카드·이름·시각 (`strawberry_두김이_20260918-1432.png`). */
+function fileNameOf(row: StoredCard): string {
+  return `${safePart(row.card)}_${safePart(row.dog_name)}_${stamp(row.created_at)}.png`;
+}
+
 export default function CardImageInspect() {
   const { admin } = useAuth();
 
@@ -122,6 +185,11 @@ export default function CardImageInspect() {
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
   const [listError, setListError] = useState<string | null>(null);
   const [listing, setListing] = useState(false);
+  /** 다음 쪽을 부르는 값. **`null` 이면 마지막 쪽**이라 「더 보기」가 사라집니다. */
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  /** 지금 내려받는 중인 행. 같은 줄을 두 번 누르는 것만 막습니다. */
+  const [saving, setSaving] = useState<string | null>(null);
   /** 삭제를 한 번 더 묻는 중인 행. 브라우저 `confirm()` 은 이 저장소에서 쓰지 않습니다. */
   const [asking, setAsking] = useState<string | null>(null);
   const [removing, setRemoving] = useState<string | null>(null);
@@ -141,30 +209,20 @@ export default function CardImageInspect() {
    */
   const refresh = useCallback(
     () =>
-      fetchJson<{ cards: StoredCard[] }>("/api/admin/cardimage/cards")
+      fetchJson<StoredPage>(`/api/admin/cardimage/cards?limit=${PAGE}`)
         .then((page) =>
-          // 미리보기는 한 장씩 따로 받습니다 — 목록 응답에 바이트가 안 실려 있습니다.
-          // 한 장이 실패해도 나머지는 그립니다(`null` 이면 아래에서 "미리보기 없음").
-          Promise.all(
-            page.cards.map(async (row): Promise<[string, string] | null> => {
-              const res = await apiFetch(`/api/admin/cardimage/cards/${row.id}/image`).catch(
-                () => null,
-              );
-              if (!res || !res.ok) return null;
-              return [row.id, URL.createObjectURL(await res.blob())];
-            }),
-          ).then((pairs) => {
-            const next: Record<string, string> = {};
-            for (const pair of pairs) if (pair) next[pair[0]] = pair[1];
+          loadThumbs(page.cards).then((next) => {
             if (!alive.current) {
               // 화면이 떠난 뒤 도착했습니다. 방금 만든 URL 을 두면 그게 곧 누수입니다.
               revokeAll(next);
               return;
             }
+            // 첫 쪽부터 다시 받는 자리라 들고 있던 것을 전부 되돌립니다.
             revokeAll(thumbsRef.current);
             thumbsRef.current = next;
             setThumbs(next);
             setStored(page.cards);
+            setCursor(page.next_cursor);
             setListError(null);
           }),
         )
@@ -180,6 +238,71 @@ export default function CardImageInspect() {
       await refresh();
     } finally {
       if (alive.current) setListing(false);
+    }
+  }
+
+  /**
+   * 다음 10줄을 **이어 붙입니다.** 키셋 커서라 겹치거나 빠지지 않습니다 — 보는 사이에 옆에서
+   * 카드를 뽑아도 이미 본 쪽은 그대로입니다 (OFFSET 이면 어긋납니다).
+   */
+  async function more() {
+    if (!cursor) return;
+    setLoadingMore(true);
+    setListError(null);
+    try {
+      const params = new URLSearchParams({ limit: String(PAGE), cursor });
+      const page = await fetchJson<StoredPage>(`/api/admin/cardimage/cards?${params}`);
+      const next = await loadThumbs(page.cards);
+      if (!alive.current) {
+        revokeAll(next);
+        return;
+      }
+      // 앞쪽 미리보기는 그대로 두고 새 줄만 더합니다 — 여기서 `revokeAll` 을 부르면
+      // 이미 그려 놓은 `<img>` 가 전부 깨집니다.
+      const merged = { ...thumbsRef.current, ...next };
+      thumbsRef.current = merged;
+      setThumbs(merged);
+      setStored((prev) => [...(prev ?? []), ...page.cards]);
+      setCursor(page.next_cursor);
+    } catch (e) {
+      if (alive.current) setListError(e instanceof Error ? e.message : String(e));
+    } finally {
+      if (alive.current) setLoadingMore(false);
+    }
+  }
+
+  /**
+   * 한 줄의 PNG 를 내려받습니다. **`<a href>` 로 바로 못 겁니다** — 그 경로도 Bearer 인증이
+   * 필요한데 `<a>` 는 헤더를 못 싣습니다. `apiFetch` 로 받아 임시 objectURL 을 만들어
+   * 누르고, 한 박자 뒤에 되돌립니다.
+   *
+   * 미리보기(`thumbs`)를 재활용하지 않는 이유는 그 장이 실패해 비어 있을 수 있어서입니다 —
+   * 「내려받기」는 미리보기가 안 뜬 줄에서도 되어야 합니다.
+   */
+  async function download(row: StoredCard) {
+    setSaving(row.id);
+    setListError(null);
+    try {
+      const res = await apiFetch(`/api/admin/cardimage/cards/${row.id}/image`);
+      if (!res.ok) {
+        const body: unknown = await res.json().catch(() => null);
+        setListError(messageOf(body, res.status));
+        return;
+      }
+      const url = URL.createObjectURL(await res.blob());
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = fileNameOf(row);
+      // 문서에 붙였다가 뗍니다 — 떠 있지 않은 `<a>` 의 click 을 무시하는 브라우저가 있습니다.
+      document.body.append(link);
+      link.click();
+      link.remove();
+      // **바로 되돌리면 브라우저가 내려받기를 취소하기도 합니다.** 한 박자 뒤에 풉니다.
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (e) {
+      if (alive.current) setListError(e instanceof Error ? e.message : String(e));
+    } finally {
+      if (alive.current) setSaving(null);
     }
   }
 
@@ -263,6 +386,8 @@ export default function CardImageInspect() {
         return;
       }
       setAsking(null);
+      // 첫 쪽부터 다시 받습니다 — 「더 보기」로 펼쳐 둔 줄은 접힙니다. 지운 줄만 빼면
+      // 그 뒤 쪽들의 커서가 어긋나서, 다시 펼치는 편이 정직합니다.
       await refresh();
     } catch (e) {
       setListError(e instanceof Error ? e.message : String(e));
@@ -496,7 +621,8 @@ export default function CardImageInspect() {
           </button>
         </div>
         <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
-          관리자 전원이 만든 카드를 최근 것부터 봅니다. 지우면 되돌릴 수 없습니다.
+          관리자 전원이 만든 카드를 최근 것부터 10장씩 봅니다 — 아래 「더 보기」로 이어 받습니다.
+          지우면 되돌릴 수 없습니다.
         </p>
 
         {listError && (
@@ -513,7 +639,7 @@ export default function CardImageInspect() {
           </p>
         ) : (
           <div className="mt-4 overflow-x-auto">
-            <table className="w-full min-w-[56rem] text-left text-sm">
+            <table className="w-full min-w-[64rem] text-left text-sm">
               <thead className="border-b border-zinc-200 text-xs text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
                 <tr>
                   <th className="py-2 pr-4 font-normal">미리보기</th>
@@ -523,6 +649,7 @@ export default function CardImageInspect() {
                   <th className="py-2 pr-4 font-normal">닮음</th>
                   <th className="py-2 pr-4 font-normal">만든 사람</th>
                   <th className="py-2 pr-4 font-normal">시각</th>
+                  <th className="py-2 pr-4 font-normal">내려받기</th>
                   <th className="py-2 font-normal">삭제</th>
                 </tr>
               </thead>
@@ -574,6 +701,18 @@ export default function CardImageInspect() {
                       <td className="py-3 pr-4 text-xs whitespace-nowrap text-zinc-500 tabular-nums dark:text-zinc-400">
                         {when(row.created_at)}
                       </td>
+                      <td className="py-3 pr-4 text-xs whitespace-nowrap">
+                        {/* 오른쪽 클릭으로 저장하면 이름이 `image.png` 입니다 — 카드·이름·시각을
+                            붙인 이름으로 받게 버튼을 답니다 (사용자 09-18). */}
+                        <button
+                          type="button"
+                          onClick={() => void download(row)}
+                          disabled={saving === row.id}
+                          className="rounded-full border border-zinc-300 px-3 py-1 text-zinc-600 transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-900"
+                        >
+                          {saving === row.id ? "받는 중…" : "PNG 저장"}
+                        </button>
+                      </td>
                       <td className="py-3 text-xs whitespace-nowrap">
                         {asking === row.id ? (
                           <span className="flex items-center gap-2">
@@ -610,6 +749,18 @@ export default function CardImageInspect() {
               </tbody>
             </table>
           </div>
+        )}
+
+        {/* 커서가 있을 때만 뜹니다 — 서버가 `next_cursor: null` 로 "더 없다"고 말합니다. */}
+        {cursor && (
+          <button
+            type="button"
+            onClick={() => void more()}
+            disabled={loadingMore}
+            className="mt-4 rounded-full border border-zinc-300 px-4 py-2 text-sm text-zinc-600 transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-900"
+          >
+            {loadingMore ? "불러오는 중…" : "더 보기"}
+          </button>
         )}
       </div>
     </section>

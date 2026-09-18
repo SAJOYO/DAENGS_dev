@@ -4804,6 +4804,13 @@ DAENGS_APP 쪽 결정이다.
 되돌리기: 규칙은 여전히 `services/ai_card_quota.py::check_quota` 한 곳이다. 표를 버리려면 `check_quota` 를
 `ai_cards` 로 되돌리고 `_finish_ready` 의 기록 한 줄을 지운다.
 
+> **D-085 로 개정됨** (2026-09-18, #593): 위의 "`ai_cards.month` 는 1~12 이고 연도가 없어 '그 달'은
+> 테마 달이다" 는 **달 카드에만** 남는다. 같은 표에 종류 카드(딸기·상추)가 들어오면서 `month` 는
+> nullable 이 되고, 카드를 가리키는 값은 새 칸 `ai_cards.card_key`(달이면 `"4"`, 종류면
+> `"strawberry"`)가 됐다. 「강아지마다 달마다 한 장」도 **「강아지마다 카드 종류당 한 장」**으로
+> 넓어졌다 — 세는 칸이 `month` 에서 `card_key` 로 바뀌었을 뿐, 달 카드의 동작은 그대로다.
+> (세는 **단위**는 그 전에 D-084 가 카드 장수에서 요청 하나로 바꿨다.)
+
 ## D-078
 ### 도감 카드 생성에 오픈 모델 GPU 서비스(`daengs_cardgen`, Cloud Run L4)를 붙이고, Nano Banana 2 와 FLUX.2-klein-4B 를 둘 다 유지
 
@@ -5163,3 +5170,77 @@ D-080 의 진입도 신호 전용이라 같은 문제가 있었다. 실기기에
 참으로 두면 된다(ready 가 되는 순간 표시가 사용 기록으로 바뀐다). 정리 기준은
 `repositories/ai_card.py::expire_generating` 의 서브쿼리를 행의 `updated_at` 으로, `stale_after()` 의
 `cardgen_url` 갈래를 지우면 예전 그대로다.
+
+## D-085
+### AI 카드를 가리키는 값을 「달 1~12」에서 **카드 키**로 넓히고, 한도는 강아지마다 카드 종류당 한 장으로 센다
+
+2026-09-18, #593. **D-077 의 「`ai_cards.month` 는 1~12 테마 달」 정의를 개정한다.** #592 가 딸기·상추
+카드를 만들어 `catalog.CardSelector = int | str`(1~12 는 달, `catalog.KINDS` 의 문자열은 종류)를 세웠지만
+**부르는 자리는 관리자 콘솔뿐이었다** — 앱 표 `ai_cards` 의 달 칸이 `month SMALLINT NOT NULL`
++ CHECK `month BETWEEN 1 AND 12` 라 종류 카드를 담을 자리가 없었기 때문이다. 사용자가 09-18 에 앱에도
+딸기·상추를 열기로 정했고, 그러려면 표와 앱 계약이 먼저 넓어져야 한다.
+
+| 항목 | 결정 |
+| --- | --- |
+| 카드를 가리키는 값 | **카드 키** — 달이면 `"1"`..`"12"`, 종류면 `"strawberry"`·`"lettuce"`(`catalog.card_key()`). 새 칸 `ai_cards.card_key VARCHAR(20) NOT NULL` 이 갖는다. 콘솔 표 `admin_ai_cards.card_key` 와 같은 모양이다 |
+| `month` | **nullable 이 된다.** 달 카드에만 1~12 가 들어가고 종류 카드는 NULL 이다 |
+| 카드별 한도 | 강아지마다 **카드 종류당 한 장**(`ready`·`generating`), 보호자마다 따로. 세는 칸이 `month` 가 아니라 `card_key` 다(`repositories/ai_card.py::has_card`) — 4월 카드가 딸기를 막지 않고, 딸기가 상추를 막지 않는다. 지우면 그 카드는 다시 열린다 |
+| 하루 한도 | 달·종류가 **계수기 하나**를 나눠 쓴다. `DAENGS_CARDIMAGE_DAILY_LIMIT` 과 `ai_card_usage` 는 그대로이고, 세는 단위도 D-084 의 요청(`pick_group`) 하나 그대로다 |
+| 누끼 카드 | `dog_cards`(폰 안 누끼)와는 여전히 **완전 독립**이다 — 표도 한도도 섞지 않는다 (D-077 그대로) |
+| 종류 카드의 열림/닫힘 | **설정을 두지 않는다 — 카탈로그에 있으면 열린 것**이다 |
+| 앱 계약 | 전환기 — `month` 와 `card` 를 **둘 다** 받고 응답에 둘 다 싣는다 (사용자 결정 A, 아래) |
+
+**CHECK 를 이름 그대로 갈아 끼웠다.** `ai_cards_month` 는 이제 "달이 있으면 1~12 이고 `card_key` 가 그 달의
+문자열, 달이 없으면 `card_key` 가 숫자가 아님" 이다. 뒷갈래에서 숫자를 막지 않으면 「`month` 는 비었는데
+`card_key` 가 `'4'`」 인 행이 설 수 있고, 그건 앱에 `month=null` 로 나가는 달 카드다 — 전환기 계약이 `month` 를
+함께 싣기 때문에 그 행은 옛 앱에서 깨진다. 빈 키는 `ai_cards_card_key` CHECK 가 막는다.
+
+**전환기 계약(A안) — `month` 와 `card` 를 둘 다.** `POST /app/ai-cards` 의 쿼리에서 `month`(1~12)와
+`card`(달 숫자 또는 종류 문자열)가 **둘 다 선택**이다. `month` 만 보내는 옛 앱 요청은 지금과 글자 하나까지
+같게 돈다. 둘 다 보내면 같은 카드를 가리킬 때만 통과하고, 어긋나면 400 `card_conflict`, 둘 다 없으면 400
+`card_required` 다. 한쪽을 조용히 이기게 하면 사용자가 고른 것과 다른 카드가 나오고, 어느 쪽이 이기는지를
+앱과 서버가 서로 다르게 기억하게 된다. 응답은 `month`(종류 카드는 `null`)와 `card`(`"4"`·`"strawberry"`)를
+**함께** 싣는다. 404·409 코드는 파라미터 이름이 아니라 **고른 카드**를 따른다 — 달이면 `month_closed`·
+`month_taken`(옛 앱이 보던 그대로), 종류면 `card_closed`·`card_taken`. 409 문장의 카드 이름은
+`catalog.KIND_LABELS`(딸기·상추) 한 곳에서 온다. 콘솔 목록도 같은 상수를 쓴다 — 그러지 않으면 종류 카드에
+달 문법이 붙어 "0월 카드가 있어요" 가 나온다(`MonthCard.month` 가 종류 카드에서 0 이다). 규칙은
+`routers/ai_card.py::_selector` 한 곳이다.
+
+**`month` 를 언제 걷어낼지는 앱 배포에 달렸다.** 앱 소스는 이 저장소에 없고(`SAJOYO/DAENGS_APP`), 옛 버전이
+설치된 폰이 남아 있는 동안에는 `month` 만 보내는 요청이 계속 온다. 그래서 이 계약은 날짜가 아니라 **조건**으로
+닫는다 — 앱이 `card` 를 보내는 버전으로 충분히 퍼졌다고 사람이 판단할 때. 그때 지우는 것은 `_selector` 의
+`month` 갈래와 응답 스키마의 `month` 칸 둘뿐이다(`schemas/ai_card.py` 에 "없애지 마세요" 를 적어 뒀다).
+
+**종류 카드에 열림/닫힘 설정을 두지 않은 이유.** 달의 `DAENGS_CARDIMAGE_MONTHS` 는 틀 12장을 한꺼번에 넣어
+두고 검증된 것만 여는 장치였다. 종류는 반대다 — 검증을 마친 것만 한 장씩 `catalog._KIND_CARDS` 에 넣으므로
+**「넣는 행위」가 곧 「여는 행위」**다. 설정을 하나 더 두면 카탈로그와 늘 같은 값을 가져야 하는 목록이 둘이
+된다. 나중에 종류를 미리 넣어 두고 나중에 열어야 할 일이 생기면 그때 `DAENGS_CARDIMAGE_KINDS` 를 만든다.
+
+**배포 순서 — 이 장에는 「DB 먼저」가 안 맞는다.** 기본 DB 는 버전 표가 없어 배포가 늘 **DB 먼저, 코드 나중**
+이었다. 그런데 이 마이그레이션이 더하는 `card_key` 는 **NOT NULL** 이고, 지금 도는 코드는 그 칸을 모른 채
+`ai_cards` 에 INSERT 한다 — 먼저 적용하면 새 코드가 뜰 때까지 앱의 카드 만들기가 전부 실패한다. 반대로 코드를
+먼저 올리면 칸이 없어 역시 실패한다. **어느 쪽도 무중단이 아니다.** 사용자 결정 ⓐ 로 **마이그레이션을 머지
+직전에 적용하고 곧바로 머지한다** — `dev` 머지가 곧 배포라 그 틈은 1~2분이고, 그 사이 `POST /app/ai-cards` 가
+실패할 수 있는 것을 감수한다. 조회·목록·삭제는 그 칸을 안 쓰므로 틈에도 그대로 돈다. 마이그레이션은 한
+트랜잭션이고 여러 번 돌려도 안전하다(칸은 `IF NOT EXISTS`, 백필은 `card_key IS NULL AND month IS NOT NULL`
+인 행만, 제약은 `DROP IF EXISTS` 뒤 `ADD`). 파일은 `db/migrations/2026-09-18_ai_cards_card_key.sql` ·
+짝 verify `verify_2026-09-18_ai_cards_card_key.sql` 이고 `tools/check_migration_verification.py` 에
+등록했다. 스키마 원본 `db/init/38_ai_cards.sql` 도 같이 고쳤다.
+
+**옛 verify 를 같이 고쳤다.** 버전 표가 없어 `verify_2026-09-14_ai_cards.sql` 이 이 장까지 적용된 DB 위에서도
+도는데, 거기서 `month` 를 조건 없이 NOT NULL 로 단언하고 있었다. 이제 타입은 늘 보고 NOT NULL 은 `card_key`
+칸이 없을 때만 본다.
+
+**잰 것.** 마이그레이션 변조 하네스(버리는 `pgvector/pgvector:pg17`)로 `ai_cards` 관련 7항목 62건 통과 — 새
+항목의 변조 14개에는 이름을 그대로 둔 채 옛 CHECK 로 되돌리는 것, 종류 갈래만 잃는 것, `NOT VALID` + 값
+어긋남, 백필만 빠진 상태, 건드리면 안 되는 인덱스·제약 셋이 들어 있다. `db/init/38_ai_cards.sql` 만 부은
+스키마가 새 verify 와 옛 verify 를 둘 다 통과한다.
+
+**운영 엔진은 그대로다** — `DAENGS_CARDGEN_URL` 은 여전히 비어 Nano Banana 2 한 장이다(D-084 의 09-17 정정).
+딸기·상추의 검증된 seed 목록은 아직 비어 있고(`pick_seeds` 가 `DEFAULT_SEEDS` 로 대신하며 warning 을 남긴다),
+seed 는 GPU 경로를 켤 때의 일이다.
+
+되돌리기: 앱 경로를 달만 받던 때로 되돌리려면 `routers/ai_card.py` 의 `_selector`·`_closed` 를 지우고 `month`
+를 다시 필수로, `services/ai_card_quota.py::check_quota` 의 `card` 를 `month` 로, `repositories/ai_card.py::
+has_card` 를 `month` 로 되돌린다. 표는 되돌리지 않아도 된다 — `card_key` 는 달 카드에서도 `month::text` 라
+값이 그대로 선다.

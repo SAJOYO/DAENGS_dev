@@ -1,4 +1,7 @@
-"""AI 도감 카드 — 사진 한 장으로 서버가 만든 달 카드 (#537, D-076).
+"""AI 도감 카드 — 사진 한 장으로 서버가 만든 카드 (#537, D-076 · D-085).
+
+달(1~12)만이 아닙니다 — 종류 카드(딸기·상추)도 같은 표에 들어옵니다 (#593, D-085).
+무엇을 만들었는지는 `card_key` 가 갖고, `month` 는 달 카드에만 있습니다.
 
 스키마 원본은 `db/init/38_ai_cards.sql` 입니다. 이 모델은 그 SQL 을 따라가는 쪽이라,
 SQL 을 고치면 여기도 손으로 맞춰야 합니다 (저장소 규칙).
@@ -35,7 +38,16 @@ class AiCard(Base):
     __tablename__ = "ai_cards"
 
     __table_args__ = (
-        CheckConstraint("month BETWEEN 1 AND 12", name="ai_cards_month"),
+        #: 달 카드와 종류 카드를 한 표에 담는 규칙 (D-085). 달이 있으면 1~12 이고 `card_key` 가
+        #: 그 달의 문자열이어야 하며, 달이 없으면(종류 카드) `card_key` 는 숫자가 아니어야 한다 —
+        #: 숫자를 막지 않으면 「month 는 비었는데 card_key 가 '4'」 인 행이 서고, 그건 앱에
+        #: `month=null` 로 나가는 달 카드다(전환기 계약이 `month` 를 함께 싣는다).
+        CheckConstraint(
+            "(month IS NOT NULL AND month BETWEEN 1 AND 12 AND card_key = month::text)"
+            " OR (month IS NULL AND card_key !~ '^[0-9]+$')",
+            name="ai_cards_month",
+        ),
+        CheckConstraint("length(btrim(card_key)) > 0", name="ai_cards_card_key"),
         CheckConstraint("length(btrim(dog_name)) > 0", name="ai_cards_dog_name"),
         CheckConstraint("status IN ('generating', 'ready', 'failed')", name="ai_cards_status"),
         CheckConstraint(
@@ -73,7 +85,11 @@ class AiCard(Base):
     #: 어느 아이로 만들었나. **아이를 지워도 카드는 남습니다** (SET NULL).
     dog_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, ForeignKey("pets.id", ondelete="SET NULL"))
 
-    month: Mapped[int] = mapped_column(SmallInteger)
+    #: 달 카드의 달(1~12). **종류 카드(딸기·상추)는 `None`** 입니다 — 그 카드에는 달이 없습니다 (D-085).
+    month: Mapped[int | None] = mapped_column(SmallInteger)
+    #: 무엇을 만들었나. 달이면 `"4"`, 종류면 `"strawberry"`·`"lettuce"`
+    #: (`daengs_cardimage.catalog.card_key`). 한도(강아지당 카드 종류 1장)가 이 값을 셉니다.
+    card_key: Mapped[str] = mapped_column(String(20))
     #: 카드에 **인쇄된** 이름. 개명해도 안 바뀝니다.
     dog_name: Mapped[str] = mapped_column(String(40))
     title: Mapped[str] = mapped_column(String(80))

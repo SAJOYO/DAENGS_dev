@@ -105,7 +105,10 @@ def _photo() -> bytes:
 
 
 def _post(client: TestClient, **params):
+    # 기본은 **옛 앱 그대로** `month=4` 다. `month=None` 을 넘기면 그 쿼리를 아예 빼고 보낸다 —
+    # 새 앱(`card=...`)과 「둘 다 없음」을 이 한 도우미로 흉내 내기 위해서다 (#593).
     q = {"month": 4, "dog_name": "네오", **params}
+    q = {k: v for k, v in q.items() if v is not None}
     return client.post("/app/ai-cards", params=q, content=_photo(), headers=JPEG)
 
 
@@ -449,7 +452,7 @@ def test_choose_a_generating_card_is_409_and_deletes_nothing(
 def test_choose_rejects_a_card_that_belongs_to_another_user(client: TestClient, store: Store) -> None:
     """없는 것과 남의 것은 같은 404 다 (`_not_found`)."""
     other_card = AiCard(
-        id=uuid.uuid4(), app_user_id=uuid.uuid4(), month=4, dog_name="남", title="BLOSSOM 남",
+        id=uuid.uuid4(), app_user_id=uuid.uuid4(), month=4, card_key="4", dog_name="남", title="BLOSSOM 남",
         status="ready", storage_key="ai-cards/other/x.png", generation="g", size_bytes=1, width=994, height=1582,
     )
     store.ai_cards.append(other_card)
@@ -459,3 +462,111 @@ def test_choose_rejects_a_card_that_belongs_to_another_user(client: TestClient, 
 
 def test_choose_unknown_card_is_404(client: TestClient) -> None:
     assert client.post(f"/app/ai-cards/{uuid.uuid4()}/choose").status_code == 404
+
+
+# ── #593 (D-085) 전환기 계약 — `month`(옛 앱)와 `card`(새 앱)를 둘 다 받는다 ──
+
+
+def test_old_app_month_only_still_works_and_response_carries_both(client: TestClient, jobs: list) -> None:
+    """**옛 앱 호환** — `month=4` 만 보내는 요청은 지금과 똑같이 202 이고, 응답에 `month` 가 그대로 있다.
+    `card` 는 새로 붙은 칸이라 옛 앱이 무시한다."""
+    body = _post(client).json()
+    assert body["month"] == 4 and body["card"] == "4"
+    _run_all(jobs)
+    detail = client.get(f"/app/ai-cards/{body['id']}").json()
+    assert detail["month"] == 4 and detail["card"] == "4"
+
+
+def test_kind_card_happy_path(client: TestClient, jobs: list) -> None:
+    """새 앱이 `card=strawberry` 를 보내면 딸기 카드가 만들어지고, 응답의 `month` 는 `null` 이다."""
+    r = _post(client, month=None, card="strawberry")
+    assert r.status_code == 202, r.text
+    body = r.json()
+    assert body["month"] is None and body["card"] == "strawberry"
+    assert body["title"] == "BERRY 네오"
+
+    _run_all(jobs)
+
+    detail = client.get(f"/app/ai-cards/{body['id']}").json()
+    assert detail["status"] == "ready" and detail["month"] is None and detail["card"] == "strawberry"
+    assert (detail["width"], detail["height"]) == (994, 1582)
+
+
+def test_kind_card_row_has_null_month(client: TestClient, store: Store) -> None:
+    """표에 남는 행도 `month IS NULL` 이어야 한다 — 0 을 넣으면 CHECK `ai_cards_month` 가 막는다."""
+    _post(client, month=None, card="strawberry")
+    assert [(c.month, c.card_key) for c in store.ai_cards] == [(None, "strawberry")]
+
+
+def test_card_with_digits_means_a_month(client: TestClient, store: Store) -> None:
+    """`card=4` 도 달이다 — 쿼리는 늘 문자열이라 숫자를 여기서 갈라야 종류로 오해받지 않는다."""
+    body = _post(client, month=None, card="4").json()
+    assert body["month"] == 4 and body["card"] == "4"
+    assert [(c.month, c.card_key) for c in store.ai_cards] == [(4, "4")]
+
+
+def test_month_and_card_agreeing_is_accepted(client: TestClient) -> None:
+    """전환기라 둘 다 보내는 앱이 있을 수 있다 — 같은 카드를 가리키면 그냥 통과한다."""
+    assert _post(client, month=4, card="4").status_code == 202
+
+
+@pytest.mark.parametrize("card", ["strawberry", "9"])
+def test_conflicting_month_and_card_is_400(client: TestClient, store: Store, card: str) -> None:
+    """한쪽을 조용히 이기게 하면 사용자가 고른 것과 다른 카드가 나온다."""
+    r = _post(client, month=4, card=card)
+    assert r.status_code == 400 and r.json()["detail"]["code"] == "card_conflict"
+    assert store.ai_cards == []
+
+
+def test_neither_month_nor_card_is_400(client: TestClient) -> None:
+    r = _post(client, month=None)
+    assert r.status_code == 400 and r.json()["detail"]["code"] == "card_required"
+
+
+def test_unknown_card_kind_is_404_card_closed(client: TestClient) -> None:
+    r = _post(client, month=None, card="banana")
+    assert r.status_code == 404 and r.json()["detail"]["code"] == "card_closed"
+
+
+def test_closed_month_asked_by_card_is_still_month_closed(client: TestClient) -> None:
+    """404 코드는 파라미터가 아니라 **고른 카드**를 따른다 — 달이면 달 이야기를 한다."""
+    r = _post(client, month=None, card="12")
+    assert r.status_code == 404 and r.json()["detail"]["code"] == "month_closed"
+
+
+def test_kind_taken_is_409_card_taken_and_says_the_korean_name(
+    client: TestClient, store: Store, jobs: list, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """종류 카드의 409 문장에 "0월" 이 나오면 안 된다 — `catalog.KIND_LABELS` 의 한국어 이름을 쓴다."""
+    monkeypatch.setattr(settings, "cardimage_daily_limit", 0)
+    pet = FakePet(app_user_id=OWNER, name="네오", breed="mix")
+    store.pets.append(pet)
+    assert _post(client, month=None, card="strawberry", dog_id=str(pet.id)).status_code == 202
+    _run_all(jobs)
+
+    r = _post(client, month=None, card="strawberry", dog_id=str(pet.id))
+
+    assert r.status_code == 409
+    assert r.json()["detail"] == {"code": "card_taken", "message": "네오는 이미 딸기 카드가 있어요."}
+
+
+def test_a_dog_can_hold_a_month_card_and_a_kind_card(
+    client: TestClient, store: Store, jobs: list, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """한도는 카드 종류당 한 장이다 — 4월 카드가 있어도 딸기는 만들 수 있다 (사용자 결정 09-18)."""
+    monkeypatch.setattr(settings, "cardimage_daily_limit", 0)
+    pet = FakePet(app_user_id=OWNER, name="네오", breed="mix")
+    store.pets.append(pet)
+    assert _post(client, dog_id=str(pet.id)).status_code == 202
+    _run_all(jobs)
+    assert _post(client, month=None, card="strawberry", dog_id=str(pet.id)).status_code == 202
+    _run_all(jobs)
+    assert {c["card"] for c in client.get("/app/ai-cards").json()["cards"]} == {"4", "strawberry"}
+
+
+def test_daily_limit_is_shared_between_months_and_kinds(client: TestClient, jobs: list) -> None:
+    """하루 한도(`DAENGS_CARDIMAGE_DAILY_LIMIT`)는 계수기 하나다 — 오늘 4월을 만들었으면 딸기도 429 다."""
+    _post(client)
+    _run_all(jobs)
+    r = _post(client, month=None, card="strawberry")
+    assert r.status_code == 429 and r.json()["detail"]["code"] == "limit_reached"

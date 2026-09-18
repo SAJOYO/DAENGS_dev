@@ -1,4 +1,8 @@
-"""달 → 틀 파일·카드명·장면 설명. `cardimage/headers.json` 의 제목에서 ` NEO` 를 뗀 것이 카드명이다."""
+"""카드(달 1~12 + 종류) → 틀 파일·카드명·장면 설명. `cardimage/headers.json` 의 제목에서 ` NEO` 를 뗀 것이 카드명이다.
+
+달은 정수, 달이 아닌 카드(딸기·상추)는 문자열로 가리킨다 — `CardSelector` 와 `resolve`.
+종류 카드는 #592 에서 콘솔에만 열렸다가 #593(D-085)부터 앱 경로(`/app/ai-cards`)도 쓴다.
+"""
 
 from __future__ import annotations
 
@@ -109,6 +113,12 @@ class MonthCard:
     #: 글씨 깨짐은 사진이 아니라 (틀, seed, 크기) 로 정해지므로 여기서 뽑으면 깨진 장이 안 나온다.
     #: 비어 있으면(`()`) 아직 실험으로 확인되지 않았다는 뜻이다 — `pick_seeds` 가 DEFAULT_SEEDS 로 대신한다.
     seeds: tuple[int, ...] = ()
+    #: 옷이 본문 강아지의 얼굴까지 덮는 틀(10월 유령 천). 프롬프트가 사진 강아지를 배지와 발로만 옮긴다(`engine.build_prompt`).
+    face_hidden: bool = False
+    #: 본문에 강아지 **얼굴만** 보이는 틀(딸기·상추). 10월 `face_hidden` 의 반대다 — `engine.build_prompt` 가 앞부분을 가른다.
+    face_only: bool = False
+    #: 달이 아닌 카드의 키("strawberry"·"lettuce"). 달 카드는 빈 문자열이고 `month` 로 식별한다.
+    kind: str = ""
 
 
 # scene 은 실험(worklog 09-13~14)에서 검증된 달만 채워져 있다. 다른 달을 열 때는 그 달의
@@ -122,7 +132,7 @@ class MonthCard:
 #   나가는 값은 이 상수다. `measure()` 자체는 고치지 않는다.
 _CARDS: dict[int, MonthCard] = {
     1: MonthCard(
-        1, "1_new_year", "NEW YEAR", "26JAN",
+        1, "1_new_year", "SEBAE", "26JAN",   # 원본 제목은 NEW YEAR — 앞말이 판을 거의 채워 사용자가 SEBAE 로 (09-18)
         "the pose (kneeling upright with both front paws stacked together on the tasseled cushion in a bowing "
         "posture), the hanging red-and-blue lantern by the hanok pillar (keep this exact color), the "
         "snow-covered hanok roof tiles and stone wall, the bare persimmon branch with snow and red persimmons, "
@@ -144,7 +154,7 @@ _CARDS: dict[int, MonthCard] = {
         seeds=(1, 6),  # 09-16 12달×seed 실험, 눈으로 확인 — 나머지는 부제 배너 자체가 통째로 안 나온다
     ),
     3: MonthCard(
-        3, "3_first_day", "FIRST DAY", "26MAR",
+        3, "3_first_day", "SCHOOL", "26MAR",   # 원본 제목은 FIRST DAY — 같은 이유로 SCHOOL (09-18)
         "the pose (running mid-stride toward the camera with the red pencil held in its mouth), the forsythia "
         "blossoms and loose lined notebook pages flying past, the wrought-iron school gate with the carved "
         'stone pillar reading "학교" (keep this text), the round clock tower, the fallen yellow petals on the '
@@ -170,7 +180,7 @@ _CARDS: dict[int, MonthCard] = {
         seeds=(2, 3),
     ),
     5: MonthCard(
-        5, "5_home_team", "HOME TEAM", "26MAY",
+        5, "5_home_team", "HOME", "26MAY",   # 원본 제목은 HOME TEAM — 앞말만으로 판을 넘겨 HOME (09-18)
         "the pose (sitting upright with one front paw resting on the open page of the photo album), the vase of "
         "red-and-pink carnations with the gold paw-charm pendant on a pink ribbon (keep this exact color), the "
         "plaid-cushioned sofa with the heart-stitched pillow and framed paw-print art, the scattered polaroid "
@@ -240,6 +250,10 @@ _CARDS: dict[int, MonthCard] = {
         OCTOBER_OUTFIT,
         Plate(center_y=99, edge=((55, 784), (142, 713)), top_y=52),
         seeds=(2, 4, 5, 6),  # 09-16 12달×seed 실험, 눈으로 확인 (task-3b-visual-report.md)
+        # 09-16 격자(페키니즈 사진, 옛 프롬프트)에서 seed 2·3·4 는 천 위에 실제 얼굴이 합성됐다 — 공통 앞부분의 얼굴 요구 탓이라 face_hidden 앞부분으로 바꿨다.
+        # 09-18 새 프롬프트 재확인(FLUX.2-klein-4B, 치와와 사진, seed 1~6): 6장 모두 천 유지·얼굴 합성 0,
+        # 글씨는 seed 1·3 깨짐 · 2·4·5·6 정상 → 목록 그대로 둔다. 표본 6장·사진 1장이라 잠정.
+        face_hidden=True,
     ),
     11: MonthCard(
         11, "11_thanks", "THANKS", "26NOV",
@@ -268,20 +282,97 @@ _CARDS: dict[int, MonthCard] = {
 }
 
 
+#: 딸기 틀의 제목판 — 09-18 실측(판 y 59~152). `top_y` 는 측정값 59 가 아니라 62 다:
+#: 윗선을 다시 재는 네 열의 중앙값이 62 라, 59 로 두면 제목이 3px 내려간다(사용자 결정 09-18).
+STRAWBERRY_PLATE = Plate(center_y=105, edge=((62, 749), (149, 676)), top_y=62)
+
+#: 상추 틀의 제목판 — 09-18 실측(판 y 47~141). 달 카드보다 넓다.
+LETTUCE_PLATE = Plate(center_y=94, edge=((50, 790), (138, 717)), top_y=47)
+
+#: 달이 아닌 카드(#592). **앱 경로도 이것을 쓴다** — #593(D-085)부터 `card=strawberry` 로 고른다.
+#: 여기 있으면 열린 것이다 — 달의 `DAENGS_CARDIMAGE_MONTHS` 에 해당하는 잠금이 종류에는 없다(#593).
+#: `outfit` 은 비워 둔다 — 몸이 없어서 입힐 곳이 없고, 소품 금지 문장은 `face_only` 앞부분이 직접 갖는다
+#: (설계 ②). 여기에 `NO_OUTFIT` 을 넣으면 같은 문장이 프롬프트에 두 번 들어간다.
+_KIND_CARDS: dict[str, MonthCard] = {
+    "strawberry": MonthCard(
+        0, "strawberry", "BERRY", "NEO-S0824",
+        "the giant leaf parachute with its golden rigging lines, the heart-shaped strawberry body with its seeds "
+        "and the round hole in its middle, the pink and golden motion streaks, the floating golden seeds, the "
+        "pastel blue-violet starry sky and the pink clouds",
+        "FRUIT DOG",
+        "",
+        STRAWBERRY_PLATE,
+        face_only=True,
+        kind="strawberry",
+    ),
+    "lettuce": MonthCard(
+        0, "lettuce", "LETTUCE", "NEO-0824",
+        "the ruffled lettuce leaves with water droplets that form the body, the two crossed lettuce stems below, "
+        "the loose leaves floating around, the radiating rainbow holographic rays and the soft reflective floor",
+        "VEGGIE DOG",
+        "",
+        LETTUCE_PLATE,
+        face_only=True,
+        kind="lettuce",
+    ),
+}
+
+KINDS: tuple[str, ...] = tuple(_KIND_CARDS)
+
+#: 달이 아닌 카드의 한국어 이름. `MonthCard` 의 `card_name` 은 카드에 찍히는 영어라 사람에게
+#: 보여 줄 이름이 따로 필요하다. **여기 한 곳에만 둔다** — 관리자 콘솔(`routers/admin_cardimage.py`
+#: 의 카드 목록)과 앱 경로의 409 문장(`routers/ai_card.py`)이 같은 글자를 써야 한다 (#593).
+KIND_LABELS: dict[str, str] = {"strawberry": "딸기", "lettuce": "상추"}
+
+#: 카드 하나를 가리키는 값 — 1~12 는 달, 문자열은 종류(`KINDS`)다.
+CardSelector = int | str
+
+
 def get(month: int) -> MonthCard:
     return _CARDS[month]
 
 
-def pick_seeds(month: int, count: int, rng: random.Random) -> list[int]:
-    """그 달의 검증된 seed 에서 `count` 개를 겹치지 않게 뽑는다. 목록이 모자라면 되풀이한다.
+def resolve(selector: CardSelector) -> MonthCard:
+    """달 정수 또는 종류 문자열로 카드 정의를 찾는다. 없으면 `MonthNotOpenError`.
 
-    아직 실험으로 확인되지 않은 달(`seeds == ()`)은 예외를 내지 않는다 — 12달이 이미 열려 있어서
+    잠금(`DAENGS_CARDIMAGE_MONTHS`)은 보지 않는다 — 그건 앱 경로의 `require_open` 몫이다."""
+    if isinstance(selector, bool):  # bool 은 int 의 하위형이다 — 달로 오인하지 않게 먼저 막는다
+        raise MonthNotOpenError(f"card {selector!r} is not a card")
+    if isinstance(selector, int):
+        card = _CARDS.get(selector)
+    else:
+        card = _KIND_CARDS.get(selector)
+    if card is None:
+        raise MonthNotOpenError(f"card {selector!r} is not a card")
+    return card
+
+
+def card_key(selector: CardSelector) -> str:
+    """저장·로그에 쓰는 문자열 키 — 달은 `"4"`, 종류는 `"strawberry"`."""
+    return str(selector)
+
+
+def label(selector: CardSelector) -> str:
+    """사람에게 보여 주는 이름 — 달은 `"4월"`, 종류는 `"딸기"` (`KIND_LABELS`).
+
+    사용자에게 나가는 문장이 이것을 쓴다. 종류 카드에 달 문법을 쓰면 "0월 카드가 있어요" 가
+    된다 — `MonthCard.month` 가 종류 카드에서 0 이기 때문이다(#593).
+    """
+    if isinstance(selector, int) and not isinstance(selector, bool):
+        return f"{selector}월"
+    return KIND_LABELS.get(str(selector), str(selector))
+
+
+def pick_seeds(selector: CardSelector, count: int, rng: random.Random) -> list[int]:
+    """그 카드의 검증된 seed 에서 `count` 개를 겹치지 않게 뽑는다. 목록이 모자라면 되풀이한다.
+
+    아직 실험으로 확인되지 않은 카드(`seeds == ()`)는 예외를 내지 않는다 — 12달이 이미 열려 있어서
     막으면 검증이 끝나지 않은 열 달이 전부 500 이 된다(#572 Task 3a, controller ruling R5). 대신
     DEFAULT_SEEDS 로 대신하고, 나중에 실험 결과를 보고 이 로그를 찾을 수 있게 warning 을 남긴다.
     """
-    pool = list(get(month).seeds)
+    pool = list(resolve(selector).seeds)
     if not pool:
-        log.warning("cardimage month %s has no verified seeds — using unverified defaults %s", month, DEFAULT_SEEDS)
+        log.warning("cardimage card %s has no verified seeds — using unverified defaults %s", selector, DEFAULT_SEEDS)
         pool = list(DEFAULT_SEEDS)
     picked: list[int] = []
     while len(picked) < count:
@@ -297,8 +388,8 @@ def require_open(month: int, open_months: frozenset[int]) -> MonthCard:
     return card
 
 
-def template_path(month: int, base: Path) -> Path:
-    return base / f"{get(month).stem}_template.webp"
+def template_path(selector: CardSelector, base: Path) -> Path:
+    return base / f"{resolve(selector).stem}_template.webp"
 
 
 def font_path(base: Path) -> Path:

@@ -50,6 +50,7 @@ from daengs_backend.orchestration.adapters.gait import (
 )
 from daengs_backend.orchestration.redirects import (
     GAIT_EXPERT_ADVISORY,
+    GAIT_OWNER_CONDITION_ECHO,
     GAIT_REFERENCE_NOTICE,
     GAIT_VERSION_WARNING,
 )
@@ -251,6 +252,9 @@ def check_row(row: Mapping[str, Any], question: Question) -> dict[str, Any]:
         vet = vet_hits(text)
         cross, cross_declined = _cross_dog_split(text)
         not_enough = question.change_kind == "not_enough"
+        #: 병명 되돌려 말하기 줄이 붙었나. 문장 앞머리로 본다 — 병명이 가운데 들어가므로
+        #: 완성된 문장으로는 못 찾는다.
+        echoed = GAIT_OWNER_CONDITION_ECHO.split("{")[0] in answer
         leads_conditions = (
             question.change_kind in LEAD_CONDITIONS or question.expects_version_warning
         )
@@ -263,7 +267,16 @@ def check_row(row: Mapping[str, Any], question: Question) -> dict[str, Any]:
             "cross_dog": bool(cross),
             # 제품 문장 — 코드가 붙이므로 0이어야 한다. 0이 아니면 렌더 경로가 깨진 것이다.
             "notice_missing": GAIT_REFERENCE_NOTICE not in answer,
-            "advisory_mismatch": (GAIT_EXPERT_ADVISORY in answer) != question.expects_advisory,
+            # ⚠️ 전문가 줄은 **하나만** 나간다. 병명 줄이 있으면 그쪽이 이기므로,
+            # #582 줄이 없는 것이 정상이다 — 그때까지 불일치로 세면 거짓 경보가 된다.
+            "advisory_mismatch": (
+                not echoed and (GAIT_EXPERT_ADVISORY in answer) != question.expects_advisory
+            ),
+            #: 보호자가 말한 병명을 되돌려 준 줄이 붙었나.
+            "echo_present": echoed,
+            #: ⚠️ **모델이 지어낸 병명.** 어댑터가 버렸어야 하는데 문장이 됐으면 빈틈이다.
+            #: 보호자 쪽 텍스트(이번 질문 · 앞 턴)에 없는 낱말이 나간 경우다.
+            "echo_invented": echoed and not question.owner_wrote(row.get("owner_condition") or ""),
             "version_warning_mismatch": (
                 (GAIT_VERSION_WARNING in answer) != question.expects_version_warning
             ),

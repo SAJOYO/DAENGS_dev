@@ -49,17 +49,22 @@ async def has_generating(session: AsyncSession, app_user_id: uuid.UUID) -> bool:
     return await session.scalar(stmt) is not None
 
 
-async def has_month_card(session: AsyncSession, app_user_id: uuid.UUID, dog_id: uuid.UUID, month: int) -> bool:
-    """이 보호자가 이 강아지로 이 달 카드를 이미 갖고 있나 (`ready`·`generating`). **실패는 안 봅니다.**
+async def has_card(session: AsyncSession, app_user_id: uuid.UUID, dog_id: uuid.UUID, card_key: str) -> bool:
+    """이 보호자가 이 강아지로 **이 카드**를 이미 갖고 있나 (`ready`·`generating`). **실패는 안 봅니다.**
 
     보호자마다 따로 봅니다 — 같은 강아지라도 다른 보호자의 카드는 막지 않습니다 (D-077).
+
+    세는 칸이 `month` 가 아니라 `card_key` 입니다 (#593, D-085) — 종류 카드(딸기·상추)의
+    `month` 는 NULL 이라 `month` 로 세면 종류가 서로를 막거나(NULL = NULL 이 참인 비교를 쓰면)
+    아무도 안 막습니다(SQL 의 `NULL = NULL` 은 참이 아닙니다). `card_key` 는 달이면 `"4"`,
+    종류면 `"strawberry"` 라 두 세계가 한 칸에서 갈립니다.
     """
     stmt = (
         select(AiCard.id)
         .where(
             AiCard.app_user_id == app_user_id,
             AiCard.dog_id == dog_id,
-            AiCard.month == month,
+            AiCard.card_key == card_key,
             AiCard.status.in_(("generating", "ready")),
         )
         .limit(1)
@@ -109,7 +114,7 @@ async def count_attempt_marks_since(session: AsyncSession, app_user_id: uuid.UUI
     한 줄뿐이라 행 수가 곧 요청 수다.
 
     카드 행(`ai_cards`)으로 세지 않는 이유: 카드는 지울 수 있다. 같은 강아지·같은 달을 다시 뽑으려면
-    미달 카드를 지워야 하고(`has_month_card`), 생성 중에 지우면 행이 아예 안 남는다.
+    미달 카드를 지워야 하고(`has_card`), 생성 중에 지우면 행이 아예 안 남는다.
     """
     stmt = select(func.count()).select_from(AiCardUsage).where(
         AiCardUsage.app_user_id == app_user_id,

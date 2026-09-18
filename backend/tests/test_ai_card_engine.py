@@ -49,7 +49,7 @@ def test_ready_check_missing_assets_is_unavailable(monkeypatch: pytest.MonkeyPat
 def test_generate_feeds_settings_into_pipeline(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings, "cardimage_months", frozenset({4, 9}))
     card = ai_card_engine.generate(
-        photo=_jpeg(), content_type="image/jpeg", month=4, dog_name="네오",
+        photo=_jpeg(), content_type="image/jpeg", card=4, dog_name="네오",
         engine=FakeEngine(), judge=FakeJudge([5]),
     )
     assert card.title == "BLOSSOM 네오"

@@ -1,14 +1,17 @@
-"""앱 사용자 AI 카드 생성 한도 (#537 · #543 · #572, D-076 · D-077 · D-084).
+"""앱 사용자 AI 카드 생성 한도 (#537 · #543 · #572 · #593, D-076 · D-077 · D-084 · D-085).
 
-**제품 규칙입니다** (사용자 결정 2026-09-15, #572 에서 D-084 로 개정). 부르는 쪽(`services/ai_card.py`)은
-세 예외만 압니다.
+**제품 규칙입니다** (사용자 결정 2026-09-15, #572 에서 D-084 로, #593 에서 D-085 로 개정).
+부르는 쪽(`services/ai_card.py`)은 세 예외만 압니다.
 
 - 사용자별 **동시 1요청** — `AiCardBusyError` (409 `already_generating`). 한 요청의 행들이 `pick_group`
   하나를 공유합니다. 행 수는 엔진이 정합니다(#572 Task 8): Nano Banana 2 경로(지금 운영)는 한 장,
   `FLUX.2-klein-4B` GPU 경로는 `cardimage_pick_count` 장.
-- **강아지마다 달마다 한 장**, 보호자마다 따로 — 같은 `dog_id`·`month` 의 `ready`/`generating` 카드가
-  있으면 `AiCardMonthTakenError` (409 `month_taken`). 그 카드를 지우면 그 달은 다시 열립니다.
-  `dog_id` 가 없으면 보지 않습니다.
+- **강아지마다 카드 종류당 한 장**, 보호자마다 따로 — 같은 `dog_id`·같은 카드(`card_key`)의
+  `ready`/`generating` 카드가 있으면 `AiCardTakenError` (409 `month_taken`·`card_taken`). 그 카드를
+  지우면 그 카드는 다시 열립니다. `dog_id` 가 없으면 보지 않습니다.
+  **달과 종류가 같은 규칙을 씁니다** (사용자 결정 2026-09-18, #593) — 달 카드는 지금까지와 똑같이
+  「강아지마다 달마다 한 장」이고, 딸기·상추는 각각 따로 한 장씩입니다. 세는 칸이 `month` 가 아니라
+  `card_key` 라(`repositories/ai_card.py::has_card`) 4월 카드가 딸기를 막지 않습니다.
 - KST **하루 N회** (`DAENGS_CARDIMAGE_DAILY_LIMIT`, 기본 1) — `AiCardLimitError` (429 `limit_reached`).
   **세는 단위는 카드 장수가 아니라 요청(뽑기) 한 번입니다.** `ai_card_usage` 의 사용 기록
   (`unfulfilled_attempt = false`)으로 셉니다. 한 요청에서 **닮음이 `cardimage_judge_min` 이상인 카드가
@@ -46,6 +49,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from daengs_backend.config import settings
 from daengs_backend.repositories import ai_card as ai_card_repo
 from daengs_backend.services import ai_card_engine
+from daengs_cardimage import catalog
 
 KST = ZoneInfo("Asia/Seoul")
 
@@ -58,8 +62,9 @@ class AiCardBusyError(Exception):
     """이미 만들고 있는 카드가 있습니다. 라우터가 409 `already_generating` 으로 바꿉니다."""
 
 
-class AiCardMonthTakenError(Exception):
-    """이 강아지의 이 달 카드가 이미 있습니다. 라우터가 409 `month_taken` 으로 바꿉니다."""
+class AiCardTakenError(Exception):
+    """이 강아지의 이 카드가 이미 있습니다. 라우터가 409 로 바꿉니다 — 달이면 `month_taken`,
+    종류(딸기·상추)면 `card_taken` (#593). 옛 이름은 `AiCardMonthTakenError` 였습니다."""
 
 
 class AiCardLimitError(Exception):
@@ -106,18 +111,24 @@ async def check_quota(
     now: datetime,
     daily_limit: int,
     dog_id: uuid.UUID | None,
-    month: int,
+    card: catalog.CardSelector,
 ) -> None:
-    """돈이 나가기 전에 부릅니다. `dog_id`·`month` 는 **키워드 필수**입니다 — 빠뜨려서 달별 검사가
-    조용히 꺼지면 안 됩니다."""
+    """돈이 나가기 전에 부릅니다. `dog_id`·`card` 는 **키워드 필수**입니다 — 빠뜨려서 카드별 검사가
+    조용히 꺼지면 안 됩니다.
+
+    `card` 는 달 정수(1~12)이거나 종류 문자열(`catalog.KINDS`)입니다. 어느 쪽이든 규칙은 하나
+    — **강아지마다 카드 종류당 한 장**이고, 세는 키는 `catalog.card_key(card)` 입니다.
+    """
     await ai_card_repo.expire_generating(
         session, app_user_id, stale_before=now - stale_after(), now=now
     )
     if await ai_card_repo.has_generating(session, app_user_id):
         raise AiCardBusyError
     # 하루 한도보다 먼저 — 내일 다시 해도 안 되는 이유이기 때문입니다.
-    if dog_id is not None and await ai_card_repo.has_month_card(session, app_user_id, dog_id, month):
-        raise AiCardMonthTakenError
+    if dog_id is not None and await ai_card_repo.has_card(
+        session, app_user_id, dog_id, catalog.card_key(card)
+    ):
+        raise AiCardTakenError
     day_start = kst_day_start(now)
     if daily_limit and await ai_card_repo.count_usage_since(session, app_user_id, day_start) >= daily_limit:
         raise AiCardLimitError

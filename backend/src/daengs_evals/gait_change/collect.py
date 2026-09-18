@@ -280,6 +280,9 @@ def _row(question: Question, run: int, result: Any, gen: CellGenerate) -> dict[s
         "actions": data.get("actions"),
         "guarded": data.get("guarded"),
         "expert_advisory": data.get("expert_advisory"),
+        #: 대조를 통과해 실제로 문장이 된 병명. 모델이 지어낸 것은 여기 안 온다 —
+        #: 원출력과 비교하면 어댑터가 버린 건이 보인다 (`raw.owner_condition`).
+        "owner_condition": data.get("owner_condition"),
         "error_kind": error_kind,
         "transient": status in ("ERROR", "TIMEOUT") and error_kind in TRANSIENT_ERROR_KINDS,
         "raw": _jsonable(gen.raw),

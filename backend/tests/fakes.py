@@ -1919,11 +1919,12 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
     async def ai_card_has_generating(session, app_user_id):
         return any(c.app_user_id == app_user_id and c.status == "generating" for c in store.ai_cards)
 
-    async def ai_card_has_month_card(session, app_user_id, dog_id, month):
+    async def ai_card_has_card(session, app_user_id, dog_id, card_key):
+        # 세는 칸은 `month` 가 아니라 `card_key` 다 (#593, D-085) — 종류 카드는 `month` 가 NULL 이다.
         return any(
             c.app_user_id == app_user_id
             and c.dog_id == dog_id
-            and c.month == month
+            and c.card_key == card_key
             and c.status in ("generating", "ready")
             for c in store.ai_cards
         )
@@ -2019,7 +2020,7 @@ def install(store: Store, monkeypatch: pytest.MonkeyPatch) -> Store:
     monkeypatch.setattr(ai_card_repo, "get_for_update", ai_card_get_for_update)
     monkeypatch.setattr(ai_card_repo, "list_for_owner", ai_card_list_for_owner)
     monkeypatch.setattr(ai_card_repo, "has_generating", ai_card_has_generating)
-    monkeypatch.setattr(ai_card_repo, "has_month_card", ai_card_has_month_card)
+    monkeypatch.setattr(ai_card_repo, "has_card", ai_card_has_card)
     monkeypatch.setattr(ai_card_repo, "add_usage", ai_card_add_usage)
     monkeypatch.setattr(ai_card_repo, "count_usage_since", ai_card_count_usage_since)
     monkeypatch.setattr(ai_card_repo, "add_attempt_mark", ai_card_add_attempt_mark)

@@ -1,3 +1,33 @@
+# Life API credentials managed in the project root .env.
+x-life-public-settings: &life-public-settings
+  DATA_GO_KR_KEY: ${DATA_GO_KR_KEY:-}
+  KAKAO_REST_KEY: ${KAKAO_REST_KEY:-}
+  KMA_HUB_KEY: ${KMA_HUB_KEY:-}
+
+# Walk settings come only from the project root .env (or explicit shell overrides).
+x-walk-settings: &walk-settings
+  DAENGS_WALK_SGIS_KEY: ${DAENGS_WALK_SGIS_KEY:-}
+  DAENGS_WALK_SGIS_SECRET: ${DAENGS_WALK_SGIS_SECRET:-}
+  DAENGS_WALK_PUBLIC_DATA_KEY: ${DAENGS_WALK_PUBLIC_DATA_KEY:-}
+  DAENGS_WALK_PARK_CATALOG_PATH: ${DAENGS_WALK_PARK_CATALOG_PATH:-/data/walk-public/parks.json}
+  DAENGS_WALK_COMMERCE_CATALOG_PATH: ${DAENGS_WALK_COMMERCE_CATALOG_PATH:-/data/walk-public/commerce.json}
+  DAENGS_WALK_RIVER_CATALOG_PATH: ${DAENGS_WALK_RIVER_CATALOG_PATH:-/data/walk-public/river.json}
+  DAENGS_WALK_PUBLIC_CATALOG_ROOT: ${DAENGS_WALK_PUBLIC_CATALOG_ROOT:-/data/walk-public/regions}
+  DAENGS_WALK_CATALOG_REFRESH_ENABLED: ${DAENGS_WALK_CATALOG_REFRESH_ENABLED:-false}
+  DAENGS_WALK_CATALOG_DAILY_REQUESTS: ${DAENGS_WALK_CATALOG_DAILY_REQUESTS:-300}
+  DAENGS_WALK_ENTRY_CONTEXT_ENABLED: ${DAENGS_WALK_ENTRY_CONTEXT_ENABLED:-false}
+  DAENGS_WALK_PUBLIC_CONTEXT_ENABLED: ${DAENGS_WALK_PUBLIC_CONTEXT_ENABLED:-false}
+  DAENGS_WALK_AREA_CONTEXT_ENABLED: ${DAENGS_WALK_AREA_CONTEXT_ENABLED:-false}
+  DAENGS_WALK_DIARY_ENABLED: ${DAENGS_WALK_DIARY_ENABLED:-false}
+  DAENGS_WALK_DIARY_SPACE_ENABLED: ${DAENGS_WALK_DIARY_SPACE_ENABLED:-false}
+  DAENGS_WALK_DIARY_ROUTE_PATTERNS_ENABLED: ${DAENGS_WALK_DIARY_ROUTE_PATTERNS_ENABLED:-false}
+  DAENGS_WALK_DIARY_SPACE_RADIUS_M: ${DAENGS_WALK_DIARY_SPACE_RADIUS_M:-1000}
+  DAENGS_WALK_LAND_COVER_LAYER: ${DAENGS_WALK_LAND_COVER_LAYER:-EGIS:lv3_2025y}
+  DAENGS_WALK_ENTRY_V2_ENABLED: ${DAENGS_WALK_ENTRY_V2_ENABLED:-false}
+  DAENGS_WALK_ENTRY_V2_WRITE_ENABLED: ${DAENGS_WALK_ENTRY_V2_WRITE_ENABLED:-false}
+  DAENGS_WALK_PHOTO_METADATA_ENABLED: ${DAENGS_WALK_PHOTO_METADATA_ENABLED:-false}
+  DAENGS_WALK_DIARY_SLOTS_PREVIEW_ENABLED: ${DAENGS_WALK_DIARY_SLOTS_PREVIEW_ENABLED:-false}
+
 services:
   nginx:
     image: nginx:1.31.1
@@ -30,10 +60,8 @@ services:
       # 없으면 그냥 넘어갑니다. (파일 마운트로 두면 없을 때 폴더가 생겨 버립니다)
       - path: ./backend/.env
         required: false
-      # Public-source secrets/flags survive checkout in a separate server file.
-      - path: ${WALK_PUBLIC_ENV_FILE:-./backend/.env.walk-public.local}
-        required: false
     environment:
+      <<: [*walk-settings, *life-public-settings]
       # venv 를 마운트 경로 밖에 둡니다.
       # /app 안에 두면 호스트의 Windows 용 .venv 와 섞여 깨집니다.
       UV_PROJECT_ENVIRONMENT: /opt/venv
@@ -655,8 +683,8 @@ services:
       DAENGS_DB_PASSWORD: ${PLACE_POSTGRES_PASSWORD:-place}
       DAENGS_DB_NAME: ${PLACE_POSTGRES_DB:-place}
       # 공공데이터 키 — 배치(ingest) 전용. 서버 기동에는 필요 없습니다 (D-026).
-      DAENGS_DATA_GO_KR_SERVICE_KEY: ${PLACE_DATA_GO_KR_SERVICE_KEY:-}
-      DAENGS_KTO_SERVICE_KEY: ${PLACE_KTO_SERVICE_KEY:-}
+      DAENGS_DATA_GO_KR_SERVICE_KEY: ${DAENGS_DATA_GO_KR_SERVICE_KEY:-${PLACE_DATA_GO_KR_SERVICE_KEY:-}}
+      DAENGS_KTO_SERVICE_KEY: ${DAENGS_KTO_SERVICE_KEY:-${PLACE_KTO_SERVICE_KEY:-}}
       # 내부 discovery만 소비합니다. 비어 있어도 기존 Place 검색과 health는 정상입니다.
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.1-flash-lite}
@@ -752,6 +780,7 @@ services:
       - path: ./backend/.env
         required: false
     environment:
+      DATA_GO_KR_KEY: ${DATA_GO_KR_KEY:-}
       UV_PROJECT_ENVIRONMENT: /opt/venv
       # 레포 밖이 아니라 컨테이너 안이라 자동 탐색이 안 됩니다. 아래 볼륨과 짝입니다.
       DAENGS_DATA_DIR: /data
@@ -828,6 +857,7 @@ services:
       - path: ./backend/.env
         required: false
     environment:
+      DATA_GO_KR_KEY: ${DATA_GO_KR_KEY:-}
       UV_PROJECT_ENVIRONMENT: /opt/venv
       DAENGS_DATA_DIR: /data
       REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
@@ -871,6 +901,7 @@ services:
     networks: [daengs-network]
     env_file: *walk-context-env
     environment: &walk-context-settings
+      <<: [*walk-settings, *life-public-settings]
       UV_PROJECT_ENVIRONMENT: /opt/venv
       DAENGS_DB_HOST: pgvector
       DAENGS_DB_PORT: 5432

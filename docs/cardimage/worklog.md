@@ -3,13 +3,254 @@
 세션이 끝날 때마다 한 절씩 위에 추가한다 (최신이 위). 무엇을 했고, 무엇을 정했고, 무엇을
 다음 세션에 넘기는지. 조사 내용 자체는 `research-*.md` 에, 요약·현재 상태는 `README.md` 에.
 
+## 2026-09-18 — #593 앱 경로에도 딸기·상추 (D-085, 브랜치 `feat/app-ai-card-kinds`)
+
+#592 가 딸기·상추를 **콘솔에만** 열어 둔 것을 앱 경로까지 넓힌 세션이다. 결정은
+`docs/decisions.md` **D-085**(D-077 의 "`month` 는 1~12 테마 달" 정의를 개정).
+
+### 커밋 넷
+
+| 커밋 | 무엇 |
+| --- | --- |
+| `c57d6d1f` | 콘솔 저장 카드 목록을 **10장씩 이어 받고**(`next_cursor`, 키셋) 줄마다 PNG 로 내려받는다 |
+| `0767e2a4` | `ai_cards` 에 **`card_key`** 칸(NOT NULL) + `month` nullable + CHECK 교체 (DB + 모델) |
+| `0b20d1b1` | 키셋 페이지네이션이 같은 시각 행을 건너뛰던 버그 **4곳** 수정 |
+| `8e7345b0` | 앱 경로가 딸기·상추를 받는다 — **전환기 계약**(`month`·`card` 둘 다) |
+
+(위 `43ad2ffd` "앱에서도 딸기·상추 카드를 만들 수 있게 한다" 는 카드를 여는 빈 커밋이다.)
+
+### 앱 계약 (전환기, 사용자 결정 A)
+
+`POST /app/ai-cards` — `month` 와 `card` 가 **둘 다 선택**이다.
+
+| 보낸 것 | 결과 |
+| --- | --- |
+| `month=4` 만 (옛 앱) | 4월 카드. **지금과 글자 하나까지 같게 돈다** |
+| `card=4` | 4월 카드 (쿼리는 늘 문자열이라 숫자면 달로 읽는다) |
+| `card=strawberry` · `card=lettuce` | 종류 카드 |
+| `month=4` + `card=4` | 통과 (같은 카드) |
+| `month=4` + `card=strawberry` | **400 `card_conflict`** |
+| 둘 다 없음 | **400 `card_required`** |
+
+응답은 `month`(종류 카드는 `null`)와 `card`(`"4"`·`"strawberry"`)를 **함께** 싣는다.
+404·409 코드는 파라미터가 아니라 **고른 카드**를 따른다 — 달은 `month_closed`·`month_taken`,
+종류는 `card_closed`·`card_taken`. 409 문장의 이름은 `catalog.KIND_LABELS`(딸기·상추) 한 곳에서
+오고 콘솔 목록도 같은 상수를 쓴다 — 안 그러면 "0월 카드가 있어요" 가 나온다.
+
+### 한도
+
+- **강아지마다 카드 종류당 한 장**(`ready`·`generating`), 보호자마다 따로. 세는 칸이 `month` 가
+  아니라 `card_key` 라(`repositories/ai_card.py::has_card`) 4월 카드가 딸기를 막지 않는다.
+- **하루 한도는 달·종류가 계수기 하나**를 나눠 쓴다 — `DAENGS_CARDIMAGE_DAILY_LIMIT` 과
+  `ai_card_usage`, 세는 단위(요청 하나, D-084)는 그대로다.
+- 누끼 카드(`dog_cards`)와는 여전히 완전 독립.
+- 종류 카드의 열림/닫힘은 **설정 없이 카탈로그 등재 = 열림**이다. 달의
+  `DAENGS_CARDIMAGE_MONTHS` 는 틀 12장을 한꺼번에 넣고 검증된 것만 여는 장치였는데, 종류는
+  검증을 마친 것만 한 장씩 넣으므로 「넣는 행위」가 곧 「여는 행위」다.
+
+### 키셋 버그 4곳 (`0b20d1b1`)
+
+`(Model.created_at, Model.id) < (at, last_id)` 처럼 **파이썬 튜플끼리** 비교 연산자를 쓰면
+SQLAlchemy 컬럼 비교식이 늘 참이라 파이썬이 첫 원소에서 멈추고 `id` 가 SQL 에 안 나간다. 같은
+`created_at` 행이 여럿일 때 페이지 사이에서 조용히 건너뛰어졌다 — 에러도 로그도 없이.
+
+| 파일 | 함수 |
+| --- | --- |
+| `repositories/admin_audit_log.py` | 감사 로그 목록 |
+| `repositories/answer_report.py` | `list_reports` · `turn_position` |
+| `repositories/gait_record.py` | `list_for_pet` |
+
+`tuple_()` 로 고쳤다(`app_user.py`·`admin_ai_card.py` 가 이미 쓰던 방식). 회귀 테스트
+`backend/tests/test_keyset_tuple_comparison.py` 는 **DB 없이** 컴파일된 SQL 에 튜플 비교가
+나가는지 본다 — 고치기 전 코드에서 4개 전부 실패하는 것을 확인했다.
+
+### 콘솔 저장 목록 (`c57d6d1f`)
+
+`GET /admin/cardimage/cards` 가 기본 **10줄 + `next_cursor`**(키셋 `(created_at, id)`, base64 로
+구운 불투명 값)를 준다. `null` 이면 마지막 쪽이고, 손으로 고친 커서는 422 `bad_cursor` 다.
+OFFSET 이 아닌 이유는 이 표가 보는 사이에도 늘기 때문이다. 화면에 「더 보기」와 줄마다
+「PNG 저장」(`<카드>_<강아지>_<시각>.png`, Windows 가 막는 글자·제어 문자는 턴다)이 붙었다.
+일괄 삭제·자동 정리는 **안 한다**(사용자 09-18).
+
+### 머지 전 남은 절차
+
+1. **개발서버에 마이그레이션 적용** — `db/migrations/2026-09-18_ai_cards_card_key.sql`.
+   ⚠ **이 장만 평소의 「DB 먼저」가 안 맞는다.** `card_key` 가 NOT NULL 이라 먼저 적용하면 새
+   코드가 뜰 때까지 앱의 카드 만들기가 실패하고, 코드를 먼저 올리면 칸이 없어 역시 실패한다.
+   **사용자 결정 ⓐ — 머지 직전에 적용하고 곧바로 머지한다.** `dev` 머지가 곧 배포라 그 틈은
+   1~2분이고, 그 사이 `POST /app/ai-cards` 가 실패할 수 있는 것을 감수한다(조회·목록·삭제는
+   그 칸을 안 쓴다). GCP 반영은 `dev → main` 때 `docs/deploy/runbook.md` §6 대로.
+2. **전체 `uv run pytest`** (약 9분) — 아직 이 브랜치 전체로는 안 돌렸다.
+3. **머지.**
+
+### 사람이 정할 것
+
+- **앱 저장소(`SAJOYO/DAENGS_APP`) 작업** — 카드 고르는 화면이 `card` 를 보내야 딸기·상추가
+  사용자에게 보인다. 서버는 열렸지만 앱이 옛 버전이면 아무것도 달라지지 않는다.
+  **`month` 계약을 걷어내는 시점도 이것에 달렸다** — 날짜가 아니라 "앱이 충분히 퍼졌나" 다.
+- **앱용 카드 목록 경로를 만들지** — 지금 앱은 무엇을 만들 수 있는지를 `GET /app/ai-cards` 의
+  `photo_guidance`·남은 횟수로만 받고, 고를 수 있는 카드 목록은 안 받는다. 콘솔에는
+  `GET /admin/cardimage/options`(카드 14 · 엔진 2)가 있지만 관리자 경로다. 앱이 카드 목록을
+  하드코딩할지, 같은 모양의 앱용 경로를 열지 안 정했다.
+
+## 2026-09-18 — #592 콘솔 카드 시험 + 과일·채소 카드 (Task 1~7, 브랜치 `fix/ai-card-title-condense`)
+
+`docs/superpowers/plans/2026-09-18-ai-card-console-and-fruit-cards.md` 를 subagent-driven-development
+로 실행한 밤의 기록이다. 설계는 `docs/superpowers/specs/2026-09-18-ai-card-console-and-fruit-cards-design.md`.
+
+### 아침에 볼 것
+
+**한 줄 요약 — 딸기·상추 카드는 실제 모델에서 잘 나왔다(잠정 「됨」, 결함 하나).** 다만 스모크 도중
+Nano Banana 2 가 **한 프로세스의 두 번째 이미지 호출을 두 번 다** `API_KEY_INVALID` 로 거절했다 —
+키는 멀쩡하다. 아침에 볼 것은 그 거절(③)과 상추 카드에 없던 아이콘 두 개가 생긴 것(⑤)이다.
+
+**① 밤에 한 일 (커밋 13개, 전부 `fix/ai-card-title-condense`. 구현자는 커밋까지만 했고, 컨트롤러가
+태스크마다 리뷰한 뒤 push 했다 — 지금 `origin` 에 다 올라가 있다. `dev` 머지는 안 했다)**
+
+| 커밋 | 무엇 |
+| --- | --- |
+| `1227b250` | 긴 이름 제목이 배지를 덮지 않게 장평으로 줄인다 (계획 전) |
+| `4aab9373` | 10월 유령 천 카드는 본문에 얼굴을 안 그리게 프롬프트 앞부분(`face_hidden`)을 바꾼다 |
+| `09c931b8` | 10월 seed 목록을 새 프롬프트 결과로 다시 확인했다고 적는다 |
+| `0284c41f` | 딸기·상추 틀 webp 두 장과 만든 도구 `backend/tools/cardimage_fruit_templates.py` |
+| `75647f38` · `df45d1fd` | #592 설계 · 구현 계획 |
+| `81485dae` | Task 3 — 콘솔 카드 저장 표 `admin_ai_cards` 스키마(`db/init/41_…` · `db/migrations/2026-09-18_…` · `verify_…`)와 모델 |
+| `fc4ae407` | Task 1 — 카드 키를 달 정수에서 종류까지(`catalog.CardSelector`·`KINDS`·`resolve`·`card_key`), 딸기·상추와 `face_only` 프롬프트 갈래 |
+| `3e346d27` | Task 4 — `services/admin_card_store`(저장·조회·삭제)와 `core/storage.build_admin_ai_card_key` |
+| `bd69db00` | Task 2 — 제목 축소 판정·장평·1·3·5월 앞말(`SEBAE`·`SCHOOL`·`HOME`) |
+| `e7f5c770` | Task 5 — 콘솔 API 다섯(`/admin/cardimage/options\|generate\|cards\|cards/{id}/image\|cards/{id}`) |
+| `3f508600` | Task 6 — 콘솔 화면(카드 14종·엔진 둘·seed·저장 목록·미리보기·삭제) |
+
+(Task 7 의 문서 커밋은 이 절 자체다.)
+
+**② 검사** — 전체 `uv run pytest` 는 **컨트롤러가 따로 돌렸다**(이 태스크에서는 건너뜀).
+마이그레이션 변조 하네스(`docs/ci/README.md` ②)는 `2026-09-18_admin_ai_cards` 한 장만 좁혀 다시 돌려
+**18건 전부 통과**했다(정상 1 + `DROP TABLE` 1 + 변조 16). 버리는 `pgvector/pgvector:pg17` 를
+55432 에 띄우고 `PYTHONUTF8=1 PGCLIENTENCODING=UTF8` 로 돌렸고, 끝나고 컨테이너는 지웠다.
+Task 3 의 에이전트가 같은 값을 보고했고 이 밤에 한 번 더 확인한 것이다.
+
+**③ 유료 스모크 — 카드 3장을 얻었고, 이미지 호출 2회가 거절됐다.**
+
+계획은 `cardimage/test/치와와_test1.jpg` 로 딸기 2장 · 상추 2장(Nano Banana 2, 최대 4회)이었다.
+실제로는 **이미지 호출 5회 중 3회 성공**했다:
+
+| 실행 | 부른 것 | 결과 |
+| --- | --- | --- |
+| 1 | `--cards strawberry --seeds 1,2` | seed 1 **성공**(29.5초) → seed 2 거절 |
+| 2 | 같은 명령(재시도) | seed 1 **성공**(32.1초, 같은 파일 이름이라 1 을 덮었다) → seed 2 거절 |
+| 3 | `--cards lettuce --seeds 1` | seed 1 **성공**(28.6초) |
+
+**한 프로세스 안의 두 번째 이미지 호출만, 두 번 다** 이렇게 죽었다 (첫 호출은 같은 프로세스에서 이미
+성공한 뒤다):
+
+```
+daengs_cardimage.engine.EngineError: 이미지 모델 호출 실패: 400 INVALID_ARGUMENT.
+{'error': {'code': 400, 'message': 'API key not valid. Please pass a valid API key.',
+           'status': 'INVALID_ARGUMENT',
+           'details': [{'reason': 'API_KEY_INVALID', 'domain': 'googleapis.com',
+                        'metadata': {'service': 'generativelanguage.googleapis.com'}}]}}
+```
+
+**확인한 것** (전부 `backend/.env` 의 같은 `DAENGS_CARDIMAGE_GEMINI_API_KEY` 로):
+
+- **그 키로 카드가 실제로 세 장 나왔다.** 키가 죽은 것이 아니다 — 메시지가 원인을 잘못 가리킨다.
+- `GET /v1beta/models` 200 — 쿼리 `?key=` 와 헤더 `x-goog-api-key` **둘 다**.
+- `GET /v1beta/models/gemini-3.1-flash-image` 200(`displayName: Nano Banana 2`).
+- `google-genai` 2.20.0 SDK 로 `client.models.get('gemini-3.1-flash-image')` OK.
+- 같은 SDK·같은 키로 `generate_content(gemini-3.1-flash-lite, ['ok?'])` OK.
+- 같은 SDK·같은 키·**같은 3개 파트**(프롬프트 + 딸기 틀 PNG 2.7MB + 사진 490KB)로
+  `count_tokens('gemini-3.1-flash-image')` OK(518 토큰), `response_modalities=['TEXT']` 로도 OK.
+- `.env` 의 그 줄에 `\r` 이나 공백 오염 없음, 셸에도 `GOOGLE_API_KEY`·`GEMINI_API_KEY`·
+  `GOOGLE_GENAI_USE_VERTEXAI` 가 비어 있음.
+- 거절은 **이미지 출력 요청의 두 번째 호출**에서만, 2회 중 2회. `GeminiCardImageEngine.generate` 는
+  호출마다 `genai.Client` 를 새로 만들므로 클라이언트를 재사용해서 생긴 것은 아니다.
+- 단발 호출(실행 3, `--seeds 1`)은 통과했다 — **그래서 상추는 프로세스를 나눠 한 장만 불렀다.**
+
+**추정(확인 못 한 것)** — 갈라 적는다:
+
+- ㉮ 이미지 생성에 **짧은 간격 제한**(분당 요청 수 등)이 걸려 있는데 서버가 그것을 `API_KEY_INVALID`
+  로 뭉뚱그려 답한다. 두 호출 사이 간격이 30초 남짓이었던 것과 맞는다.
+- ㉯ 두 번째 요청만 다른 백엔드로 가고 그쪽이 이 키를 모른다.
+- 어느 쪽이든 **재시도·간격 두기로 넘길 수 있는 모양**이지, 키를 바꿀 일로는 안 보인다.
+- 거절된 요청(400)이 과금되지 않는다는 것도 **추정**이다. 아침에 청구를 보면 확실해진다
+  (`daengs-gcp-billing-export` 메모의 BigQuery `billing_export`).
+- ⚠ 앱 경로에도 같은 모양이 있을 수 있다 — Nano Banana 2 경로는 닮음이 `cardimage_judge_min` 미만이면
+  **같은 요청 안에서 한 번 더** 부른다(D-084). 그 두 번째 호출이 이 거절을 맞으면 카드가 통째로
+  실패한다. 이번 밤에 재현한 것은 비교 도구에서지 앱 경로에서가 아니다 — **확인된 사실이 아니라
+  같은 모양이라는 관찰**이다.
+
+**④ 비용**
+
+| 무엇 | 잰 것 | 산출·추정 |
+| --- | --- | --- |
+| Nano Banana 2 카드 | 이미지 호출 **5회 = 성공 3 + 거절 2**. 성공한 3장에 붙은 판정(`gemini-3.1-flash-lite`) 3회 | 단가 장당 약 ₩140(= 도구 docstring 의 약 $0.10) → **약 ₩420**. 상한은 4장(약 ₩560)이었으니 그 안이다. 거절분 과금 없음은 **추정** |
+| 진단용 호출 | 모델 조회 5(무료) · `count_tokens` 3(무료) · 텍스트 생성 2(판정 모델 1 · 이미지 모델 TEXT 1) | 토큰 몇백 개 수준, 실비 몇 원 (추정) |
+| 같은 밤 앞선 GPU 실행 (`4aab9373` 확인용) | `FLUX.2-klein-4B` 로 10월 카드 6장(seed 1~6, 장당 23~25초) + 판정 6회. 산출물 `cardimage/out/_cardgen/oct-face-hidden/` | Cloud Run 청구는 **무료 크레딧 상쇄**, 한 번 깨우는 고정비 약 ₩700(E4 실측 시간당 약 ₩2,359 에서 산출 — `compare-2026-09-17-klein-e4-cost.md`). 판정은 크레딧이 아니라 실비, 6회 약 ₩6 (추정) |
+
+**⑤ 잠정 판정과 눈으로 볼 격자**
+
+- **제목 축소 (Task 2) — 잠정 「됨」.** 14장(12달 + 딸기·상추) × 이름 3종의 상단 띠를 눈으로 봤다.
+  격자: `cardimage/out/_title_check/titles_momo.png` · `titles_korean.png` · `titles_princess.png`
+  (각 1400×896, 미추적). 칸마다 대문자 높이와 장평이 적혀 있다.
+- **10월 `face_hidden` (`4aab9373`) — 잠정 「됨」.** 격자 `cardimage/out/_cardgen/oct-face-hidden/grid.png` ·
+  `crop_grid.png` · `legs_grid.png` · `panel_grid.png` (미추적, `FLUX.2-klein-4B` 6장).
+- **딸기·상추 카드 (Task 7) — 잠정 「됨」, 상추에 결함 하나.** 산출물·격자는
+  `cardimage/out/_cardgen/fruit-smoke/`(미추적) — `grid.png`(틀 4칸 대조, 1320×547) ·
+  `top.png`(배지·제목판 띠, 1360×318) · `bottom.png`(아래 패널 띠, 1360×526) · `results.jsonl` ·
+  만든 스크립트 `make_grid.py`. 이름은 영문 기본값 `MOMO`(판정이 한글을 깨진 글자로 오판한다).
+
+  | 볼 것 | 딸기 | 상추 |
+  | --- | --- | --- |
+  | 얼굴이 사진 강아지인가 | ✅ 본문·배지 초상화 둘 다 사진의 검은·흰 치와와 | ✅ 둘 다 |
+  | 몸통·구멍·소품이 그대로인가 | ✅ 딸기 몸통·씨·구멍·잎 낙하산·리깅 줄 그대로 | ✅ 잎·물방울·줄기 그대로 |
+  | 몸·다리가 새로 그려졌나 | ✅ 안 그려졌다 | ✅ 안 그려졌다 |
+  | 배지 `NEO-…`·부제 | ✅ `NEO-S0824` · `FRUIT DOG` | ✅ `NEO-0824` · `VEGGIE DOG` |
+  | 아래 패널 글씨 | ✅ `CALYX GLIDE` · `AIRTIME 855` · `Tiny seeds. Grand entrance.` 글자까지 그대로 | ⚠ 글씨는 그대로(`LEAF PARADE` · `FRESH FLUTTER 800` · `Loose leaves. Loud smile.`)인데 **맨 아래 띠 오른쪽에 틀에 없던 아이콘 둘(잎·불꽃)이 생겼다** |
+  | 제목이 판 안인가 | ✅ `BERRY MOMO` 가 판 안, 배지를 안 덮는다 | ✅ `LETTUCE MOMO` 도 |
+
+  판정기도 둘 다 닮음 5 · `text_ok` · `avatar_ok` 참을 줬다(`results.jsonl`) — **판정기는 위 아이콘
+  둘을 못 잡는다**(글자만 본다). 틀 밀림은 `dy` −4(딸기) · +6(상추), 제목판 어긋남 −5 · −4 로 달 카드와
+  같은 범위다.
+  ⚠ **표본이 카드마다 한 장씩이다.** 아이콘이 이 한 장의 사고인지 상추 틀에서 늘 나는지는 모른다.
+
+**⑥ 사람이 정할 것**
+
+1. **두 번째 이미지 호출이 거절되는 것(③)을 그냥 둘지, 엔진에 재시도·간격을 넣을지** — 키를 바꿀
+   일로는 안 보인다. 설정은 **일부러 안 건드렸다.** 앱 경로의 「닮음 미달이면 한 번 더」가 같은 모양이라
+   먼저 볼 자리다.
+2. **상추 카드의 없던 아이콘 둘(⑤)** — 표본 한 장이라 먼저 몇 장 더 뽑아 재현되는지 본다(장당 약 ₩140).
+   재현되면 `scene` 문장에 아래 띠를 못 박는 쪽으로 손본다.
+3. **배포 전에 `db/migrations/2026-09-18_admin_ai_cards.sql` 을 적용할 것** — 새 표라 코드가 먼저 뜨면
+   콘솔 목록·저장이 `UndefinedTable` 로 죽는다(앱 경로는 영향 없다). 개발서버는 `dev` 머지 직전에
+   `.github/workflows/db-migrate.yml`(self-hosted, GCP 엔 안 닿는다), GCP 는 dev→main 때
+   `docs/deploy/runbook.md` §6 의 ③을 ④보다 먼저. `verify_2026-09-18_admin_ai_cards.sql` 도 같이.
+4. **과일·채소 카드를 앱에 열지** — 지금은 콘솔 전용이고 앱 경로는 달 정수만 받는다. 열려면 한도
+   규칙(D-084)에 어떻게 얹을지부터 정해야 한다. 남은 21종을 더 열지도 같은 자리의 질문이다.
+5. **`db/init/` 번호 40 이 비었다** — 38(`ai_cards`) · 39(`ai_card_usage`) 다음이 **41**
+   (`41_admin_ai_cards.sql`)이다. 40 을 비워 둔 채로 갈지, 41 을 40 으로 내릴지. 볼륨이 빌 때만 도는
+   파일이라 지금 고치는 값은 싸다.
+6. **콘솔 목록의 「만든 사람」 칸** — 지금은 `admin_user_id` 의 **앞 8자리 UUID**를 보여 준다
+   (`frontend/app/components/cardimage-inspect.tsx`). 관리자 이름으로 바꾸려면 응답에 이름을 실어야
+   하고, 그러면 표에 없는 `admin_users` 조인이 하나 는다. 지금 그대로 둘지 정할 것.
+
+### 2026-09-18 — Task 7: 하네스 · 유료 스모크 · 문서
+
+위 「아침에 볼 것」 이 이 태스크의 결과 전부다. 여기에는 도구 변경 하나만 덧붙인다.
+
+**`backend/tools/cardgen_compare.py` 를 카드 키로 넓혔다.** `--months` 가 `--cards` 가 되어 달 정수와
+`catalog.KINDS` 문자열을 섞어 받는다(`parse_card`). 잠금(`open_months`)은 목록에서 정수만 골라 넘기므로
+종류 카드는 잠금을 타지 않고, 파일 이름·`results.jsonl` 은 `catalog.card_key()` 값을 쓴다 —
+`results.jsonl` 에 `card` 열이 생겼고 `month` 는 `GeneratedCard.month`(달이 아니면 0)를 그대로 싣는다.
+`plate_shift` 도 `catalog.get(month)` 대신 `catalog.resolve(selector)` 를 본다. docstring 의 비용 경고는
+그대로 두고 #592 예시 한 줄을 더했다.
+
 ## 2026-09-16~17 — #572 12달 열기 + 뽑기 (Task 1~9 · 최종 리뷰 수정 파동, 머지됨)
 
 `docs/superpowers/plans/2026-09-16-ai-card-12months-and-two-picks.md` 를 subagent-driven-development 로
 실행한 카드 하나의 기록이다(원장은 SDD 폴더 `progress.md`). 한때 「최종 리뷰 수정 파동」과 「Task 1~7」
 두 절로 나뉘어 있던 것을 Task 8 에서 한 절로 합쳤다(최신이 위).
 
-### 2026-09-17 — 머지 직전: 개발서버 DB 마이그레이션 적용
+### 2026-09-17 — 마이그레이션 적용: 개발서버 DB(머지 직전) · GCP DB(#587 스냅샷)
 
 🔴 **어느 DB 에 무엇이 들어갔는지 여기 적는다 — 버전 테이블이 없어 DB 가 기억하지 않는다.**
 
@@ -23,9 +264,26 @@
   | 3 | `2026-09-16_ai_card_seed.sql` | 컬럼 추가, verify 통과 | `vectordb-20260917-103427.dump` |
   | 4 | `2026-09-16_ai_card_usage_unfulfilled_attempt.sql` | 컬럼 추가, verify 통과(기존 사용 행 1 은 `false`) | `vectordb-20260917-103515.dump` |
 
-- **GCP DB — 아직 안 했다.** dev→main 때 `docs/deploy/runbook.md` §6: ① `git push gcp main` → ② VM `git fetch` → ③ 위 네 파일을
-  같은 순서로 `-v ON_ERROR_STOP=1` 과 `verify_*.sql` 까지 → ④ `git merge --ff-only origin/main`. **③ 을 빠뜨리면 GCP 에서 회원
-  탈퇴와 `/app/ai-cards` 가 500.** 콘솔 화면이 바뀌어 프론트 재빌드(`pm2 reload daengs-web`)도 필요.
+- **GCP DB — 적용 완료 (2026-09-17 17:10~17:12 KST, #587 dev→main 스냅샷, `main` `49eca694`, 릴리즈 `v1.1.5`).**
+  `docs/deploy/runbook.md` §6 순서대로: `git push gcp main` → VM `git fetch` → 백업 → 아래 적용 → `git merge --ff-only origin/main`
+  → `restart backend` → 프론트 재빌드. 파일은 `git show origin/main:db/migrations/<f>.sql | docker compose exec -T pgvector
+  psql -X -U daengs -d vectordb -v ON_ERROR_STOP=1` 로 한 장씩 넣었다.
+
+  **적용 전에 `verify_` 를 현재 상태에 먼저 돌려** 이미 들어가 있는지 갈랐다 — #561 때처럼 누가 먼저 넣어 둔 것은 없었다.
+
+  | # | 파일 | 적용 전 verify | 결과 |
+  | --- | --- | --- | --- |
+  | 1 | `2026-09-15_ai_card_usage.sql` | 통과(#561 에서 적용됨, 사용 행 5) | **재적용하지 않음** — 백필을 좁힌 수정은 표가 있는 DB 에서 no-op 이다. verify 만 |
+  | 2 | `2026-09-16_ai_card_pick_group.sql` | `column mismatch: ai_cards.pick_group` | `BEGIN` → 컬럼 → 인덱스 → 옛 방어 인덱스 `DROP` → 새 방어 인덱스 `CREATE` → `COMMIT`. verify 가 `UNIQUE … (app_user_id) WHERE status = 'generating' AND id = pick_group` 확인 |
+  | 3 | `2026-09-16_ai_card_seed.sql` | `column mismatch: ai_cards.seed` | 컬럼 추가, verify 통과(카드 5 · seed 0) |
+  | 4 | `2026-09-16_ai_card_usage_unfulfilled_attempt.sql` | `column mismatch: ai_card_usage.unfulfilled_attempt` | 컬럼 추가, verify 통과(기존 사용 행 5 는 `false`) |
+
+  - 백업(적용 전 한 번): VM `~/db-backups/vectordb-before-main-49eca694-20260917-081030.dump` — 61MB, `PGDMP`, `pg_restore -l` TOC 에 TABLE DATA 64.
+  - 배포 뒤 verify 4장을 다시 돌려 전부 통과. backend 재시작 뒤 로그 `UndefinedTable`·`UndefinedColumn`·`ERROR` 0건.
+    openapi 147 → 148(`/app/ai-cards/{card_id}/choose` 추가), `/app/ai-cards` 401.
+  - 운영 `backend/.env` 에 `DAENGS_CARDIMAGE_MONTHS`·`DAENGS_CARDGEN_URL` 이 없어 코드 기본(12달 · GPU 경로 꺼짐)이 섰다.
+  - 콘솔 화면 변경 때문에 프론트 재빌드 — `/srv/daengs/web/releases/49eca694-manual1`(이전 `84da7f58-manual1`), `pm2 reload daengs-web`.
+- **이제 두 DB 가 이 카드의 마이그레이션 네 장에서 같은 상태다.**
 - 러너가 백업 32개(1.67 GB)가 쌓였다고 경고한다 — 이 카드와 무관, 오래된 것은 손으로 지운다.
 
 ### 2026-09-17 — Task 9: E4 비용 실측 문서화

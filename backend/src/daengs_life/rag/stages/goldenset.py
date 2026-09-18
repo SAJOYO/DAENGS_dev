@@ -231,8 +231,9 @@ def load(path: Path | None = None) -> GoldenSet:
 def corpus_index() -> dict[str, str]:
     """현재 청크 전부의 {논리 주소: 실제 chunk_id}.
 
-    같은 논리 주소가 둘 이상이면(같은 문서를 두 날짜로 수집한 경우) 나중 것을 남긴다 —
-    `chunk_files()` 가 정렬되어 있어 날짜가 큰 쪽이 뒤에 온다.
+    `chunk_files()` 가 이제 문서별 최신 날짜 파일만 돌려주므로(RAG-087) 같은 문서를 두
+    날짜로 수집한 경우는 여기 오기 전에 이미 걸러진다. 그래도 같은 논리 주소가 둘 이상
+    나오면 나중 것을 남긴다 — `chunk_files()` 의 정렬 순서를 그대로 믿는 방어선일 뿐이다.
     """
     index: dict[str, str] = {}
     for path in io.chunk_files():

@@ -226,6 +226,12 @@ def build_ai_card_key(app_user_id: uuid.UUID, card_id: uuid.UUID) -> str:
     return f"ai-cards/{app_user_id}/{card_id}.png"
 
 
+def build_admin_ai_card_key(admin_user_id: uuid.UUID, card_id: uuid.UUID) -> str:
+    """관리자 콘솔이 시험 삼아 뽑은 카드 한 장 (#592). 앱 카드(`ai-cards/`)와 **접두사가 달라**
+    한쪽을 접두사로 통째로 지워도 다른 쪽이 안 다친다."""
+    return f"admin-ai-cards/{admin_user_id}/{card_id}.png"
+
+
 # ── none: 미설정 ────────────────────────────────────────────────────────
 class NotConfiguredStorage:
     """자리 지킴이 — 모든 호출이 명확하게 실패합니다. 조용히 no-op 하지 않습니다."""

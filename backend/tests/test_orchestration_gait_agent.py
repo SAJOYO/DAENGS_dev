@@ -31,6 +31,7 @@ from daengs_backend.orchestration.adapters.gait import (
     GaitCapabilityAdapter,
     build_gait_prompt,
     plan_gait_actions,
+    render_guidance,
     speaks_beyond_change,
     validate_gait_guidance,
 )
@@ -49,6 +50,7 @@ from daengs_backend.orchestration.redirects import (
     GAIT_ACTION_MESSAGES,
     GAIT_CHANGE_SUMMARY,
     GAIT_EXPERT_ADVISORY,
+    GAIT_OWNER_CONDITION_ECHO,
     GAIT_REFERENCE_NOTICE,
     GAIT_UNAVAILABLE_MESSAGES,
     GAIT_VERSION_WARNING,
@@ -86,8 +88,18 @@ def _request(payload: dict[str, Any]) -> CapabilityRequest:
     return CapabilityRequest.model_validate({"capability": "gait", "payload": payload})
 
 
-def _guide(text: str, actions: list[str]) -> str:
-    return json.dumps({"kind": "guide", "text": text, "actions": actions, "reason": None})
+def _guide(text: str, actions: list[str], owner_condition: str = "") -> str:
+    return json.dumps(
+        {
+            "kind": "guide",
+            "text": text,
+            "actions": actions,
+            # **필수 필드다** — 빼면 계약이 거절한다. 기본값을 안 둔 것이 의도이므로
+            # 픽스처가 그것을 따라간다 (`test_every_output_field_is_required` 가 지킨다).
+            "owner_condition": owner_condition,
+            "reason": None,
+        }
+    )
 
 
 async def _run(adapter: GaitCapabilityAdapter, payload: dict[str, Any]):
@@ -465,6 +477,47 @@ def test_not_enough_puts_retake_first_and_drops_keep_observing() -> None:
     assert "keep_observing" not in actions
 
 
+def test_no_change_drops_the_same_condition_retake() -> None:
+    """차이가 없다면서 "같은 조건으로 다시 찍어 **비교**하라" 는 앞뒤가 안 맞는다.
+
+    실기기에서 이 둘이 나란히 나왔다 — 두 줄이 같은 말을 한다:
+
+        · 다음에 한 번 더 찍어 흐름을 보면 변화인지 더 분명해져요.   (keep_observing)
+        · 같은 거리·같은 각도·비슷한 밝기에서 한 번 더 찍어 비교해 보세요.  (retake)
+
+    비교할 차이가 없으므로 남는 뜻은 `keep_observing` 의 중복뿐이다. `gc_v6` 실측에서
+    `no_change` 18셀 중 2셀이 이 모양이었고, **모델이 고른 것**이다 — 코드가 행동을 강제하는
+    자리는 `not_enough` 하나뿐이라 여기서 걸러야 한다.
+    """
+    compare = _compare(change_kind="no_change", flagged_sides=[])
+    actions = plan_gait_actions(compare, ["keep_observing", "same_condition_retake"])
+    assert actions == ["keep_observing"]
+
+
+def test_no_change_still_answers_with_an_action_when_retake_was_the_only_pick() -> None:
+    """유일하게 고른 행동을 빼도 빈 목록은 나가지 않는다 — 마지막 줄의 `or` 가 받는다."""
+    compare = _compare(change_kind="no_change", flagged_sides=[])
+    assert plan_gait_actions(compare, ["same_condition_retake"]) == ["keep_observing"]
+
+
+@pytest.mark.parametrize(
+    "compare",
+    [
+        _compare(change_kind="one_side", flagged_sides=["left"]),
+        _compare(change_kind="both_sides", flagged_sides=["left", "right"]),
+        _compare(change_kind="not_enough", flagged_sides=[]),
+    ],
+)
+def test_the_retake_survives_everywhere_except_no_change(compare) -> None:
+    """⚠️ 빼는 것은 `no_change` 에서만이다.
+
+    `one_side` · `both_sides` 는 **찍은 조건이 달랐을 가능성**을 먼저 보라는 갈래라, 조건을
+    통제하라는 지시가 중복이 아니라 실제 내용이다 (`gc_v6` 에서 둘이 같이 나온 32셀이 그것).
+    `not_enough` 는 그 행동을 코드가 맨 앞에 세운다.
+    """
+    assert "same_condition_retake" in plan_gait_actions(compare, ["same_condition_retake"])
+
+
 @pytest.mark.parametrize(
     "compare",
     [
@@ -761,14 +814,174 @@ async def test_the_advisory_line_never_leaks_when_the_flag_is_off() -> None:
     assert result.data["expert_advisory"] is False
 
 
-def test_the_advisory_says_expert_not_vet_and_claims_no_severity() -> None:
-    """**수의사가 아니라 전문가**이고, 심하다 · 악화 · 질환 의심을 말하지 않는다 (D-080).
+# ── 4-2. 보호자가 말한 병명 되돌려 말하기 ───────────────────────────────────
+def _echo(condition: str) -> str:
+    """코드가 쓸 그 한 줄. 조사까지 붙은 **완성된 문장**이라야 비교가 의미 있다."""
+    from daengs_backend.orchestration.adapters.gait import _subject_particle
 
-    진료 권유는 이 능력의 행동 집합에 없다 — 그 선을 이 문장이 넘으면 관찰이 판정으로
-    되돌아간다.
+    return GAIT_OWNER_CONDITION_ECHO.format(
+        condition=condition, particle=_subject_particle(condition)
+    )
+
+
+async def test_the_condition_the_owner_named_comes_back_in_a_sentence_code_wrote() -> None:
+    """실측(2026-09-17)에서 확인된 자리다. 병명은 모델에 닿았는데 말할 방법이 없었다.
+
+    규칙 8 이 병명을 쓰는 것도 부인하는 것도 막아서, 모델에게 남는 말이 일반 설명뿐이었다.
+    이제 모델은 **되돌려 줄** 칸을 갖고, 문장은 코드가 쓴다.
     """
-    assert "전문가" in GAIT_EXPERT_ADVISORY
-    for banned in ("수의사", "병원", "진료", "심각", "악화", "질환", "의심"):
+
+    async def generate(_prompt: str) -> str:
+        return _guide("움직임 차이는 확인되지 않았어요.", ["keep_observing"], "슬개골 탈구")
+
+    result = await _run(
+        GaitCapabilityAdapter(generate=generate),
+        {
+            "question": "그럼 아까 말한거 생각하면 이번 비교는 어떻게 봐야해?",
+            "compare": _compare(change_kind="no_change", flagged_sides=[]).model_dump(),
+            "conversation": ConversationContext(
+                relation=TurnRelation.FOLLOW_UP,
+                standalone_query="아까 비교 결과는 슬개골 탈구와 관련해 어떻게 봐야 하나요?",
+            ).model_dump(mode="json"),
+        },
+    )
+    assert result.status is CapabilityStatus.OK
+    assert _echo("슬개골 탈구") in result.data["answer"]
+    assert result.data["owner_condition"] == "슬개골 탈구"
+
+
+async def test_a_condition_the_owner_never_wrote_is_dropped_without_failing_the_answer() -> None:
+    """⚠️ **이 테스트가 이 기능을 안전하게 만든다.**
+
+    모델이 병명을 지어내면 그 줄은 안 붙는다. 그리고 **답 자체는 그대로 나간다** — 지어낸
+    것이 해설을 못 쓰게 만들지는 않으므로 거절로 바꾸지 않는다.
+    """
+
+    async def generate(_prompt: str) -> str:
+        return _guide("움직임 차이는 확인되지 않았어요.", ["keep_observing"], "고관절 이형성증")
+
+    result = await _run(
+        GaitCapabilityAdapter(generate=generate),
+        {
+            "question": "이번 비교 어떻게 봐야 해?",
+            "compare": _compare(change_kind="no_change", flagged_sides=[]).model_dump(),
+            "conversation": _conversation().model_dump(mode="json"),
+        },
+    )
+    assert result.status is CapabilityStatus.OK
+    assert "고관절" not in result.data["answer"]
+    assert result.data["owner_condition"] == ""
+    assert GAIT_REFERENCE_NOTICE in result.data["answer"]
+
+
+async def test_the_echo_reads_the_conversation_not_only_this_question() -> None:
+    """병명이 **몇 턴 앞**에 있어도 되돌려 준다 — D-082 가 연 자리가 그것이다."""
+
+    async def generate(_prompt: str) -> str:
+        return _guide("움직임 차이는 확인되지 않았어요.", ["keep_observing"], "퇴행성 관절염")
+
+    result = await _run(
+        GaitCapabilityAdapter(generate=generate),
+        {
+            "question": "이번 비교 어떻게 봐야 해?",
+            "compare": _compare(change_kind="no_change", flagged_sides=[]).model_dump(),
+            "conversation": _conversation().model_dump(mode="json"),
+        },
+    )
+    assert _echo("퇴행성 관절염") in result.data["answer"]
+
+
+async def test_no_echo_when_the_owner_named_nothing() -> None:
+    """과잉 부착 회귀. 병명이 없는 대화에 이 줄이 붙으면 안 된다."""
+
+    async def generate(_prompt: str) -> str:
+        return _guide("움직임 차이는 확인되지 않았어요.", ["keep_observing"])
+
+    result = await _run(
+        GaitCapabilityAdapter(generate=generate),
+        {"question": "뭐가 달라?", "compare": _compare().model_dump()},
+    )
+    assert "말씀하신" not in result.data["answer"]
+    assert result.data["owner_condition"] == ""
+
+
+def test_only_one_expert_line_goes_out() -> None:
+    """⚠️ 둘 다 전문가를 말한다. 한 답에서 두 번 권하면 관찰이 아니라 재촉으로 읽힌다."""
+    both = render_guidance(
+        "본문이에요.",
+        ["keep_observing"],
+        version_mismatch=False,
+        expert_advisory=True,
+        owner_condition="관절염",
+    )
+    assert _echo("관절염") in both
+    assert GAIT_EXPERT_ADVISORY not in both
+    # 병명이 없으면 #582 줄이 예전 그대로 나간다 — 이 변경이 그 경로를 안 건드린다.
+    only_advisory = render_guidance(
+        "본문이에요.", ["keep_observing"], version_mismatch=False, expert_advisory=True
+    )
+    assert GAIT_EXPERT_ADVISORY in only_advisory
+
+
+@pytest.mark.parametrize(
+    ("condition", "expected"),
+    [("슬개골 탈구", "탈구가"), ("관절염", "관절염이"), ("십자인대 파열", "파열이")],
+)
+def test_the_subject_particle_follows_the_final_consonant(condition: str, expected: str) -> None:
+    """ "탈구**가**" 와 "관절염**이**" 가 갈려야 한다 — 조사를 문장에 박으면 한쪽이 틀린다."""
+    assert expected in _echo(condition)
+
+
+def test_a_one_letter_condition_is_not_echoed() -> None:
+    """한 글자는 대조가 거의 늘 성공해 대조 자체가 무의미해진다."""
+    from daengs_backend.orchestration.adapters.gait import _owner_said
+
+    payload = GaitComparePayload.model_validate(
+        {"question": "암만 생각해도 이상해요", "compare": _compare().model_dump()}
+    )
+    assert _owner_said("암", payload) is False
+
+
+def test_spacing_does_not_decide_whether_the_owner_said_it() -> None:
+    """ "슬개골탈구" 와 "슬개골 탈구" 는 같은 말이다."""
+    from daengs_backend.orchestration.adapters.gait import _owner_said
+
+    payload = GaitComparePayload.model_validate(
+        {"question": "슬개골 탈구라고 들었어요", "compare": _compare().model_dump()}
+    )
+    assert _owner_said("슬개골탈구", payload) is True
+
+
+def test_both_code_written_lines_use_the_same_words_as_the_app_card() -> None:
+    """**"수의사 등 전문가"** — 앱 비교 카드와 같은 낱말 (2026-09-17 사용자 확정).
+
+    예전에는 서버 보행만 "전문가" 였다. 그런데 같은 화면의 앱 카드가 "수의사 등 전문가와
+    상담하는 것을 권장해요" 라고 말하고 피부는 "수의사 진료" 를 써서, **한 화면에서 두 낱말이
+    갈렸다.** 그 불일치를 없앤 것이다.
+
+    ⚠️ 행동 집합에 진료 권유가 생긴 것이 **아니다** (D-058). 이 낱말은 코드가 쓴 조건부
+    문장에만 있고, 모델은 여전히 못 쓴다 — 아래 테스트가 그것을 지킨다.
+
+    ⚠️ **둘이 같이 바뀌어야 한다.** 하나만 바꾸면 없애려던 불일치가 그대로 남는다.
+    """
+    for sentence in (GAIT_EXPERT_ADVISORY, GAIT_OWNER_CONDITION_ECHO):
+        assert "수의사 등 전문가" in sentence
+
+
+def test_the_model_still_may_not_say_vet_even_though_the_code_does() -> None:
+    """⚠️ **이 구분이 이 변경을 안전하게 만든다.**
+
+    코드가 쓴 문장은 가드 **뒤에** 붙으므로 가드를 지나지 않는다. 모델 문장은 지난다. 그래서
+    같은 낱말이 한쪽에서는 허용되고 다른 쪽에서는 막힌다 — 그것이 의도다. 이 테스트가 깨지면
+    모델이 진료를 권할 수 있게 된 것이므로, 문구를 맞춘 것이 선을 넘은 것이 된다.
+    """
+    assert speaks_beyond_change("수의사와 상담해 보세요.") is True
+    assert speaks_beyond_change("병원에 가 보세요.") is True
+
+
+def test_the_advisory_claims_no_severity() -> None:
+    """심하다 · 악화 · 질환 의심을 말하지 않는다 (D-080). 낱말이 바뀌어도 이건 그대로다."""
+    for banned in ("심각", "악화", "질환", "의심"):
         assert banned not in GAIT_EXPERT_ADVISORY
     # 앞 절이 "영상만으로는 원인을 알 수 없다" 여야 과장으로 안 읽힌다.
     assert GAIT_EXPERT_ADVISORY.startswith("영상만으로는 원인을 알 수 없어요")
@@ -781,17 +994,46 @@ def test_the_advisory_does_not_change_the_action_set() -> None:
     assert plan_gait_actions(on, ["keep_observing"]) == plan_gait_actions(off, ["keep_observing"])
 
 
-def test_the_advisory_sentence_would_pass_its_own_guard() -> None:
-    """코드가 쓰는 문장이라 가드를 안 지나지만, 지나가도 걸리지 않아야 한다 —
-    걸린다면 그 문장이 모델에게 금지한 말을 하고 있다는 뜻이다."""
-    assert speaks_beyond_change(GAIT_EXPERT_ADVISORY) is False
+@pytest.mark.parametrize(
+    "sentence",
+    [
+        GAIT_EXPERT_ADVISORY,
+        # 병명 칸은 비워서 본다 — 거기 들어갈 낱말은 보호자가 쓴 병명이라 당연히 진단어다.
+        GAIT_OWNER_CONDITION_ECHO.format(condition="", particle=""),
+    ],
+)
+def test_the_code_written_lines_cross_only_the_line_we_decided_to_cross(sentence: str) -> None:
+    """⚠️ 예전 이 테스트는 **가드를 통째로 통과**하라고 요구했다. 이제 못 한다 — "수의사" 가
+    `_VET_TERMS` 에 있고, 그 낱말을 쓰기로 한 것이 2026-09-17 의 결정이기 때문이다.
+
+    그래서 요구를 **넘은 선 하나로 좁힌다**: 진료 어휘만 걸리고 **방향 · 병명 · 수치는
+    깨끗해야 한다.** 그 셋 중 하나라도 걸리면 코드가 쓰는 문장이 모델에게 금지한 판단을 하고
+    있다는 뜻이고, 그건 이번 결정이 허락한 범위가 아니다.
+    """
+    from daengs_backend.orchestration.adapters.gait import (
+        _DIAGNOSIS_TERMS,
+        _MEASUREMENT,
+        _claims_direction,
+    )
+
+    assert _claims_direction(sentence) is False
+    assert not [term for term in _DIAGNOSIS_TERMS if term in sentence]
+    assert _MEASUREMENT.search(sentence) is None
 
 
 # ── 6. 정책 거절 ─────────────────────────────────────────────────────────────
 @pytest.mark.parametrize("reason", ["diagnosis", "medication", "emergency", "off_topic"])
 async def test_a_refusal_uses_the_shared_fixed_sentence(reason: str) -> None:
     async def generate(_prompt: str) -> str:
-        return json.dumps({"kind": "refuse", "text": "", "actions": [], "reason": reason})
+        return json.dumps(
+            {
+                "kind": "refuse",
+                "text": "",
+                "actions": [],
+                "owner_condition": "",
+                "reason": reason,
+            }
+        )
 
     result = await _run(
         GaitCapabilityAdapter(generate=generate),
@@ -853,9 +1095,26 @@ def test_the_prompt_separates_a_diagnosis_the_owner_already_received() -> None:
     assert "not even to deny a link" in rule
 
 
+def test_the_prompt_tells_the_model_to_copy_not_to_judge() -> None:
+    """모델이 **되돌려 줄** 칸이지 **판단할** 칸이 아니라는 것이 프롬프트에 있어야 한다.
+
+    코드 대조만으로는 부족하다 — 대조는 지어낸 것을 버릴 뿐이고, 버려지면 보호자는 그 줄을
+    못 본다. 모델이 애초에 그대로 옮기게 해야 기능이 실제로 동작한다.
+    """
+    prompt = build_gait_prompt(
+        GaitComparePayload.model_validate(
+            {"question": "이번 비교 어떻게 봐야 해?", "compare": _compare().model_dump()}
+        )
+    )
+    assert "copied EXACTLY as they wrote it" in prompt
+    assert "Never invent one" in prompt
+    # 규칙 8 은 여전히 **본문에** 병명을 쓰지 말라고 한다 — 이 칸이 그것을 뒤집지 않는다.
+    assert "do not repeat the name of the condition" in prompt
+
+
 def test_the_prompt_version_moved_with_the_rule_change() -> None:
     """평가 메타가 이 값을 고정한다 — 안 올리면 새 결과가 옛 셀에 섞인다."""
-    assert GAIT_PROMPT_VERSION == "gait-change-ko-v4"
+    assert GAIT_PROMPT_VERSION == "gait-change-ko-v5"
 
 
 # ── 8. 프로바이더 실패는 격리된다 ────────────────────────────────────────────
@@ -898,10 +1157,25 @@ async def test_unparseable_output_never_reaches_the_user() -> None:
 @pytest.mark.parametrize(
     "raw",
     [
-        {"kind": "guide", "text": "", "actions": [], "reason": None},
-        {"kind": "refuse", "text": "", "actions": [], "reason": None},
-        {"kind": "guide", "text": "설명이에요.", "actions": ["vet_visit"], "reason": None},
-        {"kind": "guide", "text": "설명이에요.", "actions": [], "reason": "diagnosis"},
+        {"kind": "guide", "text": "", "actions": [], "owner_condition": "", "reason": None},
+        {"kind": "refuse", "text": "", "actions": [], "owner_condition": "", "reason": None},
+        {
+            "kind": "guide",
+            "text": "설명이에요.",
+            "actions": ["vet_visit"],
+            "owner_condition": "",
+            "reason": None,
+        },
+        {
+            "kind": "guide",
+            "text": "설명이에요.",
+            "actions": [],
+            "owner_condition": "",
+            "reason": "diagnosis",
+        },
+        # **필수 필드가 빠진 출력.** 기본값을 두면 제약 디코딩이 칸을 통째로 빼므로
+        # (`text` 와 같은 이유) 빠진 것은 계약이 거절해야 한다.
+        {"kind": "guide", "text": "설명이에요.", "actions": [], "reason": None},
     ],
 )
 def test_output_shapes_the_contract_rejects(raw: dict[str, Any]) -> None:

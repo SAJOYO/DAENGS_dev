@@ -14,7 +14,7 @@ from collections.abc import Sequence
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Row, func, select
+from sqlalchemy import Row, func, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from daengs_backend.models import AdminAuditLog, AdminUser
@@ -90,10 +90,13 @@ async def list_entries(
 
     if before is not None:
         at, last_id = before
-        # (created_at, id) < (at, last_id) 를 튜플 비교로. 같은 시각의 행을 건너뛰지
-        # 않으면서 중복도 안 나오는 유일한 방법입니다.
+        # tuple_(created_at, id) < tuple_(at, last_id) — SQL 튜플 비교로 내려갑니다.
+        # 파이썬 튜플끼리 `<` 를 쓰면(예전 코드) SQLAlchemy 가 원소별로 비교하다
+        # 첫 원소에서 멈춰 `created_at < at` 만 남기고, 같은 시각에 있는 행들이
+        # 페이지 사이에서 조용히 사라졌습니다 — 여기서는 `tuple_()` 로 감싸
+        # `(created_at, id) < (at, last_id)` 를 SQL 에 그대로 내립니다.
         stmt = stmt.where(
-            (AdminAuditLog.created_at, AdminAuditLog.id) < (at, last_id)  # type: ignore[operator]
+            tuple_(AdminAuditLog.created_at, AdminAuditLog.id) < tuple_(at, last_id)
         )
     if action_prefix is not None:
         # `admin.app_user.` 처럼 접두어로 갈래를 고릅니다.

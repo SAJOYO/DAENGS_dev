@@ -1,16 +1,20 @@
 """GPU 카드 생성 서비스(D-078)와 Nano Banana 2 를 같은 사진·틀·seed 로 비교한다 (#544, #557).
 
     uv run python tools/cardgen_compare.py --engine cardgen --url http://127.0.0.1:8091 \
-        --photos ../cardimage/test/_03.jpg --months 4,9 --seeds 1,2 --out ../cardimage/out/_cardgen/klein
+        --photos ../cardimage/test/_03.jpg --cards 4,9 --seeds 1,2 --out ../cardimage/out/_cardgen/klein
     uv run python tools/cardgen_compare.py --engine gemini --photos ... --out ../cardimage/out/_cardgen/gemini
 
     # #557 E1 글씨 유지 — 아래 패널 문구를 프롬프트에 적고 / 생성 크기를 올린다
     uv run python tools/cardgen_compare.py --engine cardgen --url http://127.0.0.1:8091 --photos ... \
-        --months 4,9 --seeds 1 --panel-text --gen-size 1280x2048 --out ../cardimage/out/_cardgen/e1-both
+        --cards 4,9 --seeds 1 --panel-text --gen-size 1280x2048 --out ../cardimage/out/_cardgen/e1-both
 
     # #557 E2 — 한 요청에 4장: --batch 4 (순차 4회 비교는 --seeds 1,2,3,4)
 
-결과: `<out>/<사진>_<달>_s<seed>.png` 와 `<out>/results.jsonl` 한 줄씩 — 닮음·글자·아바타(검수),
+    # #592 콘솔 전용 종류 카드 — `--cards` 는 달 정수와 `catalog.KINDS` 문자열을 섞어 받는다
+    uv run python tools/cardgen_compare.py --engine gemini --photos ../cardimage/test/치와와_test1.jpg \
+        --cards strawberry,lettuce --seeds 1,2 --out ../cardimage/out/_cardgen/fruit-smoke
+
+결과: `<out>/<사진>_<카드>_s<seed>.png` 와 `<out>/results.jsonl` 한 줄씩 — 닮음·글자·아바타(검수),
 틀 밀림(`drift`), 제목판 어긋남(`plate_shift`, 못 재면 null), 걸린 시간(`seconds`, 서비스 쪽은 `service.seconds`),
 조건(`gen_size`, `panel_text`).
 재시도는 하지 않는다(`judge_min=1`) — 한 장 한 장이 비교 표본이다.
@@ -49,6 +53,12 @@ PANEL_TEXT: dict[int, tuple[str, ...]] = {
     4: ("PETAL PAUSE", "One petal. Perfect timing.", "SPRING", "920", "Bloomed right on schedule."),
     9: ("SONGPYEON SWEEP", "Full moon. Fuller snack tray.", "MOON LUCK", "925", "A warm Chuseok surprise."),
 }
+
+
+def parse_card(text: str) -> catalog.CardSelector:
+    """`--cards` 한 조각을 카드 선택자로 — 숫자면 달, 아니면 종류 문자열(`catalog.KINDS`)."""
+    token = text.strip()
+    return int(token) if token.isdigit() else token
 
 
 def parse_size(text: str) -> tuple[int, int]:
@@ -115,7 +125,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--engine", choices=("cardgen", "gemini"), required=True)
     parser.add_argument("--url", default="", help="cardgen 서비스 주소 (proxy 로 연 로컬 포트)")
     parser.add_argument("--photos", required=True, help="쉼표로 구분한 사진 경로")
-    parser.add_argument("--months", default="4,9")
+    parser.add_argument("--cards", default="4,9",
+                        help="쉼표로 구분한 카드 — 달 정수(1~12) 또는 종류 문자열(strawberry·lettuce)")
     parser.add_argument("--seeds", default="1")
     parser.add_argument("--dog-name", default="MOMO")
     parser.add_argument("--gen-size", type=parse_size, default=GEN_SIZE,
@@ -144,19 +155,21 @@ def main(argv: list[str] | None = None) -> int:
                             timeout_ms=settings.cardimage_timeout_ms)
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
-    months = sorted(int(m) for m in args.months.split(","))
+    cards = [parse_card(c) for c in args.cards.split(",")]
+    # 잠금은 달 카드에만 걸린다 — 종류 카드는 `generate_card` 가 `open_months` 를 보지 않는다.
+    open_months = frozenset(c for c in cards if isinstance(c, int))
     seeds = [int(s) for s in args.seeds.split(",")]
     if args.panel_text:
-        missing = [m for m in months if m not in PANEL_TEXT]
+        missing = [c for c in cards if c not in PANEL_TEXT]
         if missing:
-            print(f"--panel-text 문구가 없는 달: {missing}", file=sys.stderr)
+            print(f"--panel-text 문구가 없는 카드: {missing}", file=sys.stderr)
             return 2
     gen_size = f"{args.gen_size[0]}x{args.gen_size[1]}"
 
     for photo_path in [Path(p) for p in args.photos.split(",")]:
         photo = photo_path.read_bytes()
-        for month in months:
-            template = Image.open(catalog.template_path(month, settings.cardimage_dir)).convert("RGB")
+        for selector in cards:
+            template = Image.open(catalog.template_path(selector, settings.cardimage_dir)).convert("RGB")
             for seed in seeds:
                 if args.engine == "cardgen":
                     engine = HttpCardImageEngine(base_url=args.url, timeout_s=settings.cardgen_timeout_s, seed=seed,
@@ -168,23 +181,25 @@ def main(argv: list[str] | None = None) -> int:
                                                    size=settings.cardimage_size,
                                                    timeout_ms=settings.cardimage_timeout_ms)
                 if args.panel_text:
-                    engine = PromptSuffixEngine(engine, panel_sentence(month))
+                    engine = PromptSuffixEngine(engine, panel_sentence(selector))
                 for copy in range(args.batch or 1):
                     started = time.monotonic()
                     card = generate_card(
-                        photo=photo, content_type=MIME[photo_path.suffix.lower()], month=month,
+                        photo=photo, content_type=MIME[photo_path.suffix.lower()], card=selector,
                         dog_name=args.dog_name, engine=engine, judge=judge, base_dir=settings.cardimage_dir,
-                        open_months=frozenset(months), judge_min=1,
+                        open_months=open_months, judge_min=1,
                         # 이 도구는 특정 seed 를 정확히 겨눠 비교한다 — pick_seeds 가 대신 고르면
                         # results.jsonl 의 "seed" 열이 실제로 만든 이미지와 어긋난다(#572 fix round 1 F1).
                         seed=seed,
                     )
                     seconds = round(time.monotonic() - started, 1)
-                    name = f"{photo_path.stem}_{month}_s{seed}" + (f"_b{copy}" if args.batch else "")
+                    key = catalog.card_key(selector)
+                    name = f"{photo_path.stem}_{key}_s{seed}" + (f"_b{copy}" if args.batch else "")
                     (out / f"{name}.png").write_bytes(card.png)
                     image = Image.open(io.BytesIO(card.png)).convert("RGB")
                     row = {
-                        "name": name, "engine": args.engine, "photo": photo_path.name, "month": month, "seed": seed,
+                        "name": name, "engine": args.engine, "photo": photo_path.name, "card": key,
+                        "month": card.month, "seed": seed,
                         "gen_size": gen_size if args.engine == "cardgen" else None, "panel_text": args.panel_text,
                         "batch": args.batch or None,
                         "seconds": seconds, "service": getattr(engine, "last_meta", None),
@@ -193,7 +208,7 @@ def main(argv: list[str] | None = None) -> int:
                         "avatar_ok": card.judge.avatar_ok if card.judge else None,
                         "judge_note": card.judge.note if card.judge else None,
                         "drift": asdict(frame_drift(template, image)),
-                        "plate_shift": plate_shift(image, catalog.get(month).plate),
+                        "plate_shift": plate_shift(image, catalog.resolve(selector).plate),
                     }
                     with (out / "results.jsonl").open("a", encoding="utf-8") as f:
                         f.write(json.dumps(row, ensure_ascii=False) + "\n")

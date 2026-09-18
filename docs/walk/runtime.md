@@ -38,13 +38,14 @@
 
    각 파일 적용 후 짝 verifier를 실행한다. 최종 상태에서는 commerce verifier를 사용한다.
    5를 적용한 DB에 4를 다시 적용하면 태그 제약이 좁아지므로 순서를 뒤집지 않는다.
-3. 운영 연결 코드가 검증·배포된 뒤 `backend/.env.walk-public.example`을 서버 checkout 밖
-   `C:/deploy/daengs/walk-public.env` 등에 복사한다. 실제 SGIS 키/secret과 공공데이터 키를 채운다.
-   **Gemini 키는 기존 `backend/.env` 설정을 유지**한다. 관리 도구는 웹 재생성 시 이 값을 보존한다.
-   Start는 v2 읽기·쓰기와 사진 메타데이터도 함께 활성화하므로 2·3의 SQL이 필요하다.
-4. 서버 최상단 `.env`에 `WALK_PUBLIC_ENV_FILE=C:/deploy/daengs/walk-public.env`를 지정한다.
-   기본값은 무시되는 `backend/.env.walk-public.local`이다. 예제의 public/area/context/diary
-   flag는 준비 중에는 false로 둔다. Compose의 `COMPOSE_PROFILES`에 프로파일을 상시 추가하지 않는다.
+3. 서버 프로젝트 최상단 `.env`에 최상단 `.env.example`의 Walk 항목을 추가한다.
+   SGIS 키/secret, 공공데이터 키와 카탈로그 경로를 채운다. Gemini 키도 최상단
+   `GEMINI_API_KEY`를 사용한다. 실제 `.env`는 Git에 올리지 않는다.
+4. 기존 별도 파일을 쓰던 서버는 **이 배포 전에** `WALK_PUBLIC_ENV_FILE`이 가리키던
+   파일의 `DAENGS_WALK_*` 값을 최상단 `.env`로 옮긴다. 이름이 중복되면 하나로 정리한다.
+   예전 파일과 GitHub Secrets는 더 이상 읽지 않는다. Compose는 산책 항목만 명시적으로
+   백엔드·산책 워커·관리 CLI에 전달한다. 최상단에 없는 값은 Compose 기본값을 사용하므로
+   기존 파일에서 켜져 있던 활성화 값도 반드시 옮긴다.
 5. 서버 배포 폴더에서 아래를 실행한다. 전국 공원, 해당 지역 상가, EGIS 하천을 순차 준비한다.
 
 ```powershell
@@ -60,7 +61,7 @@ Check는 공공자료 및 스키마 검증이며, 사용자 기록이나 Gemini 
 
 ## 활성화·원격 실행
 
-준비가 끝나면 Start를 실행한다. 공공자료 파일의 context/public/area/diary 및 v2 읽기·쓰기,
+준비가 끝나면 Start를 실행한다. 최상단 `.env`의 context/public/area/diary/space/route 및 v2 읽기·쓰기,
 사진 메타데이터 flag를 true로 설정한 뒤 검사한다. 검사 실패 시 이전 설정 파일로 되돌린다.
 실행 중인 웹의 환경은 파일 수정만으로 바뀌지 않는다. Start가 먼저 별도 CLI로 검사하고,
 워커 응답을 확인한 뒤 Beat와 웹 컨테이너를 올린다. 모든 명령은 `--no-deps`로 대상만 변경한다.
@@ -69,10 +70,9 @@ Check는 공공자료 및 스키마 검증이며, 사용자 기록이나 Gemini 
 .\tools\walk-diary-runtime.ps1 -Action Start
 ```
 
-원격에서는 `Walk diary runtime` workflow의 Configure/Prepare/Check/Start/Stop/Smoke를 사용한다.
-Configure는 저장소 secrets `WALK_SGIS_KEY`, `WALK_SGIS_SECRET`, `WALK_PUBLIC_DATA_KEY`를
-서버 전용 파일에 기록하고 최상단 `.env`에 경로를 지정한다. 파일이나 경로 설정이 이미 있으면
-덮어쓰지 않고 중단한다. 키를 코드·앱·로그에 넣지 않으며 초기 기능 flag는 false다.
+Windows 개발 서버에서는 `Walk diary runtime` workflow의 Prepare/Check/Start/Stop/Smoke를 사용한다.
+키는 서버 최상단 `.env`에 직접 넣는다. Configure와 저장소 Secrets 주입 경로는 제거했다.
+이 workflow는 Windows 서버 전용이며 GCP 서버 설정은 변경하지 않는다.
 **Smoke 이외의 작업은 선택한 커밋과 서버 checkout HEAD가 같아야 한다.**
 기존 배포 폴더의 도구와 Compose를 실행하며 서버 소스를 checkout하지 않는다.
 Smoke는 선택한 커밋을 별도 하위 폴더에 받고 검증 스크립트 하나만 컨테이너의 임시 경로로
@@ -168,3 +168,64 @@ PowerShell 동작·Compose 렌더·Configure 검사 7개를 통과했다.
 없어 발생했고, 실제 Git 워크트리에서 해당 파일을 재실행해 3개 모두 통과했다.
 이후 최신 dev 통합과 Smoke/PowerShell 5.1·7 검증을 포함한 대상 검사 68 passed / 2 skipped,
 `uv run check` 통과. 전체 테스트를 재실행한 결과로 합산하지 않는다.
+
+## GCP 정식 서버 적용
+
+GCP 서버 프로젝트 루트(Compose 파일이 있는 폴더)의 `.env`에도 같은 Walk 항목을 설정한다.
+준비된 DB·카탈로그를 사용하는 서버에서는 다음 값을 `true`로 설정한다:
+`DAENGS_WALK_DIARY_ENABLED`, `DAENGS_WALK_DIARY_SPACE_ENABLED`,
+`DAENGS_WALK_DIARY_ROUTE_PATTERNS_ENABLED`, `DAENGS_WALK_ENTRY_CONTEXT_ENABLED`,
+`DAENGS_WALK_PUBLIC_CONTEXT_ENABLED`, `DAENGS_WALK_AREA_CONTEXT_ENABLED`,
+`DAENGS_WALK_ENTRY_V2_ENABLED`, `DAENGS_WALK_ENTRY_V2_WRITE_ENABLED`,
+`DAENGS_WALK_PHOTO_METADATA_ENABLED`, `DAENGS_WALK_CATALOG_REFRESH_ENABLED`.
+새 서버는 위 최초 준비의 스키마·카탈로그 준비를 먼저 수행한다.
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.gcp.yml run --rm --no-deps walk-context-tools daengs_backend.cli.walk_runtime_check --lat 37.4878 --lng 127.052 --probe-address
+# 위 검사가 성공한 뒤 실행한다.
+docker compose -f docker-compose.yml -f docker-compose.gcp.yml --profile walk-diary up -d --no-deps --force-recreate backend walk-context-worker walk-context-beat walk-catalog-worker
+docker exec daengs-backend /opt/venv/bin/python -c "from daengs_backend.config import settings; print('diary_enabled=', settings.walk_diary_enabled)"
+```
+
+`restart`만으로 환경은 바뀌지 않는다. 루트 `.env`는 서버마다 별도이며 Git merge나
+Windows Actions 실행으로 GCP의 `.env`가 복사되지는 않는다. 설정 확인 후 앱에서
+기존 산책의 일기 생성을 다시 요청해 실제 결과를 확인한다.
+
+## Life·장소 API 키도 최상단에서 관리
+
+| 최상단 `.env` 항목 | 전달 대상 |
+| --- | --- |
+| `DATA_GO_KR_KEY` | backend·산책 worker/Beat/tools 및 crawler worker/Beat |
+| `KAKAO_REST_KEY` | backend·산책 worker/Beat/tools |
+| `KMA_HUB_KEY` | backend·산책 worker/Beat/tools (선택적인 기상청 API Hub 키) |
+| `DAENGS_DATA_GO_KR_SERVICE_KEY` | place-search의 공공데이터 적재 |
+| `DAENGS_KTO_SERVICE_KEY` | place-search의 관광공사 적재 |
+
+기존 `backend/.env`의 Life 키 세 개도 루트 `.env`로 옮긴 뒤 대상 컨테이너를 재생성한다.
+루트에 없는 Life 키는 빈 값이 전달된다. 기존 `PLACE_DATA_GO_KR_SERVICE_KEY`,
+`PLACE_KTO_SERVICE_KEY`는 새 이름이 비어 있을 때만 호환용으로 사용한다.
+각 API의 활용 권한과 키는 별개이므로 키 값을 코드에서 서로 복제하지 않는다.
+
+**GCP Cloud Run 경계:** `DAENGS_REALTIME_URL`을 사용하는 서버는 날씨 조회를 별도
+Cloud Run 서비스에 위임한다. 그 서비스는 `infra/gcp/realtime.sh`의 GCP Secret Manager
+설정을 사용하며 VM 루트 `.env` 수정이나 Compose 재생성으로 갱신되지 않는다.
+이번 PR은 GitHub Secrets 기반 산책 Configure를 제거한 것이며, Cloud Run의
+Secret Manager 배포 구조를 변경하지 않는다. 별도 서비스 키 갱신은
+[실시간 서비스 운영 안내](../../infra/gcp/README.md)를 따른다.
+
+## 기존 설정의 한 번만 이관
+
+Windows Deploy는 Compose 적용 전에 `tools/migrate_walk_root_env.py`를 실행한다.
+최상단에 이미 있는 값(빈 값 포함)은 유지하고, 누락된 산책·Life 키만 기존
+`backend/.env` 및 별도 산책 파일의 적용 순서대로 복사한다. PLACE_*도 새 이름으로
+옮긴다. 원본은 `.env.walk-root-backup.local`에 보관하고 완료 표식을 남겨 이후
+배포에서 옛 설정을 다시 가져오지 않는다. 값은 로그에 출력하지 않는다.
+별도 파일 경로가 남아 있는데 파일이 없으면 배포를 멈춘다.
+GCP에서는 Compose 적용 전에 서버 루트에서 다음을 실행할 수 있다:
+
+```bash
+python3 tools/migrate_walk_root_env.py
+```
+
+자동 이관은 기존 활성화 값을 보존한다. GCP에서 기존 값이 False였다면 이관 후에도
+False이므로 활성화 여부를 직접 설정하고 위 적용 절차를 진행해야 한다.

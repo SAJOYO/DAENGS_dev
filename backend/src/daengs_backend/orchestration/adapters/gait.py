@@ -53,6 +53,7 @@ from daengs_backend.orchestration.redirects import (
     GAIT_ACTION_MESSAGES,
     GAIT_CHANGE_SUMMARY,
     GAIT_EXPERT_ADVISORY,
+    GAIT_OWNER_CONDITION_ECHO,
     GAIT_REFERENCE_NOTICE,
     GAIT_UNAVAILABLE_MESSAGES,
     GAIT_VERSION_WARNING,
@@ -79,7 +80,7 @@ from daengs_backend.orchestration.semantic import (
 #: v4 (#586 · D-082): 앞 대화(`CONVERSATION`)가 프롬프트에 들어오고 규칙 9 가 늘었다.
 #: 출력 가드 어휘도 같이 넓혔다 — **이 칸이 병명을 들여오기 때문이다.**
 #: **평가 메타가 이 값을 고정한다.**
-GAIT_PROMPT_VERSION = "gait-change-ko-v4"
+GAIT_PROMPT_VERSION = "gait-change-ko-v5"
 GAIT_MODEL_ID = ROUTER_MODEL_ID
 GAIT_MAX_OUTPUT_TOKENS = 512
 
@@ -226,6 +227,9 @@ _POLICY = (
     "comparison shows. Do NOT write words for illness, condition, disease or diagnosis at "
     'all, not even to deny a link: "이 비교는 움직임의 차이만 보여줘요" is the right shape, '
     '"질환과는 관련이 없어요" is not.\n'
+    "Instead, report the owner's own word for the condition in owner_condition (see "
+    "Output) — the app writes a separate sentence acknowledging it, so text itself "
+    "stays clean.\n"
     "9. CONVERSATION, when present, is what the owner and you said earlier in this chat. Use "
     "it to understand what the owner is referring to, and answer THIS question rather than "
     "repeating the previous answer. Rule 8 applies to the whole conversation, not only to "
@@ -242,6 +246,12 @@ _POLICY = (
     '  actions lists 1-3 of "same_condition_retake" (film again under the same conditions), '
     '"keep_observing" (film again next time and watch the trend), "check_conditions" (the '
     "two videos may have been filmed differently), most important first.\n"
+    "  owner_condition is the condition the OWNER said they were ALREADY diagnosed "
+    "with, copied EXACTLY as they wrote it and nothing else — no words you added, no "
+    "translation, no explanation. It may come from an earlier turn in CONVERSATION. "
+    'Use "" when the owner named no condition. Never invent one and never copy a '
+    "condition you thought of yourself: the app checks this string against what the "
+    "owner actually wrote and silently drops anything else.\n"
     '- kind "refuse": text is "", actions is [], and reason is set.\n'
     "Return exactly one JSON object that matches GAIT_GUIDANCE_JSON_SCHEMA."
 )
@@ -258,6 +268,13 @@ class GaitGuidance(BaseModel):
     text: str = Field(max_length=600)
     #: 모델이 고른 순서. **그대로 나가지 않는다** — `plan_gait_actions` 가 갈래별 규칙으로 고친다.
     actions: list[GaitAction] = Field(max_length=3)
+    #: 보호자가 **이미 받았다고 말한** 진단명을, 보호자가 쓴 그대로. 없으면 "".
+    #:
+    #: **필수 필드다** — `text` 와 같은 이유(기본값을 두면 제약 디코딩이 칸을 통째로 뺀다).
+    #: **그대로 나가지 않는다**: `_owner_said` 가 보호자 쪽 텍스트와 대조해 통과한 것만
+    #: `GAIT_OWNER_CONDITION_ECHO` 에 들어간다. 모델이 지어낸 병명은 조용히 버려진다 —
+    #: 이 칸은 모델이 **되돌려 줄** 자리이지 **판단할** 자리가 아니다.
+    owner_condition: str = Field(max_length=40)
     reason: RefusalReason | None = None
 
     @model_validator(mode="after")
@@ -421,12 +438,59 @@ def speaks_beyond_change(text: str) -> bool:
     )
 
 
+def _subject_particle(word: str) -> str:
+    """받침이 있으면 "이", 없으면 "가". "탈구**가**" 와 "관절염**이**" 가 갈려야 한다.
+
+    한글 음절은 (코드 - 0xAC00) % 28 이 0 이 아니면 받침이 있다. 한글이 아닌 끝(영문 약어
+    `IVDD` 등)은 읽는 소리를 코드가 알 수 없으므로 **"이"** 로 둔다 — 어느 쪽을 골라도 한쪽은
+    틀리는 자리라, 틀렸을 때 문장이 덜 깨지는 쪽을 고른다.
+    """
+    if not word:
+        return "이"
+    last = word.strip()[-1]
+    if "가" <= last <= "힣":
+        return "이" if (ord(last) - 0xAC00) % 28 else "가"
+    return "이"
+
+
+#: 병명으로 받아들이는 최소 길이. 한 글자는 대조가 거의 늘 성공해 대조가 무의미해진다.
+_MIN_CONDITION = 2
+
+
+def _owner_said(condition: str, payload: GaitComparePayload) -> bool:
+    """모델이 낸 병명이 **보호자 쪽 텍스트에 실제로 있나.**
+
+    막는 것은 **해설 모델이 병명을 지어내는 것**이다. 모델은 되돌려 줄 수만 있고 새로 만들 수
+    없다 — 그래서 이 칸이 규칙 8 을 뒤집지 않는다.
+
+    ⚠️ **대조 대상 셋 중 `standalone_query` 는 리졸버 모델이 쓴 문장이다**
+    (`resolver.py`: "모델이 만든 추론용 표현. **사실이 아니다**"). 그래서 이 함수가 주는 것은
+    "보호자가 실제로 친 낱말" 이 아니라 **"이 대화에 이미 있던 낱말"** 이다. 실측에서 병명이
+    거기에만 있었기 때문에 포함한다(2026-09-17, 슬개골 탈구 사례) — 빼면 고치려던 바로 그
+    경우가 안 고쳐진다. 리졸버까지 막으려면 보호자 원문을 나르도록 `ConversationContext` 를
+    넓혀야 하고 피부·일반 능력까지 영향이 간다. 그건 이 자리 밖이다.
+
+    공백을 지우고 비교하는 것은 "슬개골탈구" 와 "슬개골 탈구" 를 같게 보기 위해서다.
+    """
+    needle = "".join(condition.split())
+    if len(needle) < _MIN_CONDITION:
+        return False
+    sources = [payload.question]
+    if payload.conversation is not None:
+        sources += [
+            payload.conversation.referenced_original_request or "",
+            payload.conversation.standalone_query or "",
+        ]
+    return any(needle in "".join(source.split()) for source in sources)
+
+
 def render_guidance(
     text: str,
     actions: list[GaitAction],
     *,
     version_mismatch: bool,
     expert_advisory: bool = False,
+    owner_condition: str = "",
 ) -> str:
     """해설 → 다음 행동(고정 문장) → 전문가 의견 한 줄 → 버전 경고 → 고지(고정 문장).
 
@@ -436,9 +500,24 @@ def render_guidance(
     전문가 의견 줄도 **모델이 쓰지 않는다.** 제품 문장이라 코드가 쓴다 (#278) — 그래야 조건이
     맞을 때 빠짐없이 나가고, 아닐 때 새어 나오지 않는다. 기본 고지(`GAIT_REFERENCE_NOTICE`)
     는 그대로 맨 끝이다: 이 줄이 그것을 대체하지 않는다.
+
+    ⚠️ **전문가 줄은 하나만 나간다.** `owner_condition` 이 있으면 그쪽이 이긴다 — 둘 다
+    전문가를 말하는데, 보호자가 병명을 꺼낸 대화에서는 **그 걱정을 받아 주는 쪽**이 더 맞는
+    답이고 조건도 더 좁다(`expert_advisory` 는 비교 모양만 보고 켜진다). 둘을 같이 내보내면
+    한 답에서 전문가를 두 번 권하게 되고, 그건 관찰이 아니라 재촉으로 읽힌다.
+
+    `owner_condition` 은 **이미 대조를 통과한 값**이어야 한다 (`_owner_said`). 이 함수는
+    대조하지 않는다 — 문장만 쓴다.
     """
     steps = "\n".join(f"· {GAIT_ACTION_MESSAGES[action]}" for action in actions)
-    notes = [GAIT_EXPERT_ADVISORY] if expert_advisory else []
+    if owner_condition:
+        notes = [
+            GAIT_OWNER_CONDITION_ECHO.format(
+                condition=owner_condition, particle=_subject_particle(owner_condition)
+            )
+        ]
+    else:
+        notes = [GAIT_EXPERT_ADVISORY] if expert_advisory else []
     if version_mismatch:
         notes.append(GAIT_VERSION_WARNING)
     tail = "".join(f"{note}\n\n" for note in notes)
@@ -505,6 +584,14 @@ class GaitCapabilityAdapter:
             )
 
         actions = plan_gait_actions(compare, guidance.actions)
+        # 모델이 낸 병명은 **보호자 쪽 텍스트에 있을 때만** 살아남는다. 지어낸 것은 조용히
+        # 버린다 — 거절로 바꾸지 않는 이유는, 병명을 지어낸 것이 해설 자체를 못 쓰게 만들지는
+        # 않기 때문이다. 줄 하나가 안 붙을 뿐 답은 그대로 나간다.
+        echoed = (
+            guidance.owner_condition.strip()
+            if _owner_said(guidance.owner_condition, payload)
+            else ""
+        )
         text = guidance.text.strip()
         guarded = speaks_beyond_change(text)
         if guarded:
@@ -520,6 +607,7 @@ class GaitCapabilityAdapter:
                     actions,
                     version_mismatch=compare.version_mismatch,
                     expert_advisory=compare.expert_advisory,
+                    owner_condition=echoed,
                 ),
                 # 앱이 버튼으로 그릴 수 있게 기계용으로도 싣는다. 문장은 `answer` 에 이미 있다.
                 "actions": list(actions),
@@ -527,6 +615,9 @@ class GaitCapabilityAdapter:
                 # 앱이 이 줄을 따로 그리고 싶을 때를 위해 기계용으로도 싣는다. 문장은
                 # `answer` 에 이미 있고, 이 값이 켜져도 `actions` 는 바뀌지 않는다.
                 "expert_advisory": compare.expert_advisory,
+                # 앱이 따로 그리고 싶을 때를 위해 기계용으로도 싣는다. **대조를 통과한 값**
+                # 이라 모델이 지어낸 병명은 여기에도 안 온다. 빈 문자열이면 안 붙은 것이다.
+                "owner_condition": echoed,
                 "guarded": guarded,
             },
             elapsed_ms=_elapsed_ms(started),

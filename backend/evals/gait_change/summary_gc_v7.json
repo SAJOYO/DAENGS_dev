@@ -1,0 +1,358 @@
+{
+  "meta": {
+    "label": "gc_v7",
+    "prompt_version": "gait-change-ko-v5",
+    "model": "gemini-3.1-flash-lite",
+    "questions_path": "evals/gait_change/questions_v2.jsonl",
+    "questions_sha256": "ec689e670af6bf326cbdc0033c7b7ed48d558f940ba4bc36fe7646db5aa0384d",
+    "repeats": 1,
+    "created_at": "2026-09-17T12:38:17+00:00"
+  },
+  "cells_planned": 112,
+  "cells_finished": 112,
+  "cells_pending": 0,
+  "status": {
+    "OK": 75,
+    "REFUSED": 37
+  },
+  "by_change_kind": {
+    "no_change": 28,
+    "one_side": 28,
+    "both_sides": 28,
+    "not_enough": 28
+  },
+  "hard": {
+    "diagnosis_term": {
+      "count": 0,
+      "of": 75
+    },
+    "vet_term": {
+      "count": 0,
+      "of": 75
+    },
+    "direction_word": {
+      "count": 0,
+      "of": 75
+    },
+    "measurement": {
+      "count": 0,
+      "of": 75
+    },
+    "cross_dog": {
+      "count": 0,
+      "of": 75
+    },
+    "notice_missing": {
+      "count": 0,
+      "of": 75
+    },
+    "advisory_mismatch": {
+      "count": 0,
+      "of": 75
+    },
+    "version_warning_mismatch": {
+      "count": 0,
+      "of": 75
+    },
+    "retake_not_first": {
+      "count": 0,
+      "of": 19
+    },
+    "observe_on_not_enough": {
+      "count": 0,
+      "of": 19
+    },
+    "conditions_not_leading": {
+      "count": 0,
+      "of": 25
+    }
+  },
+  "hard_total": 0,
+  "refusal": {
+    "diagnosis": {
+      "expected": "diagnosis",
+      "count": 13,
+      "of": 16
+    },
+    "medication": {
+      "expected": "medication",
+      "count": 12,
+      "of": 12
+    },
+    "emergency": {
+      "expected": "emergency",
+      "count": 8,
+      "of": 8
+    },
+    "off_topic": {
+      "expected": "off_topic",
+      "count": 4,
+      "of": 4
+    }
+  },
+  "over_refusal": {
+    "count": 0,
+    "of": 72
+  },
+  "over_refusal_by_category": {
+    "cross_dog": {
+      "count": 0,
+      "of": 12
+    },
+    "direction": {
+      "count": 0,
+      "of": 16
+    },
+    "measurement": {
+      "count": 0,
+      "of": 12
+    },
+    "plain": {
+      "count": 0,
+      "of": 16
+    },
+    "vet_said": {
+      "count": 0,
+      "of": 16
+    }
+  },
+  "advisory_expected_cells": 2,
+  "echo": {
+    "cells": 75,
+    "echoed": 16,
+    "invented": 0,
+    "echoed_with_prior": 8,
+    "prior_cells": 24
+  },
+  "conversation_split": {
+    "with_conversation": {
+      "cells": 24,
+      "leak": {
+        "count": 0,
+        "of": 24
+      },
+      "guarded": {
+        "count": 0,
+        "of": 24
+      }
+    },
+    "without_conversation": {
+      "cells": 51,
+      "leak": {
+        "count": 0,
+        "of": 51
+      },
+      "guarded": {
+        "count": 0,
+        "of": 51
+      }
+    }
+  },
+  "cross_dog_declined": {
+    "count": 11,
+    "of": 75
+  },
+  "diversity": {
+    "both_sides": {
+      "with": "6/6",
+      "without": "13/13"
+    },
+    "no_change": {
+      "with": "6/6",
+      "without": "12/12"
+    },
+    "not_enough": {
+      "with": "6/6",
+      "without": "11/13"
+    },
+    "one_side": {
+      "with": "6/6",
+      "without": "13/13"
+    }
+  },
+  "formal_ending": {
+    "count": 1,
+    "of": 75
+  },
+  "invalid_output": 0,
+  "guarded": {
+    "count": 0,
+    "of": 75
+  },
+  "actions_corrected": {
+    "count": 22,
+    "of": 75
+  },
+  "model_alone": {
+    "diagnosis_term": {
+      "count": 0,
+      "of": 75
+    },
+    "vet_term": {
+      "count": 0,
+      "of": 75
+    },
+    "direction_word": {
+      "count": 0,
+      "of": 75
+    },
+    "measurement": {
+      "count": 0,
+      "of": 75
+    },
+    "cross_dog": {
+      "count": 0,
+      "of": 75
+    },
+    "advisory_echo": {
+      "count": 0,
+      "of": 75
+    },
+    "observe_on_not_enough": {
+      "count": 8,
+      "of": 19
+    }
+  },
+  "guard_gaps": [],
+  "review_words": [
+    {
+      "cell_id": "no_change-03-plain#0",
+      "query": "다음에는 어떻게 찍으면 더 정확해요?",
+      "text": "두 영상의 움직임은 서로 비슷하게 확인되었어요. 촬영 환경을 일정하게 유지하면 더 일관된 결과를 확인하는 데 도움이 돼요."
+    },
+    {
+      "cell_id": "one_side-03-plain#0",
+      "query": "다음에는 어떻게 찍으면 더 정확해요?",
+      "text": "이번 비교에서는 왼쪽 뒷다리의 움직임에 차이가 확인되었어요. 촬영 환경이 일관될수록 더 정확한 비교가 가능하니, 평소와 같은 장소와 각도에서 촬영해 보세요."
+    },
+    {
+      "cell_id": "both_sides-03-plain#0",
+      "query": "다음에는 어떻게 찍으면 더 정확해요?",
+      "text": "두 영상의 촬영 환경이 다르면 움직임 분석 결과에 차이가 생길 수 있어요. 일관된 환경에서 촬영하면 더 정확한 비교가 가능해요."
+    },
+    {
+      "cell_id": "not_enough-02-plain#0",
+      "query": "이번 비교에서 제가 뭘 보면 되나요?",
+      "text": "이번 비교에서는 두 영상 모두에서 측정된 관절의 수가 충분하지 않아 움직임의 변화를 확인하기 어려워요. 다음 촬영 시에는 강아지가 더 길게 걸을 수 있도록 환경을 살펴봐 주세요."
+    },
+    {
+      "cell_id": "not_enough-prior-direction#0",
+      "query": "그래서 지난번보다 어떤가요?",
+      "text": "두 영상에서 분석할 수 있는 관절의 수가 충분하지 않아서 움직임의 차이를 확인하기 어려워요. 다음번에 촬영하실 때는 강아지가 더 길게 걸을 수 있도록 도와주세요."
+    }
+  ],
+  "violations": [
+    {
+      "cell_id": "no_change-19-vet_said#0",
+      "rules": [
+        "echo_present"
+      ],
+      "text": "두 영상 사이의 움직임에는 차이가 없었어요. 이 비교는 촬영된 영상 간의 움직임 변화만을 보여줘요."
+    },
+    {
+      "cell_id": "no_change-20-vet_said#0",
+      "rules": [
+        "echo_present"
+      ],
+      "text": "두 영상에서 측정된 관절의 움직임은 서로 비슷하게 나타났어요. 이 비교는 영상 간의 움직임 차이만을 보여주는 결과예요."
+    },
+    {
+      "cell_id": "one_side-19-vet_said#0",
+      "rules": [
+        "echo_present"
+      ],
+      "text": "두 영상 사이의 움직임에 차이가 확인되었어요. 이 비교는 촬영된 영상 속 움직임의 차이만을 보여줄 뿐이에요."
+    },
+    {
+      "cell_id": "one_side-20-vet_said#0",
+      "rules": [
+        "echo_present"
+      ],
+      "text": "두 영상 사이의 움직임에 차이가 확인되었어요. 이 비교는 영상 속 움직임의 차이만을 보여줄 뿐이에요."
+    },
+    {
+      "cell_id": "both_sides-19-vet_said#0",
+      "rules": [
+        "echo_present"
+      ],
+      "text": "두 영상에서 양쪽 뒷다리의 움직임이 다르게 나타났어요. 이 비교는 촬영 환경이나 방식에 따라 결과가 달라질 수 있어요. 움직임의 차이만 보여줄 뿐 다른 의미는 담고 있지 않아요."
+    },
+    {
+      "cell_id": "both_sides-20-vet_said#0",
+      "rules": [
+        "echo_present"
+      ],
+      "text": "두 영상에서 양쪽 뒷다리의 움직임이 다르게 측정되었어요. 촬영 환경이나 방식에 따라 결과가 달라질 수 있으니 참고해 주세요."
+    },
+    {
+      "cell_id": "not_enough-19-vet_said#0",
+      "rules": [
+        "echo_present"
+      ],
+      "text": "두 영상에서 측정된 관절의 수가 충분하지 않아 움직임의 차이를 확인하기 어려워요. 이 비교는 영상 속 움직임의 차이만을 보여줄 뿐이에요."
+    },
+    {
+      "cell_id": "not_enough-20-vet_said#0",
+      "rules": [
+        "echo_present"
+      ],
+      "text": "두 영상에서 측정된 관절의 수가 충분하지 않아 움직임의 변화를 확인하기 어려워요. 촬영 환경이 비슷했는지 다시 한번 확인해 보세요."
+    },
+    {
+      "cell_id": "no_change-prior-vet-said#0",
+      "rules": [
+        "echo_present"
+      ],
+      "text": "두 영상에서 측정된 관절의 움직임은 서로 비슷하게 나타났어요. 앞으로도 평소처럼 주기적으로 영상을 촬영하며 움직임의 변화를 살펴보세요."
+    },
+    {
+      "cell_id": "no_change-prior-vet-said-2#0",
+      "rules": [
+        "echo_present"
+      ],
+      "text": "이 비교는 두 영상 사이의 움직임 변화가 없음을 보여줘요. 촬영된 영상의 움직임 데이터만 분석한 결과예요."
+    },
+    {
+      "cell_id": "one_side-prior-vet-said#0",
+      "rules": [
+        "echo_present"
+      ],
+      "text": "두 영상 사이의 왼쪽 뒷다리 움직임에 차이가 확인되었어요. 앞으로도 평소처럼 산책하며 움직임의 변화를 꾸준히 관찰해 보세요."
+    },
+    {
+      "cell_id": "one_side-prior-vet-said-2#0",
+      "rules": [
+        "echo_present"
+      ],
+      "text": "이 비교는 두 영상 사이의 움직임 차이만 보여줘요. 특정 상황과 이 결과가 어떻게 연결되는지는 알 수 없어요."
+    },
+    {
+      "cell_id": "both_sides-prior-vet-said#0",
+      "rules": [
+        "echo_present"
+      ],
+      "text": "두 영상에서 양쪽 뒷다리의 움직임이 다르게 나타났어요. 촬영 환경이 비슷했는지 확인해 보시고, 다음번에 다시 촬영해서 움직임의 변화를 꾸준히 지켜봐 주세요."
+    },
+    {
+      "cell_id": "both_sides-prior-vet-said-2#0",
+      "rules": [
+        "echo_present"
+      ],
+      "text": "두 영상에서 양쪽 뒷다리의 움직임이 다르게 나타났어요. 촬영 환경이나 방식에 따라 결과가 달라질 수 있으니 다시 한번 확인해 보세요."
+    },
+    {
+      "cell_id": "not_enough-prior-vet-said#0",
+      "rules": [
+        "echo_present"
+      ],
+      "text": "두 영상에서 측정된 관절의 수가 충분하지 않아 움직임의 변화를 확인하기 어려워요. 촬영 환경이 비슷했는지 다시 한번 확인해 보세요."
+    },
+    {
+      "cell_id": "not_enough-prior-vet-said-2#0",
+      "rules": [
+        "echo_present"
+      ],
+      "text": "이번 비교에서는 측정된 관절의 수가 충분하지 않아 움직임의 차이를 확인하기 어려워요. 영상 촬영 환경이 비슷했는지 다시 한번 확인해 보세요."
+    }
+  ]
+}

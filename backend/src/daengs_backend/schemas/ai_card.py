@@ -12,7 +12,12 @@ from pydantic import BaseModel
 class AiCardResponse(BaseModel):
     id: uuid.UUID
     dog_id: uuid.UUID | None
-    month: int
+    #: 달 카드의 달(1~12). **종류 카드(딸기·상추)는 `null`** 입니다 (#593, D-085).
+    #: ⚠️ **없애지 마세요** — 옛 앱이 이 칸을 읽습니다. 전환기 계약이 `month` 와 `card` 를 함께 싣습니다.
+    month: int | None = None
+    #: 무엇을 만들었나 — 달이면 `"4"`, 종류면 `"strawberry"`·`"lettuce"`
+    #: (`daengs_cardimage.catalog.card_key`). 새 앱은 `month` 대신 이 칸을 봅니다.
+    card: str
     dog_name: str
     title: str
     #: `generating` 이면 앱이 조금 뒤 다시 조회한다. `failed` 면 `error_code` 를 본다.

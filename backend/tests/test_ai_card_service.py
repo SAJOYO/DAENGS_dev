@@ -110,7 +110,11 @@ def _photo() -> bytes:
 
 
 def _start(**kw) -> AiCard:
-    args = {"photo": _photo(), "content_type": "image/jpeg", "month": 4, "dog_name": "네오", "dog_id": None}
+    # `month=4` 로 부르는 기존 호출을 그대로 둔다 — `service.start` 의 인자는 `card` 하나이고
+    # 달 정수는 그 선택자의 한 갈래다 (#593, D-085). 종류 카드는 `card="strawberry"` 로 부른다.
+    if "month" in kw:
+        kw["card"] = kw.pop("month")
+    args = {"photo": _photo(), "content_type": "image/jpeg", "card": 4, "dog_name": "네오", "dog_id": None}
     args.update(kw)
     return asyncio.run(service.start(FakeSession(), OWNER, **args))
 
@@ -392,7 +396,7 @@ def test_delete_ready_removes_object(store, storage, jobs) -> None:
 def test_stale_generating_reads_as_interrupted(store, jobs) -> None:
     old = datetime.now(UTC) - timedelta(minutes=10)
     card = AiCard(
-        id=uuid.uuid4(), app_user_id=OWNER, month=4, dog_name="네오", title="BLOSSOM 네오",
+        id=uuid.uuid4(), app_user_id=OWNER, month=4, card_key="4", dog_name="네오", title="BLOSSOM 네오",
         status="generating", created_at=old, updated_at=old,
     )
     store.ai_cards.append(card)
@@ -477,7 +481,7 @@ def test_same_dog_same_month_is_taken_other_month_is_ok(store, jobs, monkeypatch
     store.pets.append(pet)
     _start(dog_id=pet.id, month=4)
     _run_all(jobs)
-    with pytest.raises(quota.AiCardMonthTakenError):
+    with pytest.raises(quota.AiCardTakenError):
         _start(dog_id=pet.id, month=4)
     assert _start(dog_id=pet.id, month=9).status == "generating"
 
@@ -746,7 +750,7 @@ def test_multi_row_request_still_takes_the_month_once_ready(store, jobs, monkeyp
     store.pets.append(pet)
     _start(dog_id=pet.id, month=4)
     _run_all(jobs)
-    with pytest.raises(quota.AiCardMonthTakenError):
+    with pytest.raises(quota.AiCardTakenError):
         _start(dog_id=pet.id, month=4)
 
 
@@ -771,7 +775,7 @@ def test_expire_generating_expires_every_row_of_an_abandoned_group(store, jobs, 
 def test_group_progress_is_finished_without_pick_group(store, jobs) -> None:
     """옛 카드(마이그레이션 이전)는 `pick_group` 이 없다 — 기다릴 그룹이 없으니 `finished=True`."""
     card = AiCard(
-        id=uuid.uuid4(), app_user_id=OWNER, month=4, dog_name="네오", title="BLOSSOM 네오", status="ready",
+        id=uuid.uuid4(), app_user_id=OWNER, month=4, card_key="4", dog_name="네오", title="BLOSSOM 네오", status="ready",
     )
     assert asyncio.run(service.group_progress(FakeSession(), OWNER, card)) == (None, None, True)
 
@@ -1122,3 +1126,84 @@ def test_engine_choice_card_count_and_recorded_seed_agree(store, jobs, monkeypat
     _run_all(jobs)
     assert [c.status for c in store.ai_cards] == ["ready"] * len(store.ai_cards)
     assert all((c.seed is not None) is gpu for c in store.ai_cards)
+
+
+# ── #593 (D-085) 종류 카드(딸기·상추)를 앱 경로에서도 만든다 ──────────────
+
+
+def test_kind_card_row_has_null_month_and_a_kind_card_key(store, jobs) -> None:
+    """종류 카드의 행은 `month IS NULL` · `card_key='strawberry'` 다 (`db/init/38_ai_cards.sql` 의
+    CHECK `ai_cards_month`). ⚠ `daengs_cardimage` 는 종류 카드의 달을 **0** 으로 두는데, 그 0 을
+    그대로 넣으면 CHECK 를 어긴다 — 서비스가 선택자에서 직접 만든다."""
+    card = _start(card="strawberry")
+    assert card.month is None and card.card_key == "strawberry"
+    assert card.title == "BERRY 네오"
+    assert store.ai_cards == [card]
+
+
+def test_month_card_row_keeps_month_and_a_numeric_card_key(store, jobs) -> None:
+    """달 카드는 지금까지와 같다 — `month=4` 이고 `card_key` 는 그 달의 문자열이어야 한다(CHECK 의 짝 규칙)."""
+    card = _start(month=4)
+    assert card.month == 4 and card.card_key == "4"
+
+
+def test_kind_card_runs_to_ready(store, storage, jobs) -> None:
+    card = _start(card="strawberry")
+    _run_all(jobs)
+    assert card.status == "ready" and card.error_code is None
+    assert (card.width, card.height) == (994, 1582)
+    assert Image.open(storage.local_path(card.storage_key)).size == (994, 1582)
+
+
+def test_kind_card_passes_the_kind_to_the_engine(store, jobs, monkeypatch) -> None:
+    """엔진에 달 정수가 아니라 종류가 가야 딸기 틀로 만들어진다 — 옛 코드는 달만 넘겼다(#592)."""
+    seen: list = []
+    real = ai_card_engine.generate
+
+    def _spy(**kw):
+        seen.append(kw["card"])
+        return real(**kw)
+
+    monkeypatch.setattr(ai_card_engine, "generate", _spy)
+    _start(card="lettuce")
+    _run_all(jobs)
+    assert seen == ["lettuce"]
+
+
+def test_a_dog_can_hold_a_month_card_and_a_kind_card_at_once(store, jobs, monkeypatch) -> None:
+    """한도는 **카드 종류당 한 장**이다(사용자 결정 09-18) — 4월 카드가 딸기를 막지 않는다."""
+    monkeypatch.setattr(settings, "cardimage_daily_limit", 0)
+    pet = FakePet(app_user_id=OWNER, name="네옹", breed="mix")
+    store.pets.append(pet)
+    _start(dog_id=pet.id, month=4)
+    _run_all(jobs)
+    assert _start(dog_id=pet.id, card="strawberry").status == "generating"
+    _run_all(jobs)
+    assert {c.card_key for c in store.ai_cards} == {"4", "strawberry"}
+
+
+def test_second_card_of_the_same_kind_is_taken(store, jobs, monkeypatch) -> None:
+    monkeypatch.setattr(settings, "cardimage_daily_limit", 0)
+    pet = FakePet(app_user_id=OWNER, name="네옹", breed="mix")
+    store.pets.append(pet)
+    _start(dog_id=pet.id, card="strawberry")
+    _run_all(jobs)
+    with pytest.raises(quota.AiCardTakenError):
+        _start(dog_id=pet.id, card="strawberry")
+    # 다른 종류는 그대로 열려 있다 — 둘 다 `month` 가 NULL 이라 달로 셌다면 여기서 막혔다.
+    assert _start(dog_id=pet.id, card="lettuce").status == "generating"
+
+
+def test_kinds_are_open_without_the_month_setting(store, jobs, monkeypatch) -> None:
+    """종류 카드에는 `DAENGS_CARDIMAGE_MONTHS` 에 해당하는 잠금이 없다 — **카탈로그에 있으면 열린 것**이다
+    (#593 에서 정함). 달은 여전히 그 설정이 가른다."""
+    monkeypatch.setattr(settings, "cardimage_months", frozenset())
+    with pytest.raises(MonthNotOpenError):
+        _start(month=4)
+    assert _start(card="strawberry").status == "generating"
+
+
+def test_unknown_kind_is_rejected_before_any_row(store, jobs) -> None:
+    with pytest.raises(MonthNotOpenError):
+        _start(card="banana")
+    assert store.ai_cards == [] and jobs == []

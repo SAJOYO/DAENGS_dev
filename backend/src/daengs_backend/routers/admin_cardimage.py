@@ -60,8 +60,8 @@ EngineName = Literal["gemini", "cardgen"]
 #: 엔진 이름 → 화면에 띄우는 모델 이름. 줄임말을 쓰지 않는다 (문서 표기 규칙).
 _ENGINE_LABELS: dict[str, str] = {"gemini": "Nano Banana 2", "cardgen": "FLUX.2-klein-4B"}
 
-#: 달이 아닌 카드의 한국어 이름. `catalog` 는 프롬프트용 영어만 갖고 있어서 여기서 붙인다.
-_KIND_LABELS: dict[str, str] = {"strawberry": "딸기", "lettuce": "상추"}
+# 달이 아닌 카드의 한국어 이름(옛 `_KIND_LABELS`)은 `catalog.KIND_LABELS` 로 옮겼다 (#593) —
+# 앱 경로의 409 문장(`routers/ai_card.py`)이 같은 글자를 써야 해서 한 곳에만 둔다.
 
 # 목록 기본·최대 건수(10·200)는 `services/admin_card_store.py` 가 정한다 — 커서를 굽는 곳과
 # 한 쪽의 크기를 정하는 곳이 같아야 `limit + 1` 규칙이 한 자리에 남는다.
@@ -110,7 +110,7 @@ async def options(_admin: Annotated[Principal, Depends(_INSPECT)]) -> CardImageO
     """
     cards = [CardOption(key=str(m), label=f"{m}월 · {catalog.get(m).card_name}") for m in range(1, 13)]
     cards += [
-        CardOption(key=kind, label=f"{_KIND_LABELS.get(kind, kind)} · {catalog.resolve(kind).card_name}")
+        CardOption(key=kind, label=f"{catalog.KIND_LABELS.get(kind, kind)} · {catalog.resolve(kind).card_name}")
         for kind in catalog.KINDS
     ]
 

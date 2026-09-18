@@ -66,7 +66,7 @@ from daengs_backend.services.ai_card_quota import (
     kst_day_start,
     stale_after,
 )
-from daengs_cardimage import CardImageUnavailable, GeneratedCard
+from daengs_cardimage import CardImageUnavailable, GeneratedCard, catalog
 from daengs_cardimage.engine import EngineError
 from daengs_cardimage.photo import prepare_photo
 from daengs_cardimage.title import title_text
@@ -130,7 +130,7 @@ async def start(
     *,
     photo: bytes,
     content_type: str,
-    month: int,
+    card: catalog.CardSelector,
     dog_name: str,
     dog_id: uuid.UUID | None,
     title_name: str | None = None,
@@ -141,12 +141,15 @@ async def start(
     round 1 controller ruling A) — 나중에 백그라운드가 만드는 게 아닙니다. 그래서 사용자가 그
     직후 대표 행을 지우면(취소) 나머지 행도 이 자리에서 이미 존재하므로 함께 지워집니다
     (`delete_card`) — 백그라운드가 뒤늦게 형제 카드를 만들어 취소를 무시하는 일이 없습니다.
+
+    `card` 는 달 정수(1~12)이거나 종류 문자열(`catalog.KINDS` — 딸기·상추, #593 D-085)입니다.
+    라우터가 `month`·`card` 두 쿼리에서 이 값 하나로 만들어 넘깁니다.
     """
     name = " ".join(dog_name.split())
     # 제목에만 쓰는 이름 (#543). 비면 `dog_name` 그대로 — `dog_name` 은 늘 그대로 저장합니다.
     title_source = " ".join((title_name or "").split()) or name
     # ── DB 전: 설정·사진. 여기서 걸리면 잠금도 연결도 안 잡습니다.
-    meta = ai_card_engine.ready_check(month)
+    meta = ai_card_engine.ready_check(card)
     if isinstance(get_storage(), NotConfiguredStorage):
         raise StorageNotConfiguredError("AI 카드 저장소가 설정되지 않았습니다 (GAIT_STORAGE)")
     photo_jpeg = await asyncio.to_thread(prepare_photo, photo, content_type)
@@ -160,7 +163,7 @@ async def start(
 
     now = now or datetime.now(UTC)
     await check_quota(
-        session, app_user_id, now=now, daily_limit=settings.cardimage_daily_limit, dog_id=dog_id, month=month
+        session, app_user_id, now=now, daily_limit=settings.cardimage_daily_limit, dog_id=dog_id, card=card
     )
 
     title = title_text(meta.card_name, title_source)[:_TITLE_MAX]  # ß → SS 처럼 자를 수 있다.
@@ -169,7 +172,14 @@ async def start(
     # 두 장 중 고르는 화면이 아직 없습니다). GPU 경로(`FLUX.2-klein-4B`)는 장마다 쓸 seed 를 지금 한 번에
     # 뽑습니다 — 이 달의 겹치지 않는 seed 가 설정값보다 적으면(fix round 1 Important 2) 행도 그만큼만
     # 만듭니다. 같은 seed 로 두 번 만들면(엔진이 결정적이다) 완전히 같은 이미지 두 장에 돈을 두 번 냅니다.
-    seeds = ai_card_engine.plan_request_seeds(month, rng or random.Random())
+    seeds = ai_card_engine.plan_request_seeds(card, rng or random.Random())
+    # 선택자를 **칸 둘로 나눠** 넣습니다 (D-085, `db/init/38_ai_cards.sql` 의 CHECK `ai_cards_month`):
+    # 달 카드는 `month=<정수>` · `card_key="<그 정수>"`, 종류 카드는 `month=NULL` · `card_key="strawberry"`.
+    # ⚠ `daengs_cardimage` 는 종류 카드의 `MonthCard.month`·`GeneratedCard.month` 를 **0** 으로 둡니다.
+    #    그 0 을 그대로 흘리면 CHECK 를 어겨 INSERT 가 터집니다(1~12 도 아니고 NULL 도 아닙니다).
+    #    그래서 생성 결과가 아니라 **선택자에서 직접** 만듭니다.
+    month = card if isinstance(card, int) else None
+    key = catalog.card_key(card)
     # 요청의 대표 행은 **자기 id 를 pick_group 으로 씁니다** — `idx_ai_cards_one_generating` 이
     # 그 한 행만 보고 「사용자별 동시 1요청」을 지키게 하기 위해서입니다(fix round 1 Critical).
     primary_id = uuid.uuid4()
@@ -179,6 +189,7 @@ async def start(
             app_user_id=app_user_id,
             dog_id=dog_id,
             month=month,
+            card_key=key,
             dog_name=name,
             title=title,
             status="generating",
@@ -190,8 +201,9 @@ async def start(
         for i, seed in enumerate(seeds)
     ]
     try:
-        for card in cards:
-            ai_card_repo.add(session, card)
+        # 루프 변수를 `card` 로 두면 선택자 인자를 덮어씁니다 — 아래 `_run` 이 그 값을 넘깁니다.
+        for row in cards:
+            ai_card_repo.add(session, row)
         await session.commit()
     except IntegrityError as exc:
         await session.rollback()
@@ -201,7 +213,7 @@ async def start(
             raise AiCardBusyError from None
         raise
 
-    _spawn(_run([c.id for c in cards], seeds, app_user_id, photo_jpeg, month, title_source))
+    _spawn(_run([c.id for c in cards], seeds, app_user_id, photo_jpeg, card, title_source))
     return cards[0]
 
 
@@ -264,7 +276,7 @@ async def _run(
     seeds: list[int | None],
     app_user_id: uuid.UUID,
     photo_jpeg: bytes,
-    month: int,
+    card: catalog.CardSelector,
     title_name: str,
 ) -> None:
     """백그라운드 한 건. **예외를 밖으로 내지 않습니다** — 낼 곳이 없고, 행에 결과를 남깁니다.
@@ -309,8 +321,8 @@ async def _run(
                         ai_card_engine.generate,
                         photo=photo_jpeg,
                         content_type="image/jpeg",
-                        # 앱 경로는 달 정수만 넘깁니다 — 달이 아닌 카드(딸기·상추)는 콘솔 전용입니다 (#592).
-                        card=month,
+                        # 달 정수 또는 종류 문자열(딸기·상추) — 앱 경로도 둘 다 넘깁니다 (#593, D-085).
+                        card=card,
                         # `generate_card` 는 이 이름을 그림 제목에만 쓴다 — `ai_cards.title` 과 같은 글자여야 한다 (#543).
                         dog_name=title_name,
                         engine=engine,
@@ -535,7 +547,7 @@ async def delete_card(session: AsyncSession, app_user_id: uuid.UUID, card_id: uu
     중인 요청을 그만둔다" 는 뜻이라 이 조건이 필요합니다 — 지우는 카드가 이미 `ready` 라면
     그 요청은 **이미 기록이 남았으므로**(첫 슬롯에서 남긴 시도 표시, 기준 이상 카드가 나왔으면 사용
     기록 — D-084, 둘 다 카드를 지워도 남습니다), 형제를 지우지 않아도 공짜로 돌아오는
-    것이 없고 `month_taken` 도 그대로입니다. 오히려 형제를
+    것이 없고 「강아지마다 카드 종류당 한 장」(`month_taken`·`card_taken`)도 그대로입니다. 오히려 형제를
     지우면 사용자에게 카드가 하나도 안 남을 수 있으므로(#572 Task 4 fix round 2 재검토) 지우지
     않습니다 — 이미 끝난(`ready`·`failed`) 형제는 그 카드를 지울 때만 건드립니다(독립된
     결과물입니다).

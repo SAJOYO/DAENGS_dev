@@ -105,7 +105,8 @@ def generate(
 ) -> GeneratedCard:
     """동기 호출(20~60초)이다. 이벤트 루프에서는 `asyncio.to_thread` 로 부른다.
 
-    `card` 는 달 정수(앱 경로가 넘기는 것) 또는 종류 문자열(콘솔 전용 딸기·상추, #592)이다.
+    `card` 는 달 정수 또는 종류 문자열(딸기·상추)이다 — **앱 경로도 콘솔도 둘 다 넘긴다**
+    (#593, D-085. #592 에서는 종류가 콘솔 전용이었다).
 
     `seed` 를 주면(#572 Task 4 fix round 1 controller ruling A — `start` 가 행마다 미리 뽑아 둔
     값, GPU 경로에서만) `generate_card` 가 그 값을 그대로, 재시도 없이 쓴다. 관리자 콘솔과 앱의
@@ -155,8 +156,8 @@ def ready_check(card: catalog.CardSelector) -> catalog.MonthCard:
     닫힌 달·없는 카드는 `MonthNotOpenError`, 키·틀·글꼴이 없으면 `CardImageUnavailable`. 앱 경로는
     이것을 행을 만들기 전에 불러, 어차피 실패할 요청이 한도를 먹거나 백그라운드로 가지 않게 한다.
 
-    잠금(`DAENGS_CARDIMAGE_MONTHS`)은 **달일 때만** 본다 — 달이 아닌 카드(딸기·상추)는 콘솔 전용이라
-    잠글 대상이 아니다(`generate._setup` 과 같은 규칙).
+    잠금(`DAENGS_CARDIMAGE_MONTHS`)은 **달일 때만** 본다 — 달이 아닌 카드(딸기·상추)에는 그런 설정이
+    없고 **카탈로그에 있으면 열린 것**이다(`generate._setup` 과 같은 규칙, #593 에서 정함).
     """
     meta = (catalog.require_open(card, settings.cardimage_months) if isinstance(card, int)
             else catalog.resolve(card))

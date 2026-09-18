@@ -28,7 +28,7 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import or_, select
+from sqlalchemy import or_, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from daengs_backend.models.gait_record import GaitRecord
@@ -230,7 +230,11 @@ async def list_for_pet(
         if anchor is None:
             # 지워졌거나 남의 것 — 조용히 처음부터 주지 않습니다. 호출부가 400 을 냅니다.
             raise LookupError("cursor")
+        # tuple_() 로 감싸야 SQL 튜플 비교로 내려갑니다. 파이썬 튜플끼리 `>` 를 쓰면
+        # 원소별 비교로 풀려 `created_at > anchor.created_at` 만 남고, anchor 와 같은
+        # 시각에 있는 기록들이 다음 쪽에서 건너뛰어집니다.
         stmt = stmt.where(
-            (GaitRecord.created_at, GaitRecord.id) > (anchor.created_at, anchor.id)
+            tuple_(GaitRecord.created_at, GaitRecord.id)
+            > tuple_(anchor.created_at, anchor.id)
         )
     return list((await session.execute(stmt)).scalars())

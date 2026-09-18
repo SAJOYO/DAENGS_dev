@@ -40,6 +40,7 @@ from daengs_backend.models.admin_audit_log import (
     AUDIT_TARGET_TYPES,
     AdminAuditLog,
 )
+from daengs_backend.models.admin_ai_card import ADMIN_AI_CARD_ENGINES, AdminAiCard
 from daengs_backend.models.admin_user import ADMIN_ROLES, ADMIN_STATUSES, AdminUser
 from daengs_backend.models.ai_card import AI_CARD_STATUSES, AiCard, AiCardUsage
 from daengs_backend.models.answer_report import (
@@ -112,6 +113,7 @@ from daengs_backend.models.walk import (
 )
 
 __all__ = [
+    "ADMIN_AI_CARD_ENGINES",
     "ADMIN_ROLES",
     "ADMIN_STATUSES",
     "AI_CARD_STATUSES",
@@ -160,6 +162,7 @@ __all__ = [
     "ActivitySeason",
     "ActivitySessionLink",
     "ActivityWalkHead",
+    "AdminAiCard",
     "AdminAuditLog",
     "AdminUser",
     "AiCard",

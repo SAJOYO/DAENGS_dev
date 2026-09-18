@@ -63,6 +63,12 @@ CHAT_AND_ADMINS = APP_USERS + (
     "INSERT INTO admin_users(id) VALUES ('44444444-4444-4444-4444-444444444444');"
     "INSERT INTO chat_turns(id) VALUES ('55555555-5555-5555-5555-555555555555');"
 )
+# `db/init/03_auth.sql` 의 admin_users 중 admin_ai_cards 가 닿는 부분만 — FK 대상인 id 하나다.
+# app_users 는 안 세운다. 이 표는 관리자 콘솔 전용이라 앱 회원과 아무 관계가 없다.
+ADMIN_USERS = (
+    "CREATE TABLE admin_users(id uuid PRIMARY KEY);"
+    "INSERT INTO admin_users(id) VALUES ('44444444-4444-4444-4444-444444444444');"
+)
 # org 백필은 **값**을 검사하므로 픽스처에도 값이 있어야 한다. 실제 doc_id 두 개를
 # 골라 넣는다 — 마이그레이션의 VALUES 목록에 있는 것이라야 UPDATE 가 실제로 돈다.
 DOCUMENTS_WITH_ORG = (
@@ -239,6 +245,36 @@ GAIT_RECORDS_POSE_MODEL_ROWS = (
 # **모듈 수준에 둔다** — `coverage_checks()` 가 "등록됐나"를 이 목록에서 읽는다. 함수 안에
 # 있으면 그 검사가 소스를 정규식으로 긁어야 하고, 그러면 목록을 고칠 때마다 정규식이 낡는다.
 CHECKS = (
+        # 관리자 콘솔 전용 카드 표(#592). **status 가 없는 표**라 이미지 칸 넷이 전부 NOT NULL
+        # 인 것이 이 항목의 핵심이고, 그다음이 created 인덱스의 `DESC` 다 — 그것이 빠져도
+        # 인덱스는 멀쩡히 서고 에러도 안 나며, 목록만 조용히 오래된 것부터 나온다.
+        ('2026-09-18', 'admin_ai_cards', ADMIN_USERS, 'admin_ai_cards', [
+            'ALTER TABLE admin_ai_cards DROP COLUMN storage_key',
+            'ALTER TABLE admin_ai_cards DROP COLUMN elapsed_ms',
+            'ALTER TABLE admin_ai_cards ALTER COLUMN card_key TYPE varchar(10)',
+            # seed 가 좁아지는 변조 — 32767 을 넘는 seed 가 조용히 잘린다.
+            'ALTER TABLE admin_ai_cards ALTER COLUMN seed TYPE smallint',
+            'ALTER TABLE admin_ai_cards ALTER COLUMN seed SET NOT NULL',
+            # 이미지 칸이 널 허용으로 풀리는 변조 — 빈 카드 행이 목록에 설 수 있다.
+            'ALTER TABLE admin_ai_cards ALTER COLUMN storage_key DROP NOT NULL',
+            'ALTER TABLE admin_ai_cards ALTER COLUMN size_bytes DROP NOT NULL',
+            'ALTER TABLE admin_ai_cards DROP CONSTRAINT admin_ai_cards_engine',
+            'ALTER TABLE admin_ai_cards DROP CONSTRAINT admin_ai_cards_card_key',
+            'ALTER TABLE admin_ai_cards DROP CONSTRAINT admin_ai_cards_likeness',
+            'ALTER TABLE admin_ai_cards DROP CONSTRAINT admin_ai_cards_size',
+            # FK 삭제 동작을 잃는 변조 — 관리자 행을 지울 때 이 표가 삭제를 막는다.
+            'ALTER TABLE admin_ai_cards DROP CONSTRAINT admin_ai_cards_admin_user_id_fkey;'
+            ' ALTER TABLE admin_ai_cards ADD FOREIGN KEY(admin_user_id) REFERENCES admin_users(id)',
+            'DROP INDEX idx_admin_ai_cards_storage_key',
+            # 유일성을 잃는 변조 — 같은 저장 키를 두 행이 가리키면 삭제가 남의 PNG 를 지운다.
+            'DROP INDEX idx_admin_ai_cards_storage_key;'
+            ' CREATE INDEX idx_admin_ai_cards_storage_key ON admin_ai_cards (storage_key)',
+            'DROP INDEX idx_admin_ai_cards_created',
+            # **DESC 를 잃는 변조 — 이 항목의 이유다.** 이름도 같고 인덱스도 있는데 목록이
+            # 뒤집힌다. 이름만 보는 검사로는 아무 의미가 없다.
+            'DROP INDEX idx_admin_ai_cards_created;'
+            ' CREATE INDEX idx_admin_ai_cards_created ON admin_ai_cards (created_at)',
+        ]),
         # 시도 표시 칸(#572 Task 5, D-084). 픽스처에 ready 카드 한 장 + 그 사용 기록(09-15 백필)을
         # 넣어 **기존 줄이 있는 표에** NOT NULL 칸이 붙게 한다 — 빈 표면 NOT NULL·기본값 변조가 아무것도
         # 안 건드린다. 기본값을 잃거나 true 로 뒤집는 변조가 이 항목의 핵심이다 — 칸을 안 적는

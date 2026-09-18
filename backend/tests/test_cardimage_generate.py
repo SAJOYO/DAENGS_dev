@@ -23,7 +23,7 @@ def _photo() -> bytes:
 
 def _run(engine, judge=None, **kw):
     return generate.generate_card(
-        photo=_photo(), content_type="image/jpeg", month=4, dog_name="네오",
+        photo=_photo(), content_type="image/jpeg", card=4, dog_name="네오",
         engine=engine, judge=judge, base_dir=CARDIMAGE, open_months=frozenset({4}), judge_min=3, **kw,
     )
 
@@ -40,7 +40,7 @@ def test_happy_path_one_attempt_titled_output():
 def test_september_uses_its_own_template_outfit_and_title():
     eng, jd = FakeEngine(), FakeJudge([5])
     out = generate.generate_card(
-        photo=_photo(), content_type="image/jpeg", month=9, dog_name="네오",
+        photo=_photo(), content_type="image/jpeg", card=9, dog_name="네오",
         engine=eng, judge=jd, base_dir=CARDIMAGE, open_months=frozenset({4, 9}), judge_min=3,
     )
     assert out.month == 9 and out.title == "CHUSEOK 네오"
@@ -50,6 +50,41 @@ def test_september_uses_its_own_template_outfit_and_title():
     sent_template = Image.open(io.BytesIO(eng.calls[0]["template"]))
     ref = Image.open(CARDIMAGE / "9_harvest_moon_template.webp").convert("RGB")
     assert sent_template.size == ref.size and sent_template.getpixel((500, 800)) == ref.getpixel((500, 800))
+
+
+def test_october_sends_face_hidden_prompt():
+    """10월 유령 천 틀은 본문에 얼굴이 없다 — 공통 앞부분이 가면 천 위에 얼굴이 합성된다(09-16)."""
+    eng, jd = FakeEngine(), FakeJudge([5])
+    generate.generate_card(
+        photo=_photo(), content_type="image/jpeg", card=10, dog_name="네오",
+        engine=eng, judge=jd, base_dir=CARDIMAGE, open_months=frozenset({10}), judge_min=3,
+    )
+    prompt = eng.calls[0]["prompt"]
+    assert "26OCT" in prompt and "ghost-sheet" in prompt
+    assert "do not draw the dog's face" in prompt
+    assert "in the main illustration is replaced by the dog from image 2" not in prompt
+
+
+def test_strawberry_uses_its_template_and_face_only_prompt():
+    eng, jd = FakeEngine(), FakeJudge([5])
+    out = generate.generate_card(
+        photo=_photo(), content_type="image/jpeg", card="strawberry", dog_name="네오",
+        engine=eng, judge=jd, base_dir=CARDIMAGE, open_months=frozenset({4}), judge_min=3,
+    )
+    assert out.card_key == "strawberry" and out.month == 0 and out.title == "BERRY 네오"
+    prompt = eng.calls[0]["prompt"]
+    assert "only the dog's face is visible" in prompt and "NEO-S0824" in prompt
+    sent = Image.open(io.BytesIO(eng.calls[0]["template"]))
+    ref = Image.open(CARDIMAGE / "strawberry_template.webp").convert("RGB")
+    assert sent.size == ref.size == (994, 1582)
+
+
+def test_kind_card_ignores_open_months():
+    """종류 카드는 콘솔 전용이라 DAENGS_CARDIMAGE_MONTHS 로 잠그지 않는다."""
+    eng = FakeEngine()
+    generate.generate_card(photo=_photo(), content_type="image/jpeg", card="lettuce", dog_name="네오",
+                           engine=eng, judge=None, base_dir=CARDIMAGE, open_months=frozenset(), judge_min=3)
+    assert eng.calls
 
 
 def test_low_likeness_retries_once_and_keeps_better():
@@ -102,19 +137,19 @@ def test_second_attempt_judge_failure_keeps_first():
 
 def test_closed_month_raises():
     with pytest.raises(catalog.MonthNotOpenError):
-        generate.generate_card(photo=_photo(), content_type="image/jpeg", month=9, dog_name="x", engine=FakeEngine(),
+        generate.generate_card(photo=_photo(), content_type="image/jpeg", card=9, dog_name="x", engine=FakeEngine(),
                                judge=None, base_dir=CARDIMAGE, open_months=frozenset({4}), judge_min=3)
 
 
 def test_bad_photo_raises_photo_error():
     with pytest.raises(photo_mod.PhotoError):
-        generate.generate_card(photo=b"nope", content_type="image/jpeg", month=4, dog_name="x", engine=FakeEngine(),
+        generate.generate_card(photo=b"nope", content_type="image/jpeg", card=4, dog_name="x", engine=FakeEngine(),
                                judge=None, base_dir=CARDIMAGE, open_months=frozenset({4}), judge_min=3)
 
 
 def test_missing_template_dir_is_unavailable(tmp_path):
     with pytest.raises(generate.CardImageUnavailable):
-        generate.generate_card(photo=_photo(), content_type="image/jpeg", month=4, dog_name="x", engine=FakeEngine(),
+        generate.generate_card(photo=_photo(), content_type="image/jpeg", card=4, dog_name="x", engine=FakeEngine(),
                                judge=None, base_dir=tmp_path, open_months=frozenset({4}), judge_min=3)
 
 
@@ -161,7 +196,7 @@ def test_generate_cards_makes_each_card_with_a_different_seed():
     """L4 는 한 번에 2장부터 CUDA OOM 이다(#557 E2) — 반드시 순차 호출이어야 한다."""
     eng = FakeEngine()
     cards = generate.generate_cards(
-        count=2, photo=_photo(), content_type="image/jpeg", month=4, dog_name="네오",
+        count=2, photo=_photo(), content_type="image/jpeg", card=4, dog_name="네오",
         engine=eng, judge=None, base_dir=CARDIMAGE, open_months=frozenset({4}), judge_min=3,
         rng=random.Random(0),
     )
@@ -176,7 +211,7 @@ def test_generate_cards_keeps_going_when_one_attempt_fails():
     """두 장 중 한 장이 실패해도 나머지 한 장은 돌려준다 — 사용자가 고를 게 남는다."""
     eng = _FailSecondCallEngine()
     cards = generate.generate_cards(
-        count=2, photo=_photo(), content_type="image/jpeg", month=4, dog_name="네오",
+        count=2, photo=_photo(), content_type="image/jpeg", card=4, dog_name="네오",
         engine=eng, judge=None, base_dir=CARDIMAGE, open_months=frozenset({4}), judge_min=3,
         rng=random.Random(0),
     )
@@ -189,7 +224,7 @@ def test_generate_cards_raises_last_exception_when_all_fail():
     eng = FakeEngine(error=EngineError("upstream", "x"))
     with pytest.raises(EngineError) as exc_info:
         generate.generate_cards(
-            count=2, photo=_photo(), content_type="image/jpeg", month=4, dog_name="네오",
+            count=2, photo=_photo(), content_type="image/jpeg", card=4, dog_name="네오",
             engine=eng, judge=None, base_dir=CARDIMAGE, open_months=frozenset({4}), judge_min=3,
             rng=random.Random(0),
         )
@@ -202,7 +237,7 @@ def test_generate_cards_no_retry_even_with_low_judge_score():
     것 자체가 재시도의 대안이고, 재시도를 더하면 최악 2×count 번 돈이 나간다."""
     eng, jd = FakeEngine(), FakeJudge([1, 1])
     cards = generate.generate_cards(
-        count=2, photo=_photo(), content_type="image/jpeg", month=4, dog_name="네오",
+        count=2, photo=_photo(), content_type="image/jpeg", card=4, dog_name="네오",
         engine=eng, judge=jd, base_dir=CARDIMAGE, open_months=frozenset({4}), judge_min=3,
         rng=random.Random(0),
     )
@@ -217,7 +252,7 @@ def test_generate_cards_caps_to_distinct_seed_pool(monkeypatch, caplog):
     eng = FakeEngine()
     with caplog.at_level("WARNING"):
         cards = generate.generate_cards(
-            count=2, photo=_photo(), content_type="image/jpeg", month=4, dog_name="네오",
+            count=2, photo=_photo(), content_type="image/jpeg", card=4, dog_name="네오",
             engine=eng, judge=None, base_dir=CARDIMAGE, open_months=frozenset({4}), judge_min=3,
             rng=random.Random(0),
         )
@@ -236,7 +271,7 @@ def test_generate_cards_with_seed_and_count_over_one_raises():
     """#572 Task 4 fix round 1 controller ruling C — 조용히 한 장으로 줄이지 않고 알린다."""
     with pytest.raises(ValueError, match="count"):
         generate.generate_cards(
-            count=2, photo=_photo(), content_type="image/jpeg", month=4, dog_name="네오",
+            count=2, photo=_photo(), content_type="image/jpeg", card=4, dog_name="네오",
             engine=FakeEngine(), judge=None, base_dir=CARDIMAGE, open_months=frozenset({4}), judge_min=3,
             seed=3,
         )
@@ -246,7 +281,7 @@ def test_generate_cards_single_count_keeps_generate_card_behavior():
     """`count=1` 이면 옛 `generate_card` 와 같다 — 재시도가 살아 있다."""
     eng, jd = FakeEngine([png(color=(1, 1, 1)), png(color=(2, 2, 2))]), FakeJudge([2, 4])
     cards = generate.generate_cards(
-        count=1, photo=_photo(), content_type="image/jpeg", month=4, dog_name="네오",
+        count=1, photo=_photo(), content_type="image/jpeg", card=4, dog_name="네오",
         engine=eng, judge=jd, base_dir=CARDIMAGE, open_months=frozenset({4}), judge_min=3,
         rng=random.Random(0),
     )

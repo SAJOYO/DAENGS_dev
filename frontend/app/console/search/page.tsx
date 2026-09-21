@@ -3,10 +3,15 @@ import InspectTabs from "../../components/inspect-tabs";
 /**
  * `기능 / 검색 점검` — 콘솔 메뉴의 두 번째 카드가 여는 화면.
  *
- * **갈래가 다섯입니다.** 훈련 RAG(`/training/chat`, `#25`) · 생활 RAG(`/life/ask`·`/life/walk-conditions`) ·
- * 피부 스크리닝(`/screen/v1/screen`) · 어시스턴트(`/assistant/query`) · 도감 카드 생성
- * (`/admin/cardimage/generate`, `#496`).
- * 어시스턴트만 앱 ChatScreen 이 실제로 쓰는 경로이고, 나머지 넷은 **직접 API** 입니다.
+ * **갈래가 여섯입니다.** 훈련 RAG(`/training/chat`, `#25`) · 생활 RAG(`/life/ask`·`/life/walk-conditions`) ·
+ * 피부 스크리닝(`/screen/v1/screen`) · 보행 분석(`/app/gait/*`, 로드맵 C4) ·
+ * 어시스턴트(`/assistant/query`) · 도감 카드 생성(`/admin/cardimage/generate`, `#496`).
+ *
+ * **앱이 실제로 쓰는 경로를 부르는 갈래는 어시스턴트와 보행 둘입니다.** 나머지 넷은
+ * **직접 API** 입니다. 보행이 이쪽인 것은 대안이 없어서입니다 — 옛 무인증 `/gait/*` 는
+ * 410 Gone 이고, 분석은 워커(`gait.analyze`)가 하므로 **올리고 기다리는 것** 말고
+ * 다른 모양이 안 나옵니다. 그래서 그 갈래만 **회원 토큰을 손으로 넣습니다**
+ * (`gait-inspect.tsx` 머리말 · 관리자 토큰은 `current_app_user` 가 막습니다).
  * 원래는 훈련 RAG 하나뿐이었고, 그 챗봇도 처음에는 `/` 랜딩에 붙어 있었습니다 — 그때는
  * 콘솔이 없어서 임시로 거기 둔 것이었습니다.
  *

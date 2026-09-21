@@ -5,6 +5,7 @@ import { useState } from "react";
 import AskInspect from "./ask-inspect";
 import AssistantInspect from "./assistant-inspect";
 import CardImageInspect from "./cardimage-inspect";
+import GaitInspect from "./gait-inspect";
 import SkinInspect from "./skin-inspect";
 import TrainingChat from "./training-chat";
 import WalkInspect from "./walk-inspect";
@@ -23,13 +24,18 @@ import { useAuth } from "./auth-provider";
  * 누구나 부르는데 화면만 안 보이는 계정" 이 생기고, 그건 `console/page.tsx` 주석이 이미 두
  * 카드에서 지목한 실패 모드입니다. 나중에 인증을 걸면(그게 옳습니다) **백엔드와 같이** 가립니다.
  *
+ * **보행 갈래도 권한으로 안 가립니다 — 이유는 피부와 다릅니다.** `/app/gait/*` 는 인증이
+ * 있지만 그 문턱이 관리자 권한이 아니라 **회원 토큰**입니다 (`current_app_user` 는 관리자
+ * 토큰을 일부러 막습니다). 토큰을 손으로 넣어야 아무것도 안 되므로 탭을 감춰서 막히는 것이
+ * 없습니다 — 감추면 "보이는 계정/안 보이는 계정" 만 갈립니다.
+ *
  * **기본 갈래는 훈련 RAG 입니다** — 이 화면을 쓰던 사람의 흐름을 바꾸지 않으려는 것뿐이고,
  * 권한이 없으면 생활 RAG 가 기본이 됩니다.
  *
  * 갈래를 URL 에 안 싣습니다(`?tab=`). 새로고침하면 첫 갈래로 돌아옵니다 — 공유할 일이
  * 생기면 그때 넣습니다.
  */
-type TabId = "training" | "life" | "skin" | "assistant" | "cardimage";
+type TabId = "training" | "life" | "skin" | "gait" | "assistant" | "cardimage";
 
 export default function InspectTabs() {
   const { can } = useAuth();
@@ -42,6 +48,7 @@ export default function InspectTabs() {
       : []),
     { id: "life", label: "생활 RAG", hint: "제도·문서 + 실시간 산책" },
     { id: "skin", label: "피부 스크리닝", hint: "사진 한 장 · 2단계 모델" },
+    { id: "gait", label: "보행 분석", hint: "영상 1개 · 판정 되나 안 되나" },
     { id: "assistant", label: "어시스턴트", hint: "앱과 같은 경로 · 라우팅 결과" },
     ...(canInspectTraining
       ? [{ id: "cardimage" as const, label: "도감 카드 생성", hint: "사진 한 장 · 카드 14종 · 엔진 선택" }]
@@ -89,6 +96,8 @@ export default function InspectTabs() {
           <TrainingChat />
         ) : current === "skin" ? (
           <SkinInspect />
+        ) : current === "gait" ? (
+          <GaitInspect />
         ) : current === "assistant" ? (
           <AssistantInspect />
         ) : current === "cardimage" ? (
